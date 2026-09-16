@@ -45,19 +45,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupUserDefaults()
         setupAppleEvent()
         
-        // setup menu bar - delay slightly to ensure everything is initialized
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            os_log("%{public}s[%{public}ld], %{public}s: Setting up menu bar control", 
-                   ((#file as NSString).lastPathComponent), #line, #function)
-            
-            self?.menuBarRatingControl = MenuBarRatingControl()
-            WindowManager.shared.menuBarRatingControl = self?.menuBarRatingControl
-            
-            // Show first-launch window if needed
-            if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
-                UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
-                WindowManager.shared.open(.preferences)
-            }
+        // setup menu bar
+        // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated,
+        // so it must exist before the launch-time player update is broadcast.
+        menuBarRatingControl = MenuBarRatingControl()
+        WindowManager.shared.menuBarRatingControl = menuBarRatingControl
+
+        // Show first-launch window if needed
+        if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
+            UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
+            WindowManager.shared.open(.preferences)
         }
         
         #if DEBUG
