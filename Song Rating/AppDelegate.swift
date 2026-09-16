@@ -25,23 +25,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // setup shortcut validator
-        MASShortcutValidator.shared()!.allowAnyShortcutWithOptionModifier = true
+        if let validator = MASShortcutValidator.shared() {
+            validator.allowAnyShortcutWithOptionModifier = true
+        } else {
+            os_log("%{public}s[%{public}ld], %{public}s: WARNING - Failed to initialize MASShortcutValidator", 
+                   ((#file as NSString).lastPathComponent), #line, #function)
+        }
         
-        setupAppleEvent()
         setupUserDefaults()
+        setupAppleEvent()
         
         // setup menu bar
+        // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated, and the
+        // async update in setupAppleEvent() must find it already observing. A delayed control
+        // misses that update and shows the stopped icon until the next track change.
         menuBarRatingControl = MenuBarRatingControl()
         WindowManager.shared.menuBarRatingControl = menuBarRatingControl
+
+        // Show first-launch window if needed
+        if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
+            UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
+            WindowManager.shared.open(.preferences)
+        }
         
         #if DEBUG
         // WindowManager.shared.open(.preferences)
         #endif
-        
-//        if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
-//            UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
-//            WindowManager.shared.open(.preferences)
-//        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
@@ -55,7 +64,17 @@ extension AppDelegate {
     // Request AppleEvent permission
     func setupAppleEvent() {
         DispatchQueue.global().async {
-            let target =  NSAppleEventDescriptor(bundleIdentifier: OSVersionHelper.bundleIdentifier)
+            // Check if Music/iTunes is running
+            let isRunning = NSWorkspace.shared.runningApplications.contains { 
+                $0.bundleIdentifier == OSVersionHelper.bundleIdentifier 
+            }
+            
+            if !isRunning {
+                os_log("%{public}s[%{public}ld], %{public}s: iTunes/Music is not currently running", ((#file as NSString).lastPathComponent), #line, #function)
+                return
+            }
+            
+            let target = NSAppleEventDescriptor(bundleIdentifier: OSVersionHelper.bundleIdentifier)
             let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, true)
             
             DispatchQueue.main.async {
@@ -65,13 +84,33 @@ extension AppDelegate {
                     iTunesPlayer.shared.update()
                     
                 case OSStatus(procNotFound):
-                    os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes not running", ((#file as NSString).lastPathComponent), #line, #function)
+                    os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes/Music not running", ((#file as NSString).lastPathComponent), #line, #function)
+                    
                 case OSStatus(errAEEventNotPermitted):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: not permitted", ((#file as NSString).lastPathComponent), #line, #function)
+                    
+                    // Explain once; after that, only log, so a denied permission doesn't nag at every login
+                    let shownKey = "hasShownAutomationPermissionAlert"
+                    guard !UserDefaults.standard.bool(forKey: shownKey) else { break }
+                    UserDefaults.standard.set(true, forKey: shownKey)
+
+                    let alert = NSAlert()
+                    alert.messageText = "Permission Required"
+                    alert.informativeText = "Music Rating needs permission to control Music. Turn it on in System Settings → Privacy & Security → Automation."
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "Open System Settings")
+                    alert.addButton(withTitle: "Later")
+
+                    // Menu bar apps have no Dock icon, so bring the alert to the front
+                    NSApp.activate(ignoringOtherApps: true)
+                    if alert.runModal() == .alertFirstButtonReturn,
+                       let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                        NSWorkspace.shared.open(url)
+                    }
+                    
                 default:
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: %s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: status))
                 }
-                
             }
         }   // end DispatchQueue.global().async
     }
@@ -130,7 +169,7 @@ extension AppDelegate {
     }
     
     private func setupLaunchAtLogin() {
-        let launcherAppId = "com.mainasuk.Song-Rating-Helper"
+        let launcherAppId = "com.rossshannon.musicrating.helper"
         let runningApps = NSWorkspace.shared.runningApplications
         let isRunning = runningApps.contains(where: { $0.bundleIdentifier == launcherAppId })
         

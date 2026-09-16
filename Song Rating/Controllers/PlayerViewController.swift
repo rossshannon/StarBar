@@ -45,14 +45,14 @@ final class PlayerViewController: NSViewController {
     // Misc.
     private lazy var menuButtonMenu: NSMenu = {
         let menu = NSMenu()
-        let about = NSMenuItem(title: "About Song Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About Music Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
         about.target = WindowManager.shared
         menu.addItem(about)
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
         preferences.target = WindowManager.shared
         menu.addItem(preferences)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Song Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Music Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
     

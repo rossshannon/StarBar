@@ -452,6 +452,7 @@ extension SBObject: iTunesSubscriptionPlaylist {}
     @objc optional var kind: String { get } // a text description of the track
     @objc optional var longDescription: String { get }
     @objc optional var loved: Bool { get } // is this track loved?
+    @objc optional var favorited: Bool { get } // is this track favorited? (Music renamed "loved", same code pLov)
     @objc optional var lyrics: String { get } // the lyrics of the track
     @objc optional var mediaKind: iTunesEMdK { get } // the media kind of the track
     @objc optional var modificationDate: Date { get } // the modification date of the content of this track
@@ -508,6 +509,7 @@ extension SBObject: iTunesSubscriptionPlaylist {}
     @objc optional func setGrouping(_ grouping: String!) // the grouping (piece) of the track. Generally used to denote movements within a classical work.
     @objc optional func setLongDescription(_ longDescription: String!)
     @objc optional func setLoved(_ loved: Bool) // is this track loved?
+    @objc optional func setFavorited(_ favorited: Bool) // is this track favorited?
     @objc optional func setLyrics(_ lyrics: String!) // the lyrics of the track
     @objc optional func setMediaKind(_ mediaKind: iTunesEMdK) // the media kind of the track
     @objc optional func setPlayedCount(_ playedCount: Int) // number of times this track has been played

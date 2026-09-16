@@ -40,8 +40,10 @@ final class iTunesPlayer {
 extension iTunesPlayer {
     
     func update(_ track: iTunesTrack? = iTunesRadioStation.shared.iTunes?.currentTrackCopy, broadcast: Bool = true) {
+        // Use the passed-in track. The default argument already fetches a fresh copy.
+        // Reading iTunesRadioStation.shared here deadlocks when called from its init.
         _currentTrack = track
-        track.flatMap { history.insert($0) }
+        _currentTrack.flatMap { history.insert($0) }
         
         if broadcast {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)

@@ -58,6 +58,15 @@ final class MenuBarRatingControl {
     let ratingControl = RatingControl(rating: 0)
     let menuBarIcon: MenuBarIcon
     let trackingAreaResponser = TrackingAreaResponder()
+    /// Coloured heart shown over the empty heart slot in the template stars image
+    private let favoriteHeartView: NSImageView = {
+        let imageView = PassthroughImageView()
+        imageView.imageScaling = .scaleNone
+        imageView.isHidden = true
+        // Stay centred with the stars image when the button resizes after statusItem.length changes
+        imageView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        return imageView
+    }()
     
     private let clickGestureRecognizer: NSClickGestureRecognizer = {
         let gestureRecognizer = NSClickGestureRecognizer()
@@ -79,14 +88,14 @@ final class MenuBarRatingControl {
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
-        let about = NSMenuItem(title: "About Song Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About Music Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
         about.target = WindowManager.shared
         menu.addItem(about)
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
         preferences.target = WindowManager.shared
         menu.addItem(preferences)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Song Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Music Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
     private(set) var isPlaying = false {
@@ -130,11 +139,13 @@ final class MenuBarRatingControl {
         menuBarIcon = MenuBarIcon(size: ratingControl.starSize)
 
         guard let button = statusItem.button else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: CRITICAL ERROR - Failed to create status item button", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
         button.image = ratingControl.starsImage
+        favoriteHeartView.image = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
+        button.addSubview(favoriteHeartView)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.action = #selector(MenuBarRatingControl.action(_:))
         button.target = self
@@ -192,6 +203,44 @@ extension MenuBarRatingControl {
         statusItem.length = !isStop ? playingWidth : pauseWidth
         statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
+        updateFavoriteHeartView()
+    }
+
+    /// Show the coloured heart over the heart slot when the track is a favorite.
+    /// The button centres `starsImage`, the same assumption the click hit-test makes.
+    private func updateFavoriteHeartView() {
+        guard let button = statusItem.button else { return }
+        favoriteHeartView.isHidden = isStop || !ratingControl.isLoved
+        guard !favoriteHeartView.isHidden else { return }
+
+        // Same geometry as RatingControl.imagePositionX(in:), so the heart and its click area agree
+        let leftMargin = 0.5 * (button.bounds.width - ratingControl.starsImage.size.width)
+        let size = ratingControl.starSize
+        favoriteHeartView.frame = NSRect(
+            x: leftMargin + ratingControl.favoriteMinX,
+            y: 0.5 * (button.bounds.height - size.height),
+            width: size.width,
+            height: size.height
+        )
+    }
+    
+    /// Toggle the favorite status of the current track (called "loved" in the API)
+    func toggleLovedStatus() {
+        guard !isStop, let track = iTunesPlayer.shared.currentTrack else { return }
+        
+        os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
+        
+        // Toggle the loved property (which is actually "favorite" in the UI)
+        let currentLoved = track.isFavorited
+        track.updateFavorited(!currentLoved)
+        
+        // Update our local state immediately
+        ratingControl.updateLoved(!currentLoved)
+        updateFavoriteHeartView()
+        statusItem.button?.needsDisplay = true
+        
+        // Also trigger a full update to refresh data from iTunes
+        iTunesPlayer.shared.update()
     }
 
 }
@@ -222,11 +271,19 @@ extension MenuBarRatingControl {
     
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-        
+        guard let button = statusItem.button, !isStop else { return }
+
+        if sender.state == .ended,
+           let positionX = ratingControl.imagePositionX(in: button),
+           ratingControl.isFavoriteHit(positionX: positionX) {
+            toggleLovedStatus()
+            return
+        }
+
         switch sender.state {
         case .ended:
-            ratingControl.action(from: button, by: sender, behavior: .full)
+            // With half stars on, the left half of a star (next to the gap before it) sets a half star
+            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .both : .full)
         default:
             break
         }
@@ -269,6 +326,7 @@ extension MenuBarRatingControl {
         }
     }
     
+    
 }
 
 // MARK: - RatingControlDelegate
@@ -292,8 +350,11 @@ extension MenuBarRatingControl {
         let player = iTunesPlayer.shared
 
         isPlaying = player.isPlaying
-        let userRating = player.currentTrack?.userRating ?? 0
-        ratingControl.update(rating: userRating)
+        // Each property read is an Apple Event, so read the track once
+        let track = player.currentTrack
+        ratingControl.update(rating: track?.userRating ?? 0)
+        ratingControl.updateLoved(track?.isFavorited ?? false)
+        updateFavoriteHeartView()
     }
 
     @objc func iTunesRadioRequestTrackRatingUp(_ notification: Notification) {
@@ -385,17 +446,17 @@ extension NSPopover {
     func configureCloseButton() {
         guard let popoverViewController = contentViewController as? PopoverViewController,
         let superView = popoverViewController.view.superview else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Unable to find popover superview", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
         guard NSStringFromClass(type(of: superView)) == "NSPopoverFrame" else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Superview is not NSPopoverFrame: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, NSStringFromClass(type(of: superView)))
             return
         }
 
         guard let closeButton = superView.value(forKey: "closeButton") as? NSButton else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Unable to find closeButton in popover", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
@@ -408,4 +469,11 @@ extension NSPopover {
         popoverViewController.hostPopover = self
     }
 
+}
+
+/// Image view that never takes mouse events, so clicks on the favorite heart reach the status bar button.
+private final class PassthroughImageView: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
 }

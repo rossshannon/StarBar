@@ -1,5 +1,5 @@
-# Privacy Policy for Song Rating
+# Privacy Policy for Music Rating
 
-Song Rating do not store and transfer any data to anyone.
+Music Rating does not store or transfer any data.
 
 That's all.

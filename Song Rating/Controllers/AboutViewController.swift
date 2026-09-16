@@ -20,7 +20,7 @@ final class AboutViewController: NSViewController {
         return visualEffectView
     }()
     lazy var titleTextField: NSTextField = {
-        let textField = NSTextField(labelWithString: String.infoValue(for: "CFBundleName") ?? "Song Rating")
+        let textField = NSTextField(labelWithString: String.infoValue(for: "CFBundleName") ?? "Music Rating")
         textField.font = NSFont.systemFont(ofSize: 18, weight: .semibold)
         return textField
     }()
