@@ -15,6 +15,8 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 ./build.sh              # Release build into build/
 ./build.sh --install    # Also replace /Applications/Music Rating.app and relaunch it
 ./build.sh --watch -i   # Rebuild and reinstall on source changes (needs fswatch)
+./build.sh --test       # Run the tests that don't need Music
+./build.sh --test-all   # Also run the tests that read from Music (play a track first)
 ```
 
 The Xcode project and scheme are still named "Song Rating". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.

@@ -5,6 +5,8 @@
 #   ./build.sh              Clean Release build into build/
 #   ./build.sh --install    Also replace /Applications/Music Rating.app and launch it
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
+#   ./build.sh --test       Run the app and SDK tests that don't need Music
+#   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
 
 set -e
 set -o pipefail
@@ -19,11 +21,15 @@ INSTALL_PATH="/Applications/$APP_NAME.app"
 
 INSTALL=false
 WATCH=false
+TEST=false
+TEST_ALL=false
 
 for arg in "$@"; do
     case $arg in
         --install|-i) INSTALL=true ;;
         --watch|-w) WATCH=true ;;
+        --test|-t) TEST=true ;;
+        --test-all) TEST=true; TEST_ALL=true ;;
     esac
 done
 
@@ -88,7 +94,38 @@ build_and_install() {
     fi
 }
 
-if [ "$WATCH" = true ]; then
+run_tests() {
+    # These test classes read from Music, so they fail unless Music is playing a track
+    # with artwork and Music Rating may access the media library. CI has no Music.
+    # Test identifiers use the target name ("Song RatingTests"), not the module name.
+    local skip_args=()
+    if [ "$TEST_ALL" = false ]; then
+        skip_args=(
+            "-skip-testing:Song RatingTests/ScriptBridgeTests"
+            "-skip-testing:Song RatingTests/iTunesLibraryTests"
+        )
+    fi
+    local status=0
+
+    echo ""
+    echo "=== Testing $APP_NAME... ==="
+    # Keep compiler and test failures and the counts; drop the app's system log noise
+    xcodebuild -project "$PROJECT_NAME.xcodeproj" \
+        -scheme "$PROJECT_NAME" \
+        -derivedDataPath build/test \
+        "${skip_args[@]}" \
+        test 2>&1 | grep -E ": error:|Test Case .* failed|Executed [0-9]+ tests|\*\* TEST" || status=1
+
+    echo ""
+    echo "=== Testing SDK... ==="
+    (cd SDK && swift test) || status=1
+
+    return $status
+}
+
+if [ "$TEST" = true ]; then
+    run_tests
+elif [ "$WATCH" = true ]; then
     if ! command -v fswatch &> /dev/null; then
         echo "Error: fswatch not found. Install with: brew install fswatch"
         exit 1
