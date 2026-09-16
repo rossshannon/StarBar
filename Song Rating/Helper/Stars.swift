@@ -38,14 +38,13 @@ struct Stars {
             star.image.draw(in: NSRect(origin: origin, size: star.size))
         }
         
-        // Draw favorite star
+        // Draw favorite heart
         if let firstStar = stars.first {
             let starSize = firstStar.size
             let favoriteOrigin = CGPoint(x: starsWidth + spacing, y: 0.5 * (height - starSize.height))
             
-            // Draw favorite star shape
             let favoriteRect = NSRect(origin: favoriteOrigin, size: starSize)
-            drawFavoriteStar(in: favoriteRect, filled: isLoved)
+            drawFavoriteHeart(in: favoriteRect, filled: isLoved)
         }
         
         canvasImage.unlockFocus()
@@ -53,67 +52,32 @@ struct Stars {
         return canvasImage
     }
     
-    private func drawFavoriteStar(in rect: NSRect, filled: Bool) {
-        // Draw a star instead of a heart since Apple Music uses stars for favorites
+    /// Heart for Music's "favorited" flag, so it reads differently from the rating stars.
+    ///
+    /// Two circles side by side, joined by tangent lines to a point at the bottom.
+    /// AppKit's y axis points up, and arc angles are in degrees.
+    private func drawFavoriteHeart(in rect: NSRect, filled: Bool) {
+        let lineWidth: CGFloat = filled ? 1.0 : 1.5
+        // Heart is 4r wide and (2 + 1.414)r tall; leave room for the stroke
+        let radius = 0.95 * min((rect.width - lineWidth) / 4, (rect.height - lineWidth) / 3.414)
+        let centerY = rect.midY + 0.707 * radius
+        let leftCenter = NSPoint(x: rect.midX - radius, y: centerY)
+        let rightCenter = NSPoint(x: rect.midX + radius, y: centerY)
+        let bottom = NSPoint(x: rect.midX, y: centerY - 2.414 * radius)
+
         let path = NSBezierPath()
-        
-        let width = rect.width
-        let height = rect.height
-        
-        // Scale factors
-        let scale = min(width, height) * 0.8
-        
-        // Center point
-        let centerX = rect.midX
-        let centerY = rect.midY
-        
-        // Star points
-        let outerRadius = scale * 0.5
-        let innerRadius = outerRadius * 0.4
-        
-        // Create 5-pointed star
-        var points: [NSPoint] = []
-        
-        // Add the star points
-        for i in 0..<10 {
-            // Alternate between outer and inner points
-            let radius = i % 2 == 0 ? outerRadius : innerRadius
-            // Calculate angle (36 degrees per point, offset by +90 degrees: AppKit's y axis points up, so this starts at the top)
-            let angle = Double.pi * (Double(i) * 36.0 / 180.0 + 90.0 / 180.0)
-            
-            let x = centerX + CGFloat(cos(angle)) * radius
-            let y = centerY + CGFloat(sin(angle)) * radius
-            points.append(NSPoint(x: x, y: y))
-        }
-        
-        // Draw the star
-        path.move(to: points[0])
-        for i in 1..<points.count {
-            path.line(to: points[i])
-        }
+        path.move(to: bottom)
+        path.appendArc(withCenter: leftCenter, radius: radius, startAngle: 225, endAngle: 0, clockwise: true)
+        path.appendArc(withCenter: rightCenter, radius: radius, startAngle: 180, endAngle: -45, clockwise: true)
         path.close()
-        
-        path.lineWidth = 1.0
-        
-        // Use a slightly different color for the favorite star to make it more distinct
-        if filled {
-            // Use a slightly darker shade for filled state to make it stand out
-            NSColor.black.withAlphaComponent(0.9).setFill()
-            path.fill()
-            
-            // Add a slight glow/shadow effect to the filled favorite star
-            let shadow = NSShadow()
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
-            shadow.shadowOffset = NSSize(width: 0, height: 0)
-            shadow.shadowBlurRadius = 2.0
-            
-            shadow.set()
-        } else {
-            // For outline state, set a slightly thicker line
-            path.lineWidth = 1.5
-        }
-        
+        path.lineJoinStyle = .round
+        path.lineWidth = lineWidth
+
         NSColor.black.setStroke()
+        if filled {
+            NSColor.black.setFill()
+            path.fill()
+        }
         path.stroke()
     }
     
