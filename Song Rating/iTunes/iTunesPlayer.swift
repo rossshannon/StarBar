@@ -40,8 +40,14 @@ final class iTunesPlayer {
 extension iTunesPlayer {
     
     func update(_ track: iTunesTrack? = iTunesRadioStation.shared.iTunes?.currentTrackCopy, broadcast: Bool = true) {
-        _currentTrack = track
-        track.flatMap { history.insert($0) }
+        // Always get a fresh copy to ensure we have current metadata
+        _currentTrack = iTunesRadioStation.shared.iTunes?.currentTrackCopy
+        _currentTrack.flatMap { history.insert($0) }
+        
+        // Debug logging
+        if let track = _currentTrack {
+            NSLog("Updated current track: \(track.name ?? "unknown") - Rating: \(track.rating ?? 0), Loved: \(track.loved ?? false)")
+        }
         
         if broadcast {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)

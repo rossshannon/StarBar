@@ -24,24 +24,45 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        os_log("%{public}s[%{public}ld], %{public}s: APPLICATION LAUNCHING", ((#file as NSString).lastPathComponent), #line, #function)
+        
+        // Check if Music/iTunes is running
+        let isRunning = NSWorkspace.shared.runningApplications.contains { 
+            $0.bundleIdentifier == OSVersionHelper.bundleIdentifier 
+        }
+        
+        os_log("%{public}s[%{public}ld], %{public}s: iTunes/Music running status: %{public}d", 
+               ((#file as NSString).lastPathComponent), #line, #function, isRunning ? 1 : 0)
+        
         // setup shortcut validator
-        MASShortcutValidator.shared()!.allowAnyShortcutWithOptionModifier = true
+        if let validator = MASShortcutValidator.shared() {
+            validator.allowAnyShortcutWithOptionModifier = true
+        } else {
+            os_log("%{public}s[%{public}ld], %{public}s: WARNING - Failed to initialize MASShortcutValidator", 
+                   ((#file as NSString).lastPathComponent), #line, #function)
+        }
         
-        setupAppleEvent()
         setupUserDefaults()
+        setupAppleEvent()
         
-        // setup menu bar
-        menuBarRatingControl = MenuBarRatingControl()
-        WindowManager.shared.menuBarRatingControl = menuBarRatingControl
+        // setup menu bar - delay slightly to ensure everything is initialized
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            os_log("%{public}s[%{public}ld], %{public}s: Setting up menu bar control", 
+                   ((#file as NSString).lastPathComponent), #line, #function)
+            
+            self?.menuBarRatingControl = MenuBarRatingControl()
+            WindowManager.shared.menuBarRatingControl = self?.menuBarRatingControl
+            
+            // Show first-launch window if needed
+            if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
+                UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
+                WindowManager.shared.open(.preferences)
+            }
+        }
         
         #if DEBUG
         // WindowManager.shared.open(.preferences)
         #endif
-        
-//        if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
-//            UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
-//            WindowManager.shared.open(.preferences)
-//        }
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
@@ -55,7 +76,17 @@ extension AppDelegate {
     // Request AppleEvent permission
     func setupAppleEvent() {
         DispatchQueue.global().async {
-            let target =  NSAppleEventDescriptor(bundleIdentifier: OSVersionHelper.bundleIdentifier)
+            // Check if Music/iTunes is running
+            let isRunning = NSWorkspace.shared.runningApplications.contains { 
+                $0.bundleIdentifier == OSVersionHelper.bundleIdentifier 
+            }
+            
+            if !isRunning {
+                os_log("%{public}s[%{public}ld], %{public}s: iTunes/Music is not currently running", ((#file as NSString).lastPathComponent), #line, #function)
+                return
+            }
+            
+            let target = NSAppleEventDescriptor(bundleIdentifier: OSVersionHelper.bundleIdentifier)
             let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, true)
             
             DispatchQueue.main.async {
@@ -65,13 +96,34 @@ extension AppDelegate {
                     iTunesPlayer.shared.update()
                     
                 case OSStatus(procNotFound):
-                    os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes not running", ((#file as NSString).lastPathComponent), #line, #function)
+                    os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes/Music not running", ((#file as NSString).lastPathComponent), #line, #function)
+                    
+                    // Show alert to user about Music/iTunes not running
+                    let alert = NSAlert()
+                    alert.messageText = "Music App Not Running"
+                    alert.informativeText = "Please launch the Music app (or iTunes on older macOS versions) and try again."
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
+                    
                 case OSStatus(errAEEventNotPermitted):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: not permitted", ((#file as NSString).lastPathComponent), #line, #function)
+                    
+                    // Show permission alert to user
+                    let alert = NSAlert()
+                    alert.messageText = "Permission Required"
+                    alert.informativeText = "Song Rating needs permission to control Music/iTunes. Please grant this permission in System Preferences → Security & Privacy → Automation."
+                    alert.alertStyle = .warning
+                    alert.addButton(withTitle: "Open System Preferences")
+                    alert.addButton(withTitle: "Later")
+                    
+                    if alert.runModal() == .alertFirstButtonReturn {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Library/PreferencePanes/Security.prefPane"))
+                    }
+                    
                 default:
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: %s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: status))
                 }
-                
             }
         }   // end DispatchQueue.global().async
     }

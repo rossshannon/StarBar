@@ -24,6 +24,8 @@ class RatingControl {
     let spacing: CGFloat
     /// 0 ~ 100
     private(set) var rating: Int
+    /// true if the track is marked as a favorite in Apple Music (property still called "loved" in API)
+    private(set) var isLoved: Bool = false
     
     var stars: Stars {
         let fullStarCount = rating / 20
@@ -44,7 +46,7 @@ class RatingControl {
             stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .dot), count: dotCount))
         }
         
-        return Stars(stars: stars, spacing: spacing)
+        return Stars(stars: stars, spacing: spacing, isLoved: isLoved)
     }
     
     /// Stars rating control constructor
@@ -58,7 +60,8 @@ class RatingControl {
         self.starSize = starSize
         self.spacing = spacing
         
-        self.starsImage = NSImage(size: NSSize(width: CGFloat(5) * starSize.width + CGFloat(6) * spacing, height: starSize.height))
+        // Add extra space for heart icon
+        self.starsImage = NSImage(size: NSSize(width: CGFloat(5) * starSize.width + CGFloat(7) * spacing + starSize.width, height: starSize.height))
         
         starsImage.isTemplate = true
         starsImage.cacheMode = .never
@@ -78,6 +81,16 @@ extension RatingControl {
         
         drawStars()
         os_log("%{public}s[%{public}ld], %{public}s: draw rating control %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, newRating)
+    }
+    
+    /// Update favorite status (called "loved" in the API)
+    ///
+    /// - Parameter loved: true if the track is favorited in Apple Music
+    func updateLoved(_ loved: Bool) {
+        self.isLoved = loved
+        
+        drawStars()
+        os_log("%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, loved ? 1 : 0)
     }
     
     /// Stars draw only method
@@ -113,6 +126,11 @@ extension RatingControl {
         }()
         let positionX = position.x - systemLeftMargin                   // x in range: -leading margin ~ image.size.with
         
+        // Calculate where the heart icon should be
+        let starsWidth = CGFloat(5) * starSize.width + CGFloat(5) * spacing
+        let heartMinX = starsWidth + spacing
+        let heartMaxX = heartMinX + starSize.width
+        
         var rating: Int?
         let array = Array(0..<5)
         let starsMinX = array.map { i -> CGFloat in
@@ -120,7 +138,11 @@ extension RatingControl {
         }
         let starsMaxX = starsMinX.map { $0 + starSize.width }
 
-        if positionX < starsMinX[0] {
+        // Check if the heart icon was clicked
+        if positionX > heartMinX && positionX < heartMaxX {
+            // Handle heart icon click - this will be passed back to MenuBarRatingControl
+            rating = -1
+        } else if positionX < starsMinX[0] {
             rating = 0
         } else if positionX > starsMaxX[4] {
             rating = 10
@@ -138,6 +160,11 @@ extension RatingControl {
             }
         }
 
+        // We'll handle heart clicks directly in MenuBarRatingControl's clickGestureRecognizerHandler
+        if rating == -1 {
+            return
+        }
+        
         // starRating: 0 ~ 10
         guard let starRating = rating, delegate?.ratingControl(self, shouldUpdateRating: starRating * 10) ?? false else {
             return

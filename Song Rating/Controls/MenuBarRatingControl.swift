@@ -130,7 +130,7 @@ final class MenuBarRatingControl {
         menuBarIcon = MenuBarIcon(size: ratingControl.starSize)
 
         guard let button = statusItem.button else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: CRITICAL ERROR - Failed to create status item button", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
@@ -139,6 +139,13 @@ final class MenuBarRatingControl {
         button.action = #selector(MenuBarRatingControl.action(_:))
         button.target = self
         button.setButtonType(.momentaryChange)
+        
+        // Create a specific gesture recognizer for heart icon double tap
+        let heartDoubleClickGestureRecognizer = NSClickGestureRecognizer()
+        heartDoubleClickGestureRecognizer.numberOfClicksRequired = 2
+        heartDoubleClickGestureRecognizer.action = #selector(MenuBarRatingControl.doubleTapHeartGestureRecognizerHandler(_:))
+        heartDoubleClickGestureRecognizer.target = self
+        button.addGestureRecognizer(heartDoubleClickGestureRecognizer)
         
         // set fail rule
         doubleClickGestureRecognizer.shouldRequireFailure(of: clickGestureRecognizer)
@@ -186,12 +193,31 @@ extension MenuBarRatingControl {
 
     private func updateMenuBar() {
         let margin: CGFloat = 4 + 4
+        // Add extra space for heart icon
         let playingWidth = margin + ratingControl.starsImage.size.width
         let pauseWidth = margin + CGFloat(2) * ratingControl.spacing + ratingControl.starSize.width
 
         statusItem.length = !isStop ? playingWidth : pauseWidth
         statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
+    }
+    
+    /// Toggle the favorite status of the current track (called "loved" in the API)
+    func toggleLovedStatus() {
+        guard !isStop, let track = iTunesPlayer.shared.currentTrack else { return }
+        
+        os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
+        
+        // Toggle the loved property (which is actually "favorite" in the UI)
+        let currentLoved = track.loved ?? false
+        track.setLoved?(!currentLoved)
+        
+        // Update our local state immediately
+        ratingControl.updateLoved(!currentLoved)
+        statusItem.button?.needsDisplay = true
+        
+        // Also trigger a full update to refresh data from iTunes
+        iTunesPlayer.shared.update()
     }
 
 }
@@ -222,7 +248,33 @@ extension MenuBarRatingControl {
     
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem.button, !isStop else { return }
+        
+        // Check if we're clicking on the heart area
+        let position = sender.location(in: nil)
+        let width = button.bounds.size.width
+        let imageWidth = ratingControl.starsImage.size.width
+        
+        let systemLeftMargin: CGFloat = {
+            if #available(macOS 11.0, *) {
+                return 10 + 0.5 * (width - imageWidth)
+            } else {
+                return 0.5 * (width - imageWidth)
+            }
+        }()
+        
+        let positionX = position.x - systemLeftMargin
+        
+        // Heart area detection - similar to what's in RatingControl
+        let starsWidth = CGFloat(5) * ratingControl.starSize.width + CGFloat(5) * ratingControl.spacing
+        let heartMinX = starsWidth + ratingControl.spacing
+        let heartMaxX = heartMinX + ratingControl.starSize.width
+        
+        if positionX > heartMinX && positionX < heartMaxX {
+            // Heart was clicked
+            toggleLovedStatus()
+            return
+        }
         
         switch sender.state {
         case .ended:
@@ -269,6 +321,12 @@ extension MenuBarRatingControl {
         }
     }
     
+    // Double-tap on heart icon area to toggle loved status
+    @objc private func doubleTapHeartGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
+        os_log("%{public}s[%{public}ld], %{public}s: heart double tapped", ((#file as NSString).lastPathComponent), #line, #function)
+        toggleLovedStatus()
+    }
+    
 }
 
 // MARK: - RatingControlDelegate
@@ -283,6 +341,8 @@ extension MenuBarRatingControl: RatingControlDelegate {
         iTunesRadioStation.shared.setRating(rating)
         statusItem.button?.needsDisplay = true
     }
+    
+    // Removed heartIconClicked method as we're now handling heart clicks directly in the gesture recognizer
 
 }
 
@@ -294,6 +354,13 @@ extension MenuBarRatingControl {
         isPlaying = player.isPlaying
         let userRating = player.currentTrack?.userRating ?? 0
         ratingControl.update(rating: userRating)
+        
+        // Update loved status if available
+        let isLoved = player.currentTrack?.loved ?? false
+        os_log("%{public}s[%{public}ld], %{public}s: Current track '%{public}s' - loved status: %{public}d", 
+               ((#file as NSString).lastPathComponent), #line, #function, 
+               player.currentTrack?.name ?? "unknown", isLoved ? 1 : 0)
+        ratingControl.updateLoved(isLoved)
     }
 
     @objc func iTunesRadioRequestTrackRatingUp(_ notification: Notification) {
@@ -385,17 +452,17 @@ extension NSPopover {
     func configureCloseButton() {
         guard let popoverViewController = contentViewController as? PopoverViewController,
         let superView = popoverViewController.view.superview else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Unable to find popover superview", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
         guard NSStringFromClass(type(of: superView)) == "NSPopoverFrame" else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Superview is not NSPopoverFrame: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, NSStringFromClass(type(of: superView)))
             return
         }
 
         guard let closeButton = superView.value(forKey: "closeButton") as? NSButton else {
-            assertionFailure()
+            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Unable to find closeButton in popover", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
