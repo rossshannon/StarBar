@@ -14,13 +14,13 @@ struct Stars {
     let spacing: CGFloat
     /// Adds a favorite heart slot after the stars (menu bar only, not preference labels)
     let showsFavorite: Bool
-    let isLoved: Bool
-    
-    init(stars: [Star], spacing: CGFloat, showsFavorite: Bool = false, isLoved: Bool = false) {
+    let isFavorited: Bool
+
+    init(stars: [Star], spacing: CGFloat, showsFavorite: Bool = false, isFavorited: Bool = false) {
         self.stars = stars
         self.spacing = spacing
         self.showsFavorite = showsFavorite
-        self.isLoved = isLoved
+        self.isFavorited = isFavorited
     }
     
     var image: NSImage {
@@ -47,7 +47,7 @@ struct Stars {
             let favoriteOrigin = CGPoint(x: starsWidth + spacing, y: 0.5 * (height - starSize.height))
             
             let favoriteRect = NSRect(origin: favoriteOrigin, size: starSize)
-            drawFavoriteHeart(in: favoriteRect, filled: isLoved)
+            drawFavoriteHeart(in: favoriteRect, filled: isFavorited)
         }
         
         canvasImage.unlockFocus()

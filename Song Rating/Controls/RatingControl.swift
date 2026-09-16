@@ -24,8 +24,8 @@ class RatingControl {
     let spacing: CGFloat
     /// 0 ~ 100
     private(set) var rating: Int
-    /// true if the track is marked as a favorite in Apple Music (property still called "loved" in API)
-    private(set) var isLoved: Bool = false
+    /// True if the track is a favorite in Music (see `iTunesTrack.isFavorited`)
+    private(set) var isFavorited: Bool = false
     
     var stars: Stars {
         let fullStarCount = rating / 20
@@ -46,7 +46,7 @@ class RatingControl {
             stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .dot), count: dotCount))
         }
         
-        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isLoved: isLoved)
+        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isFavorited: isFavorited)
     }
     
     /// Stars rating control constructor
@@ -83,14 +83,14 @@ extension RatingControl {
         os_log("%{public}s[%{public}ld], %{public}s: draw rating control %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, newRating)
     }
     
-    /// Update favorite status (called "loved" in the API)
+    /// Update favorite status
     ///
-    /// - Parameter loved: true if the track is favorited in Apple Music
-    func updateLoved(_ loved: Bool) {
-        self.isLoved = loved
-        
+    /// - Parameter favorited: true if the track is a favorite in Music
+    func updateFavorited(_ favorited: Bool) {
+        self.isFavorited = favorited
+
         drawStars()
-        os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, loved ? 1 : 0)
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, favorited ? 1 : 0)
     }
     
     /// Stars draw only method

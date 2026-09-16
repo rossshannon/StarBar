@@ -210,7 +210,7 @@ extension MenuBarRatingControl {
     /// The button centres `starsImage`, the same assumption the click hit-test makes.
     private func updateFavoriteHeartView() {
         guard let button = statusItem.button else { return }
-        favoriteHeartView.isHidden = isStop || !ratingControl.isLoved
+        favoriteHeartView.isHidden = isStop || !ratingControl.isFavorited
         guard !favoriteHeartView.isHidden else { return }
 
         // Same geometry as RatingControl.imagePositionX(in:), so the heart and its click area agree
@@ -224,18 +224,17 @@ extension MenuBarRatingControl {
         )
     }
     
-    /// Toggle the favorite status of the current track (called "loved" in the API)
-    func toggleLovedStatus() {
+    /// Toggle the favorite status of the current track
+    func toggleFavorite() {
         guard !isStop, let track = iTunesPlayer.shared.currentTrack else { return }
-        
+
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
-        
-        // Toggle the loved property (which is actually "favorite" in the UI)
-        let currentLoved = track.isFavorited
-        track.updateFavorited(!currentLoved)
-        
+
+        let isFavorited = !track.isFavorited
+        track.updateFavorited(isFavorited)
+
         // Update our local state immediately
-        ratingControl.updateLoved(!currentLoved)
+        ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         
@@ -276,7 +275,7 @@ extension MenuBarRatingControl {
         if sender.state == .ended,
            let positionX = ratingControl.imagePositionX(in: button),
            ratingControl.isFavoriteHit(positionX: positionX) {
-            toggleLovedStatus()
+            toggleFavorite()
             return
         }
 
@@ -353,7 +352,7 @@ extension MenuBarRatingControl {
         // Each property read is an Apple Event, so read the track once
         let track = player.currentTrack
         ratingControl.update(rating: track?.userRating ?? 0)
-        ratingControl.updateLoved(track?.isFavorited ?? false)
+        ratingControl.updateFavorited(track?.isFavorited ?? false)
         updateFavoriteHeartView()
     }
 
