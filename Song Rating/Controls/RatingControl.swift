@@ -133,27 +133,31 @@ extension RatingControl {
         return positionX >= favoriteMinX - 0.5 * spacing && positionX <= favoriteMinX + starSize.width + spacing
     }
 
+    /// Star rating (0 ~ 10, one unit per half star) for a click at `positionX` inside `starsImage`.
+    ///
+    /// Star i is drawn from spacing + i * slot to that plus starSize.width.
+    /// Each gap between neighbouring stars is split, so no click position is dead.
+    /// Positions past the last star clamp to star 5; callers check `isFavoriteHit` first.
+    func starRating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int {
+        guard positionX >= spacing else { return 0 }
+
+        let slot = starSize.width + spacing
+        let i = min(4, max(0, Int(((positionX - 0.5 * spacing) / slot).rounded(.down))))
+        switch behavior {
+        case .full:
+            return 2 * (i + 1)
+        case .half:
+            return 2 * (i + 1) - 1
+        case .both:
+            let centerX = spacing + CGFloat(i) * slot + 0.5 * starSize.width
+            return positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
+        }
+    }
+
     func action(from sender: NSButton, by gestureRecognizer: NSGestureRecognizer, behavior: Behavior) {
         guard let positionX = imagePositionX(in: sender), !isFavoriteHit(positionX: positionX) else { return }
 
-        // Star i is drawn from spacing + i * slot to that plus starSize.width.
-        // Split each gap between neighbouring stars so no click position is dead.
-        let slot = starSize.width + spacing
-        let rating: Int  // starRating: 0 ~ 10
-        if positionX < spacing {
-            rating = 0
-        } else {
-            let i = min(4, max(0, Int(((positionX - 0.5 * spacing) / slot).rounded(.down))))
-            switch behavior {
-            case .full:
-                rating = 2 * (i + 1)
-            case .half:
-                rating = 2 * (i + 1) - 1
-            case .both:
-                let centerX = spacing + CGFloat(i) * slot + 0.5 * starSize.width
-                rating = positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
-            }
-        }
+        let rating = starRating(atPositionX: positionX, behavior: behavior)
 
         os_log(.debug, "%{public}s[%{public}ld], %{public}s: click positionX %{public}.1f -> star rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
 
