@@ -40,8 +40,9 @@ final class iTunesPlayer {
 extension iTunesPlayer {
     
     func update(_ track: iTunesTrack? = iTunesRadioStation.shared.iTunes?.currentTrackCopy, broadcast: Bool = true) {
-        // Always get a fresh copy to ensure we have current metadata
-        _currentTrack = iTunesRadioStation.shared.iTunes?.currentTrackCopy
+        // Use the passed-in track. The default argument already fetches a fresh copy.
+        // Reading iTunesRadioStation.shared here deadlocks when called from its init.
+        _currentTrack = track
         _currentTrack.flatMap { history.insert($0) }
         
         // Debug logging
