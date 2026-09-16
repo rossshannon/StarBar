@@ -146,36 +146,67 @@ extension RatingControl {
         switch behavior {
         case .full:
             return 2 * (i + 1)
-        case .half:
-            return 2 * (i + 1) - 1
         case .both:
             let centerX = spacing + CGFloat(i) * slot + 0.5 * starSize.width
             return positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
         }
     }
 
-    func action(from sender: NSButton, by gestureRecognizer: NSGestureRecognizer, behavior: Behavior) {
-        guard let positionX = imagePositionX(in: sender), !isFavoriteHit(positionX: positionX) else { return }
+    /// Rating (0 ~ 100) under the cursor, or nil when the cursor is over the heart.
+    func ratingUnderCursor(in button: NSButton, behavior: Behavior) -> Int? {
+        guard let positionX = imagePositionX(in: button), !isFavoriteHit(positionX: positionX) else { return nil }
 
-        let rating = starRating(atPositionX: positionX, behavior: behavior)
-
-        os_log(.debug, "%{public}s[%{public}ld], %{public}s: click positionX %{public}.1f -> star rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
-
-        guard delegate?.ratingControl(self, shouldUpdateRating: rating * 10) ?? false else {
-            return
-        }
-
-        let newRating = rating * 10
-        update(rating: newRating)
-        delegate?.ratingControl(self, userDidUpdateRating: newRating)
+        let rating = 10 * starRating(atPositionX: positionX, behavior: behavior)
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: positionX %{public}.1f -> rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
+        return rating
     }
-    
+
+    /// Set a rating the user chose, if the delegate allows it, and tell the delegate to save it.
+    ///
+    /// - Parameter rating: 0 ~ 100
+    func commit(rating: Int) {
+        guard delegate?.ratingControl(self, shouldUpdateRating: rating) ?? false else { return }
+
+        update(rating: rating)
+        delegate?.ratingControl(self, userDidUpdateRating: rating)
+    }
+
     enum Behavior {
+        /// Whole stars only
         case full
-        case half
+        /// Left half of a star (or the gap before it) is a half star
         case both
     }
-    
+
+    /// A drag across the stars. The stars follow the cursor, and the rating is saved on release.
+    struct Drag {
+
+        /// Rating (0 ~ 100) when the drag began, restored if the drag is cancelled
+        let originalRating: Int
+        /// Last rating the cursor was over. Nil until the cursor reaches the stars.
+        private(set) var lastRating: Int?
+
+        init(originalRating: Int) {
+            self.originalRating = originalRating
+        }
+
+        /// Move the cursor to `rating` (nil over the heart). Returns the rating to show.
+        /// Over the heart the stars keep showing the last rating.
+        mutating func move(to rating: Int?) -> Int {
+            if let rating = rating {
+                lastRating = rating
+            }
+            return lastRating ?? originalRating
+        }
+
+        /// Rating to save when the mouse is released over `rating` (nil over the heart),
+        /// or nil when the drag never reached the stars.
+        func releaseRating(at rating: Int?) -> Int? {
+            return rating ?? lastRating
+        }
+
+    }
+
 }
 
 #if canImport(SwiftUI) && DEBUG

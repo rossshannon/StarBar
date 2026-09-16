@@ -72,11 +72,6 @@ final class MenuBarRatingControl {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
     }()
-    private let doubleClickGestureRecognizer: NSClickGestureRecognizer = {
-        let gestureRecognizer = NSClickGestureRecognizer()
-        gestureRecognizer.numberOfClicksRequired = 2
-        return gestureRecognizer
-    }()
     private let pressGestureRecognizer: NSPressGestureRecognizer = {
         let gestureRecognizer = NSPressGestureRecognizer()
         return gestureRecognizer
@@ -85,6 +80,8 @@ final class MenuBarRatingControl {
         let gestureRecognizer = NSPanGestureRecognizer()
         return gestureRecognizer
     }()
+    /// Set while the user drags across the stars
+    private var ratingDrag: RatingControl.Drag?
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
@@ -131,8 +128,7 @@ final class MenuBarRatingControl {
     
     func updateGestureRecognizerBehavior() {
         // deliver .leftMouseUp action without delay when player stop
-        clickGestureRecognizer.delaysPrimaryMouseButtonEvents       = !isStop
-        doubleClickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
+        clickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
     }
 
     init() {
@@ -151,20 +147,12 @@ final class MenuBarRatingControl {
         button.target = self
         button.setButtonType(.momentaryChange)
         
-        // Upstream meant these as "wait for the other recognizer to fail" rules, but
-        // shouldRequireFailure(of:) is a query that subclasses override, not a setter.
-        // The calls do nothing, so a double-click also fires the single-click handler.
-        doubleClickGestureRecognizer.shouldRequireFailure(of: clickGestureRecognizer)
-        panGestureRecognizer.shouldRequireFailure(of: pressGestureRecognizer)
-        
+        // Click: set the rating (or toggle the heart). Press and hold: set the rating on release.
+        // Drag: the stars follow the cursor, and the rating is set on release.
         clickGestureRecognizer.action = #selector(MenuBarRatingControl.clickGestureRecognizerHandler(_:))
         clickGestureRecognizer.target = self
         button.addGestureRecognizer(clickGestureRecognizer)
-        
-        doubleClickGestureRecognizer.action = #selector(MenuBarRatingControl.doubleClickGestureRecognizerHandler(_:))
-        doubleClickGestureRecognizer.target = self
-        button.addGestureRecognizer(doubleClickGestureRecognizer)
-        
+
         pressGestureRecognizer.action = #selector(MenuBarRatingControl.pressGestureRecognizerHandler(_:))
         pressGestureRecognizer.target = self
         button.addGestureRecognizer(pressGestureRecognizer)
@@ -270,64 +258,68 @@ extension MenuBarRatingControl {
         }
     }
     
+    /// With half stars on, the left half of a star (or the gap before it) sets a half star
+    private var ratingBehavior: RatingControl.Behavior {
+        return UserDefaults.standard.allowHalfStar ? .both : .full
+    }
+
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button, !isStop else { return }
+        guard sender.state == .ended, let button = statusItem.button, !isStop else { return }
 
-        if sender.state == .ended,
-           let positionX = ratingControl.imagePositionX(in: button),
+        if let positionX = ratingControl.imagePositionX(in: button),
            ratingControl.isFavoriteHit(positionX: positionX) {
             toggleFavorite()
+        } else if let rating = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior) {
+            ratingControl.commit(rating: rating)
+        }
+    }
+
+    /// Press and hold without moving: set the rating under the cursor on release, like a click.
+    /// The heart is left to the click recognizer, so a long press can't toggle it twice.
+    @objc private func pressGestureRecognizerHandler(_ sender: NSPressGestureRecognizer) {
+        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
+        guard sender.state == .ended, let button = statusItem.button, !isStop else { return }
+
+        if let rating = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior) {
+            ratingControl.commit(rating: rating)
+        }
+    }
+
+    /// Drag across the stars: the stars follow the cursor, and the rating is saved on release.
+    @objc private func panGestureRecognizerHandler(_ sender: NSPanGestureRecognizer) {
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
+        guard let button = statusItem.button, !isStop else {
+            ratingDrag = nil
             return
         }
 
         switch sender.state {
+        case .began, .changed:
+            // Each drag starts fresh, even if an earlier one never reached a final state
+            var drag = (sender.state == .began ? nil : ratingDrag) ?? RatingControl.Drag(originalRating: ratingControl.rating)
+            let shownRating = drag.move(to: ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior))
+            ratingDrag = drag
+            if shownRating != ratingControl.rating {
+                ratingControl.update(rating: shownRating)
+                button.needsDisplay = true
+            }
         case .ended:
-            // With half stars on, the left half of a star (next to the gap before it) sets a half star
-            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .both : .full)
-        default:
-            break
-        }
-    }
-    
-    @objc private func doubleClickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-        
-        switch sender.state {
-        case .ended:
-            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .half : .full)
-        default:
-            break
-        }
-    }
-    
-    @objc private func pressGestureRecognizerHandler(_ sender: NSPressGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-
-        switch sender.state {
-        case .ended:
-            ratingControl.action(from: button, by: sender, behavior: .full)
+            if let rating = ratingDrag?.releaseRating(at: ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior)) {
+                ratingControl.commit(rating: rating)
+            }
+            ratingDrag = nil
+        case .cancelled, .failed:
+            if let originalRating = ratingDrag?.originalRating {
+                ratingControl.update(rating: originalRating)
+                button.needsDisplay = true
+            }
+            ratingDrag = nil
         default:
             break
         }
     }
 
-
-    @objc private func panGestureRecognizerHandler(_ sender: NSPanGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-        
-        switch sender.state {
-        case .changed, .ended:
-            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .both: .full)
-        default:
-            break
-        }
-    }
-    
-    
 }
 
 // MARK: - RatingControlDelegate
@@ -353,7 +345,10 @@ extension MenuBarRatingControl {
         isPlaying = player.isPlaying
         // Each property read is an Apple Event, so read the track once
         let track = player.currentTrack
-        ratingControl.update(rating: track?.userRating ?? 0)
+        // Don't overwrite the stars the user is dragging across
+        if ratingDrag == nil {
+            ratingControl.update(rating: track?.userRating ?? 0)
+        }
         ratingControl.updateFavorited(track?.isFavorited ?? false)
         updateFavoriteHeartView()
     }

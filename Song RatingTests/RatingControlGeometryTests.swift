@@ -59,7 +59,7 @@ final class RatingControlGeometryTests: XCTestCase {
 
     func testLeftOfFirstStarClearsRating() {
         for x: CGFloat in [-10, 0, 3.9] {
-            for behavior: RatingControl.Behavior in [.full, .half, .both] {
+            for behavior: RatingControl.Behavior in [.full, .both] {
                 XCTAssertEqual(control.starRating(atPositionX: x, behavior: behavior), 0, "x \(x), \(behavior)")
             }
         }
@@ -69,7 +69,8 @@ final class RatingControlGeometryTests: XCTestCase {
         for i in 0..<5 {
             let centreX = CGFloat(12 + 20 * i)
             XCTAssertEqual(control.starRating(atPositionX: centreX, behavior: .full), 2 * (i + 1))
-            XCTAssertEqual(control.starRating(atPositionX: centreX, behavior: .half), 2 * (i + 1) - 1)
+            XCTAssertEqual(control.starRating(atPositionX: centreX + 0.5, behavior: .both), 2 * (i + 1))
+            XCTAssertEqual(control.starRating(atPositionX: centreX, behavior: .both), 2 * (i + 1) - 1)
         }
     }
 
@@ -100,18 +101,16 @@ final class RatingControlGeometryTests: XCTestCase {
     /// Sweep the whole image: every position is either the heart or a rating,
     /// and ratings never go down as the cursor moves right.
     func testEveryPositionIsHeartOrNonDecreasingRating() {
-        var previous = 0
-        var x: CGFloat = 0
-        while x <= control.starsImage.size.width {
-            if !control.isFavoriteHit(positionX: x) {
-                let rating = control.starRating(atPositionX: x, behavior: .both)
-                XCTAssertTrue((0...10).contains(rating), "x \(x)")
-                XCTAssertGreaterThanOrEqual(rating, previous, "x \(x)")
+        for behavior: RatingControl.Behavior in [.full, .both] {
+            var previous = 0
+            for x in stride(from: CGFloat(0), through: control.starsImage.size.width, by: 0.5) where !control.isFavoriteHit(positionX: x) {
+                let rating = control.starRating(atPositionX: x, behavior: behavior)
+                XCTAssertTrue((0...10).contains(rating), "x \(x), \(behavior)")
+                XCTAssertGreaterThanOrEqual(rating, previous, "x \(x), \(behavior)")
                 previous = rating
             }
-            x += 0.5
+            XCTAssertEqual(previous, 10, "\(behavior)")
         }
-        XCTAssertEqual(previous, 10)
     }
 
 }

@@ -41,6 +41,7 @@
 		DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */; };
 		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
 		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
+		5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */; };
 		DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216922CB186F007FCF40 /* WindowManager.swift */; };
 		DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */; };
 		DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */; };
@@ -121,6 +122,7 @@
 		DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OSVersionHelper.swift; sourceTree = "<group>"; };
 		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlDragTests.swift; sourceTree = "<group>"; };
 		DB95216922CB186F007FCF40 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewController.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				DB106C5822C53D4C00502D7C /* Song_RatingTests.swift */,
 				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
+				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
 				DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */,
 				DB106C5A22C53D4C00502D7C /* Info.plist */,
 			);
@@ -525,6 +528,7 @@
 				DB89C9F522E3176C003981F5 /* iTunesLibraryTests.swift in Sources */,
 				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
+				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
