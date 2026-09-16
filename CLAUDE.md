@@ -10,8 +10,11 @@ The app is named "Music Rating". The Xcode project, scheme, targets, source fold
 - Signing: ad-hoc ("Sign to Run Locally"), no development team. Bundle IDs are `com.rossshannon.musicrating`, `.helper`, `.tests`. The helper and main app IDs are also hard-coded in both `AppDelegate.swift` files.
 - Build: `xcodebuild -project "Song Rating.xcodeproj" -scheme "Song Rating" build`
 - Test (app tests that don't need Music, plus SDK tests): `./build.sh --test`
-- Test everything, including `ScriptBridgeTests` and `iTunesLibraryTests`: `./build.sh --test-all`. These need Music playing a track with artwork and media library access, so they run locally only. CI builds the app and runs the SDK tests.
+- Test everything, including `ScriptBridgeTests` and `iTunesLibraryTests`: `./build.sh --test-all`. These need Music playing a track with artwork and media library access, so they run locally only. CI (`.github/workflows/test.yml`) runs `./build.sh` and `./build.sh --test`, so the skip list lives only in `build.sh`.
 - The app tests are hosted in Music Rating, so a test run launches the app. The test target is signed ad hoc like the app; without that, `xcodebuild test` asks for a development team.
+- Test log: `build/test/test.log`; result bundles: `build/test/results/`
+- Pre-commit hook (opt in): `git config core.hooksPath .githooks`
+- Release: push a `v*` tag; `.github/workflows/release.yml` tests, builds with `MARKETING_VERSION` from the tag, and attaches a zip to a GitHub release
 - Test: `xcodebuild -project "Song Rating.xcodeproj" -scheme "Song Rating" test`
 - Run specific test: `xcodebuild -project "Song Rating.xcodeproj" -scheme "Song Rating" test -only-testing:"Song RatingTests/TestClassName/testMethodName"` (target name with the space, not the module name; a wrong identifier is silently ignored)
 - SDK Tests: `cd SDK && swift test`

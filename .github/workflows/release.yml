@@ -1,0 +1,52 @@
+name: Release
+
+# Push a tag like v1.6.0 to test, build and publish a GitHub release with the zipped app.
+# The v prefix keeps these tags apart from upstream's version tags (1.5.0).
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Run tests
+        run: ./build.sh --test
+
+      - name: Build Release
+        run: |
+          xcodebuild build \
+            -project "Song Rating.xcodeproj" \
+            -scheme "Song Rating" \
+            -configuration Release \
+            -derivedDataPath build \
+            MARKETING_VERSION="${GITHUB_REF_NAME#v}"
+
+      # ditto keeps the bundle's symlinks, extended attributes and ad-hoc signature intact
+      - name: Zip app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            "build/Build/Products/Release/Music Rating.app" \
+            "Music-Rating-$GITHUB_REF_NAME.zip"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "Music-Rating-$GITHUB_REF_NAME.zip" \
+            --title "Music Rating ${GITHUB_REF_NAME#v}" \
+            --generate-notes

@@ -1,4 +1,6 @@
 # Music Rating
+[![Tests](https://github.com/rossshannon/MusicRating/actions/workflows/test.yml/badge.svg)](https://github.com/rossshannon/MusicRating/actions/workflows/test.yml)
+
 macOS menu bar app for rating music in iTunes/Music.app
 
 <img src="./Press/Snapshot.png" width=300 style="border-radius:4px">
@@ -21,9 +23,34 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 
 The Xcode project and scheme are still named "Song Rating". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.
 
+### Tests and CI
+The app tests are hosted in the app, so a test run launches Music Rating. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
+
+GitHub Actions builds the app and runs `./build.sh --test` for every push to `main` and every pull request. If the tests fail, the run uploads the test log and results as an artifact.
+
+To run the tests before each commit that changes code, turn on the pre-commit hook once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+### Releases
+Push a version tag to publish a release. For example, for version 1.6.0:
+
+```bash
+git tag v1.6.0
+```
+
+```bash
+git push origin v1.6.0
+```
+
+The Release workflow runs the tests, builds the app with that version number, and attaches `Music-Rating-v1.6.0.zip` to a new GitHub release. The app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
+
 ## Using the menu bar
 - **Click a star** to set that rating.
-- **Half stars**: turn on "Half star" in Preferences. Then click the left half of a star, or the gap just before it, to set a half star. For example, click just left of the third star for 3½ stars. You can also drag across the stars.
+- **Half stars**: turn on "Half star" in Preferences. Then click the left half of a star, or the gap just before it, to set a half star. For example, click just left of the third star for 3½ stars.
+- **Drag** across the stars and they fill in as you move. Let go to set the rating, the same as clicking at that spot. With half stars on, dragging across the gap between two stars shows where the half star begins. Let go over the heart to keep the last rating.
 - **Heart**: click the heart after the stars to mark the song as a favourite in Music. A filled heart means the song is a favourite.
 - **Right-click** to open the player popover.
 

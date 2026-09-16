@@ -30,8 +30,14 @@ for arg in "$@"; do
         --watch|-w) WATCH=true ;;
         --test|-t) TEST=true ;;
         --test-all) TEST=true; TEST_ALL=true ;;
+        *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
+
+if [ "$TEST" = true ] && { [ "$INSTALL" = true ] || [ "$WATCH" = true ]; }; then
+    echo "Error: --test runs on its own. Don't combine it with --install or --watch."
+    exit 2
+fi
 
 # xcodebuild needs a full Xcode. If xcode-select points at the Command Line
 # Tools, fall back to the first Xcode app we can find.
@@ -97,7 +103,7 @@ build_and_install() {
 run_tests() {
     # These test classes read from Music, so they fail unless Music is playing a track
     # with artwork and Music Rating may access the media library. CI has no Music.
-    # Test identifiers use the target name ("Song RatingTests"), not the module name.
+    # Test identifiers use the target name ("Song RatingTests"); the module name is silently ignored.
     local skip_args=()
     if [ "$TEST_ALL" = false ]; then
         skip_args=(
@@ -105,16 +111,34 @@ run_tests() {
             "-skip-testing:Song RatingTests/iTunesLibraryTests"
         )
     fi
+    local test_dir="build/test"
+    local test_log="$test_dir/test.log"
+    # xcodebuild won't overwrite a result bundle, so each run gets its own
+    local result_bundle="$test_dir/results/TestResults-$(date +%Y%m%d-%H%M%S).xcresult"
     local status=0
+
+    mkdir -p "$test_dir/results"
 
     echo ""
     echo "=== Testing $APP_NAME... ==="
-    # Keep compiler and test failures and the counts; drop the app's system log noise
-    xcodebuild -project "$PROJECT_NAME.xcodeproj" \
+    # The app hosts the tests, so a test run launches it
+    if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
         -scheme "$PROJECT_NAME" \
-        -derivedDataPath build/test \
+        -destination "platform=macOS" \
+        -derivedDataPath "$test_dir" \
+        -resultBundlePath "$result_bundle" \
         "${skip_args[@]}" \
-        test 2>&1 | grep -E ": error:|Test Case .* failed|Executed [0-9]+ tests|\*\* TEST" || status=1
+        test > "$test_log" 2>&1; then
+        grep -E "Executed [0-9]+ tests|\*\* TEST" "$test_log" | tail -2
+    else
+        status=1
+        # Failed tests first, then the end of the log, which explains crashes and build errors
+        grep -E ": error:|Test Case .* failed" "$test_log" || true
+        echo "--- last 40 lines of $test_log ---"
+        tail -40 "$test_log"
+        echo "App tests failed. Full log: $test_log"
+        echo "Results: $result_bundle"
+    fi
 
     echo ""
     echo "=== Testing SDK... ==="
