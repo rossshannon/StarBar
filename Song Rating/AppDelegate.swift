@@ -182,7 +182,7 @@ extension AppDelegate {
     }
     
     private func setupLaunchAtLogin() {
-        let launcherAppId = "com.claude.songrating.helper"
+        let launcherAppId = "com.rossshannon.musicrating.helper"
         let runningApps = NSWorkspace.shared.runningApplications
         let isRunning = runningApps.contains(where: { $0.bundleIdentifier == launcherAppId })
         
