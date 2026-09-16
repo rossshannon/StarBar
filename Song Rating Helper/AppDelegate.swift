@@ -18,7 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         
-        let mainAppIdentifier = "com.mainasuk.Song-Rating"
+        let mainAppIdentifier = "com.claude.songrating"
         let runningApps = NSWorkspace.shared.runningApplications
         let isRunning = runningApps.contains(where: { $0.bundleIdentifier == mainAppIdentifier })
         
