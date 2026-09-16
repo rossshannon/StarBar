@@ -1,4 +1,6 @@
-# Song Rating Project Guide
+# Music Rating Project Guide
+
+The app is named "Music Rating". The Xcode project, scheme, targets, source folders and Swift module (`Song_Rating`, pinned with `PRODUCT_MODULE_NAME` because storyboards reference it) keep the upstream "Song Rating" name.
 
 ## Build & Test Commands
 - Build (Release, into `build/`): `./build.sh`

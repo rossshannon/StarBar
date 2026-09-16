@@ -121,10 +121,16 @@ extension RatingControl {
         return pointInButton.x - leftMargin
     }
 
-    /// True when `positionX` (from `imagePositionX(in:)`) is over the favorite star.
+    /// Left edge of the favorite heart inside `starsImage`.
+    /// Matches the layout in `Stars.image`: five star slots, then one more spacing.
+    var favoriteMinX: CGFloat {
+        return CGFloat(7) * spacing + CGFloat(5) * starSize.width
+    }
+
+    /// True when `positionX` (from `imagePositionX(in:)`) is over the favorite heart.
     /// Matches the layout in `Stars.image`: five star slots, then one more spacing.
     func isFavoriteHit(positionX: CGFloat) -> Bool {
-        let favoriteMinX = CGFloat(7) * spacing + CGFloat(5) * starSize.width
+        let favoriteMinX = self.favoriteMinX
         return positionX >= favoriteMinX - 0.5 * spacing && positionX <= favoriteMinX + starSize.width + spacing
     }
 

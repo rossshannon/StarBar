@@ -52,12 +52,37 @@ struct Stars {
         return canvasImage
     }
     
-    /// Heart for Music's "favorited" flag, so it reads differently from the rating stars.
+    /// Fill colour for a favorited track's heart. It is drawn by `MenuBarRatingControl` as a
+    /// separate, non-template image, because the template `starsImage` can only be one colour.
+    static let favoriteHeartColor = NSColor(srgbRed: 0xF5 / 255.0, green: 0x00 / 255.0, blue: 0x2E / 255.0, alpha: 1)
+
+    /// Filled heart in `favoriteHeartColor`, the same size as one star.
+    static func filledFavoriteHeartImage(size: NSSize) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            let path = Stars.heartPath(in: rect, lineWidth: 1.0)
+            Stars.favoriteHeartColor.setFill()
+            Stars.favoriteHeartColor.setStroke()
+            path.fill()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    /// Outline heart for the template image. A favorited track leaves this slot empty, so the
+    /// coloured heart drawn on top has no template-coloured edge around it.
+    private func drawFavoriteHeart(in rect: NSRect, filled: Bool) {
+        guard !filled else { return }
+        NSColor.black.setStroke()
+        Stars.heartPath(in: rect, lineWidth: 1.5).stroke()
+    }
+
+    /// Heart outline for Music's "favorited" flag, so it reads differently from the rating stars.
     ///
     /// Two circles side by side, joined by tangent lines to a point at the bottom.
     /// AppKit's y axis points up, and arc angles are in degrees.
-    private func drawFavoriteHeart(in rect: NSRect, filled: Bool) {
-        let lineWidth: CGFloat = filled ? 1.0 : 1.5
+    private static func heartPath(in rect: NSRect, lineWidth: CGFloat) -> NSBezierPath {
         // Heart is 4r wide and (2 + 1.414)r tall; leave room for the stroke
         let radius = 0.95 * min((rect.width - lineWidth) / 4, (rect.height - lineWidth) / 3.414)
         let centerY = rect.midY + 0.707 * radius
@@ -72,13 +97,7 @@ struct Stars {
         path.close()
         path.lineJoinStyle = .round
         path.lineWidth = lineWidth
-
-        NSColor.black.setStroke()
-        if filled {
-            NSColor.black.setFill()
-            path.fill()
-        }
-        path.stroke()
+        return path
     }
     
 }

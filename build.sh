@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Build script for Song Rating
+# Build script for Music Rating
 #
 #   ./build.sh              Clean Release build into build/
-#   ./build.sh --install    Also replace /Applications/Song Rating.app and launch it
+#   ./build.sh --install    Also replace /Applications/Music Rating.app and launch it
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
 
 set -e
@@ -11,7 +11,9 @@ set -o pipefail
 
 cd "$(dirname "$0")"
 
-APP_NAME="Song Rating"
+# Xcode project and scheme keep the upstream "Song Rating" name; the product is "Music Rating"
+PROJECT_NAME="Song Rating"
+APP_NAME="Music Rating"
 APP_PATH="build/Build/Products/Release/$APP_NAME.app"
 INSTALL_PATH="/Applications/$APP_NAME.app"
 
@@ -43,8 +45,8 @@ build_and_install() {
 
     # Capture build output so a failure shows the full log
     BUILD_LOG=$(mktemp)
-    if xcodebuild -project "$APP_NAME.xcodeproj" \
-        -scheme "$APP_NAME" \
+    if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
+        -scheme "$PROJECT_NAME" \
         -configuration Release \
         -derivedDataPath build \
         clean build > "$BUILD_LOG" 2>&1; then

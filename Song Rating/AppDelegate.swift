@@ -109,7 +109,7 @@ extension AppDelegate {
                     // Show permission alert to user
                     let alert = NSAlert()
                     alert.messageText = "Permission Required"
-                    alert.informativeText = "Song Rating needs permission to control Music/iTunes. Please grant this permission in System Preferences → Security & Privacy → Automation."
+                    alert.informativeText = "Music Rating needs permission to control Music/iTunes. Please grant this permission in System Preferences → Security & Privacy → Automation."
                     alert.alertStyle = .warning
                     alert.addButton(withTitle: "Open System Preferences")
                     alert.addButton(withTitle: "Later")

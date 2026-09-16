@@ -58,6 +58,13 @@ final class MenuBarRatingControl {
     let ratingControl = RatingControl(rating: 0)
     let menuBarIcon: MenuBarIcon
     let trackingAreaResponser = TrackingAreaResponder()
+    /// Coloured heart shown over the empty heart slot in the template stars image
+    private let favoriteHeartView: NSImageView = {
+        let imageView = NSImageView()
+        imageView.imageScaling = .scaleNone
+        imageView.isHidden = true
+        return imageView
+    }()
     
     private let clickGestureRecognizer: NSClickGestureRecognizer = {
         let gestureRecognizer = NSClickGestureRecognizer()
@@ -79,14 +86,14 @@ final class MenuBarRatingControl {
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
-        let about = NSMenuItem(title: "About Song Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About Music Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
         about.target = WindowManager.shared
         menu.addItem(about)
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
         preferences.target = WindowManager.shared
         menu.addItem(preferences)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Song Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit Music Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
     private(set) var isPlaying = false {
@@ -135,6 +142,8 @@ final class MenuBarRatingControl {
         }
 
         button.image = ratingControl.starsImage
+        favoriteHeartView.image = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
+        button.addSubview(favoriteHeartView)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.action = #selector(MenuBarRatingControl.action(_:))
         button.target = self
@@ -192,6 +201,25 @@ extension MenuBarRatingControl {
         statusItem.length = !isStop ? playingWidth : pauseWidth
         statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
+        updateFavoriteHeartView()
+    }
+
+    /// Show the coloured heart over the heart slot when the track is a favorite.
+    /// The button centres `starsImage`, the same assumption the click hit-test makes.
+    private func updateFavoriteHeartView() {
+        guard let button = statusItem.button else { return }
+        favoriteHeartView.isHidden = isStop || !ratingControl.isLoved
+        guard !favoriteHeartView.isHidden else { return }
+
+        let width = statusItem.length > 0 ? statusItem.length : button.bounds.width
+        let leftMargin = 0.5 * (width - ratingControl.starsImage.size.width)
+        let size = ratingControl.starSize
+        favoriteHeartView.frame = NSRect(
+            x: leftMargin + ratingControl.favoriteMinX,
+            y: 0.5 * (button.bounds.height - size.height),
+            width: size.width,
+            height: size.height
+        )
     }
     
     /// Toggle the favorite status of the current track (called "loved" in the API)
@@ -206,6 +234,7 @@ extension MenuBarRatingControl {
         
         // Update our local state immediately
         ratingControl.updateLoved(!currentLoved)
+        updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         
         // Also trigger a full update to refresh data from iTunes
@@ -328,6 +357,7 @@ extension MenuBarRatingControl {
                ((#file as NSString).lastPathComponent), #line, #function, 
                player.currentTrack?.name ?? "unknown", isLoved ? 1 : 0)
         ratingControl.updateLoved(isLoved)
+        updateFavoriteHeartView()
     }
 
     @objc func iTunesRadioRequestTrackRatingUp(_ notification: Notification) {

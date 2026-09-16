@@ -36,7 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         components.removeLast()
         components.removeLast()
         components.append("MacOS")
-        components.append("Song Rating")
+        components.append("Music Rating")
         
         let newPath = NSString.path(withComponents: components)
         

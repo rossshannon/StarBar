@@ -15,7 +15,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "DB106C4122C53D4B00502D7C"
-               BuildableName = "Song Rating.app"
+               BuildableName = "Music Rating.app"
                BlueprintName = "Song Rating"
                ReferencedContainer = "container:Song Rating.xcodeproj">
             </BuildableReference>
@@ -55,7 +55,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "DB106C4122C53D4B00502D7C"
-            BuildableName = "Song Rating.app"
+            BuildableName = "Music Rating.app"
             BlueprintName = "Song Rating"
             ReferencedContainer = "container:Song Rating.xcodeproj">
          </BuildableReference>
@@ -72,7 +72,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "DB106C4122C53D4B00502D7C"
-            BuildableName = "Song Rating.app"
+            BuildableName = "Music Rating.app"
             BlueprintName = "Song Rating"
             ReferencedContainer = "container:Song Rating.xcodeproj">
          </BuildableReference>

@@ -1,9 +1,9 @@
-# Song Rating
+# Music Rating
 macOS menu bar app for rating music in iTunes/Music.app
 
 <img src="./Press/Snapshot.png" width=300 style="border-radius:4px">
 
-This is Ross Shannon's fork of [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
+Music Rating is Ross Shannon's fork of [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
 
 ## Requirements
 - macOS 12 +
@@ -13,11 +13,11 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 
 ```bash
 ./build.sh              # Release build into build/
-./build.sh --install    # Also replace /Applications/Song Rating.app and relaunch it
+./build.sh --install    # Also replace /Applications/Music Rating.app and relaunch it
 ./build.sh --watch -i   # Rebuild and reinstall on source changes (needs fswatch)
 ```
 
-The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.
+The Xcode project and scheme are still named "Song Rating". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.
 
 ## Using the menu bar
 - **Click a star** to set that rating.
@@ -27,7 +27,7 @@ The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon
 
 ## FAQ
 ### Are half-star ratings saved?
-Yes. Music stores a rating as a number from 0 to 100, where each star is 20. So 3½ stars is saved as 70. The Music app on the Mac can't display half stars, so it shows the whole stars only (70 shows as 3 stars). The value is still stored, Song Rating shows it, and smart playlist rules and AppleScript can use it.
+Yes. Music stores a rating as a number from 0 to 100, where each star is 20. So 3½ stars is saved as 70. The Music app on the Mac can't display half stars, so it shows the whole stars only (70 shows as 3 stars). The value is still stored, Music Rating shows it, and smart playlist rules and AppleScript can use it.
 
 To check a rating yourself:
 
@@ -44,9 +44,9 @@ Check the checkbox for "Star Ratings" in General preferences. [More info](https:
 ### Why the popover player sometimes follows to new screen scenes but sometimes not?
 The popover will jump to new scren scene when it get focused. It will stand in the old screen if the current focused window not the popover.
 
-### Why Song Rating not show star rating when iTunes/Music playing?
-Please check the Security & Privacy settings and check the checkbox of Song Rating.
+### Why does Music Rating not show the star rating when Music is playing?
+In System Settings, go to Privacy & Security, then Automation, and turn on Music for Music Rating.
 ![Automation](./Press/Automation.png)
 
 ## License
-Song Rating is released under the [MIT License](./LICENSE).
+Music Rating is released under the [MIT License](./LICENSE).
