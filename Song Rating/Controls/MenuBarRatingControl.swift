@@ -151,7 +151,9 @@ final class MenuBarRatingControl {
         button.target = self
         button.setButtonType(.momentaryChange)
         
-        // set fail rule
+        // Upstream meant these as "wait for the other recognizer to fail" rules, but
+        // shouldRequireFailure(of:) is a query that subclasses override, not a setter.
+        // The calls do nothing, so a double-click also fires the single-click handler.
         doubleClickGestureRecognizer.shouldRequireFailure(of: clickGestureRecognizer)
         panGestureRecognizer.shouldRequireFailure(of: pressGestureRecognizer)
         
