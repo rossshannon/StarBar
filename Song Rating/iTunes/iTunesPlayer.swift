@@ -45,11 +45,6 @@ extension iTunesPlayer {
         _currentTrack = track
         _currentTrack.flatMap { history.insert($0) }
         
-        // Debug logging
-        if let track = _currentTrack {
-            NSLog("Updated current track: \(track.name ?? "unknown") - Rating: \(track.rating ?? 0), Favorited: \(track.isFavorited)")
-        }
-        
         if broadcast {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)
         }

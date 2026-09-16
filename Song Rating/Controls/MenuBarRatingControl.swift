@@ -60,9 +60,11 @@ final class MenuBarRatingControl {
     let trackingAreaResponser = TrackingAreaResponder()
     /// Coloured heart shown over the empty heart slot in the template stars image
     private let favoriteHeartView: NSImageView = {
-        let imageView = NSImageView()
+        let imageView = PassthroughImageView()
         imageView.imageScaling = .scaleNone
         imageView.isHidden = true
+        // Stay centred with the stars image when the button resizes after statusItem.length changes
+        imageView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         return imageView
     }()
     
@@ -211,8 +213,8 @@ extension MenuBarRatingControl {
         favoriteHeartView.isHidden = isStop || !ratingControl.isLoved
         guard !favoriteHeartView.isHidden else { return }
 
-        let width = statusItem.length > 0 ? statusItem.length : button.bounds.width
-        let leftMargin = 0.5 * (width - ratingControl.starsImage.size.width)
+        // Same geometry as RatingControl.imagePositionX(in:), so the heart and its click area agree
+        let leftMargin = 0.5 * (button.bounds.width - ratingControl.starsImage.size.width)
         let size = ratingControl.starSize
         favoriteHeartView.frame = NSRect(
             x: leftMargin + ratingControl.favoriteMinX,
@@ -348,15 +350,10 @@ extension MenuBarRatingControl {
         let player = iTunesPlayer.shared
 
         isPlaying = player.isPlaying
-        let userRating = player.currentTrack?.userRating ?? 0
-        ratingControl.update(rating: userRating)
-        
-        // Update loved status if available
-        let isLoved = player.currentTrack?.isFavorited ?? false
-        os_log("%{public}s[%{public}ld], %{public}s: Current track '%{public}s' - loved status: %{public}d", 
-               ((#file as NSString).lastPathComponent), #line, #function, 
-               player.currentTrack?.name ?? "unknown", isLoved ? 1 : 0)
-        ratingControl.updateLoved(isLoved)
+        // Each property read is an Apple Event, so read the track once
+        let track = player.currentTrack
+        ratingControl.update(rating: track?.userRating ?? 0)
+        ratingControl.updateLoved(track?.isFavorited ?? false)
         updateFavoriteHeartView()
     }
 
@@ -472,4 +469,11 @@ extension NSPopover {
         popoverViewController.hostPopover = self
     }
 
+}
+
+/// Image view that never takes mouse events, so clicks on the favorite heart reach the status bar button.
+private final class PassthroughImageView: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
 }

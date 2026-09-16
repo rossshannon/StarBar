@@ -24,16 +24,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        os_log("%{public}s[%{public}ld], %{public}s: APPLICATION LAUNCHING", ((#file as NSString).lastPathComponent), #line, #function)
-        
-        // Check if Music/iTunes is running
-        let isRunning = NSWorkspace.shared.runningApplications.contains { 
-            $0.bundleIdentifier == OSVersionHelper.bundleIdentifier 
-        }
-        
-        os_log("%{public}s[%{public}ld], %{public}s: iTunes/Music running status: %{public}d", 
-               ((#file as NSString).lastPathComponent), #line, #function, isRunning ? 1 : 0)
-        
         // setup shortcut validator
         if let validator = MASShortcutValidator.shared() {
             validator.allowAnyShortcutWithOptionModifier = true
@@ -46,8 +36,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupAppleEvent()
         
         // setup menu bar
-        // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated,
-        // so it must exist before the launch-time player update is broadcast.
+        // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated, and the
+        // async update in setupAppleEvent() must find it already observing. A delayed control
+        // misses that update and shows the stopped icon until the next track change.
         menuBarRatingControl = MenuBarRatingControl()
         WindowManager.shared.menuBarRatingControl = menuBarRatingControl
 
@@ -95,27 +86,26 @@ extension AppDelegate {
                 case OSStatus(procNotFound):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes/Music not running", ((#file as NSString).lastPathComponent), #line, #function)
                     
-                    // Show alert to user about Music/iTunes not running
-                    let alert = NSAlert()
-                    alert.messageText = "Music App Not Running"
-                    alert.informativeText = "Please launch the Music app (or iTunes on older macOS versions) and try again."
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "OK")
-                    alert.runModal()
-                    
                 case OSStatus(errAEEventNotPermitted):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: not permitted", ((#file as NSString).lastPathComponent), #line, #function)
                     
-                    // Show permission alert to user
+                    // Explain once; after that, only log, so a denied permission doesn't nag at every login
+                    let shownKey = "hasShownAutomationPermissionAlert"
+                    guard !UserDefaults.standard.bool(forKey: shownKey) else { break }
+                    UserDefaults.standard.set(true, forKey: shownKey)
+
                     let alert = NSAlert()
                     alert.messageText = "Permission Required"
-                    alert.informativeText = "Music Rating needs permission to control Music/iTunes. Please grant this permission in System Preferences → Security & Privacy → Automation."
+                    alert.informativeText = "Music Rating needs permission to control Music. Turn it on in System Settings → Privacy & Security → Automation."
                     alert.alertStyle = .warning
-                    alert.addButton(withTitle: "Open System Preferences")
+                    alert.addButton(withTitle: "Open System Settings")
                     alert.addButton(withTitle: "Later")
-                    
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Library/PreferencePanes/Security.prefPane"))
+
+                    // Menu bar apps have no Dock icon, so bring the alert to the front
+                    NSApp.activate(ignoringOtherApps: true)
+                    if alert.runModal() == .alertFirstButtonReturn,
+                       let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+                        NSWorkspace.shared.open(url)
                     }
                     
                 default:

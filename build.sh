@@ -68,6 +68,10 @@ build_and_install() {
     echo "Build successful!"
 
     if [ "$INSTALL" = true ]; then
+        if [ -d "$INSTALL_PATH" ] && ! command -v trash &> /dev/null; then
+            echo "Error: trash not found, so the existing app can't be moved to the Trash. Install with: brew install trash"
+            return 1
+        fi
         echo "Installing to /Applications..."
         killall "$APP_NAME" 2>/dev/null || true
         sleep 0.5

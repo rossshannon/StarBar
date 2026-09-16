@@ -46,7 +46,7 @@ class RatingControl {
             stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .dot), count: dotCount))
         }
         
-        return Stars(stars: stars, spacing: spacing, isLoved: isLoved)
+        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isLoved: isLoved)
     }
     
     /// Stars rating control constructor
@@ -90,7 +90,7 @@ extension RatingControl {
         self.isLoved = loved
         
         drawStars()
-        os_log("%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, loved ? 1 : 0)
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, loved ? 1 : 0)
     }
     
     /// Stars draw only method
@@ -128,7 +128,6 @@ extension RatingControl {
     }
 
     /// True when `positionX` (from `imagePositionX(in:)`) is over the favorite heart.
-    /// Matches the layout in `Stars.image`: five star slots, then one more spacing.
     func isFavoriteHit(positionX: CGFloat) -> Bool {
         let favoriteMinX = self.favoriteMinX
         return positionX >= favoriteMinX - 0.5 * spacing && positionX <= favoriteMinX + starSize.width + spacing
@@ -156,7 +155,7 @@ extension RatingControl {
             }
         }
 
-        os_log("%{public}s[%{public}ld], %{public}s: click positionX %{public}.1f -> star rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: click positionX %{public}.1f -> star rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
 
         guard delegate?.ratingControl(self, shouldUpdateRating: rating * 10) ?? false else {
             return
@@ -171,58 +170,6 @@ extension RatingControl {
         case full
         case half
         case both
-    }
-    
-    
-    // handle .leftMouseUp, .leftMouseDragged event on host button
-    func action(from sender: NSButton, with event: NSEvent) {
-        let width = sender.bounds.size.width
-        let imageWidth = starsImage.size.width
-        guard width > 0, imageWidth > 0 else { return }
-        
-        // assert image center aligment without resize and leading & tariling margin added
-        let position = sender.convert(event.locationInWindow, to: nil)  //  leading margin | image | trailing margin
-        let systemLeftMargin: CGFloat = {
-            if #available(macOS 11.0, *) {
-                return 20 + 0.5 * (width - imageWidth)                  //  big sur magic container width + leading margin
-            } else {
-                return 0.5 * (width - imageWidth)                       //  leading margin (default 4)
-            }
-        }()
-        let positionX = position.x - systemLeftMargin                   // x in range: -leading margin ~ image.size.with
-        
-        var rating: Int?
-        let array = Array(0..<5)
-        let starsMinX = array.map { i -> CGFloat in
-            return spacing * CGFloat(1 + i) + starSize.width * CGFloat(i)
-        }
-        let starsMaxX = starsMinX.map { $0 + starSize.width }
-        
-        if positionX < starsMinX[0] {
-            rating = 0
-        } else if positionX > starsMaxX[4] {
-            rating = 5
-        } else {
-            for i in array where positionX > starsMinX[i] && positionX < starsMaxX[i] {
-                rating = i + 1
-            }
-        }
-        
-        // starRating: 0 ~ 5
-        guard let starRating = rating,
-        delegate?.ratingControl(self, shouldUpdateRating: starRating * 20) ?? false else {
-            return
-        }
-        
-        switch event.type {
-        case .leftMouseUp, .leftMouseDragged:
-            let newRating = starRating * 20
-            update(rating: newRating)
-            delegate?.ratingControl(self, userDidUpdateRating: newRating)
-
-        default:
-            break
-        }
     }
     
 }

@@ -12,20 +12,23 @@ struct Stars {
     
     let stars: [Star]
     let spacing: CGFloat
+    /// Adds a favorite heart slot after the stars (menu bar only, not preference labels)
+    let showsFavorite: Bool
     let isLoved: Bool
     
-    init(stars: [Star], spacing: CGFloat, isLoved: Bool = false) {
+    init(stars: [Star], spacing: CGFloat, showsFavorite: Bool = false, isLoved: Bool = false) {
         self.stars = stars
         self.spacing = spacing
+        self.showsFavorite = showsFavorite
         self.isLoved = isLoved
     }
     
     var image: NSImage {
-        // Calculate width including heart icon space
+        // spacing | star | spacing | … | star | spacing, then optionally spacing | heart.
+        // Must match RatingControl.starsImage and favoriteMinX, or drawing squeezes the image.
         let starsWidth = stars.map { $0.size.width }.reduce(into: 0.0, { $0 += $1 }) + CGFloat(stars.count + 1) * spacing
-        // Add extra space for heart icon
         let heartWidth = stars.first?.size.width ?? 0
-        let width = starsWidth + spacing + heartWidth + spacing
+        let width = showsFavorite ? starsWidth + spacing + heartWidth : starsWidth
         
         let height = stars.map { $0.size.height }.max() ?? 0.0
         
@@ -39,7 +42,7 @@ struct Stars {
         }
         
         // Draw favorite heart
-        if let firstStar = stars.first {
+        if showsFavorite, let firstStar = stars.first {
             let starSize = firstStar.size
             let favoriteOrigin = CGPoint(x: starsWidth + spacing, y: 0.5 * (height - starSize.height))
             

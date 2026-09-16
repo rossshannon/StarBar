@@ -27,7 +27,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Song Rating Needs Apple Event to Rate Song in iTunes</string>
+	<string>Music Rating needs to control Music to read and set song ratings and favourites.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2019 Cirno MainasuK, 2025–2026 Ross Shannon. MIT License.</string>
 	<key>NSMainStoryboardFile</key>
