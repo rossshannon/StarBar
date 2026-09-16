@@ -47,7 +47,7 @@ extension iTunesPlayer {
         
         // Debug logging
         if let track = _currentTrack {
-            NSLog("Updated current track: \(track.name ?? "unknown") - Rating: \(track.rating ?? 0), Loved: \(track.loved ?? false)")
+            NSLog("Updated current track: \(track.name ?? "unknown") - Rating: \(track.rating ?? 0), Favorited: \(track.isFavorited)")
         }
         
         if broadcast {

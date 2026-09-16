@@ -140,13 +140,6 @@ final class MenuBarRatingControl {
         button.target = self
         button.setButtonType(.momentaryChange)
         
-        // Create a specific gesture recognizer for heart icon double tap
-        let heartDoubleClickGestureRecognizer = NSClickGestureRecognizer()
-        heartDoubleClickGestureRecognizer.numberOfClicksRequired = 2
-        heartDoubleClickGestureRecognizer.action = #selector(MenuBarRatingControl.doubleTapHeartGestureRecognizerHandler(_:))
-        heartDoubleClickGestureRecognizer.target = self
-        button.addGestureRecognizer(heartDoubleClickGestureRecognizer)
-        
         // set fail rule
         doubleClickGestureRecognizer.shouldRequireFailure(of: clickGestureRecognizer)
         panGestureRecognizer.shouldRequireFailure(of: pressGestureRecognizer)
@@ -193,7 +186,6 @@ extension MenuBarRatingControl {
 
     private func updateMenuBar() {
         let margin: CGFloat = 4 + 4
-        // Add extra space for heart icon
         let playingWidth = margin + ratingControl.starsImage.size.width
         let pauseWidth = margin + CGFloat(2) * ratingControl.spacing + ratingControl.starSize.width
 
@@ -209,8 +201,8 @@ extension MenuBarRatingControl {
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
         
         // Toggle the loved property (which is actually "favorite" in the UI)
-        let currentLoved = track.loved ?? false
-        track.setLoved?(!currentLoved)
+        let currentLoved = track.isFavorited
+        track.updateFavorited(!currentLoved)
         
         // Update our local state immediately
         ratingControl.updateLoved(!currentLoved)
@@ -249,36 +241,18 @@ extension MenuBarRatingControl {
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard let button = statusItem.button, !isStop else { return }
-        
-        // Check if we're clicking on the heart area
-        let position = sender.location(in: nil)
-        let width = button.bounds.size.width
-        let imageWidth = ratingControl.starsImage.size.width
-        
-        let systemLeftMargin: CGFloat = {
-            if #available(macOS 11.0, *) {
-                return 10 + 0.5 * (width - imageWidth)
-            } else {
-                return 0.5 * (width - imageWidth)
-            }
-        }()
-        
-        let positionX = position.x - systemLeftMargin
-        
-        // Heart area detection - similar to what's in RatingControl
-        let starsWidth = CGFloat(5) * ratingControl.starSize.width + CGFloat(5) * ratingControl.spacing
-        let heartMinX = starsWidth + ratingControl.spacing
-        let heartMaxX = heartMinX + ratingControl.starSize.width
-        
-        if positionX > heartMinX && positionX < heartMaxX {
-            // Heart was clicked
+
+        if sender.state == .ended,
+           let positionX = ratingControl.imagePositionX(in: button),
+           ratingControl.isFavoriteHit(positionX: positionX) {
             toggleLovedStatus()
             return
         }
-        
+
         switch sender.state {
         case .ended:
-            ratingControl.action(from: button, by: sender, behavior: .full)
+            // With half stars on, the left half of a star (next to the gap before it) sets a half star
+            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .both : .full)
         default:
             break
         }
@@ -321,11 +295,6 @@ extension MenuBarRatingControl {
         }
     }
     
-    // Double-tap on heart icon area to toggle loved status
-    @objc private func doubleTapHeartGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: heart double tapped", ((#file as NSString).lastPathComponent), #line, #function)
-        toggleLovedStatus()
-    }
     
 }
 
@@ -341,8 +310,6 @@ extension MenuBarRatingControl: RatingControlDelegate {
         iTunesRadioStation.shared.setRating(rating)
         statusItem.button?.needsDisplay = true
     }
-    
-    // Removed heartIconClicked method as we're now handling heart clicks directly in the gesture recognizer
 
 }
 
@@ -356,7 +323,7 @@ extension MenuBarRatingControl {
         ratingControl.update(rating: userRating)
         
         // Update loved status if available
-        let isLoved = player.currentTrack?.loved ?? false
+        let isLoved = player.currentTrack?.isFavorited ?? false
         os_log("%{public}s[%{public}ld], %{public}s: Current track '%{public}s' - loved status: %{public}d", 
                ((#file as NSString).lastPathComponent), #line, #function, 
                player.currentTrack?.name ?? "unknown", isLoved ? 1 : 0)

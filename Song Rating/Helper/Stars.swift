@@ -78,8 +78,8 @@ struct Stars {
         for i in 0..<10 {
             // Alternate between outer and inner points
             let radius = i % 2 == 0 ? outerRadius : innerRadius
-            // Calculate angle (36 degrees per point, offset by -90 degrees to start at top)
-            let angle = Double.pi * (Double(i) * 36.0 / 180.0 - 90.0 / 180.0)
+            // Calculate angle (36 degrees per point, offset by +90 degrees: AppKit's y axis points up, so this starts at the top)
+            let angle = Double.pi * (Double(i) * 36.0 / 180.0 + 90.0 / 180.0)
             
             let x = centerX + CGFloat(cos(angle)) * radius
             let y = centerY + CGFloat(sin(angle)) * radius

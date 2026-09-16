@@ -108,69 +108,55 @@ extension RatingControl {
 
 extension RatingControl {
     
+    /// Cursor x offset inside `starsImage`, read from the live mouse position.
+    ///
+    /// `NSGestureRecognizer.location(in:)` on a status bar button reports the same point for
+    /// every click on macOS 27, so we convert `NSEvent.mouseLocation` into button coordinates.
+    /// The button centres the image, so the margin is half of the spare width.
+    func imagePositionX(in button: NSButton) -> CGFloat? {
+        guard let window = button.window, starsImage.size.width > 0 else { return nil }
+        let pointInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
+        let pointInButton = button.convert(pointInWindow, from: nil)
+        let leftMargin = 0.5 * (button.bounds.width - starsImage.size.width)
+        return pointInButton.x - leftMargin
+    }
+
+    /// True when `positionX` (from `imagePositionX(in:)`) is over the favorite star.
+    /// Matches the layout in `Stars.image`: five star slots, then one more spacing.
+    func isFavoriteHit(positionX: CGFloat) -> Bool {
+        let favoriteMinX = CGFloat(7) * spacing + CGFloat(5) * starSize.width
+        return positionX >= favoriteMinX - 0.5 * spacing && positionX <= favoriteMinX + starSize.width + spacing
+    }
+
     func action(from sender: NSButton, by gestureRecognizer: NSGestureRecognizer, behavior: Behavior) {
-        let width = sender.bounds.size.width
-        let imageWidth = starsImage.size.width
-        guard width > 0, imageWidth > 0 else { return }
-        
-        // assert image center aligment without resize and leading & tariling margin added
-        //  leading margin | image | trailing margin
-        let position = gestureRecognizer.location(in: nil)
-        
-        let systemLeftMargin: CGFloat = {
-            if #available(macOS 11.0, *) {
-                return 10 + 0.5 * (width - imageWidth)                  //  Big Sur magic container width + leading margin
-            } else {
-                return 0.5 * (width - imageWidth)                       //  leading margin (default 4)
-            }
-        }()
-        let positionX = position.x - systemLeftMargin                   // x in range: -leading margin ~ image.size.with
-        
-        // Calculate where the heart icon should be
-        let starsWidth = CGFloat(5) * starSize.width + CGFloat(5) * spacing
-        let heartMinX = starsWidth + spacing
-        let heartMaxX = heartMinX + starSize.width
-        
-        var rating: Int?
-        let array = Array(0..<5)
-        let starsMinX = array.map { i -> CGFloat in
-            return spacing * CGFloat(1 + i) + starSize.width * CGFloat(i)
-        }
-        let starsMaxX = starsMinX.map { $0 + starSize.width }
+        guard let positionX = imagePositionX(in: sender), !isFavoriteHit(positionX: positionX) else { return }
 
-        // Check if the heart icon was clicked
-        if positionX > heartMinX && positionX < heartMaxX {
-            // Handle heart icon click - this will be passed back to MenuBarRatingControl
-            rating = -1
-        } else if positionX < starsMinX[0] {
+        // Star i is drawn from spacing + i * slot to that plus starSize.width.
+        // Split each gap between neighbouring stars so no click position is dead.
+        let slot = starSize.width + spacing
+        let rating: Int  // starRating: 0 ~ 10
+        if positionX < spacing {
             rating = 0
-        } else if positionX > starsMaxX[4] {
-            rating = 10
         } else {
-            for i in array where positionX > starsMinX[i] && positionX < starsMaxX[i] {
-                switch behavior {
-                case .full:
-                    rating = 2 * (i + 1)
-                case .half:
-                    rating = 2 * (i + 1) - 1
-                case .both:
-                    let centerX = 0.5 * (starsMinX[i] + starsMaxX[i])
-                    rating = positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
-                }
+            let i = min(4, max(0, Int(((positionX - 0.5 * spacing) / slot).rounded(.down))))
+            switch behavior {
+            case .full:
+                rating = 2 * (i + 1)
+            case .half:
+                rating = 2 * (i + 1) - 1
+            case .both:
+                let centerX = spacing + CGFloat(i) * slot + 0.5 * starSize.width
+                rating = positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
             }
         }
 
-        // We'll handle heart clicks directly in MenuBarRatingControl's clickGestureRecognizerHandler
-        if rating == -1 {
-            return
-        }
-        
-        // starRating: 0 ~ 10
-        guard let starRating = rating, delegate?.ratingControl(self, shouldUpdateRating: starRating * 10) ?? false else {
+        os_log("%{public}s[%{public}ld], %{public}s: click positionX %{public}.1f -> star rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
+
+        guard delegate?.ratingControl(self, shouldUpdateRating: rating * 10) ?? false else {
             return
         }
 
-        let newRating = starRating * 10
+        let newRating = rating * 10
         update(rating: newRating)
         delegate?.ratingControl(self, userDidUpdateRating: newRating)
     }
