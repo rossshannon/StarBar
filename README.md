@@ -35,7 +35,7 @@ The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerT
 sudo automationmodetool enable-automationmode-without-authentication
 ```
 
-GitHub Actions builds the app and runs `./build.sh --test` and `./build.sh --ui-test` for every push to `main` and every pull request. If the tests fail, the run uploads the test log and results as an artifact.
+GitHub Actions builds the app and runs `./build.sh --test` on macOS 15, 26 and 27, and `./build.sh --ui-test` on macOS 26 and 27, for every push to `main` and every pull request. The macOS 27 jobs use GitHub's preview image with an Xcode beta, so their failures are reported but don't fail the run. If the tests fail, the run uploads the test log and results as an artifact.
 
 To run the tests before each commit that changes code, turn on the pre-commit hook once:
 

@@ -14,8 +14,24 @@ concurrency:
 
 jobs:
   test:
-    runs-on: macos-latest
+    name: test (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    # The macOS 27 image is a GitHub preview with an Xcode beta; its failures don't fail the run
+    continue-on-error: ${{ matrix.preview }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 15
+            runner: macos-15
+            preview: false
+          - name: macOS 26
+            runner: macos-26
+            preview: false
+          - name: macOS 27
+            runner: xcode-27
+            preview: true
 
     steps:
       - name: Checkout
@@ -24,6 +40,7 @@ jobs:
       - name: Select Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode.app
+          sw_vers
           xcodebuild -version
 
       - name: Build Release
@@ -38,16 +55,30 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
+          name: test-results-${{ matrix.runner }}
           path: |
             build/test/test.log
             build/test/results/
           if-no-files-found: ignore
 
   # Clicks and drags the real menu bar. The app runs with -UITesting YES, so no Music is needed.
+  # Two versions, because the menu bar delivers clicks differently: macOS 27 sends one click on
+  # mouse down and no drag events; macOS 26 and earlier send real drag events.
   ui-test:
-    runs-on: macos-latest
+    name: ui-test (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    continue-on-error: ${{ matrix.preview }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS 26
+            runner: macos-26
+            preview: false
+          - name: macOS 27
+            runner: xcode-27
+            preview: true
 
     steps:
       - name: Checkout
@@ -56,6 +87,7 @@ jobs:
       - name: Select Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode.app
+          sw_vers
           xcodebuild -version
 
       # UI tests need macOS Automation Mode, which otherwise asks for a password
@@ -71,7 +103,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ui-test-results
+          name: ui-test-results-${{ matrix.runner }}
           path: |
             build/test/ui-test.log
             build/test/results/
