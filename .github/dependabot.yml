@@ -8,3 +8,13 @@ updates:
     # Wait a week after a release before proposing it
     cooldown:
       default-days: 7
+
+  # Swift packages used by the SDK package. MASShortcut follows its master branch rather
+  # than a version, so Dependabot may not propose updates for it; version-pinned packages
+  # added later are covered.
+  - package-ecosystem: swift
+    directory: /SDK
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
