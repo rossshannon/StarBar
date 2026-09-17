@@ -14,7 +14,7 @@ enum TrackAnnouncementStyle: String, CaseIterable {
     case classic
     /// A blur of whatever is behind the strip, under a lighter black wash
     case blur
-    /// Liquid Glass with a blue tint on macOS 26 and later; the blur before that
+    /// Dark Liquid Glass on macOS 26 and later (built with its SDK); the blur before that
     case glass
 
     /// The default, and what an unknown stored value falls back to

@@ -104,11 +104,15 @@ final class TrackAnnouncementView: NSView {
     /// A behind-window blur, or Liquid Glass where the system has it. `state` must be
     /// `.active`: the default follows the window's active state, and this panel is never
     /// active, so the blur would silently switch off.
+    ///
+    /// `NSGlassEffectView` exists only in the macOS 26 SDK (Xcode 26, Swift 6.2), so the
+    /// runtime check sits inside a compiler check: an older Xcode builds the blur fallback.
     static func makeBackdrop(for style: TrackAnnouncementStyle) -> NSView? {
         switch style {
         case .classic:
             return nil
         case .glass:
+            #if compiler(>=6.2)
             if #available(macOS 26.0, *) {
                 let glass = NSGlassEffectView()
                 // .clear keeps the backdrop visible through the glass; .regular frosts it
@@ -119,6 +123,7 @@ final class TrackAnnouncementView: NSView {
                 glass.tintColor = TrackAnnouncementLayout.glassTint
                 return glass
             }
+            #endif
             return makeBlur()
         case .blur:
             return makeBlur()

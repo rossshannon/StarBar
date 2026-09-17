@@ -314,17 +314,21 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         view.style = .glass
 
         let backdrop = try XCTUnwrap(view.backdropView)
+        XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.glassTintAlpha)
+        XCTAssertEqual(view.tintColor, .black)
+        // NSGlassEffectView is only in the macOS 26 SDK, so an older Xcode builds and
+        // asserts the blur fallback, whatever macOS the tests run on
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
-            XCTAssertTrue(backdrop is NSGlassEffectView)
+            let glass = try XCTUnwrap(backdrop as? NSGlassEffectView)
+            XCTAssertEqual(glass.tintColor, TrackAnnouncementLayout.glassTint)
+            XCTAssertLessThan(TrackAnnouncementLayout.glassTint.alphaComponent, 1, "an opaque tint paints the strip solid")
         } else {
             XCTAssertTrue(backdrop is NSVisualEffectView, "before macOS 26 the glass style falls back to the blur")
         }
-        XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.glassTintAlpha)
-        XCTAssertEqual(view.tintColor, .black)
-        if #available(macOS 26.0, *), let glass = backdrop as? NSGlassEffectView {
-            XCTAssertEqual(glass.tintColor, TrackAnnouncementLayout.glassTint)
-            XCTAssertLessThan(TrackAnnouncementLayout.glassTint.alphaComponent, 1, "an opaque tint paints the strip solid")
-        }
+        #else
+        XCTAssertTrue(backdrop is NSVisualEffectView, "built without the macOS 26 SDK, the glass style is the blur")
+        #endif
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty)
     }
 
