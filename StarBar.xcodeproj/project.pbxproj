@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C1 /* RatingClickController.swift */; };
 		5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */; };
+		5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */; };
 		5A7E1A0000000000000000B2 /* MenuBarRatingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */; };
 		DB05F0632353909000CE6DF9 /* PlayerPanelViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */; };
 		DB05F0652353912500CE6DF9 /* PlayerInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */; };
@@ -23,6 +24,7 @@
 		DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6A22C661F900502D7C /* PlayInfo.swift */; };
 		DB106CA422CA3C7300502D7C /* Star.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA322CA3C7300502D7C /* Star.swift */; };
 		DB106CA622CA3EE700502D7C /* Stars.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA522CA3EE700502D7C /* Stars.swift */; };
+		5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */; };
 		DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA722CA45BB00502D7C /* RatingControl.swift */; };
 		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
 		DB11065323047E7F001DA02A /* iTunesPlayerHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */; };
@@ -44,6 +46,7 @@
 		DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */; };
 		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
 		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
+		5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */; };
 		5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */; };
 		DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216922CB186F007FCF40 /* WindowManager.swift */; };
 		DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */; };
@@ -110,6 +113,7 @@
 /* Begin PBXFileReference section */
 		5A7E1A0000000000000000C1 /* RatingClickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickControllerTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickControllerAddTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRatingUITests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000B3 /* StarBarUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "StarBarUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPanelViewController.swift; sourceTree = "<group>"; };
@@ -131,6 +135,7 @@
 		DB106C6A22C661F900502D7C /* PlayInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayInfo.swift; sourceTree = "<group>"; };
 		DB106CA322CA3C7300502D7C /* Star.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Star.swift; sourceTree = "<group>"; };
 		DB106CA522CA3EE700502D7C /* Stars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stars.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibraryBadge.swift; sourceTree = "<group>"; };
 		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
 		DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayerHistory.swift; sourceTree = "<group>"; };
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
@@ -153,6 +158,7 @@
 		DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OSVersionHelper.swift; sourceTree = "<group>"; };
 		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlAddToLibraryTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlDragTests.swift; sourceTree = "<group>"; };
 		DB95216922CB186F007FCF40 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
@@ -279,8 +285,10 @@
 				DB106C5822C53D4C00502D7C /* StarBarTests.swift */,
 				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
+				5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */,
 				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
+				5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */,
 				5A7E1A0000000000000000D7 /* RatingReminderTests.swift */,
 				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
 				5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */,
@@ -343,6 +351,7 @@
 			children = (
 				DB106CA322CA3C7300502D7C /* Star.swift */,
 				DB106CA522CA3EE700502D7C /* Stars.swift */,
+				5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
 				5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */,
@@ -610,6 +619,7 @@
 				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
 				DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */,
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
+				5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
 				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
 				5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */,
@@ -653,8 +663,10 @@
 				DB89C9F522E3176C003981F5 /* iTunesLibraryTests.swift in Sources */,
 				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
+				5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */,
 				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
+				5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */,
 				5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */,
 				5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */,
 				5A7E1A0000000000000000F2 /* FakeClock.swift in Sources */,

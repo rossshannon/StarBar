@@ -179,15 +179,18 @@ extension iTunesRadioStation {
     ///   fresh is held and sent when the window closes, so a held-down rating shortcut doesn't
     ///   send Music a burst of Apple Events. A drag doesn't come through here repeatedly:
     ///   `RatingClickController` previews it and commits once, on release.
-    func setRating(_ rating: Int) {
-        guard latestPlayInfo != nil || !(iTunes?.currentTrack?.name ?? "").isEmpty else {
+    /// - Parameter track: the track to rate, or nil for whatever is playing. The menu bar
+    ///   passes the library copy of a song just added with the Apple Music button, because the
+    ///   playing track stays a catalog track that Music will not store a rating on.
+    func setRating(_ rating: Int, on track: iTunesTrack? = nil) {
+        guard track != nil || latestPlayInfo != nil || !(iTunes?.currentTrack?.name ?? "").isEmpty else {
             os_log("%{public}s[%{public}ld], %{public}s: try to set rating but no current track info", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
         // Hold on to the track the user was looking at. A write that lands later must rate
         // that track, not whatever has started playing by then.
-        let targetTrack = iTunes?.currentTrack?.copy()
+        let targetTrack = track ?? iTunes?.currentTrack?.copy()
 
         // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification
         let name = latestPlayInfo?.name ?? iTunes?.currentTrack?.name ?? "nil"
@@ -235,6 +238,74 @@ extension iTunesRadioStation {
         let track = targetTrack ?? iTunes?.currentTrack
         track?.setRating?(rating)
         logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(name, privacy: .public): \(rating)")
+    }
+
+    /// Add the playing song to the library, so Music has somewhere to keep a rating.
+    ///
+    /// Only useful for a song streamed from the Apple Music catalog, which cannot be rated
+    /// until it is in the library. See `iTunesTrack.isCatalogStream`.
+    ///
+    /// Music's add is `duplicate`, and it has to go to the library **source**: the library
+    /// playlist is refused with "Can only duplicate subscription tracks to library source".
+    /// Despite the scripting dictionary promising a specifier, the command answers with
+    /// nothing usable, so the new song is found afterwards as the database ID that wasn't
+    /// there before. Do not look it up by name: a library can hold several songs with the
+    /// same title by different artists, and the wrong one would be rated.
+    ///
+    /// The playing track stays a URL track for the rest of the song -- it never turns into the
+    /// library copy -- so the caller has to keep the track this returns and rate that instead.
+    ///
+    /// - Returns: the new library track, or nil if the add failed
+    func addCurrentTrackToLibrary() -> iTunesTrack? {
+        guard let iTunes = iTunes, let track = iTunes.currentTrack else {
+            os_log("%{public}s[%{public}ld], %{public}s: no track to add to the library", ((#file as NSString).lastPathComponent), #line, #function)
+            return nil
+        }
+        guard let library = librarySource(of: iTunes), let libraryPlaylist = libraryPlaylist(of: library) else {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: no library source to add to", ((#file as NSString).lastPathComponent), #line, #function)
+            return nil
+        }
+
+        let name = track.name ?? "nil"
+        let existingIDs = databaseIDs(matching: track, in: libraryPlaylist)
+        os_log("%{public}s[%{public}ld], %{public}s: adding %{public}s to the library…", ((#file as NSString).lastPathComponent), #line, #function, name)
+
+        _ = (track as? iTunesGenericMethods)?.duplicateTo?(library as? SBObject)
+
+        let added = databaseIDs(matching: track, in: libraryPlaylist).subtracting(existingIDs)
+        guard let databaseID = added.first else {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: %{public}s did not appear in the library after the add", ((#file as NSString).lastPathComponent), #line, #function, name)
+            return nil
+        }
+        if added.count > 1 {
+            // Two songs appearing at once shouldn't happen; rate neither rather than guess
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: %{public}ld songs appeared at once, not rating any of them", ((#file as NSString).lastPathComponent), #line, #function, added.count)
+            return nil
+        }
+
+        os_log("%{public}s[%{public}ld], %{public}s: added %{public}s to the library as %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, name, databaseID)
+        return libraryPlaylist.tracks?().object(withID: databaseID) as? iTunesTrack
+    }
+
+    /// The user's own library, as opposed to a shared library, an iPod or the store
+    private func librarySource(of iTunes: iTunesApplication) -> iTunesSource? {
+        return iTunes.sources?().first(where: { ($0 as? iTunesSource)?.kind == .library }) as? iTunesSource
+    }
+
+    private func libraryPlaylist(of source: iTunesSource) -> iTunesPlaylist? {
+        return source.libraryPlaylists?().firstObject as? iTunesPlaylist
+    }
+
+    /// Database IDs of the library songs that look like `track`.
+    ///
+    /// Name, artist and album together, so the set stays small; it is only ever used to spot
+    /// which ID is new, never to decide which song to rate on its own.
+    private func databaseIDs(matching track: iTunesTrack, in libraryPlaylist: iTunesPlaylist) -> Set<Int> {
+        guard let name = track.name else { return [] }
+        let predicate = NSPredicate(format: "name == %@ AND artist == %@ AND album == %@",
+                                    name, track.artist ?? "", track.album ?? "")
+        guard let matches = libraryPlaylist.tracks?().filtered(using: predicate) as? [iTunesTrack] else { return [] }
+        return Set(matches.compactMap { $0.databaseID })
     }
 
     func backward() {

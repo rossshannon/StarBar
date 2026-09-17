@@ -32,6 +32,9 @@ final class RatingClickController {
     /// True when nothing is playing, so there is no track to rate
     var isStopped: () -> Bool
     var toggleFavorite: () -> Void
+    /// Add the playing song to the library, so Music has somewhere to keep a rating.
+    /// Only called in `RatingControl.Mode.addToLibrary`.
+    var addToLibrary: () -> Void = {}
     /// Called after the stars change during a drag, so the owner can redraw
     var didPreview: () -> Void = {}
     /// Called when a drag ends: true if a rating was saved, false if it was cancelled
@@ -66,6 +69,18 @@ final class RatingClickController {
             toggleFavorite()
             return false
         }
+
+        // The Apple Music button. There are no stars to drag across, so this never starts a
+        // drag, and a held click does the same thing as a quick one.
+        if ratingControl.isAddToLibraryHit(positionX: positionX) {
+            os_log("%{public}s[%{public}ld], %{public}s: add to library pressed", ((#file as NSString).lastPathComponent), #line, #function)
+            addToLibrary()
+            return false
+        }
+
+        // Anywhere else in `.addToLibrary` -- the margins -- does nothing, and must not begin
+        // a drag: there are no stars to drag across
+        guard ratingControl.mode == .rating else { return false }
 
         let rating = ratingControl.rating(atPositionX: positionX, behavior: behavior())
         guard pointer.isLeftButtonHeld else {

@@ -13,6 +13,12 @@ import ScriptingBridge
 
 /// The four character codes Music uses for its track classes in Apple Events.
 /// `iTunesTrack` is a protocol, so these can't live on it as static properties.
+/// `iTunes/Vendor/iTunes.swift` declares `SBObject` as conforming to its other protocols but
+/// not this one, so `duplicateTo` -- Music's "add to library" -- can't be reached without it.
+/// The methods are `@objc optional`, and Scripting Bridge turns each one into an Apple Event,
+/// exactly as it does for the protocols the header already declares.
+extension SBObject: iTunesGenericMethods {}
+
 enum MusicTrackClass {
     /// `'cURT'`: a song streamed from the Apple Music catalog, not in the library
     static let urlTrack: FourCharCode = 0x63555254
