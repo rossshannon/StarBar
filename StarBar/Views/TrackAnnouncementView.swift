@@ -31,16 +31,26 @@ final class TrackAnnouncementView: NSView {
 
     /// How much bigger than Growl's 1280 by 800 design to draw, set from the screen
     var scale: CGFloat = 1 {
-        didSet { content.scale = scale }
+        didSet {
+            content.scale = scale
+            applyInsets()
+            layoutBackdrop()
+        }
     }
 
     /// Space at the left and right the content keeps clear: a Dock at the side that the
     /// strip's background runs behind
     var leadingInset: CGFloat = 0 {
-        didSet { content.leadingInset = leadingInset }
+        didSet {
+            applyInsets()
+            layoutBackdrop()
+        }
     }
     var trailingInset: CGFloat = 0 {
-        didSet { content.trailingInset = trailingInset }
+        didSet {
+            applyInsets()
+            layoutBackdrop()
+        }
     }
 
     /// The background: flat black, blur or glass
@@ -48,6 +58,7 @@ final class TrackAnnouncementView: NSView {
         didSet {
             guard style != oldValue else { return }
             rebuildBackdrop()
+            applyInsets()
             content.tintAlpha = tintAlpha
             content.tintColor = tintColor
         }
@@ -62,6 +73,10 @@ final class TrackAnnouncementView: NSView {
         content = TrackAnnouncementContentView(announcement: announcement, frame: NSRect(origin: .zero, size: frame.size))
         super.init(frame: frame)
         wantsLayer = true
+        if #available(macOS 14.0, *) {
+            // The glass hangs below the strip; the window clips it, this view must not
+            clipsToBounds = false
+        }
         content.autoresizingMask = [.width, .height]
         content.tintAlpha = tintAlpha
         content.tintColor = tintColor
@@ -69,6 +84,35 @@ final class TrackAnnouncementView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(announcement.accessibilityLabel)
+    }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        super.resizeSubviews(withOldSize: oldSize)
+        layoutBackdrop()
+    }
+
+    /// The frame the backdrop takes for the current style: the whole strip for a blur, and
+    /// for glass a rectangle inset from the sides and hanging below the strip, so that only
+    /// its top corners are ever seen
+    var backdropFrame: NSRect {
+        switch style {
+        case .classic, .blur:
+            return bounds
+        case .glass:
+            return TrackAnnouncementLayout.glassFrame(in: bounds.size, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
+        }
+    }
+
+    private func applyInsets() {
+        let insets = TrackAnnouncementLayout.contentInsets(for: style, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
+        content.leadingInset = insets.leading
+        content.trailingInset = insets.trailing
+    }
+
+    private func layoutBackdrop() {
+        guard let backdrop = backdropView else { return }
+        backdrop.frame = backdropFrame
+        TrackAnnouncementView.applyCornerRadius(to: backdrop, scale: scale)
     }
 
     required init?(coder: NSCoder) {
@@ -95,10 +139,18 @@ final class TrackAnnouncementView: NSView {
         backdropView?.removeFromSuperview()
         backdropView = nil
         guard let backdrop = TrackAnnouncementView.makeBackdrop(for: style) else { return }
-        backdrop.frame = bounds
-        backdrop.autoresizingMask = [.width, .height]
         addSubview(backdrop, positioned: .below, relativeTo: content)
         backdropView = backdrop
+        layoutBackdrop()
+    }
+
+    /// The glass's corner radius, scaled with the strip; nothing for a blur
+    static func applyCornerRadius(to backdrop: NSView, scale: CGFloat) {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), let glass = backdrop as? NSGlassEffectView {
+            glass.cornerRadius = TrackAnnouncementLayout.glassCornerRadius * scale
+        }
+        #endif
     }
 
     /// A behind-window blur, or Liquid Glass where the system has it. `state` must be
@@ -117,9 +169,9 @@ final class TrackAnnouncementView: NSView {
                 let glass = NSGlassEffectView()
                 // .clear keeps the backdrop visible through the glass; .regular frosts it
                 // to a near-flat grey over a bright window. The tint's alpha matters: an
-                // opaque tint on clear glass paints the strip solid, hiding the glass.
+                // opaque tint on clear glass paints the strip solid, hiding the glass. The
+                // corner radius is set with the frame, since it scales with the strip.
                 glass.style = .clear
-                glass.cornerRadius = 0
                 glass.tintColor = TrackAnnouncementLayout.glassTint
                 return glass
             }

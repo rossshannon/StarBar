@@ -316,13 +316,15 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         let backdrop = try XCTUnwrap(view.backdropView)
         XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.glassTintAlpha)
         XCTAssertEqual(view.tintColor, .black)
+        XCTAssertEqual(backdrop.frame, TrackAnnouncementLayout.glassFrame(in: view.bounds.size), "the glass is inset and hangs below the strip")
         // NSGlassEffectView is only in the macOS 26 SDK, so an older Xcode builds and
         // asserts the blur fallback, whatever macOS the tests run on
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             let glass = try XCTUnwrap(backdrop as? NSGlassEffectView)
             XCTAssertEqual(glass.tintColor, TrackAnnouncementLayout.glassTint)
-            XCTAssertLessThan(TrackAnnouncementLayout.glassTint.alphaComponent, 1, "an opaque tint paints the strip solid")
+            XCTAssertLessThan(TrackAnnouncementLayout.glassTint.alphaComponent, 0.3, "a heavy tint flattens the glass")
+            XCTAssertEqual(glass.cornerRadius, TrackAnnouncementLayout.glassCornerRadius)
         } else {
             XCTAssertTrue(backdrop is NSVisualEffectView, "before macOS 26 the glass style falls back to the blur")
         }
@@ -330,6 +332,27 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertTrue(backdrop is NSVisualEffectView, "built without the macOS 26 SDK, the glass style is the blur")
         #endif
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty)
+    }
+
+    func testGlassFollowsTheScaleAndDockInsetsAndTheStripSize() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        view.style = .glass
+        view.scale = 2
+        view.leadingInset = 70
+
+        let backdrop = try XCTUnwrap(view.backdropView)
+        XCTAssertEqual(backdrop.frame, TrackAnnouncementLayout.glassFrame(in: view.bounds.size, scale: 2, leadingInset: 70))
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), let glass = backdrop as? NSGlassEffectView {
+            XCTAssertEqual(glass.cornerRadius, TrackAnnouncementLayout.glassCornerRadius * 2)
+        }
+        #endif
+
+        view.frame = NSRect(x: 0, y: 0, width: 1200, height: 192)
+        XCTAssertEqual(backdrop.frame, TrackAnnouncementLayout.glassFrame(in: view.bounds.size, scale: 2, leadingInset: 70), "the glass follows the strip's size")
+
+        view.style = .blur
+        XCTAssertEqual(try XCTUnwrap(view.backdropView).frame, view.bounds, "a blur fills the strip")
     }
 
     func testSwitchingBackToClassicRemovesTheBackdrop() {

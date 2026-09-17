@@ -226,6 +226,39 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(-1), 0)
     }
 
+    // MARK: - Glass geometry
+
+    func testGlassIsInsetFromTheSidesAndHangsBelowTheStrip() {
+        let frame = TrackAnnouncementLayout.glassFrame(in: CGSize(width: 1280, height: 96))
+
+        XCTAssertEqual(frame.minX, 16)
+        XCTAssertEqual(frame.maxX, 1264)
+        XCTAssertEqual(frame.minY, -24, "hangs below by the corner radius, so the bottom corners are never on screen")
+        XCTAssertEqual(frame.maxY, 96, "flush with the strip's top")
+        XCTAssertGreaterThanOrEqual(-frame.minY, TrackAnnouncementLayout.glassCornerRadius, "the overhang covers the whole bottom corner")
+    }
+
+    func testGlassScalesAndKeepsClearOfASideDock() {
+        let frame = TrackAnnouncementLayout.glassFrame(in: CGSize(width: 2560, height: 192), scale: 2, leadingInset: 70, trailingInset: 0)
+
+        XCTAssertEqual(frame.minX, 70 + 32)
+        XCTAssertEqual(frame.maxX, 2560 - 32)
+        XCTAssertEqual(frame.minY, -48)
+        XCTAssertEqual(frame.height, 240)
+        XCTAssertEqual(TrackAnnouncementLayout.glassFrame(in: CGSize(width: 40, height: 96), scale: 2).width, 0, "never a negative width")
+    }
+
+    func testOnlyTheGlassStyleAddsToTheContentInsets() {
+        let classic = TrackAnnouncementLayout.contentInsets(for: .classic, scale: 2, leadingInset: 70, trailingInset: 5)
+        XCTAssertEqual(classic.leading, 70)
+        XCTAssertEqual(classic.trailing, 5)
+        let blur = TrackAnnouncementLayout.contentInsets(for: .blur, scale: 2, leadingInset: 70, trailingInset: 5)
+        XCTAssertEqual(blur.leading, 70)
+        let glass = TrackAnnouncementLayout.contentInsets(for: .glass, scale: 2, leadingInset: 70, trailingInset: 5)
+        XCTAssertEqual(glass.leading, 70 + 32, "the text stays inside the glass")
+        XCTAssertEqual(glass.trailing, 5 + 32)
+    }
+
     func testReduceMotionSelectsFade() {
         XCTAssertEqual(TrackAnnouncementPlacement.transition(reduceMotion: false), .slide)
         XCTAssertEqual(TrackAnnouncementPlacement.transition(reduceMotion: true), .fade)

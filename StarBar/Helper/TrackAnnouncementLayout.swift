@@ -43,9 +43,38 @@ enum TrackAnnouncementLayout {
     static let glassTintAlpha: CGFloat = 0
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
-    /// The colour Liquid Glass is tinted with: dark, like the classic strip, but translucent
-    /// so the glass keeps its depth
-    static let glassTint = NSColor.black.withAlphaComponent(0.45)
+    /// The colour Liquid Glass is tinted with: a light black, so the glass's lensing and
+    /// highlights stay visible and the text shadow does the work of legibility
+    static let glassTint = NSColor.black.withAlphaComponent(0.2)
+    /// The glass strip's top corners. Liquid Glass shows its lensing and highlights along a
+    /// curved rim; a straight edge shows almost nothing, which is why a plain band reads as
+    /// a blur.
+    static let glassCornerRadius: CGFloat = 24
+    /// How far the glass stands in from each screen edge, so that the top corners exist
+    static let glassSideInset: CGFloat = 16
+
+    /// The glass view's frame inside the strip: inset from the sides, and hanging below the
+    /// strip by its corner radius so that the bottom corners are always below the screen edge
+    /// and only the top corners round. `leadingInset` and `trailingInset` are the strip's
+    /// Dock insets.
+    static func glassFrame(in size: CGSize, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0) -> CGRect {
+        let inset = glassSideInset * scale
+        let overhang = (glassCornerRadius * scale).rounded(.up)
+        return CGRect(
+            x: leadingInset + inset,
+            y: -overhang,
+            width: max(0, size.width - leadingInset - trailingInset - 2 * inset),
+            height: size.height + overhang
+        )
+    }
+
+    /// The space the content keeps clear at each side: the Dock insets, plus the glass inset
+    /// for the glass style so that text never hangs past the glass
+    static func contentInsets(for style: TrackAnnouncementStyle, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0) -> (leading: CGFloat, trailing: CGFloat) {
+        guard style == .glass else { return (leadingInset, trailingInset) }
+        let inset = glassSideInset * scale
+        return (leadingInset + inset, trailingInset + inset)
+    }
     /// Slide in and slide out, each
     static let slideDuration: TimeInterval = 0.3
     /// Time fully on screen between the slides
