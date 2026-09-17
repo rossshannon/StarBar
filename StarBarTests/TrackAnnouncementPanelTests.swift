@@ -320,7 +320,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
             XCTAssertTrue(backdrop is NSVisualEffectView, "before macOS 26 the glass style falls back to the blur")
         }
         XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.glassTintAlpha)
-        XCTAssertEqual(view.tintColor, .black, "the blue is the glass view's own tint")
+        XCTAssertEqual(view.tintColor, .black)
         if #available(macOS 26.0, *), let glass = backdrop as? NSGlassEffectView {
             XCTAssertEqual(glass.tintColor, TrackAnnouncementLayout.glassTint)
             XCTAssertLessThan(TrackAnnouncementLayout.glassTint.alphaComponent, 1, "an opaque tint paints the strip solid")

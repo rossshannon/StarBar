@@ -38,13 +38,14 @@ enum TrackAnnouncementLayout {
     static let backgroundAlpha: CGFloat = 0.6
     /// The black wash over a blurred backdrop, lighter than the classic strip
     static let blurTintAlpha: CGFloat = 0.25
-    /// The black wash over Liquid Glass, just enough for the white text; the blue is the
-    /// glass view's own tint
-    static let glassTintAlpha: CGFloat = 0.1
+    /// No wash over Liquid Glass: the darkness is the glass view's own tint, so the glass
+    /// material is what shows
+    static let glassTintAlpha: CGFloat = 0
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
-    /// The colour Liquid Glass is tinted with
-    static let glassTint = NSColor.systemBlue.withAlphaComponent(0.35)
+    /// The colour Liquid Glass is tinted with: dark, like the classic strip, but translucent
+    /// so the glass keeps its depth
+    static let glassTint = NSColor.black.withAlphaComponent(0.45)
     /// Slide in and slide out, each
     static let slideDuration: TimeInterval = 0.3
     /// Time fully on screen between the slides

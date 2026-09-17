@@ -86,8 +86,7 @@ final class TrackAnnouncementView: NSView {
         }
     }
 
-    /// The wash is always black: the glass carries its own blue tint, and an opaque blue
-    /// tint on clear glass paints the whole strip solid blue
+    /// The wash is always black; the glass carries its own dark tint instead of a wash
     var tintColor: NSColor {
         return .black
     }
@@ -114,7 +113,7 @@ final class TrackAnnouncementView: NSView {
                 let glass = NSGlassEffectView()
                 // .clear keeps the backdrop visible through the glass; .regular frosts it
                 // to a near-flat grey over a bright window. The tint's alpha matters: an
-                // opaque tint on clear glass paints the strip solid.
+                // opaque tint on clear glass paints the strip solid, hiding the glass.
                 glass.style = .clear
                 glass.cornerRadius = 0
                 glass.tintColor = TrackAnnouncementLayout.glassTint
