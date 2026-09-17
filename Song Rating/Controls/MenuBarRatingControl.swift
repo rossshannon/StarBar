@@ -91,7 +91,13 @@ final class MenuBarRatingControl {
 
     /// Launched by the UI tests with `-UITesting YES`: shows the stars as if a song is
     /// playing and never reads from or writes to Music.
-    static let isUITesting = UserDefaults.standard.bool(forKey: "UITesting")
+    /// Read from the launch arguments only, not UserDefaults, so a stray `defaults write`
+    /// can't switch a normal launch into this mode.
+    static let isUITesting: Bool = {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "-UITesting"), index + 1 < arguments.count else { return false }
+        return arguments[index + 1] == "YES"
+    }()
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
