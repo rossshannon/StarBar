@@ -17,8 +17,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var menuBarRatingControl: MenuBarRatingControl?
 
     private var launchAtLoginObservation: NSKeyValueObservation?
-    /// The Music Video strip. Kept here so it outlives the controller that shows it.
+    /// The Music Video strip and the controller that shows it
     private var trackAnnouncementPanel: TrackAnnouncementPanel?
+    private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     
     @IBAction func openAboutWindow(_ sender: NSMenuItem) {
@@ -42,16 +43,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             setupAppleEvent()
         }
 
-        // After the Music connection, so the track already playing is recorded, not announced,
-        // and before the menu bar, whose menu targets the controller
-        setupTrackAnnouncement()
-
         // setup menu bar
         // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated, and the
         // async update in setupAppleEvent() must find it already observing. A delayed control
         // misses that update and shows the stopped icon until the next track change.
         menuBarRatingControl = MenuBarRatingControl()
         WindowManager.shared.menuBarRatingControl = menuBarRatingControl
+
+        // After the Music connection, so the track already playing is recorded rather than
+        // announced, and after the status item, so the seed's Apple Event reads don't delay
+        // the menu bar. Still in this run loop turn, so no player update can arrive first,
+        // and the menus are built lazily, so they find the controller when they open.
+        setupTrackAnnouncement()
 
         // Show first-launch window if needed
         if UserDefaults.standard.bool(forKey: ApplicationKey.isFirstLaunch.rawValue) {
@@ -85,6 +88,7 @@ extension AppDelegate {
             isEnabled: UserDefaults.standard.announceNewTracks
         )
         trackAnnouncementPanel = panel
+        trackAnnouncementController = controller
         TrackAnnouncementController.shared = controller
 
         // Music sends no notification at launch, so record the current track now (one short
@@ -101,6 +105,11 @@ extension AppDelegate {
     }
 
     @objc private func playerDidUpdateForAnnouncement(_ notification: Notification) {
+        // Music's notifications arrive on the main thread; the strip is AppKit, so be sure
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.playerDidUpdateForAnnouncement(notification) }
+            return
+        }
         TrackAnnouncementController.shared?.playerDidUpdate()
     }
 
@@ -133,11 +142,23 @@ extension AppDelegate {
         guard !MenuBarRatingControl.isUITesting else { return .loaded(nil) }
         return MenuBarRatingControl.withShortTimeout { _ -> TrackAnnouncementController.ArtworkLoad in
             guard let track = iTunesPlayer.shared.currentTrack else { return .loaded(nil) }
-            if TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity),
-               let liveID = track.persistentID, !liveID.isEmpty, liveID.uppercased() != identity {
+            let liveID = track.persistentID
+            let match = TrackAnnouncementController.PlayerSnapshot.liveTrackMatch(
+                identity: identity,
+                livePersistentID: liveID,
+                liveName: TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity) ? nil : track.name,
+                liveArtist: TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity) ? nil : track.artist,
+                liveAlbum: TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity) ? nil : track.album
+            )
+            switch match {
+            case .same:
+                return .loaded(track.firstArtworkImage())
+            case .changed:
+                os_log(.debug, "%{public}s[%{public}ld], %{public}s: live track %{public}s is not the announced %{public}s", ((#file as NSString).lastPathComponent), #line, #function, liveID ?? "nil", identity)
                 return .trackChanged
+            case .unknown:
+                return .loaded(nil)
             }
-            return .loaded(track.firstArtworkImage())
         } ?? .loaded(nil)
     }
 

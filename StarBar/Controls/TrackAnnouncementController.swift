@@ -26,6 +26,9 @@ final class TrackAnnouncementController: NSObject {
             case paused
             /// Music stopped or quit. Clears the last track, so the next play announces.
             case stopped
+            /// The payload said nothing about the player (a `sourceSaved` notification, for
+            /// instance). Changes nothing.
+            case unknown
         }
 
         /// Music's persistent ID as a 16-character hex string, `name|artist|album` for a
@@ -63,6 +66,9 @@ final class TrackAnnouncementController: NSObject {
     private(set) var isEnabled: Bool
     /// Identity of the last track seen playing (or there at launch), announced or not
     private var lastIdentity: String?
+    /// The last snapshot that identified a track, for menu validation and on-demand showing
+    /// without another read of the player
+    private var lastSnapshot: PlayerSnapshot?
     private var hideTimer: RatingReminderTimer?
 
     init(
@@ -101,15 +107,20 @@ extension TrackAnnouncementController {
     func playerDidUpdate(seedOnly: Bool = false) {
         guard let snapshot = readPlayer() else {
             lastIdentity = nil
+            lastSnapshot = nil
             return
         }
+        // A payload that says nothing about the player, or nothing about the track
+        // (sourceSaved sends one), must not reset the last track, or the next real
+        // notification would announce it again
+        guard snapshot.state != .unknown else { return }
         if snapshot.state == .stopped {
             lastIdentity = nil
+            lastSnapshot = nil
             return
         }
-        // A payload with nothing to identify the track (sourceSaved can send one) must not
-        // reset the last track, or the next real notification would announce it again
         guard let identity = snapshot.identity else { return }
+        lastSnapshot = snapshot
         let isNewTrack = identity != lastIdentity
         // A track counts as seen once it has played (or was there at launch). One the user
         // skipped to while paused is still new when they press play; a resumed one is not.
@@ -120,15 +131,19 @@ extension TrackAnnouncementController {
         announce(snapshot, identity: identity)
     }
 
-    /// True when there is a track to show on demand
+    /// True when there is a track to show on demand. Answers from the last update, so menu
+    /// validation never sends an Apple Event.
     var canShowCurrentTrack: Bool {
-        guard let snapshot = readPlayer(), snapshot.identity != nil else { return false }
+        guard let snapshot = lastSnapshot, snapshot.identity != nil else { return false }
         return !snapshot.title.isEmpty
     }
 
-    /// Show the current track now, whatever the setting and whether or not it is playing
+    /// Show the current track now, whatever the setting and whether or not it is playing.
+    /// Reads the player afresh; falls back to the last update when the read has no track.
     func showCurrentTrack() {
-        guard let snapshot = readPlayer(), let identity = snapshot.identity, !snapshot.title.isEmpty else {
+        let fresh = readPlayer()
+        let snapshot = (fresh?.identity != nil ? fresh : nil) ?? lastSnapshot
+        guard let snapshot = snapshot, let identity = snapshot.identity, !snapshot.title.isEmpty else {
             os_log(.debug, "%{public}s[%{public}ld], %{public}s: no current track to show", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
@@ -211,6 +226,42 @@ extension TrackAnnouncementController.PlayerSnapshot {
         return identity.count == 16 && identity.allSatisfy { $0.isHexDigit }
     }
 
+    /// Whether the track Music has now is the one an announcement is for
+    enum LiveTrackMatch: Equatable {
+        /// Same track: attach its artwork
+        case same
+        /// Music has moved on; a notification for the new track is on its way
+        case changed
+        /// Music could not say which track it has (a timed-out read): show no artwork
+        case unknown
+    }
+
+    /// Compare an announcement's identity with the live track's Scripting Bridge fields.
+    /// `livePersistentID` is nil or empty when the read failed or the track is a stream.
+    static func liveTrackMatch(identity: String, livePersistentID: String?, liveName: String?, liveArtist: String?, liveAlbum: String?) -> LiveTrackMatch {
+        if isPersistentID(identity) {
+            guard let liveID = livePersistentID, !liveID.isEmpty else { return .unknown }
+            return liveID.uppercased() == identity ? .same : .changed
+        }
+        // A stream: match on the same name|artist|album the identity was built from
+        guard let liveIdentity = TrackAnnouncementController.PlayerSnapshot.identity(name: liveName, artist: liveArtist, album: liveAlbum) else { return .unknown }
+        return liveIdentity == identity ? .same : .changed
+    }
+
+    /// Music's Scripting Bridge player state as an announcement state
+    static func state(for playerState: iTunesEPlS?) -> State {
+        switch playerState {
+        case .playing, .fastForwarding, .rewinding:
+            return .playing
+        case .paused:
+            return .paused
+        case .stopped:
+            return .stopped
+        case .none:
+            return .unknown
+        }
+    }
+
     /// Identity for a track with no persistent ID (a stream), or nil when there is no name
     static func identity(name: String?, artist: String?, album: String?) -> String? {
         guard let name = name, !name.isEmpty else { return nil }
@@ -230,9 +281,12 @@ extension TrackAnnouncementController.PlayerSnapshot {
             state = .playing
         case .paused:
             state = .paused
-        case .unknown, .none:
+        case .unknown:
             // Music's "Stopped" decodes as unknown
             state = .stopped
+        case .none:
+            // No Player State key at all: this payload says nothing about the player
+            state = .unknown
         }
         title = name
         artist = playInfo.artist ?? ""
@@ -251,14 +305,7 @@ extension TrackAnnouncementController.PlayerSnapshot {
         } else {
             identity = TrackAnnouncementController.PlayerSnapshot.identity(name: name, artist: artist, album: album)
         }
-        switch playerState {
-        case .playing, .fastForwarding, .rewinding:
-            state = .playing
-        case .paused:
-            state = .paused
-        case .stopped, .none:
-            state = .stopped
-        }
+        state = TrackAnnouncementController.PlayerSnapshot.state(for: playerState)
         title = name
         self.artist = artist
         self.album = album

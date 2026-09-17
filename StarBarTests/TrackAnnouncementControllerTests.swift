@@ -16,6 +16,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var presenter: FakePresenter!
     private var clock: FakeClock!
     private var player: Snapshot?
+    private var playerReads = 0
     private var artwork: TrackAnnouncementController.ArtworkLoad = .loaded(nil)
     private var artworkRequests: [String] = []
     private var reduceMotion = false
@@ -27,6 +28,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         presenter = FakePresenter()
         clock = FakeClock()
         player = nil
+        playerReads = 0
         artwork = .loaded(nil)
         artworkRequests = []
         reduceMotion = false
@@ -43,7 +45,10 @@ final class TrackAnnouncementControllerTests: XCTestCase {
 
     private func makeController(enabled: Bool) -> TrackAnnouncementController {
         return TrackAnnouncementController(
-            readPlayer: { [unowned self] in self.player },
+            readPlayer: { [unowned self] in
+                self.playerReads += 1
+                return self.player
+            },
             loadArtwork: { [unowned self] identity in
                 self.artworkRequests.append(identity)
                 return self.artwork
@@ -221,6 +226,16 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.shown.count, 2)
     }
 
+    func testPayloadWithoutPlayerStateChangesNothing() {
+        update(snapshot(track: "A"))
+        // A sourceSaved payload: no Player State, no track fields
+        update(Snapshot(identity: nil, state: .unknown, title: "", artist: "", album: "", hasArtwork: true))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.count, 1, "the rating edit must not re-announce the song")
+        XCTAssertTrue(controller.canShowCurrentTrack, "the last real track is still known")
+    }
+
     func testPayloadWithoutIdentityIsIgnored() {
         update(snapshot(track: "A"))
         update(snapshot(track: nil, title: ""))
@@ -278,7 +293,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
 
     func testShowCurrentTrackWorksWhileDisabledAndPaused() {
         controller = makeController(enabled: false)
-        player = snapshot(track: "A", state: .paused)
+        update(snapshot(track: "A", state: .paused))
 
         XCTAssertTrue(controller.canShowCurrentTrack)
         controller.showCurrentTrack()
@@ -288,7 +303,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     }
 
     func testShowCurrentTrackWithNothingPlayingDoesNothing() {
-        player = nil
+        update(nil)
 
         XCTAssertFalse(controller.canShowCurrentTrack)
         controller.showCurrentTrack()
@@ -296,14 +311,36 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertTrue(presenter.shown.isEmpty)
     }
 
-    func testMenuItemIsDisabledWithoutATrack() {
+    func testMenuValidationUsesTheLastUpdateWithoutReadingThePlayer() {
         let item = NSMenuItem(title: "Show Current Track", action: #selector(TrackAnnouncementController.showCurrentTrackMenuItemPressed(_:)), keyEquivalent: "")
-
-        player = nil
         XCTAssertFalse(controller.validateMenuItem(item))
 
-        player = snapshot(track: "A")
+        update(snapshot(track: "A", state: .paused))
+        let readsBefore = playerReads
         XCTAssertTrue(controller.validateMenuItem(item))
+        XCTAssertTrue(controller.canShowCurrentTrack)
+        XCTAssertEqual(playerReads, readsBefore, "validation must not send Apple Events")
+
+        update(snapshot(track: "A", state: .stopped))
+        XCTAssertFalse(controller.validateMenuItem(item))
+    }
+
+    func testShowCurrentTrackFallsBackToTheLastUpdateWhenTheReadHasNoTrack() {
+        update(snapshot(track: "A", state: .paused))
+        player = Snapshot(identity: nil, state: .unknown, title: "", artist: "", album: "", hasArtwork: true)
+
+        controller.showCurrentTrack()
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A"])
+    }
+
+    func testShowCurrentTrackWithAnUntitledTrackDoesNothing() {
+        update(snapshot(track: "A", state: .paused, title: ""))
+
+        XCTAssertFalse(controller.canShowCurrentTrack)
+        controller.showCurrentTrack()
+
+        XCTAssertTrue(presenter.shown.isEmpty)
     }
 
     func testPreviewShowsTheSampleWithoutTheLoader() {
@@ -346,7 +383,33 @@ final class TrackAnnouncementControllerTests: XCTestCase {
 
         XCTAssertEqual(Snapshot(playInfo: try playInfo(["Player State": "Paused"])).state, .paused)
         XCTAssertEqual(Snapshot(playInfo: try playInfo(["Player State": "Stopped"])).state, .stopped)
-        XCTAssertEqual(Snapshot(playInfo: try playInfo([:])).state, .stopped)
+        XCTAssertEqual(Snapshot(playInfo: try playInfo([:])).state, .unknown, "no Player State key says nothing about the player")
+    }
+
+    func testScriptingBridgeStateMapping() {
+        XCTAssertEqual(Snapshot.state(for: .playing), .playing)
+        XCTAssertEqual(Snapshot.state(for: .fastForwarding), .playing)
+        XCTAssertEqual(Snapshot.state(for: .rewinding), .playing)
+        XCTAssertEqual(Snapshot.state(for: .paused), .paused)
+        XCTAssertEqual(Snapshot.state(for: .stopped), .stopped)
+        XCTAssertEqual(Snapshot.state(for: nil), .unknown)
+    }
+
+    // MARK: - Live track check for artwork
+
+    func testLiveTrackMatchForAPersistentID() {
+        let id = "00000000000000FF"
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: "00000000000000ff", liveName: nil, liveArtist: nil, liveAlbum: nil), .same)
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: "0000000000000100", liveName: nil, liveArtist: nil, liveAlbum: nil), .changed)
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: "", liveName: "X", liveArtist: nil, liveAlbum: nil), .unknown, "a timed-out read attaches no artwork rather than the wrong one")
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: nil, liveName: nil, liveArtist: nil, liveAlbum: nil), .unknown)
+    }
+
+    func testLiveTrackMatchForAStream() {
+        let id = "Live|Radio|"
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: nil, liveName: "Live", liveArtist: "Radio", liveAlbum: nil), .same)
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: nil, liveName: "Other", liveArtist: "Radio", liveAlbum: nil), .changed)
+        XCTAssertEqual(Snapshot.liveTrackMatch(identity: id, livePersistentID: nil, liveName: nil, liveArtist: nil, liveAlbum: nil), .unknown)
     }
 
     func testSnapshotFromPlayInfoWithoutAnIDUsesTheNames() throws {

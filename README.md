@@ -85,7 +85,7 @@ Check the checkbox for "Star Ratings" in General preferences. [More info](https:
 The popover will jump to new scren scene when it get focused. It will stand in the old screen if the current focused window not the popover.
 
 ### Which screen does the track announcement appear on?
-The screen the mouse pointer is on when the song starts, along the bottom edge: above a Dock at the bottom, and running behind a Dock at the side. It grows with the screen, so it is about half as tall again on a 27-inch display as on a laptop. It stays on that screen until it slides away. It does not appear over a full-screen app, and it never takes focus or clicks, so you can keep typing or click straight through it. With Reduce Motion on it fades instead of sliding; with Reduce Transparency on it is solid black.
+The screen the mouse pointer is on when the song starts, along the bottom edge: above a Dock at the bottom, and running behind a Dock at the side. It grows with the screen, so it is about half as tall again on a 27-inch display as on a laptop. It stays on that screen until it slides away. It appears over full-screen apps too, and it never takes focus or clicks, so you can keep typing or click straight through it. With Reduce Motion on it fades instead of sliding; with Reduce Transparency on it is solid black.
 
 ### Why does StarBar not show the star rating when Music is playing?
 In System Settings, go to Privacy & Security, then Automation, and turn on Music for StarBar.

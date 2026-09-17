@@ -8,7 +8,7 @@
 import Cocoa
 
 /// The window the announcement strip slides up in. Borderless, click-through, on every
-/// Space, one level below the Dock, not over full-screen apps, and never key: it must not
+/// Space including full-screen ones, one level below the Dock, and never key: it must not
 /// take focus from whatever the user is doing.
 ///
 /// The panel spans the screen, sits still on the visible frame's bottom edge (above a Dock at
@@ -75,7 +75,10 @@ final class TrackAnnouncementPanel: NSPanel {
         becomesKeyOnlyIfNeeded = true
         isReleasedWhenClosed = false
         animationBehavior = .none
-        collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
+        // fullScreenAuxiliary lets the strip join a full-screen Space; without it, ordering a
+        // window front while a full-screen app is up can switch Spaces, which is far worse
+        // than a strip over the app
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         isExcludedFromWindowsMenu = true
 
         let container = NSView(frame: NSRect(origin: .zero, size: size))
@@ -126,24 +129,18 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         stripView.backgroundAlpha = reduceTransparency ? 1 : TrackAnnouncementLayout.backgroundAlpha
         let isNewAnnouncement = stripView.announcement != announcement
         stripView.announcement = announcement
-        if isNewAnnouncement {
-            NSAccessibility.post(
-                element: stripView,
-                notification: .announcementRequested,
-                userInfo: [
-                    .announcement: announcement.accessibilityLabel,
-                    .priority: NSAccessibilityPriorityLevel.medium.rawValue,
-                ]
-            )
-        }
         let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
 
         switch phase {
         case .shown, .slidingIn:
             // Already on its way up or up: the new content is enough
+            if isNewAnnouncement {
+                speak(announcement)
+            }
             return
         case .slidingOut:
             // Turn round from wherever the strip has got to
+            speak(announcement)
             slide(in: true, transition: transition)
         case .hidden:
             place(on: chooseScreen())
@@ -159,8 +156,24 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             stripView.needsDisplay = true
             stripView.displayIfNeeded()
             orderFrontRegardless()
+            // Every appearance is spoken, even of the same track again: the panel never takes
+            // focus, so VoiceOver has no other way to notice it
+            speak(announcement)
             slide(in: true, transition: transition)
         }
+    }
+
+    /// Ask VoiceOver to read the announcement. Posted with the panel, which is on screen;
+    /// a view inside a window that is never key does not reach VoiceOver.
+    private func speak(_ announcement: TrackAnnouncement) {
+        NSAccessibility.post(
+            element: self,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: announcement.accessibilityLabel,
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue,
+            ]
+        )
     }
 
     func hide() {
@@ -170,13 +183,13 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         slide(in: false, transition: transition)
     }
 
-    /// Move the strip up or down over `slideDuration`, stepping the view's frame from a
-    /// 60 Hz timer with an ease-in-out curve, as Growl's NSAnimation did.
+    /// Move the strip up or down over `slideDuration`, stepping the view's frame on each
+    /// display refresh with an ease-in-out curve, as Growl's NSAnimation did.
     ///
     /// The frame is stepped by hand rather than through `animator()`: on macOS 27 the panel's
     /// on-screen image follows the view's frame, not the layer's presentation values, so a
-    /// Core Animation slide ran to completion without ever being drawn. A timer also keeps the
-    /// motion testable with a fake clock.
+    /// Core Animation slide ran to completion without ever being drawn. Stepping also keeps
+    /// the motion testable with a fake clock.
     private func slide(in shown: Bool, transition: TrackAnnouncementPlacement.Transition) {
         phase = shown ? .slidingIn : .slidingOut
         lastTransition = transition
@@ -184,6 +197,13 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         slideTimer = nil
         animationGeneration += 1
         let generation = animationGeneration
+
+        // Turning round from the other kind of transition: settle the property this one
+        // doesn't move, or the strip would hold half faded or half off screen
+        switch transition {
+        case .slide: stripView.alphaValue = 1
+        case .fade: stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
+        }
 
         let startY = stripView.frame.origin.y
         let targetY = TrackAnnouncementPlacement.stripOrigin(shown: shown, scale: scale).y
@@ -269,9 +289,13 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
 /// `RunLoopClock` for one-shot timers, and a display link for the slide's repeating ticks, so
 /// each step lands on the screen's refresh instead of drifting against it. Falls back to the
 /// run loop timer before macOS 14, where AppKit has no display link.
+///
+/// A repeating interval under `frameInterval` means "every frame": the display link ticks at
+/// the screen's own rate and ignores the exact interval, so callers must measure elapsed time
+/// with `now()` rather than count ticks, as `TrackAnnouncementPanel.slide` does.
 final class DisplayLinkClock: RatingReminderClock {
 
-    /// Ticks below this interval are frame steps and go to the display link
+    /// Repeating intervals below this are frame steps and go to the display link
     static let frameInterval: TimeInterval = 0.1
 
     private let screen: () -> NSScreen?
@@ -309,8 +333,13 @@ private final class DisplayLinkTimer: NSObject, RatingReminderTimer {
         self.link = link
     }
 
+    deinit {
+        invalidate()
+    }
+
     @objc private func tick(_ link: CADisplayLink) {
-        action()
+        // The action may invalidate this timer, which drops the display link's hold on it
+        withExtendedLifetime(self) { action() }
     }
 
     func invalidate() {

@@ -43,7 +43,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(panel.isOpaque)
         XCTAssertFalse(panel.hasShadow)
         XCTAssertTrue(panel.collectionBehavior.contains(.canJoinAllSpaces))
-        XCTAssertFalse(panel.collectionBehavior.contains(.fullScreenAuxiliary))
+        XCTAssertTrue(panel.collectionBehavior.contains(.fullScreenAuxiliary), "may join a full-screen Space rather than switch Spaces")
         XCTAssertFalse(panel.hidesOnDeactivate)
     }
 
@@ -189,6 +189,63 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         clock.fireRepeating()
         XCTAssertEqual(animated.stripView.frame.origin.y, 0)
         XCTAssertTrue(animated.isVisible)
+    }
+
+    func testHideWhileSlidingInTurnsRound() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        clock.advance(by: 0.1)
+        clock.fireRepeating()
+        let midway = animated.stripView.frame.origin.y
+
+        animated.hide()
+        XCTAssertEqual(animated.phase, .slidingOut)
+        XCTAssertEqual(animated.stripView.frame.origin.y, midway)
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+        XCTAssertFalse(animated.isVisible)
+        XCTAssertEqual(animated.phase, .hidden)
+    }
+
+    func testChangingTransitionMidTurnRoundSettlesTheOtherProperty() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+        animated.hide()
+        clock.advance(by: 0.1)
+        clock.fireRepeating()
+        XCTAssertLessThan(animated.stripView.frame.origin.y, 0)
+
+        // Reduce Motion was turned on meanwhile: the fade must not leave the strip half down
+        animated.show(sample, reduceMotion: true, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.frame.origin.y, 0)
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.alphaValue, 1)
+        XCTAssertEqual(animated.phase, .shown)
+    }
+
+    func testStaleTickAfterAScreenChangeDoesNothing() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        let staleTick = try! XCTUnwrap(clock.timers.last { $0.repeats })
+
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
+        XCTAssertFalse(staleTick.isValid)
+        XCTAssertEqual(animated.phase, .hidden)
+
+        clock.advance(by: 0.5)
+        staleTick.action()
+
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertFalse(animated.isVisible)
     }
 
     func testFadeStepsAlphaWithTheClock() {
