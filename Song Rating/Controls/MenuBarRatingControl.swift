@@ -72,10 +72,25 @@ final class MenuBarRatingControl {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
     }()
-    /// Set while the user drags across the stars
-    private var ratingDrag: RatingControl.Drag?
-    /// Reads the cursor while the mouse button is held after a press on the stars
-    private var ratingDragTimer: Timer?
+    /// Turns the menu bar's click into a rating, a favorite toggle, or a drag
+    private lazy var clickController: RatingClickController = {
+        let controller = RatingClickController(
+            ratingControl: ratingControl,
+            pointer: StatusButtonPointer(button: statusItem.button, ratingControl: ratingControl),
+            // With half stars on, the left half of a star (or the gap before it) sets a half star
+            behavior: { UserDefaults.standard.allowHalfStar ? .both : .full },
+            isStopped: { [unowned self] in self.isStop },
+            toggleFavorite: { [unowned self] in self.toggleFavorite() }
+        )
+        controller.didPreview = { [unowned self] in self.statusItem.button?.needsDisplay = true }
+        return controller
+    }()
+    /// Calls `clickController.tick()` while a drag is under way
+    private var dragTimer: Timer?
+
+    /// Launched by the UI tests with `-UITesting YES`: shows the stars as if a song is
+    /// playing and never reads from or writes to Music.
+    static let isUITesting = UserDefaults.standard.bool(forKey: "UITesting")
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
@@ -154,6 +169,16 @@ final class MenuBarRatingControl {
         trackingAreaResponser.delegate = self
 
         ratingControl.delegate = self
+        ratingControl.didChange = { [unowned self] in self.updateAccessibility() }
+        button.setAccessibilityLabel("Music Rating")
+
+        if MenuBarRatingControl.isUITesting {
+            // Property observers don't run inside init, so update by hand
+            playState = .playing
+            updateGestureRecognizerBehavior()
+            updateMenuBar()
+            return
+        }
 
         NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.iTunesPlayerDidUpdated(_:)), name: .iTunesPlayerDidUpdated, object: nil)
 
@@ -181,6 +206,15 @@ extension MenuBarRatingControl {
         statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
         updateFavoriteHeartView()
+        updateAccessibility()
+    }
+
+    /// VoiceOver reads the rating, and the UI tests check it
+    private func updateAccessibility() {
+        let value = isStop
+            ? "Not playing"
+            : RatingControl.accessibilityDescription(rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
+        statusItem.button?.setAccessibilityValue(value)
     }
 
     /// Show the coloured heart over the heart slot when the track is a favorite.
@@ -203,6 +237,11 @@ extension MenuBarRatingControl {
     
     /// Toggle the favorite status of the current track
     func toggleFavorite() {
+        if MenuBarRatingControl.isUITesting {
+            ratingControl.updateFavorited(!ratingControl.isFavorited)
+            updateFavoriteHeartView()
+            return
+        }
         guard !isStop, let track = iTunesPlayer.shared.currentTrack else { return }
 
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
@@ -245,72 +284,23 @@ extension MenuBarRatingControl {
         }
     }
     
-    /// With half stars on, the left half of a star (or the gap before it) sets a half star
-    private var ratingBehavior: RatingControl.Behavior {
-        return UserDefaults.standard.allowHalfStar ? .both : .full
-    }
-
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard sender.state == .ended, let button = statusItem.button, !isStop else { return }
+        guard sender.state == .ended else { return }
 
-        if let positionX = ratingControl.imagePositionX(in: button),
-           ratingControl.isFavoriteHit(positionX: positionX) {
-            toggleFavorite()
-        } else if isLeftMouseButtonHeld {
-            beginRatingDrag(in: button)
-        } else if let rating = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior) {
-            ratingControl.commit(rating: rating)
-        }
-    }
+        dragTimer?.invalidate()
+        dragTimer = nil
+        guard clickController.click() else { return }
 
-    private var isLeftMouseButtonHeld: Bool {
-        return NSEvent.pressedMouseButtons & 1 != 0
-    }
-
-    /// Follow the cursor while the mouse button stays down: the stars show the rating under
-    /// the cursor, and the rating is saved when the button is released.
-    private func beginRatingDrag(in button: NSButton) {
-        endRatingDrag()
-        os_log("%{public}s[%{public}ld], %{public}s: mouse held, following drag", ((#file as NSString).lastPathComponent), #line, #function)
-
-        ratingDrag = RatingControl.Drag(originalRating: ratingControl.rating)
-        updateRatingDrag(in: button)
-
-        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self, weak button] _ in
-            guard let self = self, let button = button else { return }
-            self.updateRatingDrag(in: button)
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self = self, self.clickController.tick() else {
+                timer.invalidate()
+                return
+            }
         }
         // .common keeps the timer firing while AppKit tracks the mouse
         RunLoop.main.add(timer, forMode: .common)
-        ratingDragTimer = timer
-    }
-
-    private func updateRatingDrag(in button: NSButton) {
-        guard var drag = ratingDrag else { return }
-        let ratingUnderCursor = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior)
-
-        guard isLeftMouseButtonHeld, !isStop else {
-            endRatingDrag()
-            if !isStop, let rating = drag.releaseRating(at: ratingUnderCursor) {
-                os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, rating)
-                ratingControl.commit(rating: rating)
-            }
-            return
-        }
-
-        let shownRating = drag.move(to: ratingUnderCursor)
-        ratingDrag = drag
-        if shownRating != ratingControl.rating {
-            ratingControl.update(rating: shownRating)
-            button.needsDisplay = true
-        }
-    }
-
-    private func endRatingDrag() {
-        ratingDragTimer?.invalidate()
-        ratingDragTimer = nil
-        ratingDrag = nil
+        dragTimer = timer
     }
 
 }
@@ -324,7 +314,9 @@ extension MenuBarRatingControl: RatingControlDelegate {
 
     func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
         // Update iTunes current track rating
-        iTunesRadioStation.shared.setRating(rating)
+        if !MenuBarRatingControl.isUITesting {
+            iTunesRadioStation.shared.setRating(rating)
+        }
         statusItem.button?.needsDisplay = true
     }
 
@@ -333,13 +325,14 @@ extension MenuBarRatingControl: RatingControlDelegate {
 extension MenuBarRatingControl {
 
     @objc func iTunesPlayerDidUpdated(_ notification: Notification) {
+        guard !MenuBarRatingControl.isUITesting else { return }
         let player = iTunesPlayer.shared
 
         isPlaying = player.isPlaying
         // Each property read is an Apple Event, so read the track once
         let track = player.currentTrack
         // Don't overwrite the stars the user is dragging across
-        if ratingDrag == nil {
+        if !clickController.isDragging {
             ratingControl.update(rating: track?.userRating ?? 0)
         }
         ratingControl.updateFavorited(track?.isFavorited ?? false)

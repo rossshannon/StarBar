@@ -26,6 +26,8 @@ class RatingControl {
     private(set) var rating: Int
     /// True if the track is a favorite in Music (see `iTunesTrack.isFavorited`)
     private(set) var isFavorited: Bool = false
+    /// Called after the rating or favorite changes and the stars are redrawn
+    var didChange: (() -> Void)?
     
     var stars: Stars {
         let fullStarCount = rating / 20
@@ -95,6 +97,7 @@ extension RatingControl {
     
     /// Stars draw only method
     private func drawStars() {
+        defer { didChange?() }
         let rect = NSRect(origin: .zero, size: starsImage.size)
         starsImage.lockFocus()
         if let context = NSGraphicsContext.current?.cgContext {
@@ -152,13 +155,29 @@ extension RatingControl {
         }
     }
 
-    /// Rating (0 ~ 100) under the cursor, or nil when the cursor is over the heart.
-    func ratingUnderCursor(in button: NSButton, behavior: Behavior) -> Int? {
-        guard let positionX = imagePositionX(in: button), !isFavoriteHit(positionX: positionX) else { return nil }
+    /// Rating (0 ~ 100) at `positionX` inside `starsImage`, or nil over the heart.
+    func rating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int? {
+        guard !isFavoriteHit(positionX: positionX) else { return nil }
 
         let rating = 10 * starRating(atPositionX: positionX, behavior: behavior)
         os_log(.debug, "%{public}s[%{public}ld], %{public}s: positionX %{public}.1f -> rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
         return rating
+    }
+
+    /// Spoken description of a rating and favorite, such as "3½ stars, favourite".
+    /// VoiceOver reads it, and the UI tests check it.
+    static func accessibilityDescription(rating: Int, isFavorited: Bool) -> String {
+        let halfStars = min(10, max(0, rating / 10))
+        let wholeStars = halfStars / 2
+        let hasHalf = halfStars % 2 == 1
+        let text: String
+        switch (wholeStars, hasHalf) {
+        case (0, false): text = "No rating"
+        case (0, true): text = "½ star"
+        case (1, false): text = "1 star"
+        default: text = "\(wholeStars)\(hasHalf ? "½" : "") stars"
+        }
+        return isFavorited ? text + ", favourite" : text
     }
 
     /// Set a rating the user chose, if the delegate allows it, and tell the delegate to save it.

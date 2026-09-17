@@ -7,6 +7,7 @@
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
 #   ./build.sh --test       Run the app and SDK tests that don't need Music
 #   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
+#   ./build.sh --ui-test    Run the UI tests, which click and drag the real menu bar
 
 set -e
 set -o pipefail
@@ -23,6 +24,7 @@ INSTALL=false
 WATCH=false
 TEST=false
 TEST_ALL=false
+UI_TEST=false
 
 for arg in "$@"; do
     case $arg in
@@ -30,12 +32,13 @@ for arg in "$@"; do
         --watch|-w) WATCH=true ;;
         --test|-t) TEST=true ;;
         --test-all) TEST=true; TEST_ALL=true ;;
+        --ui-test) UI_TEST=true ;;
         *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
 
-if [ "$TEST" = true ] && { [ "$INSTALL" = true ] || [ "$WATCH" = true ]; }; then
-    echo "Error: --test runs on its own. Don't combine it with --install or --watch."
+if { [ "$TEST" = true ] || [ "$UI_TEST" = true ]; } && { [ "$INSTALL" = true ] || [ "$WATCH" = true ]; }; then
+    echo "Error: --test and --ui-test run on their own. Don't combine them with --install or --watch."
     exit 2
 fi
 
@@ -139,45 +142,55 @@ build_and_install() {
     fi
 }
 
-run_tests() {
-    # These test classes read from Music, so they fail unless Music is playing a track
-    # with artwork and Music Rating may access the media library. CI has no Music.
-    # Test identifiers use the target name ("Song RatingTests"); the module name is silently ignored.
-    local skip_args=()
-    if [ "$TEST_ALL" = false ]; then
-        skip_args=(
-            "-skip-testing:Song RatingTests/ScriptBridgeTests"
-            "-skip-testing:Song RatingTests/iTunesLibraryTests"
-        )
-    fi
+# Run xcodebuild test with the given selection arguments.
+# Usage: xcode_test <name> [-only-testing:... | -skip-testing:...]...
+# Writes build/test/<name>.log and a result bundle under build/test/results/.
+xcode_test() {
+    local name="$1"
+    shift
     local test_dir="build/test"
-    local test_log="$test_dir/test.log"
+    local test_log="$test_dir/$name.log"
     # xcodebuild won't overwrite a result bundle, so each run gets its own
-    local result_bundle="$test_dir/results/TestResults-$(date +%Y%m%d-%H%M%S).xcresult"
-    local status=0
+    local result_bundle="$test_dir/results/$name-$(date +%Y%m%d-%H%M%S).xcresult"
 
     mkdir -p "$test_dir/results"
-
-    echo ""
-    echo "=== Testing $APP_NAME... ==="
-    # The app hosts the tests, so a test run launches it
     if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
         -scheme "$PROJECT_NAME" \
         -destination "platform=macOS" \
         -derivedDataPath "$test_dir" \
         -resultBundlePath "$result_bundle" \
-        "${skip_args[@]}" \
+        "$@" \
         test > "$test_log" 2>&1; then
         grep -E "Executed [0-9]+ tests|\*\* TEST" "$test_log" | tail -2
     else
-        status=1
         # Failed tests first, then the end of the log, which explains crashes and build errors
         grep -E ": error:|Test Case .* failed" "$test_log" || true
         echo "--- last 40 lines of $test_log ---"
         tail -40 "$test_log"
-        echo "App tests failed. Full log: $test_log"
+        echo "Tests failed. Full log: $test_log"
         echo "Results: $result_bundle"
+        return 1
     fi
+}
+
+run_tests() {
+    # Test identifiers use the target name ("Song RatingTests"); the module name is silently ignored.
+    # The UI tests move the mouse, so they run only with --ui-test.
+    local selection=("-skip-testing:Song RatingUITests")
+    # These test classes read from Music, so they fail unless Music is playing a track
+    # with artwork and Music Rating may access the media library. CI has no Music.
+    if [ "$TEST_ALL" = false ]; then
+        selection+=(
+            "-skip-testing:Song RatingTests/ScriptBridgeTests"
+            "-skip-testing:Song RatingTests/iTunesLibraryTests"
+        )
+    fi
+    local status=0
+
+    echo ""
+    echo "=== Testing $APP_NAME... ==="
+    # The app hosts the unit tests, so a test run launches it
+    xcode_test test "${selection[@]}" || status=1
 
     echo ""
     echo "=== Testing SDK... ==="
@@ -186,7 +199,33 @@ run_tests() {
     return $status
 }
 
-if [ "$TEST" = true ]; then
+run_ui_tests() {
+    echo ""
+    echo "=== UI testing $APP_NAME... ==="
+    echo "These tests click and drag the real menu bar, so leave the mouse alone until they finish."
+    echo "The first run asks for Accessibility permission for the test runner."
+
+    # The test build has the same bundle ID as the installed app, so quit the installed copy
+    # while the tests run, then reopen it
+    local was_running=false
+    if pgrep -xq "$APP_NAME"; then
+        was_running=true
+        killall "$APP_NAME" 2>/dev/null || true
+        sleep 0.5
+    fi
+
+    local status=0
+    xcode_test ui-test "-only-testing:Song RatingUITests" || status=1
+
+    if [ "$was_running" = true ] && [ -d "$INSTALL_PATH" ]; then
+        open "$INSTALL_PATH"
+    fi
+    return $status
+}
+
+if [ "$UI_TEST" = true ]; then
+    run_ui_tests
+elif [ "$TEST" = true ]; then
     run_tests
 elif [ "$WATCH" = true ]; then
     if ! command -v fswatch &> /dev/null; then
