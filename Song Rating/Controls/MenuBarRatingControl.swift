@@ -72,19 +72,26 @@ final class MenuBarRatingControl {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
     }()
-    private let doubleClickGestureRecognizer: NSClickGestureRecognizer = {
-        let gestureRecognizer = NSClickGestureRecognizer()
-        gestureRecognizer.numberOfClicksRequired = 2
-        return gestureRecognizer
+    private let panGestureRecognizer = NSPanGestureRecognizer()
+    /// Turns the menu bar's click into a rating, a favorite toggle, or a drag
+    private lazy var clickController: RatingClickController = {
+        let controller = RatingClickController(
+            ratingControl: ratingControl,
+            pointer: StatusButtonPointer(button: statusItem.button, ratingControl: ratingControl),
+            // With half stars on, the left half of a star (or the gap before it) sets a half star
+            behavior: { UserDefaults.standard.allowHalfStar ? .both : .full },
+            isStopped: { [unowned self] in self.isStop },
+            toggleFavorite: { [unowned self] in self.toggleFavorite() }
+        )
+        controller.didPreview = { [unowned self] in self.statusItem.button?.needsDisplay = true }
+        return controller
     }()
-    private let pressGestureRecognizer: NSPressGestureRecognizer = {
-        let gestureRecognizer = NSPressGestureRecognizer()
-        return gestureRecognizer
-    }()
-    private let panGestureRecognizer: NSPanGestureRecognizer = {
-        let gestureRecognizer = NSPanGestureRecognizer()
-        return gestureRecognizer
-    }()
+    /// Calls `clickController.tick()` while a drag is under way
+    private var dragTimer: Timer?
+
+    /// Launched by the UI tests with `-UITesting YES`: shows the stars as if a song is
+    /// playing and never reads from or writes to Music.
+    static let isUITesting = UserDefaults.standard.bool(forKey: "UITesting")
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
@@ -131,8 +138,7 @@ final class MenuBarRatingControl {
     
     func updateGestureRecognizerBehavior() {
         // deliver .leftMouseUp action without delay when player stop
-        clickGestureRecognizer.delaysPrimaryMouseButtonEvents       = !isStop
-        doubleClickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
+        clickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
     }
 
     init() {
@@ -151,22 +157,14 @@ final class MenuBarRatingControl {
         button.target = self
         button.setButtonType(.momentaryChange)
         
-        // set fail rule
-        doubleClickGestureRecognizer.shouldRequireFailure(of: clickGestureRecognizer)
-        panGestureRecognizer.shouldRequireFailure(of: pressGestureRecognizer)
-        
+        // On macOS 27 the menu bar sends the app one synthesised click when the mouse goes down,
+        // and no drag events, so the click recognizer starts drags too. On earlier macOS a drag
+        // makes the click recognizer fail, and the pan recognizer starts it instead. Either way
+        // RatingClickController then follows the drag by reading the mouse.
         clickGestureRecognizer.action = #selector(MenuBarRatingControl.clickGestureRecognizerHandler(_:))
         clickGestureRecognizer.target = self
         button.addGestureRecognizer(clickGestureRecognizer)
-        
-        doubleClickGestureRecognizer.action = #selector(MenuBarRatingControl.doubleClickGestureRecognizerHandler(_:))
-        doubleClickGestureRecognizer.target = self
-        button.addGestureRecognizer(doubleClickGestureRecognizer)
-        
-        pressGestureRecognizer.action = #selector(MenuBarRatingControl.pressGestureRecognizerHandler(_:))
-        pressGestureRecognizer.target = self
-        button.addGestureRecognizer(pressGestureRecognizer)
-        
+
         panGestureRecognizer.action = #selector(MenuBarRatingControl.panGestureRecognizerHandler(_:))
         panGestureRecognizer.target = self
         button.addGestureRecognizer(panGestureRecognizer)
@@ -177,6 +175,16 @@ final class MenuBarRatingControl {
         trackingAreaResponser.delegate = self
 
         ratingControl.delegate = self
+        ratingControl.didChange = { [unowned self] in self.updateAccessibility() }
+        button.setAccessibilityLabel("Music Rating")
+
+        if MenuBarRatingControl.isUITesting {
+            // Property observers don't run inside init, so update by hand
+            playState = .playing
+            updateGestureRecognizerBehavior()
+            updateMenuBar()
+            return
+        }
 
         NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.iTunesPlayerDidUpdated(_:)), name: .iTunesPlayerDidUpdated, object: nil)
 
@@ -204,13 +212,22 @@ extension MenuBarRatingControl {
         statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
         updateFavoriteHeartView()
+        updateAccessibility()
+    }
+
+    /// VoiceOver reads the rating, and the UI tests check it
+    private func updateAccessibility() {
+        let value = isStop
+            ? "Not playing"
+            : RatingControl.accessibilityDescription(rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
+        statusItem.button?.setAccessibilityValue(value)
     }
 
     /// Show the coloured heart over the heart slot when the track is a favorite.
     /// The button centres `starsImage`, the same assumption the click hit-test makes.
     private func updateFavoriteHeartView() {
         guard let button = statusItem.button else { return }
-        favoriteHeartView.isHidden = isStop || !ratingControl.isLoved
+        favoriteHeartView.isHidden = isStop || !ratingControl.isFavorited
         guard !favoriteHeartView.isHidden else { return }
 
         // Same geometry as RatingControl.imagePositionX(in:), so the heart and its click area agree
@@ -224,18 +241,22 @@ extension MenuBarRatingControl {
         )
     }
     
-    /// Toggle the favorite status of the current track (called "loved" in the API)
-    func toggleLovedStatus() {
+    /// Toggle the favorite status of the current track
+    func toggleFavorite() {
+        if MenuBarRatingControl.isUITesting {
+            ratingControl.updateFavorited(!ratingControl.isFavorited)
+            updateFavoriteHeartView()
+            return
+        }
         guard !isStop, let track = iTunesPlayer.shared.currentTrack else { return }
-        
+
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
-        
-        // Toggle the loved property (which is actually "favorite" in the UI)
-        let currentLoved = track.isFavorited
-        track.updateFavorited(!currentLoved)
-        
+
+        let isFavorited = !track.isFavorited
+        track.updateFavorited(isFavorited)
+
         // Update our local state immediately
-        ratingControl.updateLoved(!currentLoved)
+        ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         
@@ -271,62 +292,34 @@ extension MenuBarRatingControl {
     
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button, !isStop else { return }
-
-        if sender.state == .ended,
-           let positionX = ratingControl.imagePositionX(in: button),
-           ratingControl.isFavoriteHit(positionX: positionX) {
-            toggleLovedStatus()
-            return
-        }
-
-        switch sender.state {
-        case .ended:
-            // With half stars on, the left half of a star (next to the gap before it) sets a half star
-            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .both : .full)
-        default:
-            break
-        }
-    }
-    
-    @objc private func doubleClickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-        
-        switch sender.state {
-        case .ended:
-            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .half : .full)
-        default:
-            break
-        }
-    }
-    
-    @objc private func pressGestureRecognizerHandler(_ sender: NSPressGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-
-        switch sender.state {
-        case .ended:
-            ratingControl.action(from: button, by: sender, behavior: .full)
-        default:
-            break
-        }
+        guard sender.state == .ended else { return }
+        handlePress()
     }
 
-
+    /// Before macOS 27, dragging sends real drag events: start following the drag when it begins.
     @objc private func panGestureRecognizerHandler(_ sender: NSPanGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button else { return }
-        
-        switch sender.state {
-        case .changed, .ended:
-            ratingControl.action(from: button, by: sender, behavior: UserDefaults.standard.allowHalfStar ? .both: .full)
-        default:
-            break
-        }
+        guard sender.state == .began, !clickController.isDragging else { return }
+        handlePress()
     }
-    
-    
+
+    /// Hand the press to the click controller, and follow the drag if one begins
+    private func handlePress() {
+        dragTimer?.invalidate()
+        dragTimer = nil
+        guard clickController.click() else { return }
+
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self = self, self.clickController.tick() else {
+                timer.invalidate()
+                return
+            }
+        }
+        // .common keeps the timer firing while AppKit tracks the mouse
+        RunLoop.main.add(timer, forMode: .common)
+        dragTimer = timer
+    }
+
 }
 
 // MARK: - RatingControlDelegate
@@ -338,7 +331,9 @@ extension MenuBarRatingControl: RatingControlDelegate {
 
     func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
         // Update iTunes current track rating
-        iTunesRadioStation.shared.setRating(rating)
+        if !MenuBarRatingControl.isUITesting {
+            iTunesRadioStation.shared.setRating(rating)
+        }
         statusItem.button?.needsDisplay = true
     }
 
@@ -347,13 +342,17 @@ extension MenuBarRatingControl: RatingControlDelegate {
 extension MenuBarRatingControl {
 
     @objc func iTunesPlayerDidUpdated(_ notification: Notification) {
+        guard !MenuBarRatingControl.isUITesting else { return }
         let player = iTunesPlayer.shared
 
         isPlaying = player.isPlaying
         // Each property read is an Apple Event, so read the track once
         let track = player.currentTrack
-        ratingControl.update(rating: track?.userRating ?? 0)
-        ratingControl.updateLoved(track?.isFavorited ?? false)
+        // Don't overwrite the stars the user is dragging across
+        if !clickController.isDragging {
+            ratingControl.update(rating: track?.userRating ?? 0)
+        }
+        ratingControl.updateFavorited(track?.isFavorited ?? false)
         updateFavoriteHeartView()
     }
 

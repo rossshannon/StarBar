@@ -1,0 +1,22 @@
+#!/bin/bash
+# Run the tests before each commit that changes code or the build.
+#
+# Opt in once per clone:  git config core.hooksPath .githooks
+# Skip for one commit:    git commit --no-verify
+#
+# This tests the working tree, not only the staged changes.
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+if ! git diff --cached --name-only | grep -qE '\.(swift|pbxproj|xcscheme|plist|entitlements|storyboard|xib)$|^build\.sh$|^SDK/'; then
+    exit 0
+fi
+
+echo "Running tests before commit (skip with git commit --no-verify)..."
+if output=$(./build.sh --test 2>&1); then
+    echo "Tests passed."
+else
+    echo "$output" | tail -60
+    echo "Tests failed. Commit stopped."
+    exit 1
+fi

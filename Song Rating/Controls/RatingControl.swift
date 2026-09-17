@@ -24,8 +24,10 @@ class RatingControl {
     let spacing: CGFloat
     /// 0 ~ 100
     private(set) var rating: Int
-    /// true if the track is marked as a favorite in Apple Music (property still called "loved" in API)
-    private(set) var isLoved: Bool = false
+    /// True if the track is a favorite in Music (see `iTunesTrack.isFavorited`)
+    private(set) var isFavorited: Bool = false
+    /// Called after the rating or favorite changes and the stars are redrawn
+    var didChange: (() -> Void)?
     
     var stars: Stars {
         let fullStarCount = rating / 20
@@ -46,7 +48,7 @@ class RatingControl {
             stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .dot), count: dotCount))
         }
         
-        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isLoved: isLoved)
+        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isFavorited: isFavorited)
     }
     
     /// Stars rating control constructor
@@ -83,18 +85,19 @@ extension RatingControl {
         os_log("%{public}s[%{public}ld], %{public}s: draw rating control %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, newRating)
     }
     
-    /// Update favorite status (called "loved" in the API)
+    /// Update favorite status
     ///
-    /// - Parameter loved: true if the track is favorited in Apple Music
-    func updateLoved(_ loved: Bool) {
-        self.isLoved = loved
-        
+    /// - Parameter favorited: true if the track is a favorite in Music
+    func updateFavorited(_ favorited: Bool) {
+        self.isFavorited = favorited
+
         drawStars()
-        os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, loved ? 1 : 0)
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, favorited ? 1 : 0)
     }
     
     /// Stars draw only method
     private func drawStars() {
+        defer { didChange?() }
         let rect = NSRect(origin: .zero, size: starsImage.size)
         starsImage.lockFocus()
         if let context = NSGraphicsContext.current?.cgContext {
@@ -133,45 +136,96 @@ extension RatingControl {
         return positionX >= favoriteMinX - 0.5 * spacing && positionX <= favoriteMinX + starSize.width + spacing
     }
 
-    func action(from sender: NSButton, by gestureRecognizer: NSGestureRecognizer, behavior: Behavior) {
-        guard let positionX = imagePositionX(in: sender), !isFavoriteHit(positionX: positionX) else { return }
+    /// Star rating (0 ~ 10, one unit per half star) for a click at `positionX` inside `starsImage`.
+    ///
+    /// Star i is drawn from spacing + i * slot to that plus starSize.width.
+    /// Each gap between neighbouring stars is split, so no click position is dead.
+    /// Positions past the last star clamp to star 5; callers check `isFavoriteHit` first.
+    func starRating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int {
+        guard positionX >= spacing else { return 0 }
 
-        // Star i is drawn from spacing + i * slot to that plus starSize.width.
-        // Split each gap between neighbouring stars so no click position is dead.
         let slot = starSize.width + spacing
-        let rating: Int  // starRating: 0 ~ 10
-        if positionX < spacing {
-            rating = 0
-        } else {
-            let i = min(4, max(0, Int(((positionX - 0.5 * spacing) / slot).rounded(.down))))
-            switch behavior {
-            case .full:
-                rating = 2 * (i + 1)
-            case .half:
-                rating = 2 * (i + 1) - 1
-            case .both:
-                let centerX = spacing + CGFloat(i) * slot + 0.5 * starSize.width
-                rating = positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
-            }
+        let i = min(4, max(0, Int(((positionX - 0.5 * spacing) / slot).rounded(.down))))
+        switch behavior {
+        case .full:
+            return 2 * (i + 1)
+        case .both:
+            let centerX = spacing + CGFloat(i) * slot + 0.5 * starSize.width
+            return positionX > centerX ? (2 * (i + 1)) : (2 * (i + 1) - 1)
         }
-
-        os_log(.debug, "%{public}s[%{public}ld], %{public}s: click positionX %{public}.1f -> star rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
-
-        guard delegate?.ratingControl(self, shouldUpdateRating: rating * 10) ?? false else {
-            return
-        }
-
-        let newRating = rating * 10
-        update(rating: newRating)
-        delegate?.ratingControl(self, userDidUpdateRating: newRating)
     }
-    
+
+    /// Rating (0 ~ 100) at `positionX` inside `starsImage`, or nil over the heart.
+    func rating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int? {
+        guard !isFavoriteHit(positionX: positionX) else { return nil }
+
+        let rating = 10 * starRating(atPositionX: positionX, behavior: behavior)
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: positionX %{public}.1f -> rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
+        return rating
+    }
+
+    /// Spoken description of a rating and favorite, such as "3½ stars, favourite".
+    /// VoiceOver reads it, and the UI tests check it.
+    static func accessibilityDescription(rating: Int, isFavorited: Bool) -> String {
+        let halfStars = min(10, max(0, rating / 10))
+        let wholeStars = halfStars / 2
+        let hasHalf = halfStars % 2 == 1
+        let text: String
+        switch (wholeStars, hasHalf) {
+        case (0, false): text = "No rating"
+        case (0, true): text = "½ star"
+        case (1, false): text = "1 star"
+        default: text = "\(wholeStars)\(hasHalf ? "½" : "") stars"
+        }
+        return isFavorited ? text + ", favourite" : text
+    }
+
+    /// Set a rating the user chose, if the delegate allows it, and tell the delegate to save it.
+    ///
+    /// - Parameter rating: 0 ~ 100
+    func commit(rating: Int) {
+        guard delegate?.ratingControl(self, shouldUpdateRating: rating) ?? false else { return }
+
+        update(rating: rating)
+        delegate?.ratingControl(self, userDidUpdateRating: rating)
+    }
+
     enum Behavior {
+        /// Whole stars only
         case full
-        case half
+        /// Left half of a star (or the gap before it) is a half star
         case both
     }
-    
+
+    /// A drag across the stars. The stars follow the cursor, and the rating is saved on release.
+    struct Drag {
+
+        /// Rating (0 ~ 100) when the drag began, restored if the drag is cancelled
+        let originalRating: Int
+        /// Last rating the cursor was over. Nil until the cursor reaches the stars.
+        private(set) var lastRating: Int?
+
+        init(originalRating: Int) {
+            self.originalRating = originalRating
+        }
+
+        /// Move the cursor to `rating` (nil over the heart). Returns the rating to show.
+        /// Over the heart the stars keep showing the last rating.
+        mutating func move(to rating: Int?) -> Int {
+            if let rating = rating {
+                lastRating = rating
+            }
+            return lastRating ?? originalRating
+        }
+
+        /// Rating to save when the mouse is released over `rating` (nil over the heart),
+        /// or nil when the drag never reached the stars.
+        func releaseRating(at rating: Int?) -> Int? {
+            return rating ?? lastRating
+        }
+
+    }
+
 }
 
 #if canImport(SwiftUI) && DEBUG

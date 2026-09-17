@@ -33,7 +33,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         setupUserDefaults()
-        setupAppleEvent()
+        // UI tests run without Music, so don't ask for permission to control it
+        if !MenuBarRatingControl.isUITesting {
+            setupAppleEvent()
+        }
         
         // setup menu bar
         // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated, and the
