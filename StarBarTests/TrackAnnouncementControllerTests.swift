@@ -347,6 +347,97 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.shown.count, 1)
     }
 
+    // MARK: - Rating in StarBar while the strip is up
+
+    func testRatingInStarBarShowsOnTheStripWithoutAskingMusic() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        let timer = clock.pendingOneShot
+        let liveReads = artworkRequests.count
+
+        controller.userDidRate(80)
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
+        XCTAssertEqual(artworkRequests.count, liveReads, "Music doesn't have the rating yet, so don't ask it")
+        XCTAssertEqual(playerReads, 1)
+        XCTAssertTrue(clock.pendingOneShot === timer, "the hold timer is untouched")
+    }
+
+    func testMusicsOldRatingDoesNotUndoARatingItHasYetToSave() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80)
+
+        // The heart is toggled, or Music sends a notification, before the rating is saved
+        clock.advance(by: iTunesRadioStation.ratingSaveDelay - 0.5)
+        live = .loaded(.init(rating: 20, isFavorited: true))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 80])
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, true)
+    }
+
+    func testMusicIsBelievedAgainOnceTheRatingHasHadTimeToSave() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80)
+
+        clock.advance(by: TrackAnnouncementController.pendingRatingLifetime)
+        live = .loaded(.init(rating: 40))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 40])
+    }
+
+    func testFavouritingInStarBarShowsOnTheStrip() {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidFavorite(true)
+        controller.userDidFavorite(true)
+
+        XCTAssertEqual(presenter.refreshed.map { $0.isFavorited }, [true], "an unchanged heart is not redrawn")
+        XCTAssertEqual(presenter.refreshed.first?.rating, 60)
+    }
+
+    func testRatingAnotherTrackLeavesTheStripAlone() {
+        update(snapshot(track: "A"))
+        // Skipped to B while paused: the strip still shows A, the menu bar shows B
+        update(snapshot(track: "B", state: .paused))
+
+        controller.userDidRate(100)
+        controller.userDidFavorite(true)
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testRatingWhileHiddenIsShownByShowCurrentTrack() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        clock.fireOneShot()
+
+        controller.userDidRate(80)
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+
+        controller.showCurrentTrack()
+        XCTAssertEqual(presenter.shown.last?.rating, 80)
+    }
+
+    func testRatingInMusicWhileTheStripIsUpRefreshesIt() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+
+        // Music sends sourceSaved, with nothing about the player or the track
+        live = .loaded(.init(rating: 100))
+        update(Snapshot(identity: nil, state: .unknown, title: "", artist: "", album: "", hasArtwork: false))
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [100])
+        XCTAssertEqual(presenter.refreshed.first?.title, "Song A")
+
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.shown.count, 1, "the track is still known, so it doesn't announce again")
+    }
+
     // MARK: - On demand
 
     func testShowCurrentTrackWorksWhileDisabledAndPaused() {

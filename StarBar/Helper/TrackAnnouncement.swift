@@ -35,6 +35,19 @@ struct TrackAnnouncement: Equatable {
         self.artwork = artwork
     }
 
+    /// The same announcement with a new rating or heart
+    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil) {
+        self.init(
+            identity: other.identity,
+            title: other.title,
+            artist: other.artist,
+            album: other.album,
+            rating: rating ?? other.rating,
+            isFavorited: isFavorited ?? other.isFavorited,
+            artwork: other.artwork
+        )
+    }
+
     /// What the Preferences Preview button shows
     static var preview: TrackAnnouncement {
         return TrackAnnouncement(

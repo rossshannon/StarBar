@@ -53,6 +53,9 @@ final class iTunesRadioStation {
 
     private var debounceSetRatingTimer: Timer?
 
+    /// How long `setRating(_:)` waits before it saves the rating to Music
+    static let ratingSaveDelay: TimeInterval = 2.0
+
     private init() {
         // Listen iTunes play state change notification
         // Note: The notification name on Catalina is same as Mojave
@@ -181,7 +184,7 @@ extension iTunesRadioStation {
         os_log("%{public}s[%{public}ld], %{public}s: set timer for 2.0s and set rating for %{public}s %{public}ld…", ((#file as NSString).lastPathComponent), #line, #function, name, rating)
 
         // FIXME: delay may cause set rating to *next* song just playing
-        debounceSetRatingTimer = Timer(timeInterval: 2.0, repeats: false, block: { [weak self] timer in
+        debounceSetRatingTimer = Timer(timeInterval: iTunesRadioStation.ratingSaveDelay, repeats: false, block: { [weak self] timer in
             guard let `self` = self else { return }
             // here we use the saved record
             // so the delay will not rate the next track if song just finish (a.k.a rate in last 2s)
