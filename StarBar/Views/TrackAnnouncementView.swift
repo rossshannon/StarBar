@@ -344,6 +344,12 @@ final class TrackAnnouncementContentView: NSView {
         let shade = NSRect(x: sheen.rect.minX, y: bounds.minY, width: sheen.rect.width, height: shadeHeight)
         NSGradient(starting: NSColor.black.withAlphaComponent(TrackAnnouncementLayout.glassSheenShadeAlpha), ending: .clear)?
             .draw(in: shade, angle: 90)
+        // The specular line along the top edge, following the rounded corners: the shape
+        // stroked twice as wide and clipped, so only the inner half shows
+        let edgeWidth = TrackAnnouncementLayout.glassSheenEdgeWidth * scale
+        NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenEdgeAlpha).setStroke()
+        shape.lineWidth = edgeWidth * 2
+        shape.stroke()
         NSGraphicsContext.restoreGraphicsState()
     }
 

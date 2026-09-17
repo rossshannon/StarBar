@@ -57,8 +57,12 @@ enum TrackAnnouncementLayout {
     /// the glass, clipped to its shape, because the glass view's own geometry is flat.
     static let glassSheenHighlightAlpha: CGFloat = 0.28
     static let glassSheenHighlightFraction: CGFloat = 0.45
-    static let glassSheenShadeAlpha: CGFloat = 0.14
-    static let glassSheenShadeFraction: CGFloat = 0.5
+    static let glassSheenShadeAlpha: CGFloat = 0.22
+    static let glassSheenShadeFraction: CGFloat = 0.6
+    /// A crisp bright line along the top edge, the specular catch of a curved surface; over
+    /// light content the soft highlight alone disappears
+    static let glassSheenEdgeAlpha: CGFloat = 0.6
+    static let glassSheenEdgeWidth: CGFloat = 1
 
     /// The glass view's frame inside the strip: inset from the sides, and hanging below the
     /// strip by its corner radius so that the bottom corners are always below the screen edge
