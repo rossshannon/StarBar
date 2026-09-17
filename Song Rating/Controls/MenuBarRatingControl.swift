@@ -72,16 +72,10 @@ final class MenuBarRatingControl {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
     }()
-    private let pressGestureRecognizer: NSPressGestureRecognizer = {
-        let gestureRecognizer = NSPressGestureRecognizer()
-        return gestureRecognizer
-    }()
-    private let panGestureRecognizer: NSPanGestureRecognizer = {
-        let gestureRecognizer = NSPanGestureRecognizer()
-        return gestureRecognizer
-    }()
     /// Set while the user drags across the stars
     private var ratingDrag: RatingControl.Drag?
+    /// Reads the cursor while the mouse button is held after a press on the stars
+    private var ratingDragTimer: Timer?
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
@@ -147,19 +141,12 @@ final class MenuBarRatingControl {
         button.target = self
         button.setButtonType(.momentaryChange)
         
-        // Click: set the rating (or toggle the heart). Press and hold: set the rating on release.
-        // Drag: the stars follow the cursor, and the rating is set on release.
+        // On macOS 27 the menu bar sends the app one synthesised click when the mouse goes down,
+        // and no drag events. Pan and press recognizers never fire, so the click handler
+        // follows a drag itself by reading the mouse while the button is held.
         clickGestureRecognizer.action = #selector(MenuBarRatingControl.clickGestureRecognizerHandler(_:))
         clickGestureRecognizer.target = self
         button.addGestureRecognizer(clickGestureRecognizer)
-
-        pressGestureRecognizer.action = #selector(MenuBarRatingControl.pressGestureRecognizerHandler(_:))
-        pressGestureRecognizer.target = self
-        button.addGestureRecognizer(pressGestureRecognizer)
-        
-        panGestureRecognizer.action = #selector(MenuBarRatingControl.panGestureRecognizerHandler(_:))
-        panGestureRecognizer.target = self
-        button.addGestureRecognizer(panGestureRecognizer)
 
         let trackingArea = NSTrackingArea(rect: button.bounds, options: [.activeAlways, .mouseEnteredAndExited, .mouseMoved], owner: trackingAreaResponser, userInfo: nil)
         button.addTrackingArea(trackingArea)
@@ -270,54 +257,60 @@ extension MenuBarRatingControl {
         if let positionX = ratingControl.imagePositionX(in: button),
            ratingControl.isFavoriteHit(positionX: positionX) {
             toggleFavorite()
+        } else if isLeftMouseButtonHeld {
+            beginRatingDrag(in: button)
         } else if let rating = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior) {
             ratingControl.commit(rating: rating)
         }
     }
 
-    /// Press and hold without moving: set the rating under the cursor on release, like a click.
-    /// The heart is left to the click recognizer, so a long press can't toggle it twice.
-    @objc private func pressGestureRecognizerHandler(_ sender: NSPressGestureRecognizer) {
-        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard sender.state == .ended, let button = statusItem.button, !isStop else { return }
-
-        if let rating = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior) {
-            ratingControl.commit(rating: rating)
-        }
+    private var isLeftMouseButtonHeld: Bool {
+        return NSEvent.pressedMouseButtons & 1 != 0
     }
 
-    /// Drag across the stars: the stars follow the cursor, and the rating is saved on release.
-    @objc private func panGestureRecognizerHandler(_ sender: NSPanGestureRecognizer) {
-        os_log(.debug, "%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
-        guard let button = statusItem.button, !isStop else {
-            ratingDrag = nil
+    /// Follow the cursor while the mouse button stays down: the stars show the rating under
+    /// the cursor, and the rating is saved when the button is released.
+    private func beginRatingDrag(in button: NSButton) {
+        endRatingDrag()
+        os_log("%{public}s[%{public}ld], %{public}s: mouse held, following drag", ((#file as NSString).lastPathComponent), #line, #function)
+
+        ratingDrag = RatingControl.Drag(originalRating: ratingControl.rating)
+        updateRatingDrag(in: button)
+
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self, weak button] _ in
+            guard let self = self, let button = button else { return }
+            self.updateRatingDrag(in: button)
+        }
+        // .common keeps the timer firing while AppKit tracks the mouse
+        RunLoop.main.add(timer, forMode: .common)
+        ratingDragTimer = timer
+    }
+
+    private func updateRatingDrag(in button: NSButton) {
+        guard var drag = ratingDrag else { return }
+        let ratingUnderCursor = ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior)
+
+        guard isLeftMouseButtonHeld, !isStop else {
+            endRatingDrag()
+            if !isStop, let rating = drag.releaseRating(at: ratingUnderCursor) {
+                os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, rating)
+                ratingControl.commit(rating: rating)
+            }
             return
         }
 
-        switch sender.state {
-        case .began, .changed:
-            // Each drag starts fresh, even if an earlier one never reached a final state
-            var drag = (sender.state == .began ? nil : ratingDrag) ?? RatingControl.Drag(originalRating: ratingControl.rating)
-            let shownRating = drag.move(to: ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior))
-            ratingDrag = drag
-            if shownRating != ratingControl.rating {
-                ratingControl.update(rating: shownRating)
-                button.needsDisplay = true
-            }
-        case .ended:
-            if let rating = ratingDrag?.releaseRating(at: ratingControl.ratingUnderCursor(in: button, behavior: ratingBehavior)) {
-                ratingControl.commit(rating: rating)
-            }
-            ratingDrag = nil
-        case .cancelled, .failed:
-            if let originalRating = ratingDrag?.originalRating {
-                ratingControl.update(rating: originalRating)
-                button.needsDisplay = true
-            }
-            ratingDrag = nil
-        default:
-            break
+        let shownRating = drag.move(to: ratingUnderCursor)
+        ratingDrag = drag
+        if shownRating != ratingControl.rating {
+            ratingControl.update(rating: shownRating)
+            button.needsDisplay = true
         }
+    }
+
+    private func endRatingDrag() {
+        ratingDragTimer?.invalidate()
+        ratingDragTimer = nil
+        ratingDrag = nil
     }
 
 }
