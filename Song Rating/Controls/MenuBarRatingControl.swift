@@ -84,19 +84,27 @@ final class MenuBarRatingControl {
             toggleFavorite: { [unowned self] in self.toggleFavorite() }
         )
         controller.didPreview = { [unowned self] in self.statusItem.button?.needsDisplay = true }
+        controller.didEndDrag = { saved in
+            // Player updates are ignored during a drag, and a drag that saves nothing restores
+            // the rating from when it began. The track may have changed meanwhile, so ask Music.
+            // After a save, don't: setRating waits 2 seconds, so Music still has the old rating.
+            guard !saved, !MenuBarRatingControl.isUITesting else { return }
+            iTunesPlayer.shared.update()
+        }
         return controller
     }()
     /// Calls `clickController.tick()` while a drag is under way
     private var dragTimer: Timer?
 
     /// Launched by the UI tests with `-UITesting YES`: shows the stars as if a song is
-    /// playing and never reads from or writes to Music.
+    /// playing and never reads from or writes to Music: the Music connection isn't started and
+    /// the player popover is blocked.
     /// Read from the launch arguments only, not UserDefaults, so a stray `defaults write`
-    /// can't switch a normal launch into this mode.
+    /// can't switch a normal launch into this mode. Accepts YES, yes, true or 1.
     static let isUITesting: Bool = {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "-UITesting"), index + 1 < arguments.count else { return false }
-        return arguments[index + 1] == "YES"
+        return ["yes", "true", "1"].contains(arguments[index + 1].lowercased())
     }()
 
     private(set) lazy var menuBarMenu: NSMenu = {

@@ -37,6 +37,7 @@ final class RatingClickControllerTests: XCTestCase {
     private var behavior: RatingControl.Behavior = .full
     private var isStopped = false
     private var favoriteToggles = 0
+    private var dragEnds: [Bool] = []
 
     override func setUp() {
         super.setUp()
@@ -47,6 +48,7 @@ final class RatingClickControllerTests: XCTestCase {
         behavior = .full
         isStopped = false
         favoriteToggles = 0
+        dragEnds = []
         controller = RatingClickController(
             ratingControl: ratingControl,
             pointer: pointer,
@@ -54,6 +56,7 @@ final class RatingClickControllerTests: XCTestCase {
             isStopped: { [unowned self] in self.isStopped },
             toggleFavorite: { [unowned self] in self.favoriteToggles += 1 }
         )
+        controller.didEndDrag = { [unowned self] saved in self.dragEnds.append(saved) }
     }
 
     override func tearDown() {
@@ -95,6 +98,7 @@ final class RatingClickControllerTests: XCTestCase {
         click(at: 52)
         XCTAssertEqual(recorder.savedRatings, [60])
         XCTAssertEqual(ratingControl.rating, 60)
+        XCTAssertEqual(dragEnds, [], "a plain click is not a drag")
     }
 
     func testClickInGapBeforeStarGivesHalfStar() {
@@ -160,9 +164,11 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertTrue(move(to: 97))
         XCTAssertFalse(release(at: 97))
         XCTAssertEqual(recorder.savedRatings, [100])
+        XCTAssertEqual(dragEnds, [true])
 
         XCTAssertFalse(controller.tick())
         XCTAssertEqual(recorder.savedRatings, [100])
+        XCTAssertEqual(dragEnds, [true])
     }
 
     /// On macOS 27 the click arrives when the mouse goes down. The saved rating must come from
@@ -220,6 +226,7 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertFalse(controller.isDragging)
         XCTAssertEqual(recorder.savedRatings, [])
         XCTAssertEqual(ratingControl.rating, 40, "the unsaved preview is replaced by the original rating")
+        XCTAssertEqual(dragEnds, [false], "the owner is told nothing was saved, so it can refresh from Music")
     }
 
     /// A press just right of the heart's hit area (x > 128) starts a drag with no rating.
@@ -229,6 +236,7 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(ratingControl.rating, 40)
         XCTAssertFalse(release(at: 130))
         XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertEqual(dragEnds, [false])
         XCTAssertEqual(ratingControl.rating, 40)
         XCTAssertEqual(favoriteToggles, 0)
     }

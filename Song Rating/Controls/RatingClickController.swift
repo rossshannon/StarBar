@@ -34,6 +34,8 @@ final class RatingClickController {
     var toggleFavorite: () -> Void
     /// Called after the stars change during a drag, so the owner can redraw
     var didPreview: () -> Void = {}
+    /// Called when a drag ends: true if a rating was saved, false if it was cancelled
+    var didEndDrag: (_ saved: Bool) -> Void = { _ in }
 
     private(set) var drag: RatingControl.Drag?
 
@@ -90,11 +92,13 @@ final class RatingClickController {
             if !isStopped(), let releaseRating = drag.releaseRating(at: rating) {
                 os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, releaseRating)
                 ratingControl.commit(rating: releaseRating)
+                didEndDrag(true)
             } else {
                 // Nothing saved: put back the rating the stars showed before the drag,
                 // so later changes (such as the rating shortcuts) don't build on the preview
                 os_log("%{public}s[%{public}ld], %{public}s: drag cancelled, restoring rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, drag.originalRating)
                 preview(drag.originalRating)
+                didEndDrag(false)
             }
             return false
         }

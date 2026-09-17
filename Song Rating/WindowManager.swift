@@ -93,7 +93,9 @@ extension WindowManager {
     }
     
     func triggerPopover() {
-        guard let button = menuBarRatingControl?.statusItem.button else {
+        // The player popover reads from Music, which UI-testing mode must never touch
+        guard !MenuBarRatingControl.isUITesting,
+              let button = menuBarRatingControl?.statusItem.button else {
             return
         }
         
