@@ -53,6 +53,13 @@ enum TrackAnnouncementLayout {
     static let glassCornerRadius: CGFloat = 8
     /// How far the glass stands in from each screen edge, so that the top corners exist
     static let glassSideInset: CGFloat = 16
+    /// The artwork's corners on the glass strip: a little rounding, to sit with the glass's
+    /// own corners. Square on the classic and blur strips, as Growl drew it.
+    static let glassArtworkCornerRadius: CGFloat = 6
+
+    static func artworkCornerRadius(for style: TrackAnnouncementStyle, scale: CGFloat = 1) -> CGFloat {
+        return style == .glass ? glassArtworkCornerRadius * scale : 0
+    }
     /// The sheen that suggests a domed surface: a rim light fading down from the top edge
     /// over the top part of the strip, and a soft shade rising from the bottom. Drawn over
     /// the glass, clipped to its shape, because the glass view's own geometry is flat.

@@ -393,6 +393,19 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(view.hasSheen, "blur: never")
     }
 
+    func testTheArtworkIsRoundedOnTheGlassStripOnly() {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        XCTAssertEqual(view.artworkCornerRadius, 0)
+
+        view.style = .glass
+        view.scale = 1.5
+        XCTAssertEqual(view.artworkCornerRadius, 9)
+        XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty, "draws with the rounded artwork")
+
+        view.style = .blur
+        XCTAssertEqual(view.artworkCornerRadius, 0)
+    }
+
     func testTheGlassDefaultsAreTheChosenCombination() {
         let knobs = TrackAnnouncementGlassKnobs()
         XCTAssertTrue(knobs.regular, "the regular style, the one with the lensing")

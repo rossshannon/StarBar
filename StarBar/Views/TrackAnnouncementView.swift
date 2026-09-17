@@ -168,6 +168,12 @@ final class TrackAnnouncementView: NSView {
         let insets = TrackAnnouncementLayout.contentInsets(for: style, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
         content.leadingInset = insets.leading
         content.trailingInset = insets.trailing
+        content.artworkCornerRadius = TrackAnnouncementLayout.artworkCornerRadius(for: style, scale: scale)
+    }
+
+    /// The rounding on the artwork's corners, for tests
+    var artworkCornerRadius: CGFloat {
+        return content.artworkCornerRadius
     }
 
     private func layoutBackdrop() {
@@ -307,6 +313,11 @@ final class TrackAnnouncementContentView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// Rounding on the artwork's corners; 0 draws it square
+    var artworkCornerRadius: CGFloat = 0 {
+        didSet { needsDisplay = true }
+    }
+
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
         self.announcement = announcement
         super.init(frame: frame)
@@ -378,14 +389,19 @@ final class TrackAnnouncementContentView: NSView {
     }
 
     private func drawArtwork(in slot: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
         if let artwork = announcement.artwork, artwork.size.width > 0, artwork.size.height > 0 {
             let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: artwork.size, in: slot)
+            if artworkCornerRadius > 0 {
+                NSBezierPath(roundedRect: rect, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).addClip()
+            }
             NSGraphicsContext.current?.imageInterpolation = .high
             artwork.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
         } else {
             // No artwork: a quiet square with a music note, so the slot never looks broken
             NSColor.white.withAlphaComponent(0.12).setFill()
-            slot.fill()
+            NSBezierPath(roundedRect: slot, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).fill()
             if let note = TrackAnnouncementContentView.placeholderImage {
                 // Drawn at 36 points in an 80 point slot at scale 1, and in proportion above
                 let noteSize = CGSize(width: note.size.width * scale, height: note.size.height * scale)

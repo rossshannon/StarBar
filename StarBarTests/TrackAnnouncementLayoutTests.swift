@@ -263,6 +263,13 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(frame.maxY, 96)
     }
 
+    func testOnlyTheGlassStyleRoundsTheArtwork() {
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .classic), 0, "square, as Growl drew it")
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .blur), 0)
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .glass), 6)
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .glass, scale: 2), 12)
+    }
+
     func testOnlyTheGlassStyleAddsToTheContentInsets() {
         let classic = TrackAnnouncementLayout.contentInsets(for: .classic, scale: 2, leadingInset: 70, trailingInset: 5)
         XCTAssertEqual(classic.leading, 70)
