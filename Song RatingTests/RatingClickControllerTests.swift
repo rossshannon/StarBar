@@ -134,11 +134,13 @@ final class RatingClickControllerTests: XCTestCase {
     }
 
     func testClickWithUnknownCursorPositionDoesNothing() {
-        click(at: 52)
-        recorder.savedRatings = []
         pointer.imagePositionX = nil
         XCTAssertFalse(controller.click())
+        pointer.isLeftButtonHeld = true
+        XCTAssertFalse(controller.click())
         XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertEqual(favoriteToggles, 0)
+        XCTAssertEqual(ratingControl.rating, 40)
     }
 
     // MARK: - Drags
@@ -163,12 +165,14 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(recorder.savedRatings, [100])
     }
 
-    /// Today's bug: the rating must come from where the mouse is released, not where it was pressed.
-    func testReleaseRatingComesFromReleaseNotPress() {
+    /// On macOS 27 the click arrives when the mouse goes down. The saved rating must come from
+    /// where the mouse is released: not the press position (100) or the last tick (40).
+    func testReleaseRatingComesFromReleasePosition() {
         XCTAssertTrue(press(at: 97))
         XCTAssertTrue(move(to: 30))
-        XCTAssertFalse(release(at: 32))
-        XCTAssertEqual(recorder.savedRatings, [40])
+        XCTAssertEqual(ratingControl.rating, 40)
+        XCTAssertFalse(release(at: 52))
+        XCTAssertEqual(recorder.savedRatings, [60])
     }
 
     func testDragShowsHalfStarsWhenTheyAreOn() {
