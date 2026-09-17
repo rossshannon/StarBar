@@ -120,6 +120,9 @@ final class MenuBarRatingControl {
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
         preferences.target = WindowManager.shared
         menu.addItem(preferences)
+        let showCurrentTrack = NSMenuItem(title: "Show Current Track", action: #selector(TrackAnnouncementController.showCurrentTrackMenuItemPressed(_:)), keyEquivalent: "")
+        showCurrentTrack.target = TrackAnnouncementController.shared
+        menu.addItem(showCurrentTrack)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit StarBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu

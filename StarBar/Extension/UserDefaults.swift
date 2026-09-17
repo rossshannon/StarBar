@@ -13,6 +13,7 @@ enum ApplicationKey: String {
     case launchAtLogin
     case allowHalfStar
     case remindToRateUnrated
+    case announceNewTracks
 }
 
 extension UserDefaults {
@@ -61,6 +62,17 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.remindToRateUnrated.rawValue)
+        }
+    }
+
+    /// Slide a Growl-style Music Video strip up from the bottom of the screen when a new
+    /// song starts
+    @objc dynamic var announceNewTracks: Bool {
+        get {
+            return bool(forKey: ApplicationKey.announceNewTracks.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.announceNewTracks.rawValue)
         }
     }
 

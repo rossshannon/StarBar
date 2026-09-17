@@ -7,9 +7,35 @@
 //
 
 import Foundation
+import Cocoa
+import os
 
 extension iTunesTrack {
-    
+
+    /// The track's first artwork as an image, or nil when it has none or Music can't say.
+    /// Scripting Bridge raises Objective-C exceptions on artwork access, so the reads are
+    /// caught. Each read is an Apple Event.
+    func firstArtworkImage() -> NSImage? {
+        do {
+            return try ExceptionCatcher.catchException {
+                guard let artwork = self.artworks?().firstObject as? iTunesArtwork else { return nil }
+                if let descriptor = (artwork.data as Any) as? NSAppleEventDescriptor {
+                    return NSImage(data: descriptor.data)
+                }
+                if let image = (artwork.data as Any) as? NSImage {
+                    return image
+                }
+                if let data = artwork.rawData, let image = NSImage(data: data) {
+                    return image
+                }
+                return nil
+            } as? NSImage ?? nil
+        } catch {
+            os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
+            return nil
+        }
+    }
+
     var userRating: Int? {
         return ratingKind == .user ? rating : nil
     }

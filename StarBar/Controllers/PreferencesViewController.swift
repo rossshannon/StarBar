@@ -24,6 +24,12 @@ final class PreferencesViewController: NSViewController {
     lazy var reminderTextField: NSTextField = {
         return NSTextField(labelWithString: "Reminder: ")
     }()
+    lazy var announceTextField: NSTextField = {
+        return NSTextField(labelWithString: "Announce: ")
+    }()
+    lazy var showCurrentTrackTextField: NSTextField = {
+        return NSTextField(labelWithString: "Show current track: ")
+    }()
     lazy var ratingDownTextField: NSTextField = {
         return NSTextField(labelWithString: "Rating down: ")
     }()
@@ -73,6 +79,30 @@ final class PreferencesViewController: NSViewController {
     let reminderCheckboxButton: NSButton = {
         let button = NSButton(checkboxWithTitle: "Remind me to rate unrated songs", target: nil, action: nil)
         return button
+    }()
+    let announceCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Show a Music Video strip when a new song starts", target: nil, action: nil)
+        return button
+    }()
+    let announcePreviewButton: NSButton = {
+        let button = NSButton(title: "Preview", target: nil, action: nil)
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.font = NSFont.systemFont(ofSize: NSFont.systemFontSize(for: .small))
+        return button
+    }()
+    /// The announce checkbox and its Preview button, side by side in one grid cell
+    lazy var announceRowView: NSStackView = {
+        let stack = NSStackView(views: [announceCheckboxButton, announcePreviewButton])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 12
+        return stack
+    }()
+    let showCurrentTrackShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.showCurrentTrack.rawValue
+        return shortcutView
     }()
     let ratingDownShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
@@ -130,10 +160,12 @@ final class PreferencesViewController: NSViewController {
             [startupTextField, launchAtLoginCheckboxButton],
             [halfStarTextField, halfStarCheckboxButton],
             [reminderTextField, reminderCheckboxButton],
+            [announceTextField, announceRowView],
             [NSBox.separatorLine],
             [ratingDownTextField, ratingDownShortcutView],
             [ratingUpTextField, ratingUpShortcutView],
             [showOrClosePopoverTextField, showOrClosePopoverShortcutView],
+            [showCurrentTrackTextField, showCurrentTrackShortcutView],
             [NSBox.separatorLine],
             [rating0TextField, rating0ShortcutView],
             [rating1TextField, rating1ShortcutView],
@@ -166,6 +198,7 @@ final class PreferencesViewController: NSViewController {
     var launchAtLoginObservation: NSKeyValueObservation?
     var halfStarObservation: NSKeyValueObservation?
     var reminderObservation: NSKeyValueObservation?
+    var announceObservation: NSKeyValueObservation?
 
     override func loadView() {
         self.view = NSView()
@@ -175,6 +208,7 @@ final class PreferencesViewController: NSViewController {
         launchAtLoginObservation?.invalidate()
         halfStarObservation?.invalidate()
         reminderObservation?.invalidate()
+        announceObservation?.invalidate()
     }
 
 }
@@ -224,6 +258,14 @@ extension PreferencesViewController {
         UserDefaults.standard.remindToRateUnrated = sender.state == .on
     }
 
+    @objc private func announceCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.announceNewTracks = sender.state == .on
+    }
+
+    @objc private func announcePreviewButtonPressed(_ sender: NSButton) {
+        TrackAnnouncementController.shared?.preview()
+    }
+
 }
 
 extension PreferencesViewController {
@@ -269,6 +311,14 @@ extension PreferencesViewController {
         reminderObservation = UserDefaults.standard.observe(\.remindToRateUnrated, options: [.initial, .new]) { [weak self] defaults, _ in
             self?.reminderCheckboxButton.state = defaults.remindToRateUnrated ? .on : .off
         }
+
+        announceCheckboxButton.target = self
+        announceCheckboxButton.action = #selector(PreferencesViewController.announceCheckboxButtonChanged(_:))
+        announcePreviewButton.target = self
+        announcePreviewButton.action = #selector(PreferencesViewController.announcePreviewButtonPressed(_:))
+        announceObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.initial, .new]) { [weak self] defaults, _ in
+            self?.announceCheckboxButton.state = defaults.announceNewTracks ? .on : .off
+        }
     }
 
     override func viewDidAppear() {
@@ -289,6 +339,7 @@ extension PreferencesViewController {
         case rating2
         case rating1
         case rating0
+        case showCurrentTrack
     }
 
 }

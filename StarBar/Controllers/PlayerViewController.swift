@@ -51,11 +51,14 @@ final class PlayerViewController: NSViewController {
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
         preferences.target = WindowManager.shared
         menu.addItem(preferences)
+        let showCurrentTrack = NSMenuItem(title: "Show Current Track", action: #selector(TrackAnnouncementController.showCurrentTrackMenuItemPressed(_:)), keyEquivalent: "")
+        showCurrentTrack.target = TrackAnnouncementController.shared
+        menu.addItem(showCurrentTrack)
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit StarBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
-    
+
     // Computed property
     var playerHeight: CGFloat {
         return coverImageView.frame.height + playerPanelViewController.view.frame.height + playerHistoryTriggerButton.frame.height
@@ -231,29 +234,7 @@ extension PlayerViewController {
             return
         }
     
-        let firstImage: NSImage? = {
-            do {
-                return try ExceptionCatcher.catchException {
-                    guard let artwork = track.artworks?().firstObject as? iTunesArtwork else { return nil }
-                    if let descriptor = (artwork.data as Any) as? NSAppleEventDescriptor {
-                        return NSImage(data: descriptor.data)
-                    }
-                    if let image = (artwork.data as Any) as? NSImage {
-                        return image
-                    }
-                    if let data = artwork.rawData, let image = NSImage(data: data) {
-                        return image
-                    }
-                    
-                    return nil
-                } as? NSImage ?? nil
-            } catch {
-                os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
-                return nil
-            }
-        }()
-        
-        if let image = firstImage {
+        if let image = track.firstArtworkImage() {
             let transition = CATransition()
             transition.duration = 0.33
             transition.type = .fade
