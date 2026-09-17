@@ -51,9 +51,17 @@ final class iTunesRadioStation {
         }
     }
 
-    private var debounceSetRatingTimer: Timer?
+    /// When a chosen rating is sent to Music: the first goes at once, the rest wait
+    private var ratingWriteThrottle = RatingWriteThrottle(interval: iTunesRadioStation.ratingSaveDelay)
+    /// The newest rating waiting for the throttle window to close, with the track it belongs to
+    private var heldRatingWrite: (rating: Int, track: iTunesTrack?, name: String)?
+    private var heldRatingWriteTimer: Timer?
 
-    /// How long `setRating(_:)` waits before it saves the rating to Music
+    /// The longest `setRating(_:)` can hold a rating before saving it to Music.
+    ///
+    /// A rating usually goes out at once. Only one arriving while a previous write is still
+    /// fresh waits, and never longer than this, so it stays the upper bound anything
+    /// downstream has to allow for.
     static let ratingSaveDelay: TimeInterval = 2.0
 
     private init() {
@@ -167,35 +175,66 @@ extension iTunesRadioStation {
     /// setRating for current track
     ///
     /// - Parameter rating: integer in 0 ~ 100
-    /// - Note: call track.setRating with debounce. Prevent apple event trigger jumping bug
+    /// - Note: the rating goes to Music straight away. One arriving while that write is still
+    ///   fresh is held and sent when the window closes, so a held-down rating shortcut doesn't
+    ///   send Music a burst of Apple Events. A drag doesn't come through here repeatedly:
+    ///   `RatingClickController` previews it and commits once, on release.
     func setRating(_ rating: Int) {
-        debounceSetRatingTimer?.invalidate()
-
         guard latestPlayInfo != nil || !(iTunes?.currentTrack?.name ?? "").isEmpty else {
             os_log("%{public}s[%{public}ld], %{public}s: try to set rating but no current track info", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
-        // save the record for later rating
+        // Hold on to the track the user was looking at. A write that lands later must rate
+        // that track, not whatever has started playing by then.
         let targetTrack = iTunes?.currentTrack?.copy()
 
         // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification
         let name = latestPlayInfo?.name ?? iTunes?.currentTrack?.name ?? "nil"
-        os_log("%{public}s[%{public}ld], %{public}s: set timer for 2.0s and set rating for %{public}s %{public}ld…", ((#file as NSString).lastPathComponent), #line, #function, name, rating)
 
-        // FIXME: delay may cause set rating to *next* song just playing
-        debounceSetRatingTimer = Timer(timeInterval: iTunesRadioStation.ratingSaveDelay, repeats: false, block: { [weak self] timer in
-            guard let `self` = self else { return }
-            // here we use the saved record
-            // so the delay will not rate the next track if song just finish (a.k.a rate in last 2s)
-            let track = targetTrack ?? self.iTunes?.currentTrack
+        switch ratingWriteThrottle.decide(at: Date()) {
+        case .now:
+            // Supersede anything still waiting: this rating is newer
+            heldRatingWrite = nil
+            heldRatingWriteTimer?.invalidate()
+            heldRatingWriteTimer = nil
+            os_log("%{public}s[%{public}ld], %{public}s: set rating for %{public}s %{public}ld…", ((#file as NSString).lastPathComponent), #line, #function, name, rating)
+            write(rating: rating, to: targetTrack, name: name)
 
-            track?.setRating?(rating)
-            logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(track?.name ?? "<nil>"): \(rating)")
-        })
-        debounceSetRatingTimer.flatMap {
-            RunLoop.current.add($0, forMode: .default)
+        case .hold(let until):
+            // Keep only the newest rating. The timer is already counting to the same moment,
+            // so holding a shortcut down must not push the write further away each press.
+            heldRatingWrite = (rating, targetTrack, name)
+            guard heldRatingWriteTimer == nil else { return }
+
+            os_log("%{public}s[%{public}ld], %{public}s: holding rating for %{public}s %{public}ld until the window closes…", ((#file as NSString).lastPathComponent), #line, #function, name, rating)
+            let timer = Timer(fire: until, interval: 0, repeats: false, block: { [weak self] _ in
+                self?.sendHeldRatingWrite()
+            })
+            heldRatingWriteTimer = timer
+            RunLoop.current.add(timer, forMode: .default)
         }
+    }
+
+    /// Send the rating that was waiting for the throttle window to close.
+    private func sendHeldRatingWrite() {
+        heldRatingWriteTimer = nil
+        guard let held = heldRatingWrite else { return }
+        heldRatingWrite = nil
+
+        ratingWriteThrottle.didWrite(at: Date())
+        write(rating: held.rating, to: held.track, name: held.name)
+    }
+
+    /// Ask Music to store `rating` on `track`, falling back to whatever is playing.
+    ///
+    /// Music can refuse: a song streamed from the Apple Music catalog isn't in the library,
+    /// so there is nothing to store a rating on and the write comes back as OSStatus -54
+    /// through `eventDidFail`, after this returns. See `iTunesTrack.isCatalogStream`.
+    private func write(rating: Int, to targetTrack: iTunesTrack?, name: String) {
+        let track = targetTrack ?? iTunes?.currentTrack
+        track?.setRating?(rating)
+        logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(name, privacy: .public): \(rating)")
     }
 
     func backward() {

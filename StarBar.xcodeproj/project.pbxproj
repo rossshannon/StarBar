@@ -59,9 +59,11 @@
 		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
 		DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A937250E0A1C002C1B6C /* NSImage.swift */; };
 		5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D1 /* RatingReminder.swift */; };
+		5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */; };
 		5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D3 /* StarSweep.swift */; };
 		5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D5 /* RatingReminderController.swift */; };
 		5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D7 /* RatingReminderTests.swift */; };
+		5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */; };
 		5A7E1A0000000000000000DA /* Bell Transition.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D9 /* Bell Transition.mp3 */; };
 		5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */; };
 		5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */; };
@@ -168,9 +170,11 @@
 		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
 		DBD6A937250E0A1C002C1B6C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D1 /* RatingReminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminder.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottle.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D3 /* StarSweep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarSweep.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D5 /* RatingReminderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D7 /* RatingReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottleTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D9 /* Bell Transition.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Bell Transition.mp3"; sourceTree = "<group>"; };
 		5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncement.swift; sourceTree = "<group>"; };
@@ -278,6 +282,7 @@
 				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
 				5A7E1A0000000000000000D7 /* RatingReminderTests.swift */,
+				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
 				5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */,
 				DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */,
 				DB106C5A22C53D4C00502D7C /* Info.plist */,
@@ -340,6 +345,7 @@
 				DB106CA522CA3EE700502D7C /* Stars.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
+				5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */,
 				DB424A40230AF5C200230C7E /* PopoverWindow.swift */,
 				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
 				DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */,
@@ -606,6 +612,7 @@
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
 				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
+				5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */,
 				DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */,
 				DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */,
 				DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */,
@@ -649,6 +656,7 @@
 				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
 				5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */,
+				5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */,
 				5A7E1A0000000000000000F2 /* FakeClock.swift in Sources */,
 				5A7E1A0000000000000000F0 /* TrackAnnouncementPanelTests.swift in Sources */,
 				5A7E1A0000000000000000EE /* TrackAnnouncementControllerTests.swift in Sources */,
