@@ -7,7 +7,7 @@
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
 #   ./build.sh --test       Run the app and SDK tests that don't need Music
 #   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
-#   ./build.sh --ui-test    Run the UI tests, which click and drag the real menu bar
+#   ./build.sh --ui-test    Run the UI tests, which take over the screen (asks first; --yes skips)
 
 set -e
 set -o pipefail
@@ -25,6 +25,7 @@ WATCH=false
 TEST=false
 TEST_ALL=false
 UI_TEST=false
+ASSUME_YES=false
 
 for arg in "$@"; do
     case $arg in
@@ -33,6 +34,7 @@ for arg in "$@"; do
         --test|-t) TEST=true ;;
         --test-all) TEST=true; TEST_ALL=true ;;
         --ui-test) UI_TEST=true ;;
+        --yes|-y) ASSUME_YES=true ;;
         *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
@@ -202,8 +204,21 @@ run_tests() {
 run_ui_tests() {
     echo ""
     echo "=== UI testing $APP_NAME... ==="
-    echo "These tests click and drag the real menu bar, so leave the mouse alone until they finish."
-    echo "The first run asks for Accessibility permission for the test runner."
+    echo "These tests take over the mouse and screen for about two minutes, clicking and dragging"
+    echo "the menu bar. macOS may ask you to authenticate first."
+
+    # Only run on request: ask first, except in CI or with --yes
+    if [ -z "$CI" ] && [ "$ASSUME_YES" = false ]; then
+        if [ ! -t 0 ]; then
+            echo "Error: --ui-test takes over the screen, so it needs confirmation. Run it in a terminal, or pass --yes."
+            return 2
+        fi
+        read -r -p "Take over the screen now? [y/N] " answer
+        case "$answer" in
+            [yY]|[yY][eE][sS]) ;;
+            *) echo "UI tests not run."; return 2 ;;
+        esac
+    fi
 
     # The test build has the same bundle ID as the installed app, so quit the installed copy
     # while the tests run, then reopen it

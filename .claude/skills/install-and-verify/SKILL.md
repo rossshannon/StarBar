@@ -48,6 +48,8 @@ The build being new doesn't prove the changed code runs. Menu bar gestures, for 
   osascript -e 'tell application "Music" to get {name, rating, favorited} of current track'
   ```
 
+Don't run `./build.sh --ui-test` to check a change unless Ross asks for it. It takes over his screen for about two minutes. Use the log, or ask Ross to try the change.
+
 ## 3. Report
 
 Tell Ross the commit, the PID and start time, and the log lines that show the changed code ran. If step 2 found nothing, say plainly that the build is installed but the change is not confirmed to work, and say what you'll check next.
