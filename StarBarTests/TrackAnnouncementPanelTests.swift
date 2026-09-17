@@ -321,13 +321,14 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         view.style = .glass
 
         let backdrop = try XCTUnwrap(view.backdropView)
-        XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.glassTintAlpha)
         XCTAssertEqual(view.tintColor, .black)
-        XCTAssertEqual(backdrop.frame, TrackAnnouncementLayout.glassFrame(in: view.bounds.size), "the glass is inset and hangs below the strip")
         // NSGlassEffectView is only in the macOS 26 SDK, so an older Xcode builds and
         // asserts the blur fallback, whatever macOS the tests run on
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
+            XCTAssertEqual(view.renderedStyle, .glass)
+            XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.glassTintAlpha)
+            XCTAssertEqual(backdrop.frame, TrackAnnouncementLayout.glassFrame(in: view.bounds.size), "the glass is inset and hangs below the strip")
             let glass = try XCTUnwrap(backdrop as? NSGlassEffectView)
             XCTAssertNil(glass.tintColor, "untinted by default: the glass itself is what shows")
             XCTAssertEqual(TrackAnnouncementLayout.glassTint.alphaComponent, 0)
@@ -335,19 +336,30 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         } else {
             XCTAssertTrue(backdrop is NSVisualEffectView, "before macOS 26 the glass style falls back to the blur")
             XCTAssertEqual(view.renderedStyle, .blur, "and the geometry, wash and sheen follow the blur, not the request")
+            XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.blurTintAlpha)
             XCTAssertEqual(backdrop.frame, view.bounds)
             XCTAssertFalse(view.hasSheen)
+            XCTAssertEqual(view.artworkCornerRadius, 0)
         }
         #else
         XCTAssertTrue(backdrop is NSVisualEffectView, "built without the macOS 26 SDK, the glass style is the blur")
         XCTAssertEqual(view.renderedStyle, .blur, "and the geometry, wash and sheen follow the blur, not the request")
+        XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.blurTintAlpha)
         XCTAssertEqual(backdrop.frame, view.bounds)
         XCTAssertFalse(view.hasSheen)
+        XCTAssertEqual(view.artworkCornerRadius, 0)
         #endif
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty)
     }
 
+    /// The glass-only tests skip where the system has no Liquid Glass; the fallback there is
+    /// covered by testGlassStyleUsesLiquidGlassWhereAvailable
+    private func skipWithoutLiquidGlass() throws {
+        try XCTSkipUnless(TrackAnnouncementView.effectiveStyle(for: .glass) == .glass, "no Liquid Glass on this system or SDK")
+    }
+
     func testGlassFollowsTheScaleAndDockInsetsAndTheStripSize() throws {
+        try skipWithoutLiquidGlass()
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
         view.style = .glass
         view.scale = 2
@@ -368,7 +380,8 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(view.backdropView).frame, view.bounds, "a blur fills the strip")
     }
 
-    func testTheGlassDrawsTheEdgeLineByDefaultAndTheKnobsPickTheRest() {
+    func testTheGlassDrawsTheEdgeLineByDefaultAndTheKnobsPickTheRest() throws {
+        try skipWithoutLiquidGlass()
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
         XCTAssertFalse(view.hasSheen, "classic: nothing drawn over it")
 
@@ -404,7 +417,8 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(view.hasSheen, "blur: never")
     }
 
-    func testTheArtworkIsRoundedOnTheGlassStripOnly() {
+    func testTheArtworkIsRoundedOnTheGlassStripOnly() throws {
+        try skipWithoutLiquidGlass()
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
         XCTAssertEqual(view.artworkCornerRadius, 0)
 
