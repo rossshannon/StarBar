@@ -190,6 +190,16 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(favoriteToggles, 0)
     }
 
+    func testReleasePastHeartKeepsLastStarRating() {
+        XCTAssertTrue(press(at: 12))
+        XCTAssertTrue(move(to: 72))
+        XCTAssertTrue(move(to: 200))
+        XCTAssertEqual(ratingControl.rating, 80)
+        XCTAssertFalse(release(at: 200))
+        XCTAssertEqual(recorder.savedRatings, [80])
+        XCTAssertEqual(favoriteToggles, 0)
+    }
+
     func testDragLeftOfStarsSavesNoStars() {
         XCTAssertTrue(press(at: 52))
         XCTAssertTrue(move(to: 0))

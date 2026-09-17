@@ -156,8 +156,10 @@ extension RatingControl {
     }
 
     /// Rating (0 ~ 100) at `positionX` inside `starsImage`, or nil over the heart.
+    /// Everything from the heart's hit area rightwards counts as the heart, so a drag that
+    /// carries on past the heart keeps its last star rating instead of setting 5 stars.
     func rating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int? {
-        guard !isFavoriteHit(positionX: positionX) else { return nil }
+        guard positionX < favoriteMinX - 0.5 * spacing else { return nil }
 
         let rating = 10 * starRating(atPositionX: positionX, behavior: behavior)
         os_log(.debug, "%{public}s[%{public}ld], %{public}s: positionX %{public}.1f -> rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, positionX, rating)
