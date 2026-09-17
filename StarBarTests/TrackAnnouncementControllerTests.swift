@@ -18,6 +18,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var player: Snapshot?
     private var playerReads = 0
     private var live: TrackAnnouncementController.LiveTrackLoad = .loaded(.init())
+    private var liveQueue: [TrackAnnouncementController.LiveTrackLoad] = []
     private var artworkRequests: [String] = []
     private var wantsArtworkFlags: [Bool] = []
     private var reduceMotion = false
@@ -54,7 +55,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
             loadLiveTrack: { [unowned self] identity, wantsArtwork in
                 self.artworkRequests.append(identity)
                 self.wantsArtworkFlags.append(wantsArtwork)
-                return self.live
+                // A queued result, when a test wants the loads to differ, else the same one
+                return self.liveQueue.isEmpty ? self.live : self.liveQueue.removeFirst()
             },
             presenter: presenter,
             clock: clock,
@@ -407,6 +409,47 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.shown.map { $0.identity }, ["preview"])
         XCTAssertTrue(artworkRequests.isEmpty)
         XCTAssertEqual(clock.pendingOneShot?.seconds, expectedHold)
+    }
+
+    func testPreviewShowsTheCurrentTrackWhenThereIsOne() {
+        update(snapshot(track: "A", state: .playing))
+
+        controller.preview()
+
+        XCTAssertEqual(presenter.shown.map { $0.identity }.last, "A", "the preview is the real thing when Music has a track")
+        XCTAssertFalse(presenter.shown.map { $0.identity }.contains("preview"))
+    }
+
+    func testShowCurrentTrackReportsADroppedAnnouncement() {
+        update(snapshot(track: "A", state: .playing))
+        let shownBefore = presenter.shown.count
+        live = .trackChanged
+
+        XCTAssertFalse(controller.showCurrentTrack(), "the track changed under the read, nothing was shown")
+        XCTAssertEqual(presenter.shown.count, shownBefore)
+    }
+
+    func testPreviewReadsAgainWhenTheTrackChangesUnderIt() {
+        update(snapshot(track: "A", state: .playing))
+        let shownBefore = presenter.shown.count
+        artworkRequests.removeAll()
+        player = snapshot(track: "B", state: .playing)
+        liveQueue = [.trackChanged, .loaded(.init())]
+
+        controller.preview()
+
+        XCTAssertEqual(artworkRequests, ["B", "B"], "one more read after the drop")
+        XCTAssertEqual(presenter.shown.dropFirst(shownBefore).map { $0.identity }, ["B"], "the second read shows the new track, not the sample")
+    }
+
+    func testPreviewFallsBackToTheSampleWhenBothReadsAreDropped() {
+        update(snapshot(track: "A", state: .playing))
+        let shownBefore = presenter.shown.count
+        live = .trackChanged
+
+        controller.preview()
+
+        XCTAssertEqual(presenter.shown.dropFirst(shownBefore).map { $0.identity }, ["preview"])
     }
 
     // MARK: - Accessibility preferences

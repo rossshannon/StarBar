@@ -12,21 +12,21 @@ import XCTest
 
 final class TrackAnnouncementLayoutTests: XCTestCase {
 
-    private let normal = CGSize(width: 1440, height: 96)
+    private let normal = CGSize(width: 1440, height: 104)
 
     // MARK: - Frames
 
     func testArtworkMatchesGrowlAtScaleOne() {
         let frames = TrackAnnouncementLayout.frames(in: normal)
 
-        XCTAssertEqual(frames.artwork, CGRect(x: 8, y: 8, width: 80, height: 80))
+        XCTAssertEqual(frames.artwork, CGRect(x: 12, y: 12, width: 80, height: 80), "Growl's 80 point square, 12 in from the left and top")
     }
 
     func testTextStartsAfterTheArtworkAndItsGap() {
         let frames = TrackAnnouncementLayout.frames(in: normal)
 
-        XCTAssertEqual(frames.title.minX, 8 + 80 + 16)
-        XCTAssertEqual(frames.title.width, 1440 - 104 - 16)
+        XCTAssertEqual(frames.title.minX, 12 + 80 + 16)
+        XCTAssertEqual(frames.title.width, 1440 - 108 - 16)
         XCTAssertEqual(frames.title.height, 20)
     }
 
@@ -100,7 +100,7 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
     func testFramesScaleWithWidthOnly() {
         let narrow = TrackAnnouncementLayout.frames(in: normal)
-        let wide = TrackAnnouncementLayout.frames(in: CGSize(width: 2560, height: 96))
+        let wide = TrackAnnouncementLayout.frames(in: CGSize(width: 2560, height: normal.height))
 
         XCTAssertEqual(wide.title.width, narrow.title.width + 1120)
         XCTAssertEqual(wide.title.minY, narrow.title.minY)
@@ -113,8 +113,8 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
     func testContentKeepsClearOfASideDock() {
         let frames = TrackAnnouncementLayout.frames(in: normal, leadingInset: 70, trailingInset: 30)
 
-        XCTAssertEqual(frames.artwork.minX, 70 + 8)
-        XCTAssertEqual(frames.title.minX, 70 + 8 + 80 + 16)
+        XCTAssertEqual(frames.artwork.minX, 70 + 12)
+        XCTAssertEqual(frames.title.minX, 70 + 12 + 80 + 16)
         XCTAssertEqual(frames.title.maxX, 1440 - 30 - 16)
     }
 
@@ -128,15 +128,15 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
     }
 
     func testEverythingGrowsWithTheScale() {
-        let scaled = TrackAnnouncementLayout.frames(in: CGSize(width: 2160, height: 144), scale: 1.5)
+        let scaled = TrackAnnouncementLayout.frames(in: CGSize(width: 2160, height: 156), scale: 1.5)
 
-        XCTAssertEqual(scaled.artwork, CGRect(x: 12, y: 12, width: 120, height: 120))
-        XCTAssertEqual(scaled.title.minX, 12 + 120 + 24)
+        XCTAssertEqual(scaled.artwork, CGRect(x: 18, y: 18, width: 120, height: 120))
+        XCTAssertEqual(scaled.title.minX, 18 + 120 + 24)
         XCTAssertEqual(scaled.title.height, 30)
         XCTAssertEqual(scaled.artist?.height, 24)
-        XCTAssertEqual(scaled.title.width, 2160 - 156 - 24)
+        XCTAssertEqual(scaled.title.width, 2160 - 162 - 24)
         XCTAssertEqual(scaled.rating.height, 24)
-        XCTAssertEqual(144 - scaled.title.maxY, scaled.rating.minY, accuracy: 0.5)
+        XCTAssertEqual(156 - scaled.title.maxY, scaled.rating.minY, accuracy: 0.5)
     }
 
     // MARK: - Artwork scaling
@@ -176,7 +176,7 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
         XCTAssertEqual(frame.minY, 70)
         XCTAssertEqual(frame.width, 1440)
-        XCTAssertEqual(frame.height, 96)
+        XCTAssertEqual(frame.height, 104 + TrackAnnouncementPlacement.panelHeadroom)
         XCTAssertEqual(frame.minX, 0)
     }
 
@@ -205,15 +205,23 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
     func testPanelHeightScalesToWholePoints() {
         let screen = CGRect(x: 0, y: 0, width: 2560, height: 1440)
-        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.5).height, 144)
-        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.44).height, 139)
-        XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: 1.44).y, -139)
+        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.5).height, 156 + 72)
+        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.44).height, 150 + 70)
+        XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: 1.44).y, -150)
+    }
+
+    func testPanelHasHeadroomAboveTheStripAndTheStripKeepsItsHeight() {
+        let screen = CGRect(x: 0, y: 0, width: 1280, height: 800)
+        let frame = TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen)
+        XCTAssertEqual(frame.height, 104 + 48, "empty window above the strip, so the glass has something outside its edge to refract")
+        XCTAssertEqual(TrackAnnouncementPlacement.stripSize(panelFrame: frame), CGSize(width: 1280, height: 104))
+        XCTAssertEqual(TrackAnnouncementPlacement.stripSize(panelFrame: frame, scale: 2).height, 208)
     }
 
     func testStripOrigins() {
         XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: true), .zero)
-        XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false), CGPoint(x: 0, y: -96))
-        XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: 2), CGPoint(x: 0, y: -192))
+        XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false), CGPoint(x: 0, y: -104))
+        XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: 2), CGPoint(x: 0, y: -208))
     }
 
     func testEaseInOutIsSlowAtBothEnds() {
@@ -224,6 +232,53 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertGreaterThan(TrackAnnouncementPlacement.easeInOut(0.75), 0.75)
         XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(2), 1)
         XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(-1), 0)
+    }
+
+    // MARK: - Glass geometry
+
+    func testGlassIsInsetFromTheSidesAndHangsBelowTheStrip() {
+        let frame = TrackAnnouncementLayout.glassFrame(in: CGSize(width: 1280, height: 96))
+
+        XCTAssertEqual(frame.minX, 16)
+        XCTAssertEqual(frame.maxX, 1264)
+        XCTAssertEqual(frame.minY, -TrackAnnouncementLayout.glassCornerRadius, "hangs below by the corner radius, so the bottom corners are never on screen")
+        XCTAssertEqual(frame.maxY, 96, "flush with the strip's top")
+        XCTAssertGreaterThanOrEqual(-frame.minY, TrackAnnouncementLayout.glassCornerRadius, "the overhang covers the whole bottom corner")
+    }
+
+    func testGlassScalesAndKeepsClearOfASideDock() {
+        let frame = TrackAnnouncementLayout.glassFrame(in: CGSize(width: 2560, height: 192), scale: 2, leadingInset: 70, trailingInset: 0)
+
+        XCTAssertEqual(frame.minX, 70 + 32)
+        XCTAssertEqual(frame.maxX, 2560 - 32)
+        let overhang = TrackAnnouncementLayout.glassCornerRadius * 2
+        XCTAssertEqual(frame.minY, -overhang)
+        XCTAssertEqual(frame.height, 192 + overhang)
+        XCTAssertEqual(TrackAnnouncementLayout.glassFrame(in: CGSize(width: 40, height: 96), scale: 2).width, 0, "never a negative width")
+    }
+
+    func testABiggerCornerHangsFurtherBelowTheStrip() {
+        let frame = TrackAnnouncementLayout.glassFrame(in: CGSize(width: 1280, height: 96), scale: 1.5, cornerRadius: 48)
+        XCTAssertEqual(frame.minY, -72, "the overhang is the corner radius, so the bottom corners stay off screen")
+        XCTAssertEqual(frame.maxY, 96)
+    }
+
+    func testOnlyTheGlassStyleRoundsTheArtwork() {
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .classic), 0, "square, as Growl drew it")
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .blur), 0)
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .glass), 6)
+        XCTAssertEqual(TrackAnnouncementLayout.artworkCornerRadius(for: .glass, scale: 2), 12)
+    }
+
+    func testOnlyTheGlassStyleAddsToTheContentInsets() {
+        let classic = TrackAnnouncementLayout.contentInsets(for: .classic, scale: 2, leadingInset: 70, trailingInset: 5)
+        XCTAssertEqual(classic.leading, 70)
+        XCTAssertEqual(classic.trailing, 5)
+        let blur = TrackAnnouncementLayout.contentInsets(for: .blur, scale: 2, leadingInset: 70, trailingInset: 5)
+        XCTAssertEqual(blur.leading, 70)
+        let glass = TrackAnnouncementLayout.contentInsets(for: .glass, scale: 2, leadingInset: 70, trailingInset: 5)
+        XCTAssertEqual(glass.leading, 70 + 32, "the text stays inside the glass")
+        XCTAssertEqual(glass.trailing, 5 + 32)
     }
 
     func testReduceMotionSelectsFade() {

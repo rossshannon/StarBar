@@ -14,6 +14,7 @@ enum ApplicationKey: String {
     case allowHalfStar
     case remindToRateUnrated
     case announceNewTracks
+    case announcementStyle
 }
 
 extension UserDefaults {
@@ -73,6 +74,16 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.announceNewTracks.rawValue)
+        }
+    }
+
+    /// The strip's background: a `TrackAnnouncementStyle` raw value
+    @objc dynamic var announcementStyle: String {
+        get {
+            return string(forKey: ApplicationKey.announcementStyle.rawValue) ?? TrackAnnouncementStyle.default.rawValue
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.announcementStyle.rawValue)
         }
     }
 

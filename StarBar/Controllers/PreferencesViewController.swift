@@ -30,6 +30,9 @@ final class PreferencesViewController: NSViewController {
     lazy var showCurrentTrackTextField: NSTextField = {
         return NSTextField(labelWithString: "Show current track: ")
     }()
+    lazy var announcementStyleTextField: NSTextField = {
+        return NSTextField(labelWithString: "Strip style: ")
+    }()
     lazy var ratingDownTextField: NSTextField = {
         return NSTextField(labelWithString: "Rating down: ")
     }()
@@ -99,6 +102,14 @@ final class PreferencesViewController: NSViewController {
         stack.spacing = 12
         return stack
     }()
+    let announcementStylePopUpButton: NSPopUpButton = {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        for style in TrackAnnouncementStyle.allCases {
+            button.addItem(withTitle: style.title)
+            button.lastItem?.representedObject = style.rawValue
+        }
+        return button
+    }()
     let showCurrentTrackShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
         shortcutView.associatedUserDefaultsKey = ShortcutKey.showCurrentTrack.rawValue
@@ -161,6 +172,7 @@ final class PreferencesViewController: NSViewController {
             [halfStarTextField, halfStarCheckboxButton],
             [reminderTextField, reminderCheckboxButton],
             [announceTextField, announceRowView],
+            [announcementStyleTextField, announcementStylePopUpButton],
             [NSBox.separatorLine],
             [ratingDownTextField, ratingDownShortcutView],
             [ratingUpTextField, ratingUpShortcutView],
@@ -199,6 +211,7 @@ final class PreferencesViewController: NSViewController {
     var halfStarObservation: NSKeyValueObservation?
     var reminderObservation: NSKeyValueObservation?
     var announceObservation: NSKeyValueObservation?
+    var announcementStyleObservation: NSKeyValueObservation?
 
     override func loadView() {
         self.view = NSView()
@@ -209,6 +222,7 @@ final class PreferencesViewController: NSViewController {
         halfStarObservation?.invalidate()
         reminderObservation?.invalidate()
         announceObservation?.invalidate()
+        announcementStyleObservation?.invalidate()
     }
 
 }
@@ -266,6 +280,11 @@ extension PreferencesViewController {
         TrackAnnouncementController.shared?.preview()
     }
 
+    @objc private func announcementStyleChanged(_ sender: NSPopUpButton) {
+        guard let rawValue = sender.selectedItem?.representedObject as? String else { return }
+        UserDefaults.standard.announcementStyle = rawValue
+    }
+
 }
 
 extension PreferencesViewController {
@@ -318,6 +337,13 @@ extension PreferencesViewController {
         announcePreviewButton.action = #selector(PreferencesViewController.announcePreviewButtonPressed(_:))
         announceObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.initial, .new]) { [weak self] defaults, _ in
             self?.announceCheckboxButton.state = defaults.announceNewTracks ? .on : .off
+        }
+
+        announcementStylePopUpButton.target = self
+        announcementStylePopUpButton.action = #selector(PreferencesViewController.announcementStyleChanged(_:))
+        announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak self] defaults, _ in
+            let style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
+            self?.announcementStylePopUpButton.selectItem(withTitle: style.title)
         }
     }
 
