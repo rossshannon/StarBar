@@ -8,6 +8,32 @@
 import Foundation
 import Cocoa
 
+/// The strip's background, chosen in Preferences
+enum TrackAnnouncementStyle: String, CaseIterable {
+    /// Growl's flat black at 60 percent
+    case classic
+    /// A blur of whatever is behind the strip, under a lighter black wash
+    case blur
+    /// Dark Liquid Glass on macOS 26 and later (built with its SDK); the blur before that
+    case glass
+
+    /// The default, and what an unknown stored value falls back to
+    static let `default`: TrackAnnouncementStyle = .classic
+
+    init(storedValue: String?) {
+        self = storedValue.flatMap(TrackAnnouncementStyle.init(rawValue:)) ?? .default
+    }
+
+    /// The Preferences pop-up's wording
+    var title: String {
+        switch self {
+        case .classic: return "Classic (black)"
+        case .blur: return "Blur"
+        case .glass: return "Liquid Glass"
+        }
+    }
+}
+
 /// What the announcement strip shows for one track. A plain value, so the Preview button,
 /// the UI tests and the unit tests can show a strip without Music.
 struct TrackAnnouncement: Equatable {
@@ -49,7 +75,7 @@ struct TrackAnnouncement: Equatable {
         )
     }
 
-    /// What the Preferences Preview button shows
+    /// What the Preferences Preview button shows when Music has no track to show instead
     static var preview: TrackAnnouncement {
         return TrackAnnouncement(
             identity: "preview",
@@ -58,8 +84,25 @@ struct TrackAnnouncement: Equatable {
             album: "A strip like Growl's, for the song that just started",
             rating: 70,
             isFavorited: true,
-            artwork: NSApp?.applicationIconImage
+            artwork: previewArtwork
         )
+    }
+
+    /// The app icon, cropped to its shape. A macOS icon's canvas has transparent margins
+    /// around the rounded square, so drawn as it is it looks smaller than album artwork.
+    static var previewArtwork: NSImage? {
+        guard let icon = NSApp?.applicationIconImage, icon.size.width > 0 else { return nil }
+        let margin: CGFloat = 0.1
+        let source = NSRect(
+            x: icon.size.width * margin,
+            y: icon.size.height * margin,
+            width: icon.size.width * (1 - 2 * margin),
+            height: icon.size.height * (1 - 2 * margin)
+        )
+        return NSImage(size: source.size, flipped: false) { rect in
+            icon.draw(in: rect, from: source, operation: .sourceOver, fraction: 1)
+            return true
+        }
     }
 
     /// What VoiceOver reads when the strip appears

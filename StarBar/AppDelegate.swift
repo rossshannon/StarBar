@@ -21,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var trackAnnouncementPanel: TrackAnnouncementPanel?
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
+    private var announcementStyleObservation: NSKeyValueObservation?
     
     @IBAction func openAboutWindow(_ sender: NSMenuItem) {
         WindowManager.shared.open(.about)
@@ -99,6 +100,9 @@ extension AppDelegate {
 
         announceNewTracksObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.new]) { [weak controller] defaults, _ in
             controller?.setEnabled(defaults.announceNewTracks)
+        }
+        announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak panel] defaults, _ in
+            panel?.style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
         }
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showCurrentTrack.rawValue, toAction: { [weak controller] in
             controller?.showCurrentTrack()
@@ -284,7 +288,8 @@ extension AppDelegate {
             ApplicationKey.launchAtLogin.rawValue : false,
             ApplicationKey.allowHalfStar.rawValue : false,
             ApplicationKey.remindToRateUnrated.rawValue : true,
-            ApplicationKey.announceNewTracks.rawValue : false
+            ApplicationKey.announceNewTracks.rawValue : false,
+            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue
         ])
         
         // setup observer

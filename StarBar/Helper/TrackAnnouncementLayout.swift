@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreGraphics
+import AppKit
 
 /// Where everything goes on the announcement strip. The base numbers are the original Growl
 /// "Music Video" display's: a 96 point strip, 80 point artwork inset 8 points, bold 16 point
@@ -16,11 +17,13 @@ import CoreGraphics
 enum TrackAnnouncementLayout {
 
     /// Strip height, in points, at scale 1
-    static let height: CGFloat = 96
+    /// Growl's 96, plus 8 so the artwork keeps 12 above and below it
+    static let height: CGFloat = 104
     static let artworkSize: CGFloat = 80
-    /// Artwork inset from the left; it is centred vertically
-    static let artworkInset: CGFloat = 8
-    /// Gap between the artwork and the text
+    /// Artwork inset from the left, Growl's 8 plus 4; it is centred vertically, which with the
+    /// strip's height puts the same 12 above it
+    static let artworkInset: CGFloat = 12
+    /// Gap between the artwork and the text, Growl's 16
     static let textGap: CGFloat = 16
     /// Gap between the text and the right edge
     static let textTrailingPad: CGFloat = 16
@@ -35,8 +38,68 @@ enum TrackAnnouncementLayout {
     static let ratingStarSize: CGFloat = 12
     static let ratingSpacing: CGFloat = 3
     static let backgroundAlpha: CGFloat = 0.6
+    /// The black wash over a blurred backdrop, lighter than the classic strip
+    static let blurTintAlpha: CGFloat = 0.25
+    /// No wash over Liquid Glass: the darkness is the glass view's own tint, so the glass
+    /// material is what shows
+    static let glassTintAlpha: CGFloat = 0
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
+    /// The colour Liquid Glass is tinted with. Alpha 0 means no tint at all: the glass's
+    /// own frost and lensing are what shows, and the text shadow does the work of legibility.
+    static let glassTint = NSColor.black.withAlphaComponent(0)
+    /// The glass strip's top corners. Liquid Glass shows its lensing and highlights along a
+    /// curved rim, so square corners read as a blur; 8 is the radius Ross picked from a grid
+    /// of samples, tight enough to sit beside the square artwork.
+    static let glassCornerRadius: CGFloat = 8
+    /// How far the glass stands in from each screen edge, so that the top corners exist
+    static let glassSideInset: CGFloat = 16
+    /// The artwork's corners on the glass strip: a little rounding, to sit with the glass's
+    /// own corners. Square on the classic and blur strips, as Growl drew it.
+    static let glassArtworkCornerRadius: CGFloat = 6
+
+    static func artworkCornerRadius(for style: TrackAnnouncementStyle, scale: CGFloat = 1) -> CGFloat {
+        return style == .glass ? glassArtworkCornerRadius * scale : 0
+    }
+    /// The sheen that suggests a domed surface: a rim light fading down from the top edge
+    /// over the top part of the strip, and a soft shade rising from the bottom. Drawn over
+    /// the glass, clipped to its shape, because the glass view's own geometry is flat.
+    static let glassSheenHighlightAlpha: CGFloat = 0.35
+    static let glassSheenHighlightFraction: CGFloat = 0.5
+    /// Kept faint: the shade is the one part of the sheen that darkens the glass, and it
+    /// read as a tint
+    static let glassSheenShadeAlpha: CGFloat = 0.07
+    static let glassSheenShadeFraction: CGFloat = 0.5
+    /// A crisp bright line along the top edge, the specular catch of a curved surface; over
+    /// light content the soft highlight alone disappears
+    static let glassSheenEdgeAlpha: CGFloat = 0.6
+    static let glassSheenEdgeWidth: CGFloat = 1
+
+    /// The glass view's frame inside the strip: inset from the sides, and hanging below the
+    /// strip by its corner radius so that the bottom corners are always below the screen edge
+    /// and only the top corners round. `leadingInset` and `trailingInset` are the strip's
+    /// Dock insets.
+    static func glassFrame(in size: CGSize, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0, cornerRadius: CGFloat = glassCornerRadius) -> CGRect {
+        // Whole points, so the 1 point edge line drawn along the glass lands on pixels
+        let inset = (glassSideInset * scale).rounded()
+        let overhang = (cornerRadius * scale).rounded(.up)
+        let x = (leadingInset + inset).rounded()
+        let maxX = (size.width - trailingInset - inset).rounded()
+        return CGRect(
+            x: x,
+            y: -overhang,
+            width: max(0, maxX - x),
+            height: size.height + overhang
+        )
+    }
+
+    /// The space the content keeps clear at each side: the Dock insets, plus the glass inset
+    /// for the glass style so that text never hangs past the glass
+    static func contentInsets(for style: TrackAnnouncementStyle, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0) -> (leading: CGFloat, trailing: CGFloat) {
+        guard style == .glass else { return (leadingInset, trailingInset) }
+        let inset = glassSideInset * scale
+        return (leadingInset + inset, trailingInset + inset)
+    }
     /// Slide in and slide out, each
     static let slideDuration: TimeInterval = 0.3
     /// Time fully on screen between the slides
@@ -132,16 +195,32 @@ enum TrackAnnouncementPlacement {
         case fade
     }
 
+    /// Empty window above the strip. Liquid Glass refracts what lies just outside its edge
+    /// into its rim, and a backdrop only covers the window: with the window's top flush with
+    /// the glass's top there was nothing to bend, and the straight edge showed no lensing at
+    /// all while the corners, with window either side of them, did. The panel ignores the
+    /// mouse, so the headroom costs nothing.
+    static let panelHeadroom: CGFloat = 48
+
+    static func panelHeadroom(scale: CGFloat) -> CGFloat {
+        return (panelHeadroom * scale).rounded(.up)
+    }
+
     /// The panel spans the whole screen width and rests on the visible frame's bottom edge:
     /// above a Dock at the bottom, and running behind a Dock at the side (the panel's window
-    /// level is just below the Dock's)
+    /// level is just below the Dock's). It is taller than the strip by the headroom.
     static func panelFrame(screenFrame: CGRect, visibleFrame: CGRect, scale: CGFloat = 1) -> CGRect {
         return CGRect(
             x: screenFrame.minX,
             y: visibleFrame.minY,
             width: screenFrame.width,
-            height: TrackAnnouncementLayout.stripHeight(scale: scale)
+            height: TrackAnnouncementLayout.stripHeight(scale: scale) + panelHeadroom(scale: scale)
         )
+    }
+
+    /// The strip's size inside the panel: the panel's width, the strip's height
+    static func stripSize(panelFrame: CGRect, scale: CGFloat = 1) -> CGSize {
+        return CGSize(width: panelFrame.width, height: TrackAnnouncementLayout.stripHeight(scale: scale))
     }
 
     /// The strip view's origin inside the panel: on screen, or just below it
