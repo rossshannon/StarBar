@@ -209,9 +209,11 @@ final class TrackAnnouncementView: NSView {
     private func rebuildBackdrop() {
         backdropView?.removeFromSuperview()
         backdropView = nil
-        guard let backdrop = TrackAnnouncementView.makeBackdrop(for: style) else { return }
-        addSubview(backdrop, positioned: .below, relativeTo: content)
-        backdropView = backdrop
+        if let backdrop = TrackAnnouncementView.makeBackdrop(for: style) {
+            addSubview(backdrop, positioned: .below, relativeTo: content)
+            backdropView = backdrop
+        }
+        // Always, so the sheen drawn over a glass backdrop goes when the style loses it
         layoutBackdrop()
     }
 

@@ -370,6 +370,11 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertTrue(view.hasSheen, "glass: the bright line along the top edge, by default")
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty, "draws with the edge line")
 
+        view.style = .classic
+        XCTAssertFalse(view.hasSheen, "back to classic while the strip is up: the line must go with the glass")
+        view.style = .glass
+        XCTAssertTrue(view.hasSheen)
+
         TrackAnnouncementGlassKnobs.read = {
             var knobs = TrackAnnouncementGlassKnobs()
             knobs.edgeLine = false
