@@ -104,8 +104,9 @@ final class TrackAnnouncementController: NSObject {
     /// What the strip is showing while the hold timer runs
     private var currentAnnouncement: TrackAnnouncement?
     private var hideTimer: RatingReminderTimer?
-    /// A rating the user just chose in StarBar. Music only gets it after
-    /// `iTunesRadioStation.ratingSaveDelay`, so until then it wins over Music's reads.
+    /// A rating the user just chose in StarBar. Music usually has it at once, but a rating
+    /// that arrives in the shadow of another can wait up to `iTunesRadioStation.ratingSaveDelay`,
+    /// so until this expires it wins over Music's reads.
     private var pendingRating: (identity: String, rating: Int, expires: Date)?
 
     init(
@@ -224,7 +225,7 @@ extension TrackAnnouncementController {
     }
 
     /// The user chose a rating for the current track in StarBar. Shows it on the strip now,
-    /// without asking Music, which only gets the rating after `ratingSaveDelay`.
+    /// without asking Music, which may not have the rating for up to `ratingSaveDelay`.
     ///
     /// - Parameter rating: 0 to 100
     func userDidRate(_ rating: Int) {

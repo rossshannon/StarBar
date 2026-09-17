@@ -95,7 +95,42 @@ of `iTunesEClS`, so the enum cannot represent it.
 `exists` returns `true` for a catalog track, so `iTunesPlayer.currentTrack` does not filter
 these out — the app treats them as ordinary tracks today.
 
+## Adding the song to the library
+
+`duplicate <track> to source "Library"` adds it. Three things about it are not obvious:
+
+- It must be the library **source**. Duplicating to `library playlist 1` fails with
+  "Can only duplicate subscription tracks to library source" (-10006).
+- **It returns nothing usable.** The scripting dictionary declares a result specifier, but the
+  variable is undefined afterwards. A first test appeared to succeed only because the read was
+  inside a `try` block that swallowed the error.
+- The new entry is a normal `file track` with a `cloud status` of `subscription`, and it is
+  **rateable immediately** — a rating written with no delay at all reads straight back as a
+  user rating. There is no window in which the song exists but cannot be rated.
+
+Whether the add also downloads the audio is unresolved. Music reports a size for the new
+track, but `~/Music/Music/` is blocked by privacy protection so the bytes can't be checked.
+Music has a separate `download` command, which would be redundant if `duplicate` downloaded,
+and the download appears to be queued asynchronously in any case. It does not affect whether
+there is somewhere to store the rating, which is the part that matters here.
+
+### Finding the song after adding it
+
+Since the add returns nothing, the new song has to be found afterwards — and **not by name**.
+Collect the database IDs of the tracks matching the song before the add, then take whichever
+one is new. Only a handful ever match, so it is cheap.
+
+Matching on name alone rates the wrong song. That is not hypothetical: a test doing it found
+two songs called "Flume" in this library, by Bon Iver and by Rare, and rated both.
+
+### The playing track never changes
+
+After the add, the track Music reports as playing is still the `URL track`, still rating 0,
+for the rest of the song. It does not become the library copy. Anything that should show the
+new song's rating has to switch to the library copy itself.
+
 ## Open question
 
-Whether the favourite survives leaving the song and coming back to it later. The write is
-accepted and held while the song is loaded; persistence across sessions is untested.
+Whether the favourite on a catalog track reaches the user's Apple Music account or only the
+session. Setting it on a streamed copy of a song that was also in the library left the library
+copy reading as favourited, but it may have been favourited already — untested either way.
