@@ -85,11 +85,10 @@ struct TrackAnnouncement: Equatable {
             width: icon.size.width * (1 - 2 * margin),
             height: icon.size.height * (1 - 2 * margin)
         )
-        let cropped = NSImage(size: source.size)
-        cropped.lockFocus()
-        icon.draw(in: NSRect(origin: .zero, size: source.size), from: source, operation: .sourceOver, fraction: 1)
-        cropped.unlockFocus()
-        return cropped
+        return NSImage(size: source.size, flipped: false) { rect in
+            icon.draw(in: rect, from: source, operation: .sourceOver, fraction: 1)
+            return true
+        }
     }
 
     /// What VoiceOver reads when the strip appears

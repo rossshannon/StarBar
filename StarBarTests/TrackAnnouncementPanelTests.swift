@@ -334,9 +334,15 @@ final class TrackAnnouncementPanelTests: XCTestCase {
             XCTAssertEqual(glass.cornerRadius, TrackAnnouncementLayout.glassCornerRadius)
         } else {
             XCTAssertTrue(backdrop is NSVisualEffectView, "before macOS 26 the glass style falls back to the blur")
+            XCTAssertEqual(view.renderedStyle, .blur, "and the geometry, wash and sheen follow the blur, not the request")
+            XCTAssertEqual(backdrop.frame, view.bounds)
+            XCTAssertFalse(view.hasSheen)
         }
         #else
         XCTAssertTrue(backdrop is NSVisualEffectView, "built without the macOS 26 SDK, the glass style is the blur")
+        XCTAssertEqual(view.renderedStyle, .blur, "and the geometry, wash and sheen follow the blur, not the request")
+        XCTAssertEqual(backdrop.frame, view.bounds)
+        XCTAssertFalse(view.hasSheen)
         #endif
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty)
     }
@@ -409,6 +415,27 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
         view.style = .blur
         XCTAssertEqual(view.artworkCornerRadius, 0)
+    }
+
+    func testTheRenderedStyleIsTheRequestedOneExceptGlassWithoutLiquidGlass() {
+        XCTAssertEqual(TrackAnnouncementView.effectiveStyle(for: .classic), .classic)
+        XCTAssertEqual(TrackAnnouncementView.effectiveStyle(for: .blur), .blur)
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            XCTAssertEqual(TrackAnnouncementView.effectiveStyle(for: .glass), .glass)
+        } else {
+            XCTAssertEqual(TrackAnnouncementView.effectiveStyle(for: .glass), .blur)
+        }
+        #else
+        XCTAssertEqual(TrackAnnouncementView.effectiveStyle(for: .glass), .blur)
+        #endif
+
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        XCTAssertEqual(view.renderedStyle, .classic)
+        view.style = .glass
+        XCTAssertEqual(view.renderedStyle, TrackAnnouncementView.effectiveStyle(for: .glass))
+        view.style = .classic
+        XCTAssertEqual(view.renderedStyle, .classic)
     }
 
     func testTheGlassDefaultsAreTheChosenCombination() {

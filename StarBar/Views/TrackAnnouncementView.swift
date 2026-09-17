@@ -146,12 +146,26 @@ final class TrackAnnouncementView: NSView {
     /// for glass a rectangle inset from the sides and hanging below the strip, so that only
     /// its top corners are ever seen
     var backdropFrame: NSRect {
-        switch style {
+        switch renderedStyle {
         case .classic, .blur:
             return bounds
         case .glass:
             return TrackAnnouncementLayout.glassFrame(in: bounds.size, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset, cornerRadius: glassCornerRadius)
         }
+    }
+
+    /// The style the backdrop was actually built as: the requested one, except that glass is
+    /// the blur where the system has no Liquid Glass. Geometry follows this, not the request,
+    /// or the fallback would be a square blur inset from the sides with a rounded edge line
+    /// drawn over it.
+    private(set) var renderedStyle: TrackAnnouncementStyle = .classic
+
+    static func effectiveStyle(for style: TrackAnnouncementStyle) -> TrackAnnouncementStyle {
+        guard style == .glass else { return style }
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) { return .glass }
+        #endif
+        return .blur
     }
 
     /// The glass's corner radius at scale 1: the layout's, unless the experiment knob says otherwise
@@ -165,10 +179,10 @@ final class TrackAnnouncementView: NSView {
     }
 
     private func applyInsets() {
-        let insets = TrackAnnouncementLayout.contentInsets(for: style, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
+        let insets = TrackAnnouncementLayout.contentInsets(for: renderedStyle, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
         content.leadingInset = insets.leading
         content.trailingInset = insets.trailing
-        content.artworkCornerRadius = TrackAnnouncementLayout.artworkCornerRadius(for: style, scale: scale)
+        content.artworkCornerRadius = TrackAnnouncementLayout.artworkCornerRadius(for: renderedStyle, scale: scale)
     }
 
     /// The rounding on the artwork's corners, for tests
@@ -178,7 +192,7 @@ final class TrackAnnouncementView: NSView {
 
     private func layoutBackdrop() {
         let knobs = TrackAnnouncementGlassKnobs.read()
-        content.sheen = (style == .glass && (knobs.edgeLine || knobs.sheen))
+        content.sheen = (renderedStyle == .glass && (knobs.edgeLine || knobs.sheen))
             ? TrackAnnouncementContentView.Sheen(rect: backdropFrame, cornerRadius: glassCornerRadius * scale, edgeLine: knobs.edgeLine, shading: knobs.sheen)
             : nil
         guard let backdrop = backdropView else { return }
@@ -194,7 +208,7 @@ final class TrackAnnouncementView: NSView {
     /// over a blur or glass, and opaque for Reduce Transparency whatever the style
     var tintAlpha: CGFloat {
         if backgroundAlpha >= 1 { return 1 }
-        switch style {
+        switch renderedStyle {
         case .classic: return backgroundAlpha
         case .blur: return TrackAnnouncementLayout.blurTintAlpha
         case .glass: return TrackAnnouncementLayout.glassTintAlpha
@@ -209,6 +223,7 @@ final class TrackAnnouncementView: NSView {
     private func rebuildBackdrop() {
         backdropView?.removeFromSuperview()
         backdropView = nil
+        renderedStyle = TrackAnnouncementView.effectiveStyle(for: style)
         if let backdrop = TrackAnnouncementView.makeBackdrop(for: style) {
             addSubview(backdrop, positioned: .below, relativeTo: content)
             backdropView = backdrop
