@@ -16,6 +16,8 @@ import os
 /// identity of the last track it saw, even while the setting is off, so only a change of track
 /// announces: pause, resume, seeking and rating edits never do. A new track while a strip is
 /// showing replaces it; nothing is queued.
+///
+/// Called from the main thread only, like the rest of the menu bar.
 final class TrackAnnouncementController: NSObject {
 
     /// What the announcement needs to know about the player
@@ -86,6 +88,9 @@ final class TrackAnnouncementController: NSObject {
     /// Reads the live track's rating, favourite flag and, when asked, artwork, for the track
     /// with this identity
     private let loadLiveTrack: (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad
+    /// Reads the identity of the track Music has now, or nil when it can't say. One Apple
+    /// Event, so a rating can be matched to its track without a full live read.
+    private let readCurrentIdentity: () -> String?
     private let presenter: TrackAnnouncementPresenter
     private let clock: RatingReminderClock
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
@@ -106,6 +111,7 @@ final class TrackAnnouncementController: NSObject {
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
         loadLiveTrack: @escaping (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad,
+        readCurrentIdentity: @escaping () -> String?,
         presenter: TrackAnnouncementPresenter,
         clock: RatingReminderClock = RunLoopClock(),
         accessibility: @escaping () -> (reduceMotion: Bool, reduceTransparency: Bool) = {
@@ -116,6 +122,7 @@ final class TrackAnnouncementController: NSObject {
     ) {
         self.readPlayer = readPlayer
         self.loadLiveTrack = loadLiveTrack
+        self.readCurrentIdentity = readCurrentIdentity
         self.presenter = presenter
         self.clock = clock
         self.accessibility = accessibility
@@ -146,10 +153,12 @@ extension TrackAnnouncementController {
         // (sourceSaved sends one), must not reset the last track, or the next real
         // notification would announce it again
         guard snapshot.state != .unknown else {
-            // Music sends sourceSaved when the song is rated in Music itself: show the change
+            // Music sends sourceSaved when the song is rated in Music itself: show the change.
+            // The payload says nothing dependable about which track it is for, so only
+            // Music's live read is believed, and the strip keeps its own words.
             if let current = currentAnnouncement, hideTimer != nil,
                snapshot.identity == nil || snapshot.identity == current.identity {
-                refresh(current, from: snapshot, identity: current.identity)
+                refreshFromMusic(current)
             }
             return
         }
@@ -229,19 +238,16 @@ extension TrackAnnouncementController {
 
     /// The track a rating chosen in StarBar belongs to: the one Music is playing.
     ///
-    /// While the strip is up, that is checked against Music, so a rating chosen in the gap
-    /// between Music changing track and its notification arriving never lands on the song
-    /// the strip is showing. With no strip up there is nothing to draw and nothing to check,
-    /// so the last update's track is good enough, and no Apple Event is sent.
+    /// While the strip is up, Music is asked which track that is (one Apple Event), so a
+    /// rating chosen in the gap between Music changing track and its notification arriving
+    /// never lands on the song the strip is showing. With no strip up there is nothing to
+    /// draw, so the last update's track is good enough and nothing is asked.
     private func ratedTrackIdentity() -> String? {
         guard let current = currentAnnouncement, hideTimer != nil else { return lastSnapshot?.identity }
-        switch loadLiveTrack(current.identity, false) {
-        case .loaded:
-            return current.identity
-        case .trackChanged:
-            os_log(.debug, "%{public}s[%{public}ld], %{public}s: the rating is for a track Music has already moved on to", ((#file as NSString).lastPathComponent), #line, #function)
-            return nil
-        }
+        // A read Music can't answer leaves the strip as the best guess, as elsewhere here
+        guard let live = readCurrentIdentity(), live != current.identity else { return current.identity }
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: the rating is for %{public}s, which the strip isn't showing", ((#file as NSString).lastPathComponent), #line, #function, live)
+        return nil
     }
 
     /// Redraw the strip if it is up and showing the track with this identity
@@ -304,6 +310,20 @@ extension TrackAnnouncementController {
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? current.isFavorited,
             artwork: current.artwork
+        )
+        guard updated != current else { return }
+        currentAnnouncement = updated
+        presenter.refresh(updated)
+    }
+
+    /// Redraw the strip's rating and heart from Music alone, for a notification that says
+    /// nothing dependable about the track it is for
+    private func refreshFromMusic(_ current: TrackAnnouncement) {
+        guard let live = loadLive(identity: current.identity, wantsArtwork: false) else { return }
+        let updated = TrackAnnouncement(
+            copying: current,
+            rating: rating(for: current.identity, live: live.rating, payload: nil) ?? current.rating,
+            isFavorited: live.isFavorited ?? current.isFavorited
         )
         guard updated != current else { return }
         currentAnnouncement = updated
