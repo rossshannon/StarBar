@@ -37,7 +37,8 @@ final class RatingControlDragTests: XCTestCase {
         XCTAssertEqual(drag.releaseRating(at: nil), 100)
     }
 
-    /// A drag that starts and ends on the heart never touches the rating.
+    /// A drag that never reaches the stars, such as one that starts right of the heart,
+    /// has no rating to save.
     func testDragOnlyOverTheHeartSavesNothing() {
         var drag = RatingControl.Drag(originalRating: 40)
         XCTAssertEqual(drag.move(to: nil), 40)

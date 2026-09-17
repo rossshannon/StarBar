@@ -16,8 +16,20 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      # The tag becomes CFBundleShortVersionString, which must be three numbers, so refuse
+      # tags like v1.6.0-beta1 before building anything
+      - name: Check tag format
+        run: |
+          if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must look like v1.6.0, not $GITHUB_REF_NAME"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # The build and tests don't need the write token; only gh release create uses it
+          persist-credentials: false
 
       - name: Select Xcode
         run: |

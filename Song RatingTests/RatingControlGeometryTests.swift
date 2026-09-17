@@ -92,6 +92,15 @@ final class RatingControlGeometryTests: XCTestCase {
         XCTAssertEqual(control.starRating(atPositionX: 23, behavior: .both), 3)
     }
 
+    /// The heart and everything to its right give no rating; just left of the heart is 5 stars.
+    func testRatingIsNilFromHeartRightwards() {
+        XCTAssertEqual(control.rating(atPositionX: 105.9, behavior: .full), 100)
+        XCTAssertNil(control.rating(atPositionX: 106, behavior: .full))
+        XCTAssertNil(control.rating(atPositionX: 116, behavior: .full))
+        XCTAssertNil(control.rating(atPositionX: 128.5, behavior: .full))
+        XCTAssertNil(control.rating(atPositionX: 400, behavior: .both))
+    }
+
     func testPositionsPastLastStarClampToFiveStars() {
         XCTAssertEqual(control.starRating(atPositionX: 100, behavior: .full), 10)
         XCTAssertEqual(control.starRating(atPositionX: 105, behavior: .full), 10)

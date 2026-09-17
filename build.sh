@@ -144,12 +144,13 @@ build_and_install() {
     fi
 }
 
-# Run xcodebuild test with the given selection arguments.
-# Usage: xcode_test <name> [-only-testing:... | -skip-testing:...]...
+# Run xcodebuild test with the given scheme and selection arguments.
+# Usage: xcode_test <name> <scheme> [-only-testing:... | -skip-testing:...]...
 # Writes build/test/<name>.log and a result bundle under build/test/results/.
 xcode_test() {
     local name="$1"
-    shift
+    local scheme="$2"
+    shift 2
     local test_dir="build/test"
     local test_log="$test_dir/$name.log"
     # xcodebuild won't overwrite a result bundle, so each run gets its own
@@ -157,7 +158,7 @@ xcode_test() {
 
     mkdir -p "$test_dir/results"
     if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
-        -scheme "$PROJECT_NAME" \
+        -scheme "$scheme" \
         -destination "platform=macOS" \
         -derivedDataPath "$test_dir" \
         -resultBundlePath "$result_bundle" \
@@ -177,8 +178,8 @@ xcode_test() {
 
 run_tests() {
     # Test identifiers use the target name ("Song RatingTests"); the module name is silently ignored.
-    # The UI tests move the mouse, so they run only with --ui-test.
-    local selection=("-skip-testing:Song RatingUITests")
+    # The UI tests take over the screen, so they have their own scheme and run only with --ui-test.
+    local selection=()
     # These test classes read from Music, so they fail unless Music is playing a track
     # with artwork and Music Rating may access the media library. CI has no Music.
     if [ "$TEST_ALL" = false ]; then
@@ -192,7 +193,7 @@ run_tests() {
     echo ""
     echo "=== Testing $APP_NAME... ==="
     # The app hosts the unit tests, so a test run launches it
-    xcode_test test "${selection[@]}" || status=1
+    xcode_test test "$PROJECT_NAME" "${selection[@]}" || status=1
 
     echo ""
     echo "=== Testing SDK... ==="
@@ -213,7 +214,12 @@ run_ui_tests() {
             echo "Error: --ui-test takes over the screen, so it needs confirmation. Run it in a terminal, or pass --yes."
             return 2
         fi
-        read -r -p "Take over the screen now? [y/N] " answer
+        # read fails at end of input (Ctrl-D); without the || the script would exit silently
+        if ! read -r -p "Take over the screen now? [y/N] " answer; then
+            echo ""
+            echo "UI tests not run."
+            return 2
+        fi
         case "$answer" in
             [yY]|[yY][eE][sS]) ;;
             *) echo "UI tests not run."; return 2 ;;
@@ -230,7 +236,7 @@ run_ui_tests() {
     fi
 
     local status=0
-    xcode_test ui-test "-only-testing:Song RatingUITests" || status=1
+    xcode_test ui-test "$PROJECT_NAME UI Tests" || status=1
 
     if [ "$was_running" = true ] && [ -d "$INSTALL_PATH" ]; then
         open "$INSTALL_PATH"
