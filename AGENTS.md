@@ -1,0 +1,71 @@
+# StarBar Project Guide
+
+> Instructions for every AI coding tool. Claude Code users: see also `CLAUDE.md`.
+
+StarBar is a macOS menu bar app (AppKit with some SwiftUI) for rating the current track in Music with stars and a favourite heart. It talks to Music through Scripting Bridge.
+
+The app, Xcode project, schemes, targets, source folders and Swift module are all named StarBar. The module name is pinned with `PRODUCT_MODULE_NAME` because the storyboards reference it.
+
+## Commands
+
+| Task | Command |
+|------|---------|
+| Build (Release, into `build/`) | `./build.sh` |
+| Build, install to /Applications, relaunch | `./build.sh --install` |
+| Rebuild on file changes | `./build.sh --watch --install` (needs `brew install fswatch`) |
+| App tests that don't need Music, plus SDK tests | `./build.sh --test` |
+| All tests, including `ScriptBridgeTests` and `iTunesLibraryTests` | `./build.sh --test-all` |
+| UI tests (take over the screen, see below) | `./build.sh --ui-test` |
+| One test | `xcodebuild -project StarBar.xcodeproj -scheme StarBar test -only-testing:StarBarTests/TestClassName/testMethodName` |
+| SDK tests only | `cd SDK && swift test` |
+| Clean | `xcodebuild -project StarBar.xcodeproj clean` |
+| Enable the pre-commit hook | `git config core.hooksPath .githooks` |
+
+- Prefer `build.sh` over raw `xcodebuild`. When `xcode-select` points at the Command Line Tools, the script finds an Xcode app with Spotlight and prints "Using Xcode at …". For raw `xcodebuild`, `swift test` or `sdef` on such a machine, set `DEVELOPER_DIR` to that app's `Contents/Developer`.
+- `-only-testing` silently ignores a wrong identifier, so check the log shows the test ran.
+- Test logs are in `build/test/test.log` and `build/test/ui-test.log`. Result bundles are in `build/test/results/`.
+- `--test-all` needs Music playing a track with artwork and media library access, so it runs locally only. The skip list for `--test` lives only in `build.sh`.
+- An install only counts when three things are proven: the new binary is in `/Applications`, the running app is that binary, and the changed code runs. `./build.sh --install` ends with a verification block (commit, binary hash, running PID) that covers the first two; read it rather than the exit code. For the third, check the app's log for the code path you changed. Claude Code has an `install-and-verify` skill for this.
+
+## Testing gotchas
+
+- **UI tests: only run them when the user asks.** They click and drag the real menu bar and take over the mouse and screen for about two minutes. The script asks for confirmation; a non-interactive run stops unless `--yes` is passed. Pass `--yes` only after the user has asked for UI tests in this conversation. CI runs them on every push, so CI is the normal way to get them.
+- UI tests have their own shared scheme, `StarBar UI Tests`. The `StarBar` scheme doesn't include them, so a plain `xcodebuild test` or Xcode's Product > Test can't take over the screen. Keep it that way. (A skipped testable can't be picked with `-only-testing`, which is why it's a separate scheme.)
+- In UI tests the app runs with `-UITesting YES` (fake playing state, no Music). `MenuBarRatingUITests` reads the status item's accessibility value ("3½ stars, favourite"). They need macOS Automation Mode: `sudo automationmodetool enable-automationmode-without-authentication`, or authenticate when asked.
+- App tests are hosted in StarBar, so a test run launches the app. The test target is signed ad hoc like the app; without that, `xcodebuild test` asks for a development team.
+- To exercise Music-driven code without changing playback, post a synthetic `com.apple.iTunes.playerInfo` distributed notification from JXA (`osascript -l JavaScript`; pass `$()`, not `null`, as the object). Useful keys: `Name`, `Artist`, `Album`, `Persistent ID`, `Player State`, `Artwork Count`. Afterwards, re-post the real track so the app's state is correct.
+- In the Bash tool, `log` is a zsh builtin. Use `/usr/bin/log show --predicate 'process == "StarBar"'`.
+- `CGWindowListCreateImage` is gone from the macOS 27 SDK. Use `screencapture -l <windowNumber>` to capture one window.
+
+## CI and release
+
+- `.github/workflows/test.yml` runs `./build.sh` and `./build.sh --test` on macos-15, macos-26 and xcode-27 (the macOS 27 preview, non-blocking), and `--ui-test` on macos-26 and xcode-27.
+- Release: push a `v*` tag. `.github/workflows/release.yml` tests, builds with `MARKETING_VERSION` from the tag, and attaches a zip to a GitHub release.
+
+## Architecture
+
+- Targets macOS 12+. Swift 5 language mode. Dependencies come through SPM.
+- `StarBar/`: the app. `Controls/` holds the menu bar rating control and click and reminder controllers, `Controllers/` the view controllers, `Views/` the views, `Helper/` pure logic (`RatingReminder`, `StarSweep`, `Stars`), and `iTunes/` the Scripting Bridge layer (`iTunesPlayer`, `iTunesTrack`, vendored header in `iTunes/Vendor/iTunes.swift`).
+- `StarBar Helper/`: login-item helper that launches the main app.
+- `SDK/`: local Swift package with shared extensions; depends on MASShortcut.
+- Signing is ad hoc ("Sign to Run Locally"), with no development team. Bundle IDs are the main app's ID plus `.helper`, `.tests` and `.uitests`. The main app and helper IDs are also hard-coded in both `AppDelegate.swift` files, so change them together.
+- Shared services are singletons (`iTunesPlayer.shared`, `WindowManager.shared`). App-wide events go through NotificationCenter; views talk to controllers through delegates.
+
+## Conventions
+
+- **Favorites**: Music renamed "Loved" to "Favorite". Code says `favorite` (the heart: `favoriteMinX`, `isFavoriteHit`) and `favorited` (the state: `isFavorited`, `updateFavorited(_:)`), in American spelling to match Apple's API. User-facing text uses British "favourite". `loved` appears only in the Scripting Bridge header and the fallback for older Music versions in `iTunesTrack.swift`.
+- **Click geometry**: keep hit-testing in pure functions on `RatingControl` (`starRating(atPositionX:behavior:)`, `isFavoriteHit(positionX:)`) and cover them in `RatingControlGeometryTests`.
+- **Ratings**: ratings the user chooses go through `RatingControl.commit(rating:)`; display-only changes use `update(rating:)`.
+- Log with `os_log` / `Logger`. Put SwiftUI previews at the bottom of files under conditional compilation. File names match type names.
+
+## Behaviour gotchas
+
+- **Menu bar gestures**: on macOS 27 the menu bar sends the status item one synthesised click (mouse down and up together) when the mouse goes down, and no drag events, so pan and press recognizers never fire there. Before macOS 27, real drag events arrive and the click recognizer fails, so a pan recognizer starts the drag instead. Both paths call the same handler. `RatingClickController` toggles the heart, saves a plain click, or, while the left button is still held, follows a drag: `MenuBarRatingControl` calls `tick()` from a 60 Hz timer, the stars preview, and the rating is saved on release. The mouse comes from a `RatingPointer` (`StatusButtonPointer` reads `NSEvent`), so `RatingClickControllerTests` drives clicks and drags with a fake one.
+- **Rating reminder**: `RatingReminder` (pure timing rule) and `StarSweep` are covered by `RatingReminderTests`; `RatingReminderController` takes a fake bell and clock in `RatingReminderControllerTests`. Music posts no `playerInfo` notification when the user seeks, so the controller reads `playerPosition` every 2 s while a reminder is pending. Music saves ratings after a 2 s debounce, so every user rating path must call `userDidRate()`. The sweep only sets `RatingControl.sweepPosition` and never changes `rating`.
+- **Track announcement**: the Growl-style "Music Video" strip. `TrackAnnouncement` (value type) and `TrackAnnouncementLayout` / `TrackAnnouncementPlacement` (pure geometry, Growl's constants) are covered by `TrackAnnouncementLayoutTests`. `TrackAnnouncementController` takes closures for the player read and artwork load, a `TrackAnnouncementPresenter` and the reminder's `RatingReminderClock`, and `TrackAnnouncementControllerTests` drives it with fakes (`FakeClock` is shared with the reminder tests). Track identity is the 16-character hex persistent ID (`PlayerSnapshot.identity(persistentID:)` converts the notification's `Int`); the live-track loader (artwork when the payload says there is any, plus rating and favourite through the Scripting Bridge) returns `.trackChanged` when the live track's ID differs, and the announcement is dropped; the strip's last row is the rating and heart drawn with `Stars.rating`; `TrackAnnouncementStyle` (`announcementStyle` default) picks the background, which `TrackAnnouncementView` builds as a backdrop subview under `TrackAnnouncementContentView` (classic: none; blur: `NSVisualEffectView` behind-window with `state = .active`, or the panel's inactivity switches it off; glass: `NSGlassEffectView` on macOS 26+ inside `#if compiler(>=6.2)` because older SDKs lack the symbol, blur before; the glass is inset from the sides and hangs a corner radius below the strip, `TrackAnnouncementLayout.glassFrame`, so only its top corners round and lens, and the panel keeps empty headroom above the strip, `TrackAnnouncementPlacement.panelHeadroom`, because glass refracts what lies outside its edge and a window's backdrop stops at the window; the glass is the regular style, untinted, at full opacity with 8 pt corners, the combination picked from a sampler grid; the content draws a bright 1 pt line along the glass's top edge and corners (on by default) and can add a soft rim light and bottom shade (off by default), all clipped to the glass shape; `announcementGlassRegular`, `announcementGlassTintAlpha`, `announcementGlassCornerRadius`, `announcementGlassEdgeLine`, `announcementGlassSheen` and `announcementGlassAlpha` are hidden defaults for trying the glass style, tint, corner size, edge line, shading and the glass view's opacity without a rebuild; the system's Liquid Glass appearance setting and Reduce Transparency apply to the glass view on their own, nothing reads them; `NSGlassEffectView`'s whole public surface is `style` (regular or clear), `tintColor`, `cornerRadius`, `contentView` and `effectIsInteractive`, so there is no frost or refraction dial); and a same-track update while the strip is up refreshes that row without touching the hold timer. Music sends no notification at launch, so `AppDelegate.setupTrackAnnouncement()` seeds the controller with `playerDidUpdate(seedOnly: true)` before observing `.iTunesPlayerDidUpdated`; a track is "seen" once it has played, so a resumed track never announces but one skipped to while paused does; a payload with no Player State (`sourceSaved`) is `.unknown` and changes nothing, only an explicit Stopped clears the last track. Replace, never queue. Menu validation answers from the last snapshot, never with an Apple Event. `TrackAnnouncementPanel` is a non-activating `NSPanel` one window level below the Dock (so a side Dock draws over it), joining full-screen Spaces as an auxiliary window, spanning the screen width and resting on the `visibleFrame` bottom, while `TrackAnnouncementView` slides inside it. The slide steps the view's frame on each display refresh (`DisplayLinkClock`, a `RatingReminderClock` backed by `CADisplayLink` on macOS 14+, a timer before) with `TrackAnnouncementPlacement.easeInOut`, not `animator()`: on macOS 27 a Core Animation frame animation on this panel ran to completion without ever being drawn (root cause not found; see the 2026-09-17 session notes). The layout scales with the screen height (`TrackAnnouncementLayout.scale(forScreenHeight:)`, 1 at 1000 pt, capped at 2); it must never go through `WindowManager.open(_:)` or be counted by `hasWindowDisplay`, which would activate the app.
+
+## Keeping this file useful
+
+If a problem occurs that a rule here could have prevented, suggest adding the rule. Keep machine-specific paths and personal names out of this file.
+
+Project instructions live here so that every tool reads them. `CLAUDE.md` imports this file and adds only what is specific to Claude Code.
