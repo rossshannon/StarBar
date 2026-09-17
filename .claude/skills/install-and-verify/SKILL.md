@@ -1,6 +1,6 @@
 ---
 name: install-and-verify
-description: Install StarBar into /Applications and prove the running app is the new build and the change works. Use whenever you install, reinstall, relaunch or "try out" the app, before telling Ross a change is ready to test, and when Ross says a change "isn't active" or "isn't working" after an install.
+description: Install StarBar into /Applications and prove the running app is the new build and the change works. Use whenever you install, reinstall, relaunch or "try out" the app, before telling the user a change is ready to test, and when the user says a change "isn't active" or "isn't working" after an install.
 ---
 
 # Install and verify StarBar
@@ -42,14 +42,14 @@ The build being new doesn't prove the changed code runs. Menu bar gestures, for 
   ```bash
   /usr/bin/log stream --level debug --style compact --predicate 'process == "StarBar"'
   ```
-- If you need Ross to click or drag, start the stream first. Then ask for one specific action, and read the stream afterwards.
+- If you need the user to click or drag, start the stream first. Then ask for one specific action, and read the stream afterwards.
 - For rating changes, `iTunesRadioStation.setRating` logs `set timer for 2.0s and set rating for <track> <rating>`. To confirm what Music stored:
   ```bash
   osascript -e 'tell application "Music" to get {name, rating, favorited} of current track'
   ```
 
-Don't run `./build.sh --ui-test` to check a change unless Ross asks for it. It takes over his screen for about two minutes. Use the log, or ask Ross to try the change.
+Don't run `./build.sh --ui-test` to check a change unless the user asks for it. It takes over the screen for about two minutes. Use the log, or ask the user to try the change.
 
 ## 3. Report
 
-Tell Ross the commit, the PID and start time, and the log lines that show the changed code ran. If step 2 found nothing, say plainly that the build is installed but the change is not confirmed to work, and say what you'll check next.
+Tell the user the commit, the PID and start time, and the log lines that show the changed code ran. If step 2 found nothing, say plainly that the build is installed but the change is not confirmed to work, and say what you'll check next.
