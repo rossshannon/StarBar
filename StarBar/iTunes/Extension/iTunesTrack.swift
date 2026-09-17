@@ -55,6 +55,10 @@ extension iTunesTrack {
     /// Don't reach for `is iTunesURLTrack` instead. `iTunes/Vendor/iTunes.swift` declares
     /// `SBObject` as conforming to the file, shared *and* URL track protocols, so every one of
     /// those casts succeeds for every track and tells us nothing.
+    ///
+    /// This is an Apple Event, about 17 ms, and it works the same on a `get()`-resolved copy
+    /// as on the live track. Read it once when the track changes, next to the rating, rather
+    /// than from anything the drawing path can reach.
     var scriptingClassCode: FourCharCode? {
         guard let descriptor = (self as AnyObject).value(forKey: "objectClass") as? NSAppleEventDescriptor else { return nil }
         return descriptor.typeCodeValue
