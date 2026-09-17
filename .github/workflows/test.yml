@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# The tests only need to read the code
+permissions:
+  contents: read
+
 # A new push to the same branch or pull request cancels the older run
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
