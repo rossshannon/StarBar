@@ -63,6 +63,7 @@ The Release workflow runs the tests, builds the app with that version number, an
 - **Heart**: click the heart after the stars to mark the song as a favourite in Music. A filled heart means the song is a favourite.
 - **Right-click** to open the player popover.
 - **Rating reminder**: when a song with no rating is nearly over, StarBar plays a bell and a hollow star sweeps across the dots and back. It happens once each time a song plays, 30 seconds before the end or three quarters of the way through, whichever is later. To turn it off, uncheck "Remind me to rate unrated songs" in Preferences.
+- **Track announcement**: a translucent black strip slides up from the bottom of the screen when a new song starts, with the artwork on the left and the title, artist, album and the song's current stars and heart in white, then slides away after five seconds. Rate the song or tap the heart while the strip is up and it updates. It is a recreation of Growl's "Music Video" display. It is off by default: check "Show a Music Video strip when a new song starts" in Preferences to turn it on, and press Preview there to see it. "Show Current Track" in the popover's menu, or Option-Control-N, shows the strip for the current song whenever you like, even with announcements off.
 
 ## FAQ
 ### Are half-star ratings saved?
@@ -82,6 +83,9 @@ Check the checkbox for "Star Ratings" in General preferences. [More info](https:
 
 ### Why the popover player sometimes follows to new screen scenes but sometimes not?
 The popover will jump to new scren scene when it get focused. It will stand in the old screen if the current focused window not the popover.
+
+### Which screen does the track announcement appear on?
+The screen the mouse pointer is on when the song starts, along the bottom edge: above a Dock at the bottom, and running behind a Dock at the side. It grows with the screen, so it is about half as tall again on a 27-inch display as on a laptop. It stays on that screen until it slides away. It appears over full-screen apps too, and it never takes focus or clicks, so you can keep typing or click straight through it. With Reduce Motion on it fades instead of sliding; with Reduce Transparency on it is solid black.
 
 ### Why does StarBar not show the star rating when Music is playing?
 In System Settings, go to Privacy & Security, then Automation, and turn on Music for StarBar.

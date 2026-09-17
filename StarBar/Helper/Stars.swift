@@ -22,11 +22,37 @@ struct Stars {
         self.showsFavorite = showsFavorite
         self.isFavorited = isFavorited
     }
+
+    /// Star styles for a Music rating, 0 to 100: full stars, then a half star, then dots
+    static func styles(forRating rating: Int) -> [Star.Style] {
+        let clamped = min(100, max(0, rating))
+        let fullStarCount = clamped / 20
+        let halfStarCount = (clamped - 20 * fullStarCount) / 10
+        let dotCount = 5 - fullStarCount - halfStarCount
+        return Array(repeating: .full, count: fullStarCount)
+            + Array(repeating: .half, count: halfStarCount)
+            + Array(repeating: .dot, count: dotCount)
+    }
+
+    /// The five stars and the heart for a rating, as the menu bar draws them
+    static func rating(_ rating: Int, starSize: NSSize, spacing: CGFloat, isFavorited: Bool) -> Stars {
+        return Stars(
+            stars: styles(forRating: rating).map { Star(size: starSize, style: $0) },
+            spacing: spacing,
+            showsFavorite: true,
+            isFavorited: isFavorited
+        )
+    }
+
+    /// Width of the five stars with their spacing, before the heart slot
+    var starsWidth: CGFloat {
+        return stars.map { $0.size.width }.reduce(into: 0.0, { $0 += $1 }) + CGFloat(stars.count + 1) * spacing
+    }
     
     var image: NSImage {
         // spacing | star | spacing | … | star | spacing, then optionally spacing | heart.
         // Must match RatingControl.starsImage and favoriteMinX, or drawing squeezes the image.
-        let starsWidth = stars.map { $0.size.width }.reduce(into: 0.0, { $0 += $1 }) + CGFloat(stars.count + 1) * spacing
+        let starsWidth = self.starsWidth
         let heartWidth = stars.first?.size.width ?? 0
         let width = showsFavorite ? starsWidth + spacing + heartWidth : starsWidth
         
