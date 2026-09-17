@@ -113,6 +113,60 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         }
     }
 
+    // MARK: - What actually gets drawn
+
+    /// Non-transparent pixels between two x positions of the drawn strip, given in points.
+    ///
+    /// The bitmap is not the same size as the image: on a retina Mac `tiffRepresentation`
+    /// comes back at 2 pixels per point, so the range has to be scaled or it lands on the
+    /// wrong glyph entirely.
+    private func ink(in image: NSImage, fromX: CGFloat, toX: CGFloat) -> Int {
+        guard let data = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: data),
+              image.size.width > 0 else { return 0 }
+
+        let scale = CGFloat(bitmap.pixelsWide) / image.size.width
+        let first = max(0, Int((fromX * scale).rounded()))
+        let last = min(bitmap.pixelsWide, Int((toX * scale).rounded()))
+        guard first < last else { return 0 }
+
+        var count = 0
+        for x in first..<last {
+            for y in 0..<bitmap.pixelsHigh where (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.01 {
+                count += 1
+            }
+        }
+        return count
+    }
+
+    /// A wrong SF Symbol name draws nothing at all rather than failing, which would leave a
+    /// blank space in the menu bar. Every slot must have ink in it.
+    func testEverySlotIsActuallyDrawn() {
+        let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+        let image = badge.image
+
+        XCTAssertGreaterThan(ink(in: image, fromX: 4, toX: 20), 0, "the music note")
+        XCTAssertGreaterThan(ink(in: image, fromX: 24, toX: 40), 0, "the plus")
+        XCTAssertGreaterThan(ink(in: image, fromX: 48, toX: 64), 0, "the heart")
+
+    }
+
+    func testAFavoritedTrackLeavesTheHeartSlotEmpty() {
+        // `MenuBarRatingControl` draws the coloured heart over the top, so the outline would
+        // show as an edge around it
+        let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isFavorited: true)
+
+        XCTAssertEqual(ink(in: badge.image, fromX: 48, toX: 64), 0)
+        XCTAssertGreaterThan(ink(in: badge.image, fromX: 4, toX: 20), 0, "the note is still drawn")
+    }
+
+    func testTheGapBeforeTheHeartIsEmpty() {
+        let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+
+        // The spacing between the plus and the heart, so the two don't run together
+        XCTAssertEqual(ink(in: badge.image, fromX: 41, toX: 47), 0)
+    }
+
     // MARK: - Accessibility
 
     func testSpokenDescriptionSaysWhyThereAreNoStars() {
