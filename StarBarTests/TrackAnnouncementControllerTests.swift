@@ -445,6 +445,14 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertTrue(presenter.refreshed.isEmpty)
     }
 
+    func testRatingWithNoTrackKnownDoesNothing() {
+        controller.userDidRate(80)
+        controller.userDidFavorite(true)
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+        XCTAssertTrue(presenter.shown.isEmpty)
+    }
+
     func testRatingWhileHiddenIsShownByShowCurrentTrack() {
         live = .loaded(.init(rating: 20))
         update(snapshot(track: "A"))

@@ -35,7 +35,8 @@ struct TrackAnnouncement: Equatable {
         self.artwork = artwork
     }
 
-    /// The same announcement with a new rating or heart
+    /// The same announcement with a new rating or heart. Nil means "leave as it was";
+    /// unrated is 0 and the heart off is false, so both are still passed as themselves.
     init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil) {
         self.init(
             identity: other.identity,

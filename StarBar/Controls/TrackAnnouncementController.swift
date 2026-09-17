@@ -77,6 +77,9 @@ final class TrackAnnouncementController: NSObject {
 
     static let holdDuration = TrackAnnouncementLayout.holdDuration
     static let slideDuration = TrackAnnouncementLayout.slideDuration
+    /// How long a rating chosen in StarBar wins over Music's reads: the save delay, plus
+    /// time for the Apple Event
+    static let pendingRatingLifetime = iTunesRadioStation.ratingSaveDelay + 1.0
 
     /// Reads the player now, or returns nil when Music isn't running
     private let readPlayer: () -> PlayerSnapshot?
@@ -99,10 +102,6 @@ final class TrackAnnouncementController: NSObject {
     /// A rating the user just chose in StarBar. Music only gets it after
     /// `iTunesRadioStation.ratingSaveDelay`, so until then it wins over Music's reads.
     private var pendingRating: (identity: String, rating: Int, expires: Date)?
-
-    /// How long a rating chosen in StarBar wins over Music's reads: the save delay, plus
-    /// time for the Apple Event
-    static let pendingRatingLifetime = iTunesRadioStation.ratingSaveDelay + 1.0
 
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
@@ -220,6 +219,9 @@ extension TrackAnnouncementController {
     }
 
     /// The user toggled the current track's heart in StarBar. Shows it on the strip now.
+    ///
+    /// The heart needs no counterpart to `pendingRating`: `iTunesTrack.updateFavorited(_:)`
+    /// writes to Music at once, so Music's next read already has it.
     func userDidFavorite(_ isFavorited: Bool) {
         guard let identity = ratedTrackIdentity() else { return }
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
@@ -253,15 +255,13 @@ extension TrackAnnouncementController {
     }
 
     /// The rating to show: the user's own rating while Music has yet to save it, otherwise
-    /// the first of `ratings` that is known.
+    /// Music's, and then the notification's.
     ///
     /// Music is believed again as soon as it reports the saved rating, so a change made in
     /// Music straight afterwards isn't held back for the rest of the wait.
-    private func rating(for identity: String, _ ratings: Int?...) -> Int? {
-        if let pending = pendingRating, clock.now() >= pending.expires {
-            pendingRating = nil
-        }
-        let known = ratings.lazy.compactMap { $0 }.first
+    private func rating(for identity: String, live: Int?, payload: Int?) -> Int? {
+        expirePendingRating()
+        let known = live ?? payload
         guard let pending = pendingRating, pending.identity == identity else { return known }
         guard known != pending.rating else {
             // Music has the rating now
@@ -271,6 +271,12 @@ extension TrackAnnouncementController {
         return pending.rating
     }
 
+    /// Forget the user's rating once Music has had time to save it
+    private func expirePendingRating() {
+        guard let pending = pendingRating, clock.now() >= pending.expires else { return }
+        pendingRating = nil
+    }
+
     private func announce(_ snapshot: PlayerSnapshot, identity: String) {
         guard let live = loadLive(identity: identity, wantsArtwork: snapshot.hasArtwork) else { return }
         let announcement = TrackAnnouncement(
@@ -278,7 +284,7 @@ extension TrackAnnouncementController {
             title: snapshot.title,
             artist: snapshot.artist,
             album: snapshot.album,
-            rating: rating(for: identity, live.rating, snapshot.rating) ?? 0,
+            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? false,
             artwork: live.artwork
         )
@@ -295,7 +301,7 @@ extension TrackAnnouncementController {
             title: snapshot.title.isEmpty ? current.title : snapshot.title,
             artist: snapshot.artist.isEmpty ? current.artist : snapshot.artist,
             album: snapshot.album.isEmpty ? current.album : snapshot.album,
-            rating: rating(for: identity, live.rating, snapshot.rating) ?? current.rating,
+            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? current.isFavorited,
             artwork: current.artwork
         )
