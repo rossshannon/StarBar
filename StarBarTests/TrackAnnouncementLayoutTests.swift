@@ -241,7 +241,7 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
         XCTAssertEqual(frame.minX, 16)
         XCTAssertEqual(frame.maxX, 1264)
-        XCTAssertEqual(frame.minY, -24, "hangs below by the corner radius, so the bottom corners are never on screen")
+        XCTAssertEqual(frame.minY, -TrackAnnouncementLayout.glassCornerRadius, "hangs below by the corner radius, so the bottom corners are never on screen")
         XCTAssertEqual(frame.maxY, 96, "flush with the strip's top")
         XCTAssertGreaterThanOrEqual(-frame.minY, TrackAnnouncementLayout.glassCornerRadius, "the overhang covers the whole bottom corner")
     }
@@ -251,8 +251,9 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
         XCTAssertEqual(frame.minX, 70 + 32)
         XCTAssertEqual(frame.maxX, 2560 - 32)
-        XCTAssertEqual(frame.minY, -48)
-        XCTAssertEqual(frame.height, 240)
+        let overhang = TrackAnnouncementLayout.glassCornerRadius * 2
+        XCTAssertEqual(frame.minY, -overhang)
+        XCTAssertEqual(frame.height, 192 + overhang)
         XCTAssertEqual(TrackAnnouncementLayout.glassFrame(in: CGSize(width: 40, height: 96), scale: 2).width, 0, "never a negative width")
     }
 
