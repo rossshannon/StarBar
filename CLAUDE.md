@@ -1,6 +1,6 @@
 # StarBar Project Guide
 
-The app is named "StarBar". The Xcode project, scheme, targets, source folders and Swift module (`StarBar`, pinned with `PRODUCT_MODULE_NAME` because storyboards reference it) keep the upstream "StarBar" name.
+The app, Xcode project, schemes, targets, source folders and Swift module are all named StarBar. The module name is pinned with `PRODUCT_MODULE_NAME` because the storyboards reference it.
 
 ## Build & Test Commands
 - Build (Release, into `build/`): `./build.sh`

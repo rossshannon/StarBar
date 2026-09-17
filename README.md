@@ -5,7 +5,7 @@ macOS menu bar app for rating music in iTunes/Music.app
 
 <img src="./Press/Snapshot.png" width=300 style="border-radius:4px">
 
-StarBar is Ross Shannon's fork of [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
+StarBar is based on [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
 
 ## Requirements
 - macOS 12 +
@@ -22,7 +22,7 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 ./build.sh --ui-test    # Click and drag the real menu bar (see below)
 ```
 
-The Xcode project and scheme are still named "StarBar". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
+The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 
 ### Tests and CI
 The app tests are hosted in the app, so a test run launches StarBar. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
@@ -44,17 +44,17 @@ git config core.hooksPath .githooks
 ```
 
 ### Releases
-Push a version tag to publish a release. For example, for version 1.6.0:
+Push a version tag to publish a release. For example, for version 1.1.0:
 
 ```bash
-git tag v1.6.0
+git tag v1.1.0
 ```
 
 ```bash
-git push origin v1.6.0
+git push origin v1.1.0
 ```
 
-The Release workflow runs the tests, builds the app with that version number, and attaches `StarBar-v1.6.0.zip` to a new GitHub release. The app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
+The Release workflow runs the tests, builds the app with that version number, and attaches `StarBar-v1.1.0.zip` to a new GitHub release. The app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
 
 ## Using the menu bar
 - **Click a star** to set that rating.

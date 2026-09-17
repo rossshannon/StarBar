@@ -14,7 +14,6 @@ set -o pipefail
 
 cd "$(dirname "$0")"
 
-# Xcode project and scheme keep the upstream "StarBar" name; the product is "StarBar"
 PROJECT_NAME="StarBar"
 APP_NAME="StarBar"
 APP_PATH="build/Build/Products/Release/$APP_NAME.app"

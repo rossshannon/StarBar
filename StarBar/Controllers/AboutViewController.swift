@@ -78,7 +78,7 @@ extension AboutViewController {
     }
 
     @objc func githubButtonPressed(_ sender: Bundle) {
-        guard let url = URL(string: "https://github.com/MainasuK/Song-Rating") else { return }
+        guard let url = URL(string: "https://github.com/rossshannon/StarBar") else { return }
         NSWorkspace.shared.open(url)
     }
 

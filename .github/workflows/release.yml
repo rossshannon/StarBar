@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v1.6.0 to test, build and publish a GitHub release with the zipped app.
+# Push a tag like v1.1.0 to test, build and publish a GitHub release with the zipped app.
 # The v prefix keeps these tags apart from upstream's version tags (1.5.0).
 on:
   push:
@@ -17,11 +17,11 @@ jobs:
 
     steps:
       # The tag becomes CFBundleShortVersionString, which must be three numbers, so refuse
-      # tags like v1.6.0-beta1 before building anything
+      # tags like v1.1.0-beta1 before building anything
       - name: Check tag format
         run: |
           if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release tags must look like v1.6.0, not $GITHUB_REF_NAME"
+            echo "::error::Release tags must look like v1.1.0, not $GITHUB_REF_NAME"
             exit 1
           fi
 
