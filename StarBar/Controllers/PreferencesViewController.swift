@@ -21,41 +21,41 @@ final class PreferencesViewController: NSViewController {
     lazy var halfStarTextField: NSTextField = {
         return NSTextField(labelWithString: "Half star: ")
     }()
-    lazy var songRatingDownTextField: NSTextField = {
-        return NSTextField(labelWithString: "Song rating down: ")
+    lazy var ratingDownTextField: NSTextField = {
+        return NSTextField(labelWithString: "Rating down: ")
     }()
-    lazy var songRatingUpTextField: NSTextField = {
-        return NSTextField(labelWithString: "Song rating up: ")
+    lazy var ratingUpTextField: NSTextField = {
+        return NSTextField(labelWithString: "Rating up: ")
     }()
     lazy var showOrClosePopoverTextField: NSTextField = {
         return NSTextField(labelWithString: "Show/Close popover: ")
     }()
-    lazy var songRating5TextField: NSTextField = {
+    lazy var rating5TextField: NSTextField = {
         let attributedString = PreferencesViewController.starsAttributedString(count: 5, fontSize: PreferencesViewController.defaultTextFieldFontSize)
         attributedString.append(NSAttributedString(string: ": "))
         return NSTextField(labelWithAttributedString: attributedString)
     }()
-    lazy var songRating4TextField: NSTextField = {
+    lazy var rating4TextField: NSTextField = {
         let attributedString = PreferencesViewController.starsAttributedString(count: 4, fontSize: PreferencesViewController.defaultTextFieldFontSize)
         attributedString.append(NSAttributedString(string: ": "))
         return NSTextField(labelWithAttributedString: attributedString)
     }()
-    lazy var songRating3TextField: NSTextField = {
+    lazy var rating3TextField: NSTextField = {
         let attributedString = PreferencesViewController.starsAttributedString(count: 3, fontSize: PreferencesViewController.defaultTextFieldFontSize)
         attributedString.append(NSAttributedString(string: ": "))
         return NSTextField(labelWithAttributedString: attributedString)
     }()
-    lazy var songRating2TextField: NSTextField = {
+    lazy var rating2TextField: NSTextField = {
         let attributedString = PreferencesViewController.starsAttributedString(count: 2, fontSize: PreferencesViewController.defaultTextFieldFontSize)
         attributedString.append(NSAttributedString(string: ": "))
         return NSTextField(labelWithAttributedString: attributedString)
     }()
-    lazy var songRating1TextField: NSTextField = {
+    lazy var rating1TextField: NSTextField = {
         let attributedString = PreferencesViewController.starsAttributedString(count: 1, fontSize: PreferencesViewController.defaultTextFieldFontSize)
         attributedString.append(NSAttributedString(string: ": "))
         return NSTextField(labelWithAttributedString: attributedString)
     }()
-    lazy var songRating0TextField: NSTextField = {
+    lazy var rating0TextField: NSTextField = {
         return NSTextField(labelWithString: "Remove stars: ")
     }()
     
@@ -67,14 +67,14 @@ final class PreferencesViewController: NSViewController {
         let button = NSButton(checkboxWithTitle: "Enable", target: nil, action: nil)
         return button
     }()
-    let songRatingDownShortcutView: MASShortcutView = {
+    let ratingDownShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRatingDown.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.ratingDown.rawValue
         return shortcutView
     }()
-    let songRatingUpShortcutView: MASShortcutView = {
+    let ratingUpShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRatingUp.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.ratingUp.rawValue
         return shortcutView
     }()
     let showOrClosePopoverShortcutView: MASShortcutView = {
@@ -82,34 +82,34 @@ final class PreferencesViewController: NSViewController {
         shortcutView.associatedUserDefaultsKey = ShortcutKey.showOrClosePopover.rawValue
         return shortcutView
     }()
-    let songRating5ShortcutView: MASShortcutView = {
+    let rating5ShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRating5.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating5.rawValue
         return shortcutView
     }()
-    let songRating4ShortcutView: MASShortcutView = {
+    let rating4ShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRating4.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating4.rawValue
         return shortcutView
     }()
-    let songRating3ShortcutView: MASShortcutView = {
+    let rating3ShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRating3.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating3.rawValue
         return shortcutView
     }()
-    let songRating2ShortcutView: MASShortcutView = {
+    let rating2ShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRating2.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating2.rawValue
         return shortcutView
     }()
-    let songRating1ShortcutView: MASShortcutView = {
+    let rating1ShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRating1.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating1.rawValue
         return shortcutView
     }()
-    let songRating0ShortcutView: MASShortcutView = {
+    let rating0ShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
-        shortcutView.associatedUserDefaultsKey = ShortcutKey.songRating0.rawValue
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating0.rawValue
         return shortcutView
     }()
 
@@ -123,16 +123,16 @@ final class PreferencesViewController: NSViewController {
             [startupTextField, launchAtLoginCheckboxButton],
             [halfStarTextField, halfStarCheckboxButton],
             [NSBox.separatorLine],
-            [songRatingDownTextField, songRatingDownShortcutView],
-            [songRatingUpTextField, songRatingUpShortcutView],
+            [ratingDownTextField, ratingDownShortcutView],
+            [ratingUpTextField, ratingUpShortcutView],
             [showOrClosePopoverTextField, showOrClosePopoverShortcutView],
             [NSBox.separatorLine],
-            [songRating0TextField, songRating0ShortcutView],
-            [songRating1TextField, songRating1ShortcutView],
-            [songRating2TextField, songRating2ShortcutView],
-            [songRating3TextField, songRating3ShortcutView],
-            [songRating4TextField, songRating4ShortcutView],
-            [songRating5TextField, songRating5ShortcutView],
+            [rating0TextField, rating0ShortcutView],
+            [rating1TextField, rating1ShortcutView],
+            [rating2TextField, rating2ShortcutView],
+            [rating3TextField, rating3ShortcutView],
+            [rating4TextField, rating4ShortcutView],
+            [rating5TextField, rating5ShortcutView],
             [leadingPaddingView, trailingPaddingView]
         ])
 
@@ -260,15 +260,15 @@ extension PreferencesViewController {
 extension PreferencesViewController {
 
     enum ShortcutKey: String {
-        case songRatingDown
-        case songRatingUp
+        case ratingDown
+        case ratingUp
         case showOrClosePopover
-        case songRating5
-        case songRating4
-        case songRating3
-        case songRating2
-        case songRating1
-        case songRating0
+        case rating5
+        case rating4
+        case rating3
+        case rating2
+        case rating1
+        case rating0
     }
 
 }

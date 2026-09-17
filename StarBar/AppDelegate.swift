@@ -125,33 +125,33 @@ extension AppDelegate {
             let ratingDownShortcut = MASShortcut(keyCode: kVK_ANSI_Comma, modifierFlags: [.option, .control])
             let ratingUpShortcut = MASShortcut(keyCode: kVK_ANSI_Period, modifierFlags: [.option, .control])
             let showOrClosePopoverShortcut = MASShortcut(keyCode: kVK_ANSI_Slash, modifierFlags: [.option, .control])
-            let songRating5Shortcut = MASShortcut(keyCode: kVK_ANSI_5, modifierFlags: [.option, .control])
-            let songRating4Shortcut = MASShortcut(keyCode: kVK_ANSI_4, modifierFlags: [.option, .control])
-            let songRating3Shortcut = MASShortcut(keyCode: kVK_ANSI_3, modifierFlags: [.option, .control])
-            let songRating2Shortcut = MASShortcut(keyCode: kVK_ANSI_2, modifierFlags: [.option, .control])
-            let songRating1Shortcut = MASShortcut(keyCode: kVK_ANSI_1, modifierFlags: [.option, .control])
-            let songRating0Shortcut = MASShortcut(keyCode: kVK_ANSI_Grave, modifierFlags: [.option, .control])
+            let rating5Shortcut = MASShortcut(keyCode: kVK_ANSI_5, modifierFlags: [.option, .control])
+            let rating4Shortcut = MASShortcut(keyCode: kVK_ANSI_4, modifierFlags: [.option, .control])
+            let rating3Shortcut = MASShortcut(keyCode: kVK_ANSI_3, modifierFlags: [.option, .control])
+            let rating2Shortcut = MASShortcut(keyCode: kVK_ANSI_2, modifierFlags: [.option, .control])
+            let rating1Shortcut = MASShortcut(keyCode: kVK_ANSI_1, modifierFlags: [.option, .control])
+            let rating0Shortcut = MASShortcut(keyCode: kVK_ANSI_Grave, modifierFlags: [.option, .control])
 
             let ratingDownShortcutData = try NSKeyedArchiver.archivedData(withRootObject: ratingDownShortcut as Any, requiringSecureCoding: false)
             let ratingUpShortcutData = try NSKeyedArchiver.archivedData(withRootObject: ratingUpShortcut as Any, requiringSecureCoding: false)
             let showOrClosePopoverShortcutData = try NSKeyedArchiver.archivedData(withRootObject: showOrClosePopoverShortcut as Any, requiringSecureCoding: false)
-            let songRating5ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: songRating5Shortcut as Any, requiringSecureCoding: false)
-            let songRating4ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: songRating4Shortcut as Any, requiringSecureCoding: false)
-            let songRating3ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: songRating3Shortcut as Any, requiringSecureCoding: false)
-            let songRating2ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: songRating2Shortcut as Any, requiringSecureCoding: false)
-            let songRating1ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: songRating1Shortcut as Any, requiringSecureCoding: false)
-            let songRating0ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: songRating0Shortcut as Any, requiringSecureCoding: false)
+            let rating5ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: rating5Shortcut as Any, requiringSecureCoding: false)
+            let rating4ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: rating4Shortcut as Any, requiringSecureCoding: false)
+            let rating3ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: rating3Shortcut as Any, requiringSecureCoding: false)
+            let rating2ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: rating2Shortcut as Any, requiringSecureCoding: false)
+            let rating1ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: rating1Shortcut as Any, requiringSecureCoding: false)
+            let rating0ShortcutData = try NSKeyedArchiver.archivedData(withRootObject: rating0Shortcut as Any, requiringSecureCoding: false)
             
             UserDefaults.standard.register(defaults: [
-                PreferencesViewController.ShortcutKey.songRatingDown.rawValue : ratingDownShortcutData,
-                PreferencesViewController.ShortcutKey.songRatingUp.rawValue : ratingUpShortcutData,
+                PreferencesViewController.ShortcutKey.ratingDown.rawValue : ratingDownShortcutData,
+                PreferencesViewController.ShortcutKey.ratingUp.rawValue : ratingUpShortcutData,
                 PreferencesViewController.ShortcutKey.showOrClosePopover.rawValue : showOrClosePopoverShortcutData,
-                PreferencesViewController.ShortcutKey.songRating5.rawValue: songRating5ShortcutData,
-                PreferencesViewController.ShortcutKey.songRating4.rawValue: songRating4ShortcutData,
-                PreferencesViewController.ShortcutKey.songRating3.rawValue: songRating3ShortcutData,
-                PreferencesViewController.ShortcutKey.songRating2.rawValue: songRating2ShortcutData,
-                PreferencesViewController.ShortcutKey.songRating1.rawValue: songRating1ShortcutData,
-                PreferencesViewController.ShortcutKey.songRating0.rawValue: songRating0ShortcutData,
+                PreferencesViewController.ShortcutKey.rating5.rawValue: rating5ShortcutData,
+                PreferencesViewController.ShortcutKey.rating4.rawValue: rating4ShortcutData,
+                PreferencesViewController.ShortcutKey.rating3.rawValue: rating3ShortcutData,
+                PreferencesViewController.ShortcutKey.rating2.rawValue: rating2ShortcutData,
+                PreferencesViewController.ShortcutKey.rating1.rawValue: rating1ShortcutData,
+                PreferencesViewController.ShortcutKey.rating0.rawValue: rating0ShortcutData,
             ])
         } catch {
             os_log("%{public}s[%{public}ld], %{public}s: Default shortcut set fail", ((#file as NSString).lastPathComponent), #line, #function)

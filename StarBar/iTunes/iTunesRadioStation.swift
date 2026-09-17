@@ -64,35 +64,35 @@ final class iTunesRadioStation {
 
         // Bind and broadcast keyboard
         // Notify control directly without trigger player update notification
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRatingUp.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.ratingUp.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRatingUp, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRatingDown.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.ratingDown.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRatingDown, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRating5.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.rating5.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating5, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRating4.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.rating4.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating4, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRating3.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.rating3.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating3, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRating2.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.rating2.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating2, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRating1.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.rating1.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating1, object: nil)
         })
-        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.songRating0.rawValue, toAction: {
+        MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.rating0.rawValue, toAction: {
             iTunesPlayer.shared.update(broadcast: false)
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating0, object: nil)
         })
