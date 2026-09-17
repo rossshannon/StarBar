@@ -72,6 +72,7 @@ final class MenuBarRatingControl {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
     }()
+    private let panGestureRecognizer = NSPanGestureRecognizer()
     /// Turns the menu bar's click into a rating, a favorite toggle, or a drag
     private lazy var clickController: RatingClickController = {
         let controller = RatingClickController(
@@ -157,11 +158,16 @@ final class MenuBarRatingControl {
         button.setButtonType(.momentaryChange)
         
         // On macOS 27 the menu bar sends the app one synthesised click when the mouse goes down,
-        // and no drag events. Pan and press recognizers never fire, so the click handler
-        // follows a drag itself by reading the mouse while the button is held.
+        // and no drag events, so the click recognizer starts drags too. On earlier macOS a drag
+        // makes the click recognizer fail, and the pan recognizer starts it instead. Either way
+        // RatingClickController then follows the drag by reading the mouse.
         clickGestureRecognizer.action = #selector(MenuBarRatingControl.clickGestureRecognizerHandler(_:))
         clickGestureRecognizer.target = self
         button.addGestureRecognizer(clickGestureRecognizer)
+
+        panGestureRecognizer.action = #selector(MenuBarRatingControl.panGestureRecognizerHandler(_:))
+        panGestureRecognizer.target = self
+        button.addGestureRecognizer(panGestureRecognizer)
 
         let trackingArea = NSTrackingArea(rect: button.bounds, options: [.activeAlways, .mouseEnteredAndExited, .mouseMoved], owner: trackingAreaResponser, userInfo: nil)
         button.addTrackingArea(trackingArea)
@@ -287,7 +293,18 @@ extension MenuBarRatingControl {
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard sender.state == .ended else { return }
+        handlePress()
+    }
 
+    /// Before macOS 27, dragging sends real drag events: start following the drag when it begins.
+    @objc private func panGestureRecognizerHandler(_ sender: NSPanGestureRecognizer) {
+        os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
+        guard sender.state == .began, !clickController.isDragging else { return }
+        handlePress()
+    }
+
+    /// Hand the press to the click controller, and follow the drag if one begins
+    private func handlePress() {
         dragTimer?.invalidate()
         dragTimer = nil
         guard clickController.click() else { return }
