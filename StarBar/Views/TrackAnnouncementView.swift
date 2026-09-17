@@ -6,6 +6,27 @@
 //
 
 import Cocoa
+import os.log
+
+/// Experiment knobs for the glass, read from defaults so its look can be compared without a
+/// rebuild: `announcementGlassRegular` (bool; false, the clear style, by default) and
+/// `announcementGlassTintAlpha` (0 to 1; `TrackAnnouncementLayout.glassTint`'s alpha by
+/// default, 0 for no tint at all). They are read when the glass is built, so switch the
+/// strip style away and back after changing one.
+struct TrackAnnouncementGlassKnobs: Equatable {
+    var regular = false
+    var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
+
+    static var current: TrackAnnouncementGlassKnobs {
+        let defaults = UserDefaults.standard
+        var knobs = TrackAnnouncementGlassKnobs()
+        knobs.regular = defaults.bool(forKey: "announcementGlassRegular")
+        if defaults.object(forKey: "announcementGlassTintAlpha") != nil {
+            knobs.tintAlpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassTintAlpha"))))
+        }
+        return knobs
+    }
+}
 
 /// The announcement strip: a dark band with the artwork on the left and the title, artist,
 /// album and rating in white, drawn the way Growl's Music Video view drew them.
@@ -167,15 +188,20 @@ final class TrackAnnouncementView: NSView {
             #if compiler(>=6.2)
             if #available(macOS 26.0, *) {
                 let glass = NSGlassEffectView()
+                let knobs = TrackAnnouncementGlassKnobs.current
                 // .clear keeps the backdrop visible through the glass; .regular frosts it
                 // to a near-flat grey over a bright window. The tint's alpha matters: an
                 // opaque tint on clear glass paints the strip solid, hiding the glass. The
                 // corner radius is set with the frame, since it scales with the strip.
-                glass.style = .clear
-                glass.tintColor = TrackAnnouncementLayout.glassTint
+                glass.style = knobs.regular ? .regular : .clear
+                if knobs.tintAlpha > 0 {
+                    glass.tintColor = NSColor.black.withAlphaComponent(knobs.tintAlpha)
+                }
+                os_log("%{public}s[%{public}ld], %{public}s: NSGlassEffectView style=%{public}s tint=%.2f", ((#file as NSString).lastPathComponent), #line, #function, knobs.regular ? "regular" : "clear", Double(knobs.tintAlpha))
                 return glass
             }
             #endif
+            os_log("%{public}s[%{public}ld], %{public}s: no Liquid Glass on this system; using the blur", ((#file as NSString).lastPathComponent), #line, #function)
             return makeBlur()
         case .blur:
             return makeBlur()

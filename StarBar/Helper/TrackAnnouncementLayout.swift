@@ -170,16 +170,32 @@ enum TrackAnnouncementPlacement {
         case fade
     }
 
+    /// Empty window above the strip. Liquid Glass refracts what lies just outside its edge
+    /// into its rim, and a backdrop only covers the window: with the window's top flush with
+    /// the glass's top there was nothing to bend, and the straight edge showed no lensing at
+    /// all while the corners, with window either side of them, did. The panel ignores the
+    /// mouse, so the headroom costs nothing.
+    static let panelHeadroom: CGFloat = 48
+
+    static func panelHeadroom(scale: CGFloat) -> CGFloat {
+        return (panelHeadroom * scale).rounded(.up)
+    }
+
     /// The panel spans the whole screen width and rests on the visible frame's bottom edge:
     /// above a Dock at the bottom, and running behind a Dock at the side (the panel's window
-    /// level is just below the Dock's)
+    /// level is just below the Dock's). It is taller than the strip by the headroom.
     static func panelFrame(screenFrame: CGRect, visibleFrame: CGRect, scale: CGFloat = 1) -> CGRect {
         return CGRect(
             x: screenFrame.minX,
             y: visibleFrame.minY,
             width: screenFrame.width,
-            height: TrackAnnouncementLayout.stripHeight(scale: scale)
+            height: TrackAnnouncementLayout.stripHeight(scale: scale) + panelHeadroom(scale: scale)
         )
+    }
+
+    /// The strip's size inside the panel: the panel's width, the strip's height
+    static func stripSize(panelFrame: CGRect, scale: CGFloat = 1) -> CGSize {
+        return CGSize(width: panelFrame.width, height: TrackAnnouncementLayout.stripHeight(scale: scale))
     }
 
     /// The strip view's origin inside the panel: on screen, or just below it

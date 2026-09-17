@@ -270,7 +270,10 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         let panelFrame = TrackAnnouncementPlacement.panelFrame(screenFrame: screenFrame, visibleFrame: visibleFrame, scale: scale)
         setFrame(panelFrame, display: false)
         contentView?.frame = NSRect(origin: .zero, size: panelFrame.size)
-        stripView.frame = NSRect(origin: TrackAnnouncementPlacement.stripOrigin(shown: false, scale: scale), size: panelFrame.size)
+        stripView.frame = NSRect(
+            origin: TrackAnnouncementPlacement.stripOrigin(shown: false, scale: scale),
+            size: TrackAnnouncementPlacement.stripSize(panelFrame: panelFrame, scale: scale)
+        )
     }
 
     /// The screen under the pointer, else the main screen

@@ -176,7 +176,7 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
         XCTAssertEqual(frame.minY, 70)
         XCTAssertEqual(frame.width, 1440)
-        XCTAssertEqual(frame.height, 96)
+        XCTAssertEqual(frame.height, 96 + TrackAnnouncementPlacement.panelHeadroom)
         XCTAssertEqual(frame.minX, 0)
     }
 
@@ -205,9 +205,17 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
     func testPanelHeightScalesToWholePoints() {
         let screen = CGRect(x: 0, y: 0, width: 2560, height: 1440)
-        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.5).height, 144)
-        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.44).height, 139)
+        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.5).height, 144 + 72)
+        XCTAssertEqual(TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen, scale: 1.44).height, 139 + 70)
         XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: 1.44).y, -139)
+    }
+
+    func testPanelHasHeadroomAboveTheStripAndTheStripKeepsItsHeight() {
+        let screen = CGRect(x: 0, y: 0, width: 1280, height: 800)
+        let frame = TrackAnnouncementPlacement.panelFrame(screenFrame: screen, visibleFrame: screen)
+        XCTAssertEqual(frame.height, 96 + 48, "empty window above the strip, so the glass has something outside its edge to refract")
+        XCTAssertEqual(TrackAnnouncementPlacement.stripSize(panelFrame: frame), CGSize(width: 1280, height: 96))
+        XCTAssertEqual(TrackAnnouncementPlacement.stripSize(panelFrame: frame, scale: 2).height, 192)
     }
 
     func testStripOrigins() {
