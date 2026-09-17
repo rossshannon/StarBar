@@ -106,20 +106,14 @@ extension RatingReminderController {
             failedReads = 0
         }
 
-        guard let snapshot = snapshot else {
-            stopEffects()
-            return
-        }
+        // A bell and sweep already under way always finish, even if playback changes
+        guard let snapshot = snapshot else { return }
         if snapshot.trackID != currentTrackID {
             // A new track, or the same one played again later, gets its own reminder
             currentTrackID = snapshot.trackID
             remindedTrackID = nil
-            stopEffects()
         }
-        guard snapshot.isPlaying, !snapshot.isRated else {
-            stopEffects()
-            return
-        }
+        guard snapshot.isPlaying else { return }
 
         let decision = RatingReminder.decision(
             position: snapshot.position,

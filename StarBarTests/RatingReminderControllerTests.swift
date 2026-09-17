@@ -201,19 +201,19 @@ final class RatingReminderControllerTests: XCTestCase {
         XCTAssertEqual(bell.playCount, 2)
     }
 
-    func testPauseDuringTheSweepStopsItAndTheBell() {
+    func testPauseDuringTheSweepLetsItFinish() {
         update(snapshot(position: 580))
-        XCTAssertTrue(bell.isPlaying)
         update(snapshot(playing: false, position: 580))
-        XCTAssertNil(control.sweepPosition)
-        XCTAssertFalse(bell.isPlaying)
+        XCTAssertNotNil(control.sweepPosition)
+        XCTAssertTrue(bell.isPlaying)
     }
 
-    func testTrackChangeDuringTheSweepStopsIt() {
+    func testTrackChangeOrMusicQuittingDuringTheSweepLetsItFinish() {
         update(snapshot(track: "A", position: 580))
         update(snapshot(track: "B", position: 0))
-        XCTAssertNil(control.sweepPosition)
-        XCTAssertFalse(bell.isPlaying)
+        update(nil)
+        XCTAssertNotNil(control.sweepPosition)
+        XCTAssertTrue(bell.isPlaying)
     }
 
     func testPauseCancelsTheTimer() {
