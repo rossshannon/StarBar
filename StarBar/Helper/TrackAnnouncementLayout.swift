@@ -57,9 +57,9 @@ enum TrackAnnouncementLayout {
     /// strip by its corner radius so that the bottom corners are always below the screen edge
     /// and only the top corners round. `leadingInset` and `trailingInset` are the strip's
     /// Dock insets.
-    static func glassFrame(in size: CGSize, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0) -> CGRect {
+    static func glassFrame(in size: CGSize, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0, cornerRadius: CGFloat = glassCornerRadius) -> CGRect {
         let inset = glassSideInset * scale
-        let overhang = (glassCornerRadius * scale).rounded(.up)
+        let overhang = (cornerRadius * scale).rounded(.up)
         return CGRect(
             x: leadingInset + inset,
             y: -overhang,

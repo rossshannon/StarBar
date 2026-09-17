@@ -9,13 +9,20 @@ import Cocoa
 import os.log
 
 /// Experiment knobs for the glass, read from defaults so its look can be compared without a
-/// rebuild: `announcementGlassRegular` (bool; false, the clear style, by default) and
+/// rebuild: `announcementGlassRegular` (bool; false, the clear style, by default),
 /// `announcementGlassTintAlpha` (0 to 1; `TrackAnnouncementLayout.glassTint`'s alpha by
-/// default, 0 for no tint at all). They are read when the glass is built, so switch the
-/// strip style away and back after changing one.
+/// default, 0 for no tint at all) and `announcementGlassCornerRadius` (points at scale 1;
+/// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more). They
+/// are read when the glass is built, so switch the strip style away and back after changing
+/// one.
 struct TrackAnnouncementGlassKnobs: Equatable {
     var regular = false
     var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
+    var cornerRadius = TrackAnnouncementLayout.glassCornerRadius
+
+    /// Where the strip gets its knobs. The tests are hosted in the app, so they replace this
+    /// with fixed values rather than read whatever is set on the machine.
+    static var read: () -> TrackAnnouncementGlassKnobs = { current }
 
     static var current: TrackAnnouncementGlassKnobs {
         let defaults = UserDefaults.standard
@@ -23,6 +30,9 @@ struct TrackAnnouncementGlassKnobs: Equatable {
         knobs.regular = defaults.bool(forKey: "announcementGlassRegular")
         if defaults.object(forKey: "announcementGlassTintAlpha") != nil {
             knobs.tintAlpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassTintAlpha"))))
+        }
+        if defaults.object(forKey: "announcementGlassCornerRadius") != nil {
+            knobs.cornerRadius = max(0, CGFloat(defaults.double(forKey: "announcementGlassCornerRadius")))
         }
         return knobs
     }
@@ -120,8 +130,13 @@ final class TrackAnnouncementView: NSView {
         case .classic, .blur:
             return bounds
         case .glass:
-            return TrackAnnouncementLayout.glassFrame(in: bounds.size, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
+            return TrackAnnouncementLayout.glassFrame(in: bounds.size, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset, cornerRadius: glassCornerRadius)
         }
+    }
+
+    /// The glass's corner radius at scale 1: the layout's, unless the experiment knob says otherwise
+    private var glassCornerRadius: CGFloat {
+        return TrackAnnouncementGlassKnobs.read().cornerRadius
     }
 
     private func applyInsets() {
@@ -133,7 +148,7 @@ final class TrackAnnouncementView: NSView {
     private func layoutBackdrop() {
         guard let backdrop = backdropView else { return }
         backdrop.frame = backdropFrame
-        TrackAnnouncementView.applyCornerRadius(to: backdrop, scale: scale)
+        TrackAnnouncementView.applyCornerRadius(to: backdrop, radius: glassCornerRadius * scale)
     }
 
     required init?(coder: NSCoder) {
@@ -165,11 +180,11 @@ final class TrackAnnouncementView: NSView {
         layoutBackdrop()
     }
 
-    /// The glass's corner radius, scaled with the strip; nothing for a blur
-    static func applyCornerRadius(to backdrop: NSView, scale: CGFloat) {
+    /// The glass's corner radius, already scaled with the strip; nothing for a blur
+    static func applyCornerRadius(to backdrop: NSView, radius: CGFloat) {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *), let glass = backdrop as? NSGlassEffectView {
-            glass.cornerRadius = TrackAnnouncementLayout.glassCornerRadius * scale
+            glass.cornerRadius = radius
         }
         #endif
     }
@@ -188,7 +203,7 @@ final class TrackAnnouncementView: NSView {
             #if compiler(>=6.2)
             if #available(macOS 26.0, *) {
                 let glass = NSGlassEffectView()
-                let knobs = TrackAnnouncementGlassKnobs.current
+                let knobs = TrackAnnouncementGlassKnobs.read()
                 // .clear keeps the backdrop visible through the glass; .regular frosts it
                 // to a near-flat grey over a bright window. The tint's alpha matters: an
                 // opaque tint on clear glass paints the strip solid, hiding the glass. The

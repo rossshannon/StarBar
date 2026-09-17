@@ -256,6 +256,12 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(TrackAnnouncementLayout.glassFrame(in: CGSize(width: 40, height: 96), scale: 2).width, 0, "never a negative width")
     }
 
+    func testABiggerCornerHangsFurtherBelowTheStrip() {
+        let frame = TrackAnnouncementLayout.glassFrame(in: CGSize(width: 1280, height: 96), scale: 1.5, cornerRadius: 48)
+        XCTAssertEqual(frame.minY, -72, "the overhang is the corner radius, so the bottom corners stay off screen")
+        XCTAssertEqual(frame.maxY, 96)
+    }
+
     func testOnlyTheGlassStyleAddsToTheContentInsets() {
         let classic = TrackAnnouncementLayout.contentInsets(for: .classic, scale: 2, leadingInset: 70, trailingInset: 5)
         XCTAssertEqual(classic.leading, 70)

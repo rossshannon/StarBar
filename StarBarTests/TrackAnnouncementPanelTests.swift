@@ -15,8 +15,14 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     private var panel: TrackAnnouncementPanel!
     private var mouse = NSPoint.zero
 
+    private var readKnobs: (() -> TrackAnnouncementGlassKnobs)!
+
     override func setUp() {
         super.setUp()
+        // The tests are hosted in the app, whose defaults may carry the glass experiment
+        // knobs; read fixed values instead
+        readKnobs = TrackAnnouncementGlassKnobs.read
+        TrackAnnouncementGlassKnobs.read = { TrackAnnouncementGlassKnobs() }
         mouse = NSScreen.main.map { NSPoint(x: $0.frame.midX, y: $0.frame.midY) } ?? .zero
         panel = TrackAnnouncementPanel(
             slideDuration: 0,
@@ -28,6 +34,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     override func tearDown() {
         panel.orderOut(nil)
         panel = nil
+        TrackAnnouncementGlassKnobs.read = readKnobs
         super.tearDown()
     }
 
