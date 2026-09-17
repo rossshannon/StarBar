@@ -16,6 +16,8 @@ import os
 /// identity of the last track it saw, even while the setting is off, so only a change of track
 /// announces: pause, resume, seeking and rating edits never do. A new track while a strip is
 /// showing replaces it; nothing is queued.
+///
+/// Called from the main thread only, like the rest of the menu bar.
 final class TrackAnnouncementController: NSObject {
 
     /// What the announcement needs to know about the player
@@ -77,12 +79,18 @@ final class TrackAnnouncementController: NSObject {
 
     static let holdDuration = TrackAnnouncementLayout.holdDuration
     static let slideDuration = TrackAnnouncementLayout.slideDuration
+    /// How long a rating chosen in StarBar wins over Music's reads: the save delay, plus
+    /// time for the Apple Event
+    static let pendingRatingLifetime = iTunesRadioStation.ratingSaveDelay + 1.0
 
     /// Reads the player now, or returns nil when Music isn't running
     private let readPlayer: () -> PlayerSnapshot?
     /// Reads the live track's rating, favourite flag and, when asked, artwork, for the track
     /// with this identity
     private let loadLiveTrack: (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad
+    /// Reads the identity of the track Music has now, or nil when it can't say. One Apple
+    /// Event, so a rating can be matched to its track without a full live read.
+    private let readCurrentIdentity: () -> String?
     private let presenter: TrackAnnouncementPresenter
     private let clock: RatingReminderClock
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
@@ -96,10 +104,14 @@ final class TrackAnnouncementController: NSObject {
     /// What the strip is showing while the hold timer runs
     private var currentAnnouncement: TrackAnnouncement?
     private var hideTimer: RatingReminderTimer?
+    /// A rating the user just chose in StarBar. Music only gets it after
+    /// `iTunesRadioStation.ratingSaveDelay`, so until then it wins over Music's reads.
+    private var pendingRating: (identity: String, rating: Int, expires: Date)?
 
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
         loadLiveTrack: @escaping (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad,
+        readCurrentIdentity: @escaping () -> String?,
         presenter: TrackAnnouncementPresenter,
         clock: RatingReminderClock = RunLoopClock(),
         accessibility: @escaping () -> (reduceMotion: Bool, reduceTransparency: Bool) = {
@@ -110,6 +122,7 @@ final class TrackAnnouncementController: NSObject {
     ) {
         self.readPlayer = readPlayer
         self.loadLiveTrack = loadLiveTrack
+        self.readCurrentIdentity = readCurrentIdentity
         self.presenter = presenter
         self.clock = clock
         self.accessibility = accessibility
@@ -139,7 +152,16 @@ extension TrackAnnouncementController {
         // A payload that says nothing about the player, or nothing about the track
         // (sourceSaved sends one), must not reset the last track, or the next real
         // notification would announce it again
-        guard snapshot.state != .unknown else { return }
+        guard snapshot.state != .unknown else {
+            // Music sends sourceSaved when the song is rated in Music itself: show the change.
+            // The payload says nothing dependable about which track it is for, so only
+            // Music's live read is believed, and the strip keeps its own words.
+            if let current = currentAnnouncement, hideTimer != nil,
+               snapshot.identity == nil || snapshot.identity == current.identity {
+                refreshFromMusic(current)
+            }
+            return
+        }
         if snapshot.state == .stopped {
             lastIdentity = nil
             lastSnapshot = nil
@@ -201,6 +223,72 @@ extension TrackAnnouncementController {
         showCurrentTrack()
     }
 
+    /// The user chose a rating for the current track in StarBar. Shows it on the strip now,
+    /// without asking Music, which only gets the rating after `ratingSaveDelay`.
+    ///
+    /// - Parameter rating: 0 to 100
+    func userDidRate(_ rating: Int) {
+        guard let identity = ratedTrackIdentity() else { return }
+        pendingRating = (identity, rating, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime))
+        updateStrip(identity: identity) { TrackAnnouncement(copying: $0, rating: rating) }
+    }
+
+    /// The user toggled the current track's heart in StarBar. Shows it on the strip now.
+    ///
+    /// The heart needs no counterpart to `pendingRating`: `iTunesTrack.updateFavorited(_:)`
+    /// writes to Music at once, so Music's next read already has it.
+    func userDidFavorite(_ isFavorited: Bool) {
+        guard let identity = ratedTrackIdentity() else { return }
+        updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
+    }
+
+    /// The track a rating chosen in StarBar belongs to: the one Music is playing.
+    ///
+    /// While the strip is up, Music is asked which track that is (one Apple Event), so a
+    /// rating chosen in the gap between Music changing track and its notification arriving
+    /// never lands on the song the strip is showing. With no strip up there is nothing to
+    /// draw, so the last update's track is good enough and nothing is asked.
+    private func ratedTrackIdentity() -> String? {
+        guard let current = currentAnnouncement, hideTimer != nil else { return lastSnapshot?.identity }
+        // A read Music can't answer leaves the strip as the best guess, as elsewhere here
+        guard let live = readCurrentIdentity(), live != current.identity else { return current.identity }
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: the rating is for %{public}s, which the strip isn't showing", ((#file as NSString).lastPathComponent), #line, #function, live)
+        return nil
+    }
+
+    /// Redraw the strip if it is up and showing the track with this identity
+    private func updateStrip(identity: String, _ change: (TrackAnnouncement) -> TrackAnnouncement) {
+        guard let current = currentAnnouncement, hideTimer != nil, current.identity == identity else { return }
+        let updated = change(current)
+        guard updated != current else { return }
+        os_log("%{public}s[%{public}ld], %{public}s: strip now shows rating %{public}ld, favourite %{public}s", ((#file as NSString).lastPathComponent), #line, #function, updated.rating, String(updated.isFavorited))
+        currentAnnouncement = updated
+        presenter.refresh(updated)
+    }
+
+    /// The rating to show: the user's own rating while Music has yet to save it, otherwise
+    /// Music's, and then the notification's.
+    ///
+    /// Music is believed again as soon as it reports the saved rating, so a change made in
+    /// Music straight afterwards isn't held back for the rest of the wait.
+    private func rating(for identity: String, live: Int?, payload: Int?) -> Int? {
+        expirePendingRating()
+        let known = live ?? payload
+        guard let pending = pendingRating, pending.identity == identity else { return known }
+        guard known != pending.rating else {
+            // Music has the rating now
+            pendingRating = nil
+            return known
+        }
+        return pending.rating
+    }
+
+    /// Forget the user's rating once Music has had time to save it
+    private func expirePendingRating() {
+        guard let pending = pendingRating, clock.now() >= pending.expires else { return }
+        pendingRating = nil
+    }
+
     /// Returns false when the announcement was dropped because the track changed under it
     @discardableResult
     private func announce(_ snapshot: PlayerSnapshot, identity: String) -> Bool {
@@ -210,7 +298,7 @@ extension TrackAnnouncementController {
             title: snapshot.title,
             artist: snapshot.artist,
             album: snapshot.album,
-            rating: live.rating ?? snapshot.rating ?? 0,
+            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? false,
             artwork: live.artwork
         )
@@ -228,9 +316,23 @@ extension TrackAnnouncementController {
             title: snapshot.title.isEmpty ? current.title : snapshot.title,
             artist: snapshot.artist.isEmpty ? current.artist : snapshot.artist,
             album: snapshot.album.isEmpty ? current.album : snapshot.album,
-            rating: live.rating ?? snapshot.rating ?? current.rating,
+            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? current.isFavorited,
             artwork: current.artwork
+        )
+        guard updated != current else { return }
+        currentAnnouncement = updated
+        presenter.refresh(updated)
+    }
+
+    /// Redraw the strip's rating and heart from Music alone, for a notification that says
+    /// nothing dependable about the track it is for
+    private func refreshFromMusic(_ current: TrackAnnouncement) {
+        guard let live = loadLive(identity: current.identity, wantsArtwork: false) else { return }
+        let updated = TrackAnnouncement(
+            copying: current,
+            rating: rating(for: current.identity, live: live.rating, payload: nil) ?? current.rating,
+            isFavorited: live.isFavorited ?? current.isFavorited
         )
         guard updated != current else { return }
         currentAnnouncement = updated

@@ -61,6 +61,20 @@ struct TrackAnnouncement: Equatable {
         self.artwork = artwork
     }
 
+    /// The same announcement with a new rating or heart. Nil means "leave as it was";
+    /// unrated is 0 and the heart off is false, so both are still passed as themselves.
+    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil) {
+        self.init(
+            identity: other.identity,
+            title: other.title,
+            artist: other.artist,
+            album: other.album,
+            rating: rating ?? other.rating,
+            isFavorited: isFavorited ?? other.isFavorited,
+            artwork: other.artwork
+        )
+    }
+
     /// What the Preferences Preview button shows when Music has no track to show instead
     static var preview: TrackAnnouncement {
         return TrackAnnouncement(

@@ -85,6 +85,7 @@ extension AppDelegate {
         let controller = TrackAnnouncementController(
             readPlayer: { AppDelegate.readAnnouncementSnapshot() },
             loadLiveTrack: { identity, wantsArtwork in AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork) },
+            readCurrentIdentity: { AppDelegate.readCurrentTrackIdentity() },
             presenter: panel,
             isEnabled: UserDefaults.standard.announceNewTracks
         )
@@ -135,6 +136,16 @@ extension AppDelegate {
                 os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
                 return nil
             }
+        } ?? nil
+    }
+
+    /// Which track Music has now, as an announcement identity. One Apple Event; nil when
+    /// Music isn't running, the read timed out, or the track has no persistent ID.
+    static func readCurrentTrackIdentity() -> String? {
+        guard !MenuBarRatingControl.isUITesting else { return nil }
+        return MenuBarRatingControl.withShortTimeout { _ -> String? in
+            guard let id = iTunesPlayer.shared.currentTrack?.persistentID, !id.isEmpty else { return nil }
+            return id.uppercased()
         } ?? nil
     }
 

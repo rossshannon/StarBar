@@ -300,6 +300,7 @@ extension MenuBarRatingControl {
         ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
+        TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
         
         // Also trigger a full update to refresh data from iTunes
         iTunesPlayer.shared.update()
@@ -373,6 +374,7 @@ extension MenuBarRatingControl: RatingControlDelegate {
 
     func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
         reminderController?.userDidRate()
+        TrackAnnouncementController.shared?.userDidRate(rating)
         // Update iTunes current track rating
         if !MenuBarRatingControl.isUITesting {
             iTunesRadioStation.shared.setRating(rating)
@@ -442,6 +444,7 @@ extension MenuBarRatingControl {
         ratingControl.update(rating: ratingControl.rating + ratingChange)
         iTunesRadioStation.shared.setRating(ratingControl.rating)
         reminderController?.userDidRate()
+        TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
 
     @objc func iTunesRadioRequestTrackRatingDown(_ notification: Notification) {
@@ -454,6 +457,7 @@ extension MenuBarRatingControl {
         ratingControl.update(rating: ratingControl.rating - ratingChange)
         iTunesRadioStation.shared.setRating(ratingControl.rating)
         reminderController?.userDidRate()
+        TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
 
     @objc func iTunesRadioRequestTrackRating5(_ notification: Notification) {
@@ -489,6 +493,7 @@ extension MenuBarRatingControl {
       ratingControl.update(rating: stars * 20)
       iTunesRadioStation.shared.setRating(ratingControl.rating)
       reminderController?.userDidRate()
+      TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
 
     @objc func windowDidResize(_ notification: Notification) {
