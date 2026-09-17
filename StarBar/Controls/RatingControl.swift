@@ -26,6 +26,9 @@ class RatingControl {
     private(set) var rating: Int
     /// True if the track is a favorite in Music (see `iTunesTrack.isFavorited`)
     private(set) var isFavorited: Bool = false
+    /// Position (0 ~ 4) of the hollow star in the rating reminder sweep, or nil when no sweep
+    /// is running. Display only: it never changes `rating`.
+    private(set) var sweepPosition: Int?
     /// Called after the rating or favorite changes and the stars are redrawn
     var didChange: (() -> Void)?
     
@@ -47,7 +50,11 @@ class RatingControl {
         if dotCount > 0 {
             stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .dot), count: dotCount))
         }
-        
+        // The sweep only replaces a dot, never a star the user chose
+        if let sweepPosition = sweepPosition, stars.indices.contains(sweepPosition), stars[sweepPosition].style == .dot {
+            stars[sweepPosition] = Star(size: starSize, style: .outline)
+        }
+
         return Stars(stars: stars, spacing: spacing, showsFavorite: true, isFavorited: isFavorited)
     }
     
@@ -95,6 +102,16 @@ extension RatingControl {
         os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, favorited ? 1 : 0)
     }
     
+    /// Move the rating reminder's hollow star, or remove it with nil
+    ///
+    /// - Parameter position: 0 ~ 4, or nil
+    func updateSweep(position: Int?) {
+        guard position != sweepPosition else { return }
+        sweepPosition = position
+
+        drawStars()
+    }
+
     /// Stars draw only method
     private func drawStars() {
         defer { didChange?() }

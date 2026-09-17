@@ -21,6 +21,9 @@ final class PreferencesViewController: NSViewController {
     lazy var halfStarTextField: NSTextField = {
         return NSTextField(labelWithString: "Half star: ")
     }()
+    lazy var reminderTextField: NSTextField = {
+        return NSTextField(labelWithString: "Reminder: ")
+    }()
     lazy var ratingDownTextField: NSTextField = {
         return NSTextField(labelWithString: "Rating down: ")
     }()
@@ -65,6 +68,10 @@ final class PreferencesViewController: NSViewController {
     }()
     let halfStarCheckboxButton: NSButton = {
         let button = NSButton(checkboxWithTitle: "Enable", target: nil, action: nil)
+        return button
+    }()
+    let reminderCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Remind me to rate unrated songs", target: nil, action: nil)
         return button
     }()
     let ratingDownShortcutView: MASShortcutView = {
@@ -122,6 +129,7 @@ final class PreferencesViewController: NSViewController {
         let gridView = NSGridView(views: [
             [startupTextField, launchAtLoginCheckboxButton],
             [halfStarTextField, halfStarCheckboxButton],
+            [reminderTextField, reminderCheckboxButton],
             [NSBox.separatorLine],
             [ratingDownTextField, ratingDownShortcutView],
             [ratingUpTextField, ratingUpShortcutView],
@@ -157,6 +165,7 @@ final class PreferencesViewController: NSViewController {
 
     var launchAtLoginObservation: NSKeyValueObservation?
     var halfStarObservation: NSKeyValueObservation?
+    var reminderObservation: NSKeyValueObservation?
 
     override func loadView() {
         self.view = NSView()
@@ -165,6 +174,7 @@ final class PreferencesViewController: NSViewController {
     deinit {
         launchAtLoginObservation?.invalidate()
         halfStarObservation?.invalidate()
+        reminderObservation?.invalidate()
     }
 
 }
@@ -210,6 +220,10 @@ extension PreferencesViewController {
         UserDefaults.standard.allowHalfStar = sender.state == .on
     }
 
+    @objc private func reminderCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.remindToRateUnrated = sender.state == .on
+    }
+
 }
 
 extension PreferencesViewController {
@@ -248,6 +262,12 @@ extension PreferencesViewController {
         halfStarCheckboxButton.action = #selector(PreferencesViewController.halfStarCheckboxButtonChanged(_:))
         halfStarObservation = UserDefaults.standard.observe(\.allowHalfStar, options: [.initial, .new]) { [weak self] defaults, launchAtLogin in
             self?.halfStarCheckboxButton.state = defaults.allowHalfStar ? .on : .off
+        }
+
+        reminderCheckboxButton.target = self
+        reminderCheckboxButton.action = #selector(PreferencesViewController.reminderCheckboxButtonChanged(_:))
+        reminderObservation = UserDefaults.standard.observe(\.remindToRateUnrated, options: [.initial, .new]) { [weak self] defaults, _ in
+            self?.reminderCheckboxButton.state = defaults.remindToRateUnrated ? .on : .off
         }
     }
 

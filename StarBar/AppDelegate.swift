@@ -161,7 +161,8 @@ extension AppDelegate {
         UserDefaults.standard.register(defaults: [
             ApplicationKey.isFirstLaunch.rawValue : true,
             ApplicationKey.launchAtLogin.rawValue : false,
-            ApplicationKey.allowHalfStar.rawValue : false
+            ApplicationKey.allowHalfStar.rawValue : false,
+            ApplicationKey.remindToRateUnrated.rawValue : true
         ])
         
         // setup observer

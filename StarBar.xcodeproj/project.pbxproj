@@ -58,6 +58,12 @@
 		DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */; };
 		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
 		DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A937250E0A1C002C1B6C /* NSImage.swift */; };
+		5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D1 /* RatingReminder.swift */; };
+		5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D3 /* StarSweep.swift */; };
+		5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D5 /* RatingReminderController.swift */; };
+		5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D7 /* RatingReminderTests.swift */; };
+		5A7E1A0000000000000000DA /* Bell Transition.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D9 /* Bell Transition.mp3 */; };
+		5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -152,6 +158,12 @@
 		DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
 		DBD6A937250E0A1C002C1B6C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000D1 /* RatingReminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminder.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000D3 /* StarSweep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarSweep.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000D5 /* RatingReminderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderController.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000D7 /* RatingReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000D9 /* Bell Transition.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Bell Transition.mp3"; sourceTree = "<group>"; };
+		5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderControllerTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -247,6 +259,8 @@
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
 				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
+				5A7E1A0000000000000000D7 /* RatingReminderTests.swift */,
+				5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */,
 				DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */,
 				DB106C5A22C53D4C00502D7C /* Info.plist */,
 			);
@@ -267,6 +281,7 @@
 				DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */,
 				DB106CA722CA45BB00502D7C /* RatingControl.swift */,
 				5A7E1A0000000000000000C1 /* RatingClickController.swift */,
+				5A7E1A0000000000000000D5 /* RatingReminderController.swift */,
 				DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */,
 			);
 			path = Controls;
@@ -276,6 +291,7 @@
 			isa = PBXGroup;
 			children = (
 				DB106C4922C53D4C00502D7C /* Assets.xcassets */,
+				5A7E1A0000000000000000D9 /* Bell Transition.mp3 */,
 				DB106C4B22C53D4C00502D7C /* Main.storyboard */,
 			);
 			path = "Supporting Files";
@@ -299,6 +315,8 @@
 			children = (
 				DB106CA322CA3C7300502D7C /* Star.swift */,
 				DB106CA522CA3EE700502D7C /* Stars.swift */,
+				5A7E1A0000000000000000D3 /* StarSweep.swift */,
+				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
 				DB424A40230AF5C200230C7E /* PopoverWindow.swift */,
 				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
 				DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */,
@@ -512,6 +530,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				DB106C4A22C53D4C00502D7C /* Assets.xcassets in Resources */,
+				5A7E1A0000000000000000DA /* Bell Transition.mp3 in Resources */,
 				DB106C4D22C53D4C00502D7C /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -558,6 +577,8 @@
 				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
 				DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */,
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
+				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
+				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
 				DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */,
 				DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */,
 				DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */,
@@ -569,6 +590,7 @@
 				DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */,
 				DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */,
 				5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */,
+				5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */,
 				DB05F0632353909000CE6DF9 /* PlayerPanelViewController.swift in Sources */,
 				DB05F0862354CA5800CE6DF9 /* NSViewPreview.swift in Sources */,
 				DB89C9F322E2D766003981F5 /* MenuBarIcon.swift in Sources */,
@@ -594,6 +616,8 @@
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
 				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
+				5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */,
+				5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
