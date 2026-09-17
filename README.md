@@ -1,11 +1,11 @@
-# Music Rating
-[![Tests](https://github.com/rossshannon/MusicRating/actions/workflows/test.yml/badge.svg)](https://github.com/rossshannon/MusicRating/actions/workflows/test.yml)
+# StarBar
+[![Tests](https://github.com/rossshannon/StarBar/actions/workflows/test.yml/badge.svg)](https://github.com/rossshannon/StarBar/actions/workflows/test.yml)
 
 macOS menu bar app for rating music in iTunes/Music.app
 
 <img src="./Press/Snapshot.png" width=300 style="border-radius:4px">
 
-Music Rating is Ross Shannon's fork of [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
+StarBar is Ross Shannon's fork of [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
 
 ## Requirements
 - macOS 12 +
@@ -15,21 +15,21 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 
 ```bash
 ./build.sh              # Release build into build/
-./build.sh --install    # Also replace /Applications/Music Rating.app and relaunch it
+./build.sh --install    # Also replace /Applications/StarBar.app and relaunch it
 ./build.sh --watch -i   # Rebuild and reinstall on source changes (needs fswatch)
 ./build.sh --test       # Run the tests that don't need Music
 ./build.sh --test-all   # Also run the tests that read from Music (play a track first)
 ./build.sh --ui-test    # Click and drag the real menu bar (see below)
 ```
 
-The Xcode project and scheme are still named "StarBar". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.
+The Xcode project and scheme are still named "StarBar". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 
 ### Tests and CI
-The app tests are hosted in the app, so a test run launches Music Rating. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
+The app tests are hosted in the app, so a test run launches StarBar. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
 
 The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerTests`) and the star geometry (`RatingControlGeometryTests`).
 
-`--ui-test` runs `MenuBarRatingUITests` from the separate `StarBar UI Tests` scheme, which clicks and drags the real menu bar item. The app runs with `-UITesting YES`, so it shows the stars as if a song is playing and doesn't talk to Music. The tests take over the mouse and screen for about two minutes, so the script asks before it starts (`--yes` skips the question). The installed Music Rating is quit while they run and reopened afterwards. macOS asks for authentication before UI tests can control the Mac. To stop it asking each time, run:
+`--ui-test` runs `MenuBarRatingUITests` from the separate `StarBar UI Tests` scheme, which clicks and drags the real menu bar item. The app runs with `-UITesting YES`, so it shows the stars as if a song is playing and doesn't talk to Music. The tests take over the mouse and screen for about two minutes, so the script asks before it starts (`--yes` skips the question). The installed StarBar is quit while they run and reopened afterwards. macOS asks for authentication before UI tests can control the Mac. To stop it asking each time, run:
 
 ```bash
 sudo automationmodetool enable-automationmode-without-authentication
@@ -54,7 +54,7 @@ git tag v1.6.0
 git push origin v1.6.0
 ```
 
-The Release workflow runs the tests, builds the app with that version number, and attaches `Music-Rating-v1.6.0.zip` to a new GitHub release. The app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
+The Release workflow runs the tests, builds the app with that version number, and attaches `StarBar-v1.6.0.zip` to a new GitHub release. The app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
 
 ## Using the menu bar
 - **Click a star** to set that rating.
@@ -65,7 +65,7 @@ The Release workflow runs the tests, builds the app with that version number, an
 
 ## FAQ
 ### Are half-star ratings saved?
-Yes. Music stores a rating as a number from 0 to 100, where each star is 20. So 3½ stars is saved as 70. The Music app on the Mac can't display half stars, so it shows the whole stars only (70 shows as 3 stars). The value is still stored, Music Rating shows it, and smart playlist rules and AppleScript can use it.
+Yes. Music stores a rating as a number from 0 to 100, where each star is 20. So 3½ stars is saved as 70. The Music app on the Mac can't display half stars, so it shows the whole stars only (70 shows as 3 stars). The value is still stored, StarBar shows it, and smart playlist rules and AppleScript can use it.
 
 To check a rating yourself:
 
@@ -82,9 +82,9 @@ Check the checkbox for "Star Ratings" in General preferences. [More info](https:
 ### Why the popover player sometimes follows to new screen scenes but sometimes not?
 The popover will jump to new scren scene when it get focused. It will stand in the old screen if the current focused window not the popover.
 
-### Why does Music Rating not show the star rating when Music is playing?
-In System Settings, go to Privacy & Security, then Automation, and turn on Music for Music Rating.
+### Why does StarBar not show the star rating when Music is playing?
+In System Settings, go to Privacy & Security, then Automation, and turn on Music for StarBar.
 ![Automation](./Press/Automation.png)
 
 ## License
-Music Rating is released under the [MIT License](./LICENSE).
+StarBar is released under the [MIT License](./LICENSE).

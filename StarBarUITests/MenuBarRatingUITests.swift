@@ -26,7 +26,7 @@ final class MenuBarRatingUITests: XCTestCase {
         app.launchArguments = ["-UITesting", "YES", "-allowHalfStar", "YES", "-isFirstLaunch", "NO"]
         app.launch()
 
-        statusItem = app.statusItems["Music Rating"]
+        statusItem = app.statusItems["StarBar"]
         XCTAssertTrue(statusItem.waitForExistence(timeout: 10), "No status item. App hierarchy:\n\(app.debugDescription)")
         waitForValue("No rating")
     }

@@ -100,7 +100,7 @@ extension AppDelegate {
 
                     let alert = NSAlert()
                     alert.messageText = "Permission Required"
-                    alert.informativeText = "Music Rating needs permission to control Music. Turn it on in System Settings → Privacy & Security → Automation."
+                    alert.informativeText = "StarBar needs permission to control Music. Turn it on in System Settings → Privacy & Security → Automation."
                     alert.alertStyle = .warning
                     alert.addButton(withTitle: "Open System Settings")
                     alert.addButton(withTitle: "Later")
@@ -173,7 +173,7 @@ extension AppDelegate {
     }
     
     private func setupLaunchAtLogin() {
-        let launcherAppId = "com.rossshannon.musicrating.helper"
+        let launcherAppId = "com.rossshannon.starbar.helper"
         let runningApps = NSWorkspace.shared.runningApplications
         let isRunning = runningApps.contains(where: { $0.bundleIdentifier == launcherAppId })
         

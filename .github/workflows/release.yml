@@ -52,13 +52,13 @@ jobs:
       - name: Zip app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
-            "build/Build/Products/Release/Music Rating.app" \
-            "Music-Rating-$GITHUB_REF_NAME.zip"
+            "build/Build/Products/Release/StarBar.app" \
+            "StarBar-$GITHUB_REF_NAME.zip"
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "Music-Rating-$GITHUB_REF_NAME.zip" \
-            --title "Music Rating ${GITHUB_REF_NAME#v}" \
+          gh release create "$GITHUB_REF_NAME" "StarBar-$GITHUB_REF_NAME.zip" \
+            --title "StarBar ${GITHUB_REF_NAME#v}" \
             --generate-notes

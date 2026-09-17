@@ -1,9 +1,9 @@
 ---
 name: install-and-verify
-description: Install Music Rating into /Applications and prove the running app is the new build and the change works. Use whenever you install, reinstall, relaunch or "try out" the app, before telling Ross a change is ready to test, and when Ross says a change "isn't active" or "isn't working" after an install.
+description: Install StarBar into /Applications and prove the running app is the new build and the change works. Use whenever you install, reinstall, relaunch or "try out" the app, before telling Ross a change is ready to test, and when Ross says a change "isn't active" or "isn't working" after an install.
 ---
 
-# Install and verify Music Rating
+# Install and verify StarBar
 
 An install only counts when three things are proven: the new binary is in `/Applications`, the app now running is that binary, and the changed code actually runs. "`./build.sh --install` said Done" proves none of them.
 
@@ -34,13 +34,13 @@ Read it; don't just check the exit code.
 The build being new doesn't prove the changed code runs. Menu bar gestures, for example, can be swallowed by AppKit before the new handler sees them. Check the app's log for the code path you changed:
 
 ```bash
-/usr/bin/log show --last 10m --predicate 'process == "Music Rating"' | grep -E "<function or message you changed>"
+/usr/bin/log show --last 10m --predicate 'process == "StarBar"' | grep -E "<function or message you changed>"
 ```
 
 - Use `/usr/bin/log`. In zsh, `log` is a shell builtin.
 - `os_log(.debug, …)` messages aren't kept. To see them, stream while the action happens:
   ```bash
-  /usr/bin/log stream --level debug --style compact --predicate 'process == "Music Rating"'
+  /usr/bin/log stream --level debug --style compact --predicate 'process == "StarBar"'
   ```
 - If you need Ross to click or drag, start the stream first. Then ask for one specific action, and read the stream afterwards.
 - For rating changes, `iTunesRadioStation.setRating` logs `set timer for 2.0s and set rating for <track> <rating>`. To confirm what Music stored:

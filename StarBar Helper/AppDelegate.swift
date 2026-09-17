@@ -18,7 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         
-        let mainAppIdentifier = "com.rossshannon.musicrating"
+        let mainAppIdentifier = "com.rossshannon.starbar"
         let runningApps = NSWorkspace.shared.runningApplications
         let isRunning = runningApps.contains(where: { $0.bundleIdentifier == mainAppIdentifier })
         
@@ -36,7 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         components.removeLast()
         components.removeLast()
         components.append("MacOS")
-        components.append("Music Rating")
+        components.append("StarBar")
         
         let newPath = NSString.path(withComponents: components)
         

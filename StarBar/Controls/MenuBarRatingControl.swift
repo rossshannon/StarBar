@@ -109,14 +109,14 @@ final class MenuBarRatingControl {
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
-        let about = NSMenuItem(title: "About Music Rating", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About StarBar", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
         about.target = WindowManager.shared
         menu.addItem(about)
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
         preferences.target = WindowManager.shared
         menu.addItem(preferences)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit Music Rating", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit StarBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
     private(set) var isPlaying = false {
@@ -190,7 +190,7 @@ final class MenuBarRatingControl {
 
         ratingControl.delegate = self
         ratingControl.didChange = { [unowned self] in self.updateAccessibility() }
-        button.setAccessibilityLabel("Music Rating")
+        button.setAccessibilityLabel("StarBar")
 
         if MenuBarRatingControl.isUITesting {
             // Property observers don't run inside init, so update by hand

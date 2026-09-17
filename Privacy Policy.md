@@ -1,5 +1,5 @@
-# Privacy Policy for Music Rating
+# Privacy Policy for StarBar
 
-Music Rating does not store or transfer any data.
+StarBar does not store or transfer any data.
 
 That's all.
