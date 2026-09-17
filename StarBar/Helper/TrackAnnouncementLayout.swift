@@ -17,11 +17,12 @@ import AppKit
 enum TrackAnnouncementLayout {
 
     /// Strip height, in points, at scale 1
-    static let height: CGFloat = 96
+    /// Growl's 96, plus 8 so the artwork keeps 12 above and below it
+    static let height: CGFloat = 104
     static let artworkSize: CGFloat = 80
-    /// Artwork inset from the left, Growl's 8; it is centred vertically. The glass's 8 point
-    /// corner sits happily beside the square artwork.
-    static let artworkInset: CGFloat = 8
+    /// Artwork inset from the left, Growl's 8 plus 4; it is centred vertically, which with the
+    /// strip's height puts the same 12 above it
+    static let artworkInset: CGFloat = 12
     /// Gap between the artwork and the text, Growl's 16
     static let textGap: CGFloat = 16
     /// Gap between the text and the right edge
