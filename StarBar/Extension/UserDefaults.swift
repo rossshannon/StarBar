@@ -12,6 +12,7 @@ enum ApplicationKey: String {
     case isFirstLaunch
     case launchAtLogin
     case allowHalfStar
+    case remindToRateUnrated
 }
 
 extension UserDefaults {
@@ -52,5 +53,15 @@ extension UserDefaults {
             set(newValue, forKey: ApplicationKey.allowHalfStar.rawValue)
         }
     }
-    
+
+    /// Play a bell and sweep a star across the dots when an unrated track nears its end
+    @objc dynamic var remindToRateUnrated: Bool {
+        get {
+            return bool(forKey: ApplicationKey.remindToRateUnrated.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.remindToRateUnrated.rawValue)
+        }
+    }
+
 }

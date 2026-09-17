@@ -62,6 +62,7 @@ The Release workflow runs the tests, builds the app with that version number, an
 - **Drag** across the stars and they fill in as you move. Let go to set the rating, the same as clicking at that spot. With half stars on, dragging across the gap between two stars shows where the half star begins. Let go over the heart to keep the last rating.
 - **Heart**: click the heart after the stars to mark the song as a favourite in Music. A filled heart means the song is a favourite.
 - **Right-click** to open the player popover.
+- **Rating reminder**: when a song with no rating is nearly over, StarBar plays a bell and a hollow star sweeps across the dots and back. It happens once each time a song plays, 30 seconds before the end or three quarters of the way through, whichever is later. To turn it off, uncheck "Remind me to rate unrated songs" in Preferences.
 
 ## FAQ
 ### Are half-star ratings saved?

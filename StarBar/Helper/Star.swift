@@ -29,6 +29,8 @@ extension Star {
         case dot
         case full
         case half
+        /// Edge only, no fill: the star that sweeps across the dots in the rating reminder
+        case outline
     }
 }
 
@@ -61,7 +63,24 @@ extension Star {
                 
                 path.stroke()
                 path.fill()
-                
+
+                return true
+            case .outline:
+                // Shrink the star so the whole stroke stays inside the image
+                let lineWidth: CGFloat = 1.25
+                let points = Star.starPoints(at: center, with: radius - 0.5 * lineWidth)
+                let path = NSBezierPath()
+                path.move(to: points[0])
+
+                for point in points[1...] {
+                    path.line(to: point)
+                }
+                path.close()
+
+                path.lineWidth = lineWidth
+                path.lineJoinStyle = .round
+                path.stroke()
+
                 return true
             case .half:
                 let points = Star.halfStarPoints(at: center, with: radius)
