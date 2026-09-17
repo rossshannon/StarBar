@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v1.6.0 to test, build and publish a GitHub release with the zipped app.
+# Push a tag like v1.1.0 to test, build and publish a GitHub release with the zipped app.
 # The v prefix keeps these tags apart from upstream's version tags (1.5.0).
 on:
   push:
@@ -17,11 +17,11 @@ jobs:
 
     steps:
       # The tag becomes CFBundleShortVersionString, which must be three numbers, so refuse
-      # tags like v1.6.0-beta1 before building anything
+      # tags like v1.1.0-beta1 before building anything
       - name: Check tag format
         run: |
           if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release tags must look like v1.6.0, not $GITHUB_REF_NAME"
+            echo "::error::Release tags must look like v1.1.0, not $GITHUB_REF_NAME"
             exit 1
           fi
 
@@ -42,8 +42,8 @@ jobs:
       - name: Build Release
         run: |
           xcodebuild build \
-            -project "Song Rating.xcodeproj" \
-            -scheme "Song Rating" \
+            -project "StarBar.xcodeproj" \
+            -scheme "StarBar" \
             -configuration Release \
             -derivedDataPath build \
             MARKETING_VERSION="${GITHUB_REF_NAME#v}"
@@ -52,13 +52,13 @@ jobs:
       - name: Zip app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
-            "build/Build/Products/Release/Music Rating.app" \
-            "Music-Rating-$GITHUB_REF_NAME.zip"
+            "build/Build/Products/Release/StarBar.app" \
+            "StarBar-$GITHUB_REF_NAME.zip"
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "Music-Rating-$GITHUB_REF_NAME.zip" \
-            --title "Music Rating ${GITHUB_REF_NAME#v}" \
+          gh release create "$GITHUB_REF_NAME" "StarBar-$GITHUB_REF_NAME.zip" \
+            --title "StarBar ${GITHUB_REF_NAME#v}" \
             --generate-notes

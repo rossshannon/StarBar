@@ -1,0 +1,290 @@
+//
+//  PreferencesViewController.swift
+//  StarBar
+//
+//  Created by Cirno MainasuK on 2019-7-2.
+//  Copyright © 2019 Cirno MainasuK. All rights reserved.
+//
+
+import Cocoa
+import MASShortcut
+
+final class PreferencesViewController: NSViewController {
+    
+    static var defaultTextFieldFontSize: CGFloat {
+        return NSTextField(labelWithString: "sample").font!.pointSize
+    }
+
+    lazy var startupTextField: NSTextField = {
+        return NSTextField(labelWithString: "Startup: ")
+    }()
+    lazy var halfStarTextField: NSTextField = {
+        return NSTextField(labelWithString: "Half star: ")
+    }()
+    lazy var ratingDownTextField: NSTextField = {
+        return NSTextField(labelWithString: "Rating down: ")
+    }()
+    lazy var ratingUpTextField: NSTextField = {
+        return NSTextField(labelWithString: "Rating up: ")
+    }()
+    lazy var showOrClosePopoverTextField: NSTextField = {
+        return NSTextField(labelWithString: "Show/Close popover: ")
+    }()
+    lazy var rating5TextField: NSTextField = {
+        let attributedString = PreferencesViewController.starsAttributedString(count: 5, fontSize: PreferencesViewController.defaultTextFieldFontSize)
+        attributedString.append(NSAttributedString(string: ": "))
+        return NSTextField(labelWithAttributedString: attributedString)
+    }()
+    lazy var rating4TextField: NSTextField = {
+        let attributedString = PreferencesViewController.starsAttributedString(count: 4, fontSize: PreferencesViewController.defaultTextFieldFontSize)
+        attributedString.append(NSAttributedString(string: ": "))
+        return NSTextField(labelWithAttributedString: attributedString)
+    }()
+    lazy var rating3TextField: NSTextField = {
+        let attributedString = PreferencesViewController.starsAttributedString(count: 3, fontSize: PreferencesViewController.defaultTextFieldFontSize)
+        attributedString.append(NSAttributedString(string: ": "))
+        return NSTextField(labelWithAttributedString: attributedString)
+    }()
+    lazy var rating2TextField: NSTextField = {
+        let attributedString = PreferencesViewController.starsAttributedString(count: 2, fontSize: PreferencesViewController.defaultTextFieldFontSize)
+        attributedString.append(NSAttributedString(string: ": "))
+        return NSTextField(labelWithAttributedString: attributedString)
+    }()
+    lazy var rating1TextField: NSTextField = {
+        let attributedString = PreferencesViewController.starsAttributedString(count: 1, fontSize: PreferencesViewController.defaultTextFieldFontSize)
+        attributedString.append(NSAttributedString(string: ": "))
+        return NSTextField(labelWithAttributedString: attributedString)
+    }()
+    lazy var rating0TextField: NSTextField = {
+        return NSTextField(labelWithString: "Remove stars: ")
+    }()
+    
+    let launchAtLoginCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
+        return button
+    }()
+    let halfStarCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Enable", target: nil, action: nil)
+        return button
+    }()
+    let ratingDownShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.ratingDown.rawValue
+        return shortcutView
+    }()
+    let ratingUpShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.ratingUp.rawValue
+        return shortcutView
+    }()
+    let showOrClosePopoverShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.showOrClosePopover.rawValue
+        return shortcutView
+    }()
+    let rating5ShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating5.rawValue
+        return shortcutView
+    }()
+    let rating4ShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating4.rawValue
+        return shortcutView
+    }()
+    let rating3ShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating3.rawValue
+        return shortcutView
+    }()
+    let rating2ShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating2.rawValue
+        return shortcutView
+    }()
+    let rating1ShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating1.rawValue
+        return shortcutView
+    }()
+    let rating0ShortcutView: MASShortcutView = {
+        let shortcutView = MASShortcutView()
+        shortcutView.associatedUserDefaultsKey = ShortcutKey.rating0.rawValue
+        return shortcutView
+    }()
+
+    let leadingPaddingView = NSView()
+    let trailingPaddingView = NSView()
+
+    lazy var gridView: NSGridView = {
+        let empty = NSGridCell.emptyContentView
+        
+        let gridView = NSGridView(views: [
+            [startupTextField, launchAtLoginCheckboxButton],
+            [halfStarTextField, halfStarCheckboxButton],
+            [NSBox.separatorLine],
+            [ratingDownTextField, ratingDownShortcutView],
+            [ratingUpTextField, ratingUpShortcutView],
+            [showOrClosePopoverTextField, showOrClosePopoverShortcutView],
+            [NSBox.separatorLine],
+            [rating0TextField, rating0ShortcutView],
+            [rating1TextField, rating1ShortcutView],
+            [rating2TextField, rating2ShortcutView],
+            [rating3TextField, rating3ShortcutView],
+            [rating4TextField, rating4ShortcutView],
+            [rating5TextField, rating5ShortcutView],
+            [leadingPaddingView, trailingPaddingView]
+        ])
+
+        gridView.row(at: 0).rowAlignment = .lastBaseline
+
+        gridView.column(at: 0).xPlacement = .trailing
+        gridView.column(at: 1).xPlacement = .leading
+        gridView.rowSpacing = 8
+        
+        let lines = gridView.subviews.filter { ($0 as? NSBox)?.boxType == .separator }
+        for line in lines {
+            guard let lineRow = gridView.cell(for: line)?.row else {
+                continue
+            }
+            lineRow.mergeCells(in: NSMakeRange(0, 2))
+            lineRow.topPadding = 8
+            lineRow.bottomPadding = 8
+        }
+
+        return gridView
+    }()
+
+    var launchAtLoginObservation: NSKeyValueObservation?
+    var halfStarObservation: NSKeyValueObservation?
+
+    override func loadView() {
+        self.view = NSView()
+    }
+
+    deinit {
+        launchAtLoginObservation?.invalidate()
+        halfStarObservation?.invalidate()
+    }
+
+}
+
+extension PreferencesViewController {
+    private static func starsAttributedString(count: Int, fontSize: CGFloat) -> NSMutableAttributedString {
+        let font = NSFont.systemFont(ofSize: fontSize)
+        let stars = Stars(
+            stars: Array(repeating: Star(size: CGSize(width: fontSize, height: fontSize), style: .full), count: count),
+            spacing: 3
+        )
+        var image = stars.image
+        image.isTemplate = true
+        image = image.withTintColor(.labelColor)
+        
+        let attachment = NSTextAttachment()
+        attachment.image = image
+        // center vertical image
+        attachment.bounds = CGRect(
+            x: 0,
+            y: (font.capHeight - image.size.height) * 0.5,
+            width: image.size.width,
+            height: image.size.height
+        )
+
+        let attributedString = NSMutableAttributedString()
+        let attachmentAttributedString = NSAttributedString(attachment: attachment)
+        attributedString.append(attachmentAttributedString)
+        // not works. use tinted image workaround it
+        attributedString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: NSRange(location: 0, length: attributedString.length))
+   
+        return attributedString
+    }
+}
+
+extension PreferencesViewController {
+
+    @objc private func launchAtLoginCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.launchAtLogin = sender.state == .on
+    }
+    
+    @objc private func halfStarCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.allowHalfStar = sender.state == .on
+    }
+
+}
+
+extension PreferencesViewController {
+
+    func setupWindow() {
+        view.window?.styleMask.remove(.resizable)
+    }
+
+}
+
+extension PreferencesViewController {
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        title = "Preferences"
+
+        gridView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(gridView)
+        NSLayoutConstraint.activate([
+            gridView.topAnchor.constraint(equalTo: view.topAnchor, constant: 16),
+            gridView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            view.trailingAnchor.constraint(equalTo: gridView.trailingAnchor, constant: 16),
+            view.bottomAnchor.constraint(equalTo: gridView.bottomAnchor, constant: 8),
+            leadingPaddingView.widthAnchor.constraint(equalTo: trailingPaddingView.widthAnchor, multiplier: 1.0),
+            gridView.widthAnchor.constraint(greaterThanOrEqualToConstant: 420), // magic width
+        ])
+
+        launchAtLoginCheckboxButton.target = self
+        launchAtLoginCheckboxButton.action = #selector(PreferencesViewController.launchAtLoginCheckboxButtonChanged(_:))
+        launchAtLoginObservation = UserDefaults.standard.observe(\.launchAtLogin, options: [.initial, .new]) { [weak self] defaults, launchAtLogin in
+            self?.launchAtLoginCheckboxButton.state = defaults.launchAtLogin ? .on : .off
+        }
+        
+        halfStarCheckboxButton.target = self
+        halfStarCheckboxButton.action = #selector(PreferencesViewController.halfStarCheckboxButtonChanged(_:))
+        halfStarObservation = UserDefaults.standard.observe(\.allowHalfStar, options: [.initial, .new]) { [weak self] defaults, launchAtLogin in
+            self?.halfStarCheckboxButton.state = defaults.allowHalfStar ? .on : .off
+        }
+    }
+
+    override func viewDidAppear() {
+        setupWindow()
+    }
+
+}
+
+extension PreferencesViewController {
+
+    enum ShortcutKey: String {
+        case ratingDown
+        case ratingUp
+        case showOrClosePopover
+        case rating5
+        case rating4
+        case rating3
+        case rating2
+        case rating1
+        case rating0
+    }
+
+}
+
+#if canImport(SwiftUI) && DEBUG
+import SwiftUI
+
+@available(macOS 10.15.0, *)
+struct PreferencesViewController_Preview: PreviewProvider {
+
+    static var previews: some View {
+        NSViewControllerPreview {
+            return PreferencesViewController()
+        }
+    }
+
+}
+
+#endif

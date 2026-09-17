@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Build script for Music Rating
+# Build script for StarBar
 #
 #   ./build.sh              Clean Release build into build/
-#   ./build.sh --install    Also replace /Applications/Music Rating.app and launch it
+#   ./build.sh --install    Also replace /Applications/StarBar.app and launch it
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
 #   ./build.sh --test       Run the app and SDK tests that don't need Music
 #   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
@@ -14,9 +14,8 @@ set -o pipefail
 
 cd "$(dirname "$0")"
 
-# Xcode project and scheme keep the upstream "Song Rating" name; the product is "Music Rating"
-PROJECT_NAME="Song Rating"
-APP_NAME="Music Rating"
+PROJECT_NAME="StarBar"
+APP_NAME="StarBar"
 APP_PATH="build/Build/Products/Release/$APP_NAME.app"
 INSTALL_PATH="/Applications/$APP_NAME.app"
 
@@ -177,15 +176,15 @@ xcode_test() {
 }
 
 run_tests() {
-    # Test identifiers use the target name ("Song RatingTests"); the module name is silently ignored.
+    # Test identifiers look like "StarBarTests/ClassName"; a wrong identifier is silently ignored.
     # The UI tests take over the screen, so they have their own scheme and run only with --ui-test.
     local selection=()
     # These test classes read from Music, so they fail unless Music is playing a track
-    # with artwork and Music Rating may access the media library. CI has no Music.
+    # with artwork and StarBar may access the media library. CI has no Music.
     if [ "$TEST_ALL" = false ]; then
         selection+=(
-            "-skip-testing:Song RatingTests/ScriptBridgeTests"
-            "-skip-testing:Song RatingTests/iTunesLibraryTests"
+            "-skip-testing:StarBarTests/ScriptBridgeTests"
+            "-skip-testing:StarBarTests/iTunesLibraryTests"
         )
     fi
     local status=0
@@ -254,7 +253,7 @@ elif [ "$WATCH" = true ]; then
         exit 1
     fi
 
-    echo "Watching: Song Rating/, Song Rating Helper/, SDK/Sources/"
+    echo "Watching: StarBar/, StarBar Helper/, SDK/Sources/"
     echo "Press Ctrl+C to stop"
 
     build_and_install || true
@@ -267,7 +266,7 @@ elif [ "$WATCH" = true ]; then
         --include="\.storyboard$" \
         --include="\.entitlements$" \
         --include="\.strings$" \
-        -r "Song Rating/" "Song Rating Helper/" "SDK/Sources/" | while read -r; do
+        -r "StarBar/" "StarBar Helper/" "SDK/Sources/" | while read -r; do
         echo ""
         echo "Change detected, rebuilding..."
         build_and_install || true
