@@ -56,10 +56,12 @@ enum TrackAnnouncementLayout {
     /// The sheen that suggests a domed surface: a rim light fading down from the top edge
     /// over the top part of the strip, and a soft shade rising from the bottom. Drawn over
     /// the glass, clipped to its shape, because the glass view's own geometry is flat.
-    static let glassSheenHighlightAlpha: CGFloat = 0.28
-    static let glassSheenHighlightFraction: CGFloat = 0.45
-    static let glassSheenShadeAlpha: CGFloat = 0.22
-    static let glassSheenShadeFraction: CGFloat = 0.6
+    static let glassSheenHighlightAlpha: CGFloat = 0.35
+    static let glassSheenHighlightFraction: CGFloat = 0.5
+    /// Kept faint: the shade is the one part of the sheen that darkens the glass, and it
+    /// read as a tint
+    static let glassSheenShadeAlpha: CGFloat = 0.07
+    static let glassSheenShadeFraction: CGFloat = 0.5
     /// A crisp bright line along the top edge, the specular catch of a curved surface; over
     /// light content the soft highlight alone disappears
     static let glassSheenEdgeAlpha: CGFloat = 0.6
