@@ -16,17 +16,17 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
     // MARK: - Frames
 
-    func testArtworkIsGrowlsSizeSetInFromTheLeftAtScaleOne() {
+    func testArtworkMatchesGrowlAtScaleOne() {
         let frames = TrackAnnouncementLayout.frames(in: normal)
 
-        XCTAssertEqual(frames.artwork, CGRect(x: 38, y: 8, width: 80, height: 80), "Growl's 80 point square, 30 further in than Growl drew it")
+        XCTAssertEqual(frames.artwork, CGRect(x: 8, y: 8, width: 80, height: 80), "Growl's 80 point square where Growl drew it")
     }
 
     func testTextStartsAfterTheArtworkAndItsGap() {
         let frames = TrackAnnouncementLayout.frames(in: normal)
 
-        XCTAssertEqual(frames.title.minX, 38 + 80 + 46)
-        XCTAssertEqual(frames.title.width, 1440 - 164 - 16)
+        XCTAssertEqual(frames.title.minX, 8 + 80 + 46)
+        XCTAssertEqual(frames.title.width, 1440 - 134 - 16)
         XCTAssertEqual(frames.title.height, 20)
     }
 
@@ -113,8 +113,8 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
     func testContentKeepsClearOfASideDock() {
         let frames = TrackAnnouncementLayout.frames(in: normal, leadingInset: 70, trailingInset: 30)
 
-        XCTAssertEqual(frames.artwork.minX, 70 + 38)
-        XCTAssertEqual(frames.title.minX, 70 + 38 + 80 + 46)
+        XCTAssertEqual(frames.artwork.minX, 70 + 8)
+        XCTAssertEqual(frames.title.minX, 70 + 8 + 80 + 46)
         XCTAssertEqual(frames.title.maxX, 1440 - 30 - 16)
     }
 
@@ -130,11 +130,11 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
     func testEverythingGrowsWithTheScale() {
         let scaled = TrackAnnouncementLayout.frames(in: CGSize(width: 2160, height: 144), scale: 1.5)
 
-        XCTAssertEqual(scaled.artwork, CGRect(x: 57, y: 12, width: 120, height: 120))
-        XCTAssertEqual(scaled.title.minX, 57 + 120 + 69)
+        XCTAssertEqual(scaled.artwork, CGRect(x: 12, y: 12, width: 120, height: 120))
+        XCTAssertEqual(scaled.title.minX, 12 + 120 + 69)
         XCTAssertEqual(scaled.title.height, 30)
         XCTAssertEqual(scaled.artist?.height, 24)
-        XCTAssertEqual(scaled.title.width, 2160 - 246 - 24)
+        XCTAssertEqual(scaled.title.width, 2160 - 201 - 24)
         XCTAssertEqual(scaled.rating.height, 24)
         XCTAssertEqual(144 - scaled.title.maxY, scaled.rating.minY, accuracy: 0.5)
     }

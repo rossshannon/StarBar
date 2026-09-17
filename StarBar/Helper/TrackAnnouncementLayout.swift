@@ -19,9 +19,9 @@ enum TrackAnnouncementLayout {
     /// Strip height, in points, at scale 1
     static let height: CGFloat = 96
     static let artworkSize: CGFloat = 80
-    /// Artwork inset from the left; it is centred vertically. Growl's 8, plus 30 so the
-    /// square artwork sits clear of the glass's rounded corner.
-    static let artworkInset: CGFloat = 38
+    /// Artwork inset from the left, Growl's 8; it is centred vertically. The glass's 8 point
+    /// corner sits happily beside the square artwork.
+    static let artworkInset: CGFloat = 8
     /// Gap between the artwork and the text: Growl's 16, plus 30 of breathing room
     static let textGap: CGFloat = 46
     /// Gap between the text and the right edge

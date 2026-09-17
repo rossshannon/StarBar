@@ -362,25 +362,35 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(view.backdropView).frame, view.bounds, "a blur fills the strip")
     }
 
-    func testTheSheenIsOffByDefaultAndOnlyTheGlassStyleCanDrawIt() {
+    func testTheGlassDrawsTheEdgeLineByDefaultAndTheKnobsPickTheRest() {
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
-        XCTAssertFalse(view.hasSheen, "classic: no sheen")
+        XCTAssertFalse(view.hasSheen, "classic: nothing drawn over it")
 
         view.style = .glass
-        XCTAssertFalse(view.hasSheen, "glass: the bare regular glass is the chosen look, no sheen by default")
+        XCTAssertTrue(view.hasSheen, "glass: the bright line along the top edge, by default")
+        XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty, "draws with the edge line")
 
         TrackAnnouncementGlassKnobs.read = {
             var knobs = TrackAnnouncementGlassKnobs()
+            knobs.edgeLine = false
+            return knobs
+        }
+        view.style = .classic
+        view.style = .glass
+        XCTAssertFalse(view.hasSheen, "edge line off and no shading: bare glass")
+
+        TrackAnnouncementGlassKnobs.read = {
+            var knobs = TrackAnnouncementGlassKnobs()
+            knobs.edgeLine = false
             knobs.sheen = true
             return knobs
         }
         view.style = .classic
         view.style = .glass
-        XCTAssertTrue(view.hasSheen, "the knob turns the sheen on")
-        XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty, "draws with the sheen")
+        XCTAssertTrue(view.hasSheen, "the shading alone is enough to draw")
 
         view.style = .blur
-        XCTAssertFalse(view.hasSheen, "blur: never a sheen")
+        XCTAssertFalse(view.hasSheen, "blur: never")
     }
 
     func testTheGlassDefaultsAreTheChosenCombination() {
@@ -389,7 +399,8 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(knobs.alpha, 1)
         XCTAssertEqual(knobs.tintAlpha, 0)
         XCTAssertEqual(knobs.cornerRadius, 8)
-        XCTAssertFalse(knobs.sheen)
+        XCTAssertTrue(knobs.edgeLine, "the bright line Ross liked")
+        XCTAssertFalse(knobs.sheen, "no soft shading")
     }
 
     func testSwitchingBackToClassicRemovesTheBackdrop() {

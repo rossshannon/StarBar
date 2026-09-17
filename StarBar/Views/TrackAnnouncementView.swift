@@ -15,14 +15,17 @@ import os.log
 /// `announcementGlassTintAlpha` (0 to 1; `TrackAnnouncementLayout.glassTint`'s alpha, 0, by
 /// default), `announcementGlassCornerRadius` (points at scale 1;
 /// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more),
-/// `announcementGlassSheen` (bool; false by default: a drawn rim light and shade that suggest
-/// a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default: the glass view's own
-/// opacity, which fades frost and rim together, since the API has no frost dial). They are
-/// read when the glass is built, so switch the strip style away and back after changing one.
+/// `announcementGlassEdgeLine` (bool; true by default: the bright line along the top edge
+/// and corners), `announcementGlassSheen` (bool; false by default: the drawn rim light and
+/// shade that suggest a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default:
+/// the glass view's own opacity, which fades frost and rim together, since the API has no
+/// frost dial). They are read when the glass is built, so switch the strip style away and
+/// back after changing one.
 struct TrackAnnouncementGlassKnobs: Equatable {
     var regular = true
     var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
     var cornerRadius = TrackAnnouncementLayout.glassCornerRadius
+    var edgeLine = true
     var sheen = false
     var alpha: CGFloat = 1
 
@@ -44,6 +47,9 @@ struct TrackAnnouncementGlassKnobs: Equatable {
         }
         if defaults.object(forKey: "announcementGlassSheen") != nil {
             knobs.sheen = defaults.bool(forKey: "announcementGlassSheen")
+        }
+        if defaults.object(forKey: "announcementGlassEdgeLine") != nil {
+            knobs.edgeLine = defaults.bool(forKey: "announcementGlassEdgeLine")
         }
         if defaults.object(forKey: "announcementGlassAlpha") != nil {
             knobs.alpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassAlpha"))))
@@ -165,8 +171,9 @@ final class TrackAnnouncementView: NSView {
     }
 
     private func layoutBackdrop() {
-        content.sheen = (style == .glass && TrackAnnouncementGlassKnobs.read().sheen)
-            ? TrackAnnouncementContentView.Sheen(rect: backdropFrame, cornerRadius: glassCornerRadius * scale)
+        let knobs = TrackAnnouncementGlassKnobs.read()
+        content.sheen = (style == .glass && (knobs.edgeLine || knobs.sheen))
+            ? TrackAnnouncementContentView.Sheen(rect: backdropFrame, cornerRadius: glassCornerRadius * scale, edgeLine: knobs.edgeLine, shading: knobs.sheen)
             : nil
         guard let backdrop = backdropView else { return }
         backdrop.frame = backdropFrame
@@ -272,13 +279,16 @@ final class TrackAnnouncementContentView: NSView {
         didSet { needsDisplay = true }
     }
 
-    /// The glass's shape in this view's coordinates, for the sheen drawn over it
+    /// The glass's shape in this view's coordinates, and which parts of the sheen to draw
+    /// over it: the bright line along the top edge, and the soft shading that suggests a dome
     struct Sheen: Equatable {
         var rect: NSRect
         var cornerRadius: CGFloat
+        var edgeLine = true
+        var shading = false
     }
 
-    /// Set for the glass style: a rim light and a shade that suggest a domed surface
+    /// Set for the glass style when any part of the sheen is on
     var sheen: Sheen? {
         didSet {
             guard sheen != oldValue else { return }
@@ -345,21 +355,25 @@ final class TrackAnnouncementContentView: NSView {
         let shape = NSBezierPath(roundedRect: sheen.rect, xRadius: sheen.cornerRadius, yRadius: sheen.cornerRadius)
         NSGraphicsContext.saveGraphicsState()
         shape.addClip()
-        let highlightHeight = bounds.height * TrackAnnouncementLayout.glassSheenHighlightFraction
-        let highlight = NSRect(x: sheen.rect.minX, y: bounds.maxY - highlightHeight, width: sheen.rect.width, height: highlightHeight)
-        // Angle -90 draws the starting colour at the top
-        NSGradient(starting: NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenHighlightAlpha), ending: .clear)?
-            .draw(in: highlight, angle: -90)
-        let shadeHeight = bounds.height * TrackAnnouncementLayout.glassSheenShadeFraction
-        let shade = NSRect(x: sheen.rect.minX, y: bounds.minY, width: sheen.rect.width, height: shadeHeight)
-        NSGradient(starting: NSColor.black.withAlphaComponent(TrackAnnouncementLayout.glassSheenShadeAlpha), ending: .clear)?
-            .draw(in: shade, angle: 90)
-        // The specular line along the top edge, following the rounded corners: the shape
-        // stroked twice as wide and clipped, so only the inner half shows
-        let edgeWidth = TrackAnnouncementLayout.glassSheenEdgeWidth * scale
-        NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenEdgeAlpha).setStroke()
-        shape.lineWidth = edgeWidth * 2
-        shape.stroke()
+        if sheen.shading {
+            let highlightHeight = bounds.height * TrackAnnouncementLayout.glassSheenHighlightFraction
+            let highlight = NSRect(x: sheen.rect.minX, y: bounds.maxY - highlightHeight, width: sheen.rect.width, height: highlightHeight)
+            // Angle -90 draws the starting colour at the top
+            NSGradient(starting: NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenHighlightAlpha), ending: .clear)?
+                .draw(in: highlight, angle: -90)
+            let shadeHeight = bounds.height * TrackAnnouncementLayout.glassSheenShadeFraction
+            let shade = NSRect(x: sheen.rect.minX, y: bounds.minY, width: sheen.rect.width, height: shadeHeight)
+            NSGradient(starting: NSColor.black.withAlphaComponent(TrackAnnouncementLayout.glassSheenShadeAlpha), ending: .clear)?
+                .draw(in: shade, angle: 90)
+        }
+        if sheen.edgeLine {
+            // The specular line along the top edge, following the rounded corners: the
+            // shape stroked twice as wide and clipped, so only the inner half shows
+            let edgeWidth = TrackAnnouncementLayout.glassSheenEdgeWidth * scale
+            NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenEdgeAlpha).setStroke()
+            shape.lineWidth = edgeWidth * 2
+            shape.stroke()
+        }
         NSGraphicsContext.restoreGraphicsState()
     }
 
