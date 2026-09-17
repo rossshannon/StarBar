@@ -409,6 +409,15 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(clock.pendingOneShot?.seconds, expectedHold)
     }
 
+    func testPreviewShowsTheCurrentTrackWhenThereIsOne() {
+        update(snapshot(track: "A", state: .playing))
+
+        controller.preview()
+
+        XCTAssertEqual(presenter.shown.map { $0.identity }.last, "A", "the preview is the real thing when Music has a track")
+        XCTAssertFalse(presenter.shown.map { $0.identity }.contains("preview"))
+    }
+
     // MARK: - Accessibility preferences
 
     func testAccessibilityPreferencesReachThePresenter() {

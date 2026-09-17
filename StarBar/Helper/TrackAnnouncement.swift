@@ -61,7 +61,7 @@ struct TrackAnnouncement: Equatable {
         self.artwork = artwork
     }
 
-    /// What the Preferences Preview button shows
+    /// What the Preferences Preview button shows when Music has no track to show instead
     static var preview: TrackAnnouncement {
         return TrackAnnouncement(
             identity: "preview",
@@ -70,8 +70,26 @@ struct TrackAnnouncement: Equatable {
             album: "A strip like Growl's, for the song that just started",
             rating: 70,
             isFavorited: true,
-            artwork: NSApp?.applicationIconImage
+            artwork: previewArtwork
         )
+    }
+
+    /// The app icon, cropped to its shape. A macOS icon's canvas has transparent margins
+    /// around the rounded square, so drawn as it is it looks smaller than album artwork.
+    static var previewArtwork: NSImage? {
+        guard let icon = NSApp?.applicationIconImage, icon.size.width > 0 else { return nil }
+        let margin: CGFloat = 0.1
+        let source = NSRect(
+            x: icon.size.width * margin,
+            y: icon.size.height * margin,
+            width: icon.size.width * (1 - 2 * margin),
+            height: icon.size.height * (1 - 2 * margin)
+        )
+        let cropped = NSImage(size: source.size)
+        cropped.lockFocus()
+        icon.draw(in: NSRect(origin: .zero, size: source.size), from: source, operation: .sourceOver, fraction: 1)
+        cropped.unlockFocus()
+        return cropped
     }
 
     /// What VoiceOver reads when the strip appears

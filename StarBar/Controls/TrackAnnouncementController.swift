@@ -171,19 +171,25 @@ extension TrackAnnouncementController {
 
     /// Show the current track now, whatever the setting and whether or not it is playing.
     /// Reads the player afresh; falls back to the last update when the read has no track.
-    func showCurrentTrack() {
+    /// Returns false when there is no track to show.
+    @discardableResult
+    func showCurrentTrack() -> Bool {
         let fresh = readPlayer()
         let snapshot = (fresh?.identity != nil ? fresh : nil) ?? lastSnapshot
         guard let snapshot = snapshot, let identity = snapshot.identity, !snapshot.title.isEmpty else {
             os_log(.debug, "%{public}s[%{public}ld], %{public}s: no current track to show", ((#file as NSString).lastPathComponent), #line, #function)
-            return
+            return false
         }
         announce(snapshot, identity: identity)
+        return true
     }
 
-    /// Show the sample strip, for the Preferences Preview button
+    /// The Preferences Preview button: the current track when Music has one, so the preview
+    /// is the real thing, else the sample strip
     func preview() {
-        present(TrackAnnouncement.preview)
+        if !showCurrentTrack() {
+            present(TrackAnnouncement.preview)
+        }
     }
 
     /// The Preferences checkbox changed
