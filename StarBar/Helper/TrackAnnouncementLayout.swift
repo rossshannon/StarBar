@@ -48,9 +48,9 @@ enum TrackAnnouncementLayout {
     /// own frost and lensing are what shows, and the text shadow does the work of legibility.
     static let glassTint = NSColor.black.withAlphaComponent(0)
     /// The glass strip's top corners. Liquid Glass shows its lensing and highlights along a
-    /// curved rim; a straight edge shows almost nothing, which is why a plain band reads as
-    /// a blur. Shallow enough that the curve clears the square artwork beside it.
-    static let glassCornerRadius: CGFloat = 20
+    /// curved rim, so square corners read as a blur; 8 is the radius Ross picked from a grid
+    /// of samples, tight enough to sit beside the square artwork.
+    static let glassCornerRadius: CGFloat = 8
     /// How far the glass stands in from each screen edge, so that the top corners exist
     static let glassSideInset: CGFloat = 16
     /// The sheen that suggests a domed surface: a rim light fading down from the top edge

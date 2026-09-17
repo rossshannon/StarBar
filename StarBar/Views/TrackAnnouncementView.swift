@@ -9,20 +9,21 @@ import Cocoa
 import os.log
 
 /// Experiment knobs for the glass, read from defaults so its look can be compared without a
-/// rebuild: `announcementGlassRegular` (bool; false, the clear style, by default),
-/// `announcementGlassTintAlpha` (0 to 1; `TrackAnnouncementLayout.glassTint`'s alpha by
-/// default, 0 for no tint at all) and `announcementGlassCornerRadius` (points at scale 1;
-/// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more) and
-/// `announcementGlassSheen` (bool; true by default: the drawn rim light and shade that
-/// suggest a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default: the glass
-/// view's own opacity, which fades frost and rim together, since the API has no frost dial).
-/// They are read when the glass is built, so switch the strip style away and back after
-/// changing one.
+/// rebuild. The defaults are the combination Ross picked from a grid of samples: the regular
+/// style at full opacity, untinted, 8 point corners, no drawn sheen.
+/// `announcementGlassRegular` (bool; true by default, false for the clear style),
+/// `announcementGlassTintAlpha` (0 to 1; `TrackAnnouncementLayout.glassTint`'s alpha, 0, by
+/// default), `announcementGlassCornerRadius` (points at scale 1;
+/// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more),
+/// `announcementGlassSheen` (bool; false by default: a drawn rim light and shade that suggest
+/// a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default: the glass view's own
+/// opacity, which fades frost and rim together, since the API has no frost dial). They are
+/// read when the glass is built, so switch the strip style away and back after changing one.
 struct TrackAnnouncementGlassKnobs: Equatable {
-    var regular = false
+    var regular = true
     var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
     var cornerRadius = TrackAnnouncementLayout.glassCornerRadius
-    var sheen = true
+    var sheen = false
     var alpha: CGFloat = 1
 
     /// Where the strip gets its knobs. The tests are hosted in the app, so they replace this
@@ -32,7 +33,9 @@ struct TrackAnnouncementGlassKnobs: Equatable {
     static var current: TrackAnnouncementGlassKnobs {
         let defaults = UserDefaults.standard
         var knobs = TrackAnnouncementGlassKnobs()
-        knobs.regular = defaults.bool(forKey: "announcementGlassRegular")
+        if defaults.object(forKey: "announcementGlassRegular") != nil {
+            knobs.regular = defaults.bool(forKey: "announcementGlassRegular")
+        }
         if defaults.object(forKey: "announcementGlassTintAlpha") != nil {
             knobs.tintAlpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassTintAlpha"))))
         }
@@ -223,10 +226,10 @@ final class TrackAnnouncementView: NSView {
             if #available(macOS 26.0, *) {
                 let glass = NSGlassEffectView()
                 let knobs = TrackAnnouncementGlassKnobs.read()
-                // .clear keeps the backdrop visible through the glass; .regular frosts it
-                // to a near-flat grey over a bright window. The tint's alpha matters: an
-                // opaque tint on clear glass paints the strip solid, hiding the glass. The
-                // corner radius is set with the frame, since it scales with the strip.
+                // .regular is the style with the lensing Ross was after; .clear is a little
+                // less frosted but bends less. The tint's alpha matters: an opaque tint
+                // paints the strip solid, hiding the glass. The corner radius is set with
+                // the frame, since it scales with the strip.
                 glass.style = knobs.regular ? .regular : .clear
                 if knobs.tintAlpha > 0 {
                     glass.tintColor = NSColor.black.withAlphaComponent(knobs.tintAlpha)
