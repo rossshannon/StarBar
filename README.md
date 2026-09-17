@@ -22,14 +22,14 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 ./build.sh --ui-test    # Click and drag the real menu bar (see below)
 ```
 
-The Xcode project and scheme are still named "Song Rating". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.
+The Xcode project and scheme are still named "StarBar". The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.musicrating`. After a rebuild, macOS can ask again for permission to control Music.
 
 ### Tests and CI
 The app tests are hosted in the app, so a test run launches Music Rating. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
 
 The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerTests`) and the star geometry (`RatingControlGeometryTests`).
 
-`--ui-test` runs `MenuBarRatingUITests` from the separate `Song Rating UI Tests` scheme, which clicks and drags the real menu bar item. The app runs with `-UITesting YES`, so it shows the stars as if a song is playing and doesn't talk to Music. The tests take over the mouse and screen for about two minutes, so the script asks before it starts (`--yes` skips the question). The installed Music Rating is quit while they run and reopened afterwards. macOS asks for authentication before UI tests can control the Mac. To stop it asking each time, run:
+`--ui-test` runs `MenuBarRatingUITests` from the separate `StarBar UI Tests` scheme, which clicks and drags the real menu bar item. The app runs with `-UITesting YES`, so it shows the stars as if a song is playing and doesn't talk to Music. The tests take over the mouse and screen for about two minutes, so the script asks before it starts (`--yes` skips the question). The installed Music Rating is quit while they run and reopened afterwards. macOS asks for authentication before UI tests can control the Mac. To stop it asking each time, run:
 
 ```bash
 sudo automationmodetool enable-automationmode-without-authentication

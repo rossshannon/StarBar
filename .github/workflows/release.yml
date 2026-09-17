@@ -42,8 +42,8 @@ jobs:
       - name: Build Release
         run: |
           xcodebuild build \
-            -project "Song Rating.xcodeproj" \
-            -scheme "Song Rating" \
+            -project "StarBar.xcodeproj" \
+            -scheme "StarBar" \
             -configuration Release \
             -derivedDataPath build \
             MARKETING_VERSION="${GITHUB_REF_NAME#v}"

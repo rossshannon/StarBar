@@ -1,6 +1,6 @@
 # Music Rating Project Guide
 
-The app is named "Music Rating". The Xcode project, scheme, targets, source folders and Swift module (`Song_Rating`, pinned with `PRODUCT_MODULE_NAME` because storyboards reference it) keep the upstream "Song Rating" name.
+The app is named "Music Rating". The Xcode project, scheme, targets, source folders and Swift module (`StarBar`, pinned with `PRODUCT_MODULE_NAME` because storyboards reference it) keep the upstream "StarBar" name.
 
 ## Build & Test Commands
 - Build (Release, into `build/`): `./build.sh`
@@ -8,18 +8,18 @@ The app is named "Music Rating". The Xcode project, scheme, targets, source fold
 - Rebuild on file changes: `./build.sh --watch --install` (needs `brew install fswatch`)
 - Xcode is at `~/Downloads/Xcode-beta.app` and `xcode-select` points at the Command Line Tools. `build.sh` finds Xcode itself; for raw `xcodebuild` or `swift test`, prefix with `DEVELOPER_DIR=/Users/ross/Downloads/Xcode-beta.app/Contents/Developer`.
 - Signing: ad-hoc ("Sign to Run Locally"), no development team. Bundle IDs are `com.rossshannon.musicrating`, `.helper`, `.tests`, `.uitests`. The helper and main app IDs are also hard-coded in both `AppDelegate.swift` files.
-- Build: `xcodebuild -project "Song Rating.xcodeproj" -scheme "Song Rating" build`
+- Build: `xcodebuild -project "StarBar.xcodeproj" -scheme "StarBar" build`
 - Test (app tests that don't need Music, plus SDK tests): `./build.sh --test`
 - Test everything, including `ScriptBridgeTests` and `iTunesLibraryTests`: `./build.sh --test-all`. These need Music playing a track with artwork and media library access, so they run locally only. CI (`.github/workflows/test.yml`) runs `./build.sh` and `./build.sh --test` on macos-15, macos-26 and xcode-27 (the macOS 27 preview, non-blocking), and `--ui-test` on macos-26 and xcode-27, so the skip list lives only in `build.sh`.
 - The app tests are hosted in Music Rating, so a test run launches the app. The test target is signed ad hoc like the app; without that, `xcodebuild test` asks for a development team.
-- UI tests (click and drag the real menu bar): `./build.sh --ui-test`. **Only run them when Ross asks.** They take over the mouse and screen for about two minutes. The script asks for confirmation, and a non-interactive run stops unless `--yes` is passed; pass `--yes` only after Ross has asked for UI tests in this conversation. CI runs them on every push, so that is the normal way to get them. The app runs with `-UITesting YES` (fake playing state, no Music), and `MenuBarRatingUITests` reads the status item's accessibility value ("3½ stars, favourite"). Needs macOS Automation Mode: `sudo automationmodetool enable-automationmode-without-authentication`, or authenticate when asked. The UI tests have their own shared scheme, `Song Rating UI Tests`; the `Song Rating` scheme doesn't include them, so a plain `xcodebuild test` or Xcode's Product > Test can't take over the screen. Keep it that way. (A skipped testable can't be picked with `-only-testing` either, which is why it's a separate scheme.)
+- UI tests (click and drag the real menu bar): `./build.sh --ui-test`. **Only run them when Ross asks.** They take over the mouse and screen for about two minutes. The script asks for confirmation, and a non-interactive run stops unless `--yes` is passed; pass `--yes` only after Ross has asked for UI tests in this conversation. CI runs them on every push, so that is the normal way to get them. The app runs with `-UITesting YES` (fake playing state, no Music), and `MenuBarRatingUITests` reads the status item's accessibility value ("3½ stars, favourite"). Needs macOS Automation Mode: `sudo automationmodetool enable-automationmode-without-authentication`, or authenticate when asked. The UI tests have their own shared scheme, `StarBar UI Tests`; the `StarBar` scheme doesn't include them, so a plain `xcodebuild test` or Xcode's Product > Test can't take over the screen. Keep it that way. (A skipped testable can't be picked with `-only-testing` either, which is why it's a separate scheme.)
 - Test logs: `build/test/test.log`, `build/test/ui-test.log`; result bundles: `build/test/results/`
 - Pre-commit hook (opt in): `git config core.hooksPath .githooks`
 - Release: push a `v*` tag; `.github/workflows/release.yml` tests, builds with `MARKETING_VERSION` from the tag, and attaches a zip to a GitHub release
-- Test (unit tests only, including the ones that need Music): `xcodebuild -project "Song Rating.xcodeproj" -scheme "Song Rating" test`
-- Run specific test: `xcodebuild -project "Song Rating.xcodeproj" -scheme "Song Rating" test -only-testing:"Song RatingTests/TestClassName/testMethodName"` (target name with the space, not the module name; a wrong identifier is silently ignored)
+- Test (unit tests only, including the ones that need Music): `xcodebuild -project "StarBar.xcodeproj" -scheme "StarBar" test`
+- Run specific test: `xcodebuild -project "StarBar.xcodeproj" -scheme "StarBar" test -only-testing:"StarBarTests/TestClassName/testMethodName"` (target name with the space, not the module name; a wrong identifier is silently ignored)
 - SDK Tests: `cd SDK && swift test`
-- Clean: `xcodebuild -project "Song Rating.xcodeproj" clean`
+- Clean: `xcodebuild -project "StarBar.xcodeproj" clean`
 
 ## Code Style Guidelines
 - **Formatting**: 4-space indentation, braces on same line as declarations

@@ -1,0 +1,1028 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C1 /* RatingClickController.swift */; };
+		5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */; };
+		5A7E1A0000000000000000B2 /* MenuBarRatingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */; };
+		DB05F0632353909000CE6DF9 /* PlayerPanelViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */; };
+		DB05F0652353912500CE6DF9 /* PlayerInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */; };
+		DB05F0862354CA5800CE6DF9 /* NSViewPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */; };
+		DB05F0882354CA6B00CE6DF9 /* NSViewControllerPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0872354CA6B00CE6DF9 /* NSViewControllerPreview.swift */; };
+		DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0892354FC7700CE6DF9 /* PlayerControlView.swift */; };
+		DB106C4622C53D4B00502D7C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C4522C53D4B00502D7C /* AppDelegate.swift */; };
+		DB106C4A22C53D4C00502D7C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DB106C4922C53D4C00502D7C /* Assets.xcassets */; };
+		DB106C4D22C53D4C00502D7C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DB106C4B22C53D4C00502D7C /* Main.storyboard */; };
+		DB106C5922C53D4C00502D7C /* StarBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C5822C53D4C00502D7C /* StarBarTests.swift */; };
+		DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */; };
+		DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6A22C661F900502D7C /* PlayInfo.swift */; };
+		DB106CA422CA3C7300502D7C /* Star.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA322CA3C7300502D7C /* Star.swift */; };
+		DB106CA622CA3EE700502D7C /* Stars.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA522CA3EE700502D7C /* Stars.swift */; };
+		DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA722CA45BB00502D7C /* RatingControl.swift */; };
+		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
+		DB11065323047E7F001DA02A /* iTunesPlayerHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */; };
+		DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */; };
+		DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */; };
+		DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = DB334388235E102600B45ED0 /* ExceptionCatcher.m */; };
+		DB398D152CB522CA00E722A1 /* SDK in Frameworks */ = {isa = PBXBuildFile; productRef = DB398D142CB522CA00E722A1 /* SDK */; };
+		DB424A352307259800230C7E /* iTunesTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A342307259800230C7E /* iTunesTrack.swift */; };
+		DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3723073CB000230C7E /* PopoverViewController.swift */; };
+		DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3923086C1200230C7E /* MovableImageView.swift */; };
+		DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3B230877F400230C7E /* PlayerViewController.swift */; };
+		DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */; };
+		DB424A41230AF5C200230C7E /* PopoverWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A40230AF5C200230C7E /* PopoverWindow.swift */; };
+		DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A44230D877800230C7E /* PlayerHistoryViewController.swift */; };
+		DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */; };
+		DB89C9F322E2D766003981F5 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */; };
+		DB89C9F522E3176C003981F5 /* iTunesLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */; };
+		DB89C9FE22E31B67003981F5 /* iTunesLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB89C9FD22E31B67003981F5 /* iTunesLibrary.framework */; };
+		DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */; };
+		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
+		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
+		5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */; };
+		DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216922CB186F007FCF40 /* WindowManager.swift */; };
+		DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */; };
+		DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */; };
+		DB9D9AF0235F7974008C53C3 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */; };
+		DB9D9B592363FC6B008C53C3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B582363FC6B008C53C3 /* AppDelegate.swift */; };
+		DB9D9B5D2363FC6D008C53C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DB9D9B5C2363FC6D008C53C3 /* Assets.xcassets */; };
+		DB9D9B602363FC6D008C53C3 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DB9D9B5E2363FC6D008C53C3 /* Main.storyboard */; };
+		DB9D9B672363FD0A008C53C3 /* Music Rating Helper.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = DB9D9B562363FC6B008C53C3 /* Music Rating Helper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		DB9D9B6B2363FF45008C53C3 /* NotificationName.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */; };
+		DB9D9B6C2363FF45008C53C3 /* NotificationName.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */; };
+		DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */; };
+		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
+		DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A937250E0A1C002C1B6C /* NSImage.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DB106C5522C53D4C00502D7C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DB106C3A22C53D4B00502D7C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB106C4122C53D4B00502D7C;
+			remoteInfo = "StarBar";
+		};
+		5A7E1A0000000000000000B9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DB106C3A22C53D4B00502D7C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DB106C4122C53D4B00502D7C;
+			remoteInfo = "StarBar";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		DB9D9B662363FCBB008C53C3 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Library/LoginItems;
+			dstSubfolderSpec = 1;
+			files = (
+				DB9D9B672363FD0A008C53C3 /* Music Rating Helper.app in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		5A7E1A0000000000000000C1 /* RatingClickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickController.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickControllerTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRatingUITests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000B3 /* StarBarUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "StarBarUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPanelViewController.swift; sourceTree = "<group>"; };
+		DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerInfoView.swift; sourceTree = "<group>"; };
+		DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSViewPreview.swift; sourceTree = "<group>"; };
+		DB05F0872354CA6B00CE6DF9 /* NSViewControllerPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSViewControllerPreview.swift; sourceTree = "<group>"; };
+		DB05F0892354FC7700CE6DF9 /* PlayerControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerControlView.swift; sourceTree = "<group>"; };
+		DB106C4222C53D4B00502D7C /* Music Rating.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Music Rating.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB106C4522C53D4B00502D7C /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		DB106C4922C53D4C00502D7C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		DB106C4C22C53D4C00502D7C /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		DB106C4E22C53D4C00502D7C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DB106C5422C53D4C00502D7C /* StarBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "StarBarTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB106C5822C53D4C00502D7C /* StarBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarBarTests.swift; sourceTree = "<group>"; };
+		DB106C5A22C53D4C00502D7C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DB106C6322C53DAE00502D7C /* iTunes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunes.swift; sourceTree = "<group>"; };
+		DB106C6722C5433900502D7C /* StarBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "StarBar.entitlements"; sourceTree = "<group>"; };
+		DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesRadioStation.swift; sourceTree = "<group>"; };
+		DB106C6A22C661F900502D7C /* PlayInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayInfo.swift; sourceTree = "<group>"; };
+		DB106CA322CA3C7300502D7C /* Star.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Star.swift; sourceTree = "<group>"; };
+		DB106CA522CA3EE700502D7C /* Stars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stars.swift; sourceTree = "<group>"; };
+		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
+		DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayerHistory.swift; sourceTree = "<group>"; };
+		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
+		DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesApplication.swift; sourceTree = "<group>"; };
+		DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StarBar-Bridging-Header.h"; sourceTree = "<group>"; };
+		DB334388235E102600B45ED0 /* ExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExceptionCatcher.m; sourceTree = "<group>"; };
+		DB33438A235E103200B45ED0 /* ExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExceptionCatcher.h; sourceTree = "<group>"; };
+		DB398D132CB51F7F00E722A1 /* SDK */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = SDK; sourceTree = "<group>"; };
+		DB424A342307259800230C7E /* iTunesTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesTrack.swift; sourceTree = "<group>"; };
+		DB424A3723073CB000230C7E /* PopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverViewController.swift; sourceTree = "<group>"; };
+		DB424A3923086C1200230C7E /* MovableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovableImageView.swift; sourceTree = "<group>"; };
+		DB424A3B230877F400230C7E /* PlayerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewController.swift; sourceTree = "<group>"; };
+		DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScrollTextField.swift; sourceTree = "<group>"; };
+		DB424A40230AF5C200230C7E /* PopoverWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverWindow.swift; sourceTree = "<group>"; };
+		DB424A44230D877800230C7E /* PlayerHistoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerHistoryViewController.swift; sourceTree = "<group>"; };
+		DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRatingControl.swift; sourceTree = "<group>"; };
+		DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
+		DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesLibraryTests.swift; sourceTree = "<group>"; };
+		DB89C9FD22E31B67003981F5 /* iTunesLibrary.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iTunesLibrary.framework; path = System/Library/Frameworks/iTunesLibrary.framework; sourceTree = SDKROOT; };
+		DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OSVersionHelper.swift; sourceTree = "<group>"; };
+		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlDragTests.swift; sourceTree = "<group>"; };
+		DB95216922CB186F007FCF40 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
+		DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
+		DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewController.swift; sourceTree = "<group>"; };
+		DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DispatchQueue.swift; sourceTree = "<group>"; };
+		DB9D9B562363FC6B008C53C3 /* Music Rating Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Music Rating Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB9D9B582363FC6B008C53C3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		DB9D9B5C2363FC6D008C53C3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		DB9D9B5F2363FC6D008C53C3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		DB9D9B612363FC6D008C53C3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		DB9D9B622363FC6D008C53C3 /* StarBar_Helper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StarBar_Helper.entitlements; sourceTree = "<group>"; };
+		DB9D9B682363FD2E008C53C3 /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = System/Library/Frameworks/ServiceManagement.framework; sourceTree = SDKROOT; };
+		DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationName.swift; sourceTree = "<group>"; };
+		DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
+		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
+		DBD6A937250E0A1C002C1B6C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		DB106C3F22C53D4B00502D7C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB89C9FE22E31B67003981F5 /* iTunesLibrary.framework in Frameworks */,
+				DB398D152CB522CA00E722A1 /* SDK in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB106C5122C53D4C00502D7C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB9D9B532363FC6B008C53C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A7E1A0000000000000000B7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		7E6699F3E558528B857B7A62 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				DB9D9B682363FD2E008C53C3 /* ServiceManagement.framework */,
+				DB89C9FD22E31B67003981F5 /* iTunesLibrary.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		DB106C3922C53D4B00502D7C = {
+			isa = PBXGroup;
+			children = (
+				DB398D132CB51F7F00E722A1 /* SDK */,
+				DB106C4422C53D4B00502D7C /* StarBar */,
+				DB106C5722C53D4C00502D7C /* StarBarTests */,
+				5A7E1A0000000000000000B4 /* StarBarUITests */,
+				DB9D9B572363FC6B008C53C3 /* StarBar Helper */,
+				DB106C4322C53D4B00502D7C /* Products */,
+				7E6699F3E558528B857B7A62 /* Frameworks */,
+			);
+			sourceTree = "<group>";
+		};
+		DB106C4322C53D4B00502D7C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				DB106C4222C53D4B00502D7C /* Music Rating.app */,
+				DB106C5422C53D4C00502D7C /* StarBarTests.xctest */,
+				5A7E1A0000000000000000B3 /* StarBarUITests.xctest */,
+				DB9D9B562363FC6B008C53C3 /* Music Rating Helper.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DB106C4422C53D4B00502D7C /* StarBar */ = {
+			isa = PBXGroup;
+			children = (
+				DB106C6722C5433900502D7C /* StarBar.entitlements */,
+				DB106C4522C53D4B00502D7C /* AppDelegate.swift */,
+				DB95216922CB186F007FCF40 /* WindowManager.swift */,
+				DB27976D2306E97500DDE3EB /* Controllers */,
+				DB424A3F2308937D00230C7E /* Views */,
+				DB106CC622CA9EB600502D7C /* Controls */,
+				DB9D9B6D2364287E008C53C3 /* Extension */,
+				DB27976C2306E95A00DDE3EB /* Helper */,
+				DB106CC822CA9F2D00502D7C /* iTunes */,
+				DB106CC722CA9ECE00502D7C /* Supporting Files */,
+				DB106C4E22C53D4C00502D7C /* Info.plist */,
+			);
+			path = "StarBar";
+			sourceTree = "<group>";
+		};
+		DB106C5722C53D4C00502D7C /* StarBarTests */ = {
+			isa = PBXGroup;
+			children = (
+				DB106C5822C53D4C00502D7C /* StarBarTests.swift */,
+				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
+				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
+				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
+				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
+				DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */,
+				DB106C5A22C53D4C00502D7C /* Info.plist */,
+			);
+			path = "StarBarTests";
+			sourceTree = "<group>";
+		};
+		DB106CC522CA9E9000502D7C /* Vendor */ = {
+			isa = PBXGroup;
+			children = (
+				DB106C6322C53DAE00502D7C /* iTunes.swift */,
+			);
+			path = Vendor;
+			sourceTree = "<group>";
+		};
+		DB106CC622CA9EB600502D7C /* Controls */ = {
+			isa = PBXGroup;
+			children = (
+				DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */,
+				DB106CA722CA45BB00502D7C /* RatingControl.swift */,
+				5A7E1A0000000000000000C1 /* RatingClickController.swift */,
+				DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */,
+			);
+			path = Controls;
+			sourceTree = "<group>";
+		};
+		DB106CC722CA9ECE00502D7C /* Supporting Files */ = {
+			isa = PBXGroup;
+			children = (
+				DB106C4922C53D4C00502D7C /* Assets.xcassets */,
+				DB106C4B22C53D4C00502D7C /* Main.storyboard */,
+			);
+			path = "Supporting Files";
+			sourceTree = "<group>";
+		};
+		DB106CC822CA9F2D00502D7C /* iTunes */ = {
+			isa = PBXGroup;
+			children = (
+				DB106CC522CA9E9000502D7C /* Vendor */,
+				DB424A36230725A800230C7E /* Extension */,
+				DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */,
+				DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */,
+				DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */,
+				DB106C6A22C661F900502D7C /* PlayInfo.swift */,
+			);
+			path = iTunes;
+			sourceTree = "<group>";
+		};
+		DB27976C2306E95A00DDE3EB /* Helper */ = {
+			isa = PBXGroup;
+			children = (
+				DB106CA322CA3C7300502D7C /* Star.swift */,
+				DB106CA522CA3EE700502D7C /* Stars.swift */,
+				DB424A40230AF5C200230C7E /* PopoverWindow.swift */,
+				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
+				DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */,
+				DB05F0872354CA6B00CE6DF9 /* NSViewControllerPreview.swift */,
+				DB33438A235E103200B45ED0 /* ExceptionCatcher.h */,
+				DB334388235E102600B45ED0 /* ExceptionCatcher.m */,
+				DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */,
+			);
+			path = Helper;
+			sourceTree = "<group>";
+		};
+		DB27976D2306E97500DDE3EB /* Controllers */ = {
+			isa = PBXGroup;
+			children = (
+				DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */,
+				DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */,
+				DB424A3723073CB000230C7E /* PopoverViewController.swift */,
+				DB424A3B230877F400230C7E /* PlayerViewController.swift */,
+				DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */,
+				DB424A44230D877800230C7E /* PlayerHistoryViewController.swift */,
+			);
+			path = Controllers;
+			sourceTree = "<group>";
+		};
+		DB424A36230725A800230C7E /* Extension */ = {
+			isa = PBXGroup;
+			children = (
+				DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */,
+				DB424A342307259800230C7E /* iTunesTrack.swift */,
+			);
+			path = Extension;
+			sourceTree = "<group>";
+		};
+		DB424A3F2308937D00230C7E /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */,
+				DB424A3923086C1200230C7E /* MovableImageView.swift */,
+				DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */,
+				DB05F0892354FC7700CE6DF9 /* PlayerControlView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		DB9D9B572363FC6B008C53C3 /* StarBar Helper */ = {
+			isa = PBXGroup;
+			children = (
+				DB9D9B582363FC6B008C53C3 /* AppDelegate.swift */,
+				DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */,
+				DB9D9B5C2363FC6D008C53C3 /* Assets.xcassets */,
+				DB9D9B5E2363FC6D008C53C3 /* Main.storyboard */,
+				DB9D9B612363FC6D008C53C3 /* Info.plist */,
+				DB9D9B622363FC6D008C53C3 /* StarBar_Helper.entitlements */,
+			);
+			path = "StarBar Helper";
+			sourceTree = "<group>";
+		};
+		DB9D9B6D2364287E008C53C3 /* Extension */ = {
+			isa = PBXGroup;
+			children = (
+				DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */,
+				DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */,
+				DBD6A935250DA48E002C1B6C /* NSBox.swift */,
+				DBD6A937250E0A1C002C1B6C /* NSImage.swift */,
+			);
+			path = Extension;
+			sourceTree = "<group>";
+		};
+		5A7E1A0000000000000000B4 /* StarBarUITests */ = {
+			isa = PBXGroup;
+			children = (
+				5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */,
+			);
+			path = "StarBarUITests";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		DB106C4122C53D4B00502D7C /* StarBar */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DB106C5D22C53D4C00502D7C /* Build configuration list for PBXNativeTarget "StarBar" */;
+			buildPhases = (
+				DB106C3E22C53D4B00502D7C /* Sources */,
+				DB106C3F22C53D4B00502D7C /* Frameworks */,
+				DB106C4022C53D4B00502D7C /* Resources */,
+				DB9D9B662363FCBB008C53C3 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "StarBar";
+			productName = "StarBar";
+			productReference = DB106C4222C53D4B00502D7C /* Music Rating.app */;
+			productType = "com.apple.product-type.application";
+		};
+		DB106C5322C53D4C00502D7C /* StarBarTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DB106C6022C53D4C00502D7C /* Build configuration list for PBXNativeTarget "StarBarTests" */;
+			buildPhases = (
+				DB106C5022C53D4C00502D7C /* Sources */,
+				DB106C5122C53D4C00502D7C /* Frameworks */,
+				DB106C5222C53D4C00502D7C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				DB106C5622C53D4C00502D7C /* PBXTargetDependency */,
+			);
+			name = "StarBarTests";
+			productName = "StarBarTests";
+			productReference = DB106C5422C53D4C00502D7C /* StarBarTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		DB9D9B552363FC6B008C53C3 /* StarBar Helper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = DB9D9B652363FC6D008C53C3 /* Build configuration list for PBXNativeTarget "StarBar Helper" */;
+			buildPhases = (
+				DB9D9B522363FC6B008C53C3 /* Sources */,
+				DB9D9B532363FC6B008C53C3 /* Frameworks */,
+				DB9D9B542363FC6B008C53C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "StarBar Helper";
+			productName = "StarBar Helper";
+			productReference = DB9D9B562363FC6B008C53C3 /* Music Rating Helper.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5A7E1A0000000000000000B5 /* StarBarUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5A7E1A0000000000000000BB /* Build configuration list for PBXNativeTarget "StarBarUITests" */;
+			buildPhases = (
+				5A7E1A0000000000000000B6 /* Sources */,
+				5A7E1A0000000000000000B7 /* Frameworks */,
+				5A7E1A0000000000000000B8 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5A7E1A0000000000000000BA /* PBXTargetDependency */,
+			);
+			name = "StarBarUITests";
+			productName = "StarBarUITests";
+			productReference = 5A7E1A0000000000000000B3 /* StarBarUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		DB106C3A22C53D4B00502D7C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastSwiftUpdateCheck = 1110;
+				LastUpgradeCheck = 1600;
+				ORGANIZATIONNAME = "Ross Shannon";
+				TargetAttributes = {
+					DB106C4122C53D4B00502D7C = {
+						CreatedOnToolsVersion = 10.2.1;
+						LastSwiftMigration = 1110;
+						SystemCapabilities = {
+							com.apple.HardenedRuntime = {
+								enabled = 1;
+							};
+							com.apple.Sandbox = {
+								enabled = 1;
+							};
+						};
+					};
+					DB106C5322C53D4C00502D7C = {
+						CreatedOnToolsVersion = 10.2.1;
+						TestTargetID = DB106C4122C53D4B00502D7C;
+					};
+					5A7E1A0000000000000000B5 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = DB106C4122C53D4B00502D7C;
+					};
+					DB9D9B552363FC6B008C53C3 = {
+						CreatedOnToolsVersion = 11.1;
+					};
+				};
+			};
+			buildConfigurationList = DB106C3D22C53D4B00502D7C /* Build configuration list for PBXProject "StarBar" */;
+			compatibilityVersion = "Xcode 9.3";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = DB106C3922C53D4B00502D7C;
+			productRefGroup = DB106C4322C53D4B00502D7C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DB106C4122C53D4B00502D7C /* StarBar */,
+				DB106C5322C53D4C00502D7C /* StarBarTests */,
+				DB9D9B552363FC6B008C53C3 /* StarBar Helper */,
+				5A7E1A0000000000000000B5 /* StarBarUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		DB106C4022C53D4B00502D7C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB106C4A22C53D4C00502D7C /* Assets.xcassets in Resources */,
+				DB106C4D22C53D4C00502D7C /* Main.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB106C5222C53D4C00502D7C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB9D9B542363FC6B008C53C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB9D9B5D2363FC6D008C53C3 /* Assets.xcassets in Resources */,
+				DB9D9B602363FC6D008C53C3 /* Main.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A7E1A0000000000000000B8 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		DB106C3E22C53D4B00502D7C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */,
+				DB106CC422CA86A500502D7C /* iTunes.swift in Sources */,
+				DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */,
+				DB05F0882354CA6B00CE6DF9 /* NSViewControllerPreview.swift in Sources */,
+				DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */,
+				DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */,
+				DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */,
+				DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */,
+				DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */,
+				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
+				DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */,
+				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
+				DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */,
+				DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */,
+				DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */,
+				DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */,
+				DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */,
+				DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */,
+				DB05F0652353912500CE6DF9 /* PlayerInfoView.swift in Sources */,
+				DB9D9B6B2363FF45008C53C3 /* NotificationName.swift in Sources */,
+				DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */,
+				DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */,
+				5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */,
+				DB05F0632353909000CE6DF9 /* PlayerPanelViewController.swift in Sources */,
+				DB05F0862354CA5800CE6DF9 /* NSViewPreview.swift in Sources */,
+				DB89C9F322E2D766003981F5 /* MenuBarIcon.swift in Sources */,
+				DB106CA422CA3C7300502D7C /* Star.swift in Sources */,
+				DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */,
+				DB9D9AF0235F7974008C53C3 /* DispatchQueue.swift in Sources */,
+				DB424A352307259800230C7E /* iTunesTrack.swift in Sources */,
+				DB106C4622C53D4B00502D7C /* AppDelegate.swift in Sources */,
+				DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */,
+				DB424A41230AF5C200230C7E /* PopoverWindow.swift in Sources */,
+				DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */,
+				DB11065323047E7F001DA02A /* iTunesPlayerHistory.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB106C5022C53D4C00502D7C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB106C5922C53D4C00502D7C /* StarBarTests.swift in Sources */,
+				DB89C9F522E3176C003981F5 /* iTunesLibraryTests.swift in Sources */,
+				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
+				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
+				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
+				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DB9D9B522363FC6B008C53C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DB9D9B6C2363FF45008C53C3 /* NotificationName.swift in Sources */,
+				DB9D9B592363FC6B008C53C3 /* AppDelegate.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5A7E1A0000000000000000B6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5A7E1A0000000000000000B2 /* MenuBarRatingUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		DB106C5622C53D4C00502D7C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB106C4122C53D4B00502D7C /* StarBar */;
+			targetProxy = DB106C5522C53D4C00502D7C /* PBXContainerItemProxy */;
+		};
+		5A7E1A0000000000000000BA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DB106C4122C53D4B00502D7C /* StarBar */;
+			targetProxy = 5A7E1A0000000000000000B9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		DB106C4B22C53D4C00502D7C /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				DB106C4C22C53D4C00502D7C /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		DB9D9B5E2363FC6D008C53C3 /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				DB9D9B5F2363FC6D008C53C3 /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		DB106C5B22C53D4C00502D7C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Mac Developer";
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				FRAMEWORK_SEARCH_PATHS = "";
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		DB106C5C22C53D4C00502D7C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "Mac Developer";
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				FRAMEWORK_SEARCH_PATHS = "";
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+			};
+			name = Release;
+		};
+		DB106C5E22C53D4C00502D7C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "StarBar/StarBar.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 18;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "StarBar/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating;
+				PRODUCT_MODULE_NAME = StarBar;
+				PRODUCT_NAME = "Music Rating";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "StarBar/Helper/StarBar-Bridging-Header.h";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DB106C5F22C53D4C00502D7C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CLANG_ENABLE_MODULES = YES;
+				CODE_SIGN_ENTITLEMENTS = "StarBar/StarBar.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 18;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_FILE = "StarBar/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating;
+				PRODUCT_MODULE_NAME = StarBar;
+				PRODUCT_NAME = "Music Rating";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "StarBar/Helper/StarBar-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		DB106C6122C53D4C00502D7C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				INFOPLIST_FILE = "StarBarTests/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Music Rating.app/Contents/MacOS/Music Rating";
+			};
+			name = Debug;
+		};
+		DB106C6222C53D4C00502D7C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				INFOPLIST_FILE = "StarBarTests/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Music Rating.app/Contents/MacOS/Music Rating";
+			};
+			name = Release;
+		};
+		DB9D9B632363FC6D008C53C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "StarBar Helper/StarBar_Helper.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = "StarBar Helper/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating.helper;
+				PRODUCT_MODULE_NAME = StarBar_Helper;
+				PRODUCT_NAME = "Music Rating Helper";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DB9D9B642363FC6D008C53C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "StarBar Helper/StarBar_Helper.entitlements";
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = "StarBar Helper/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MARKETING_VERSION = 1.5.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating.helper;
+				PRODUCT_MODULE_NAME = StarBar_Helper;
+				PRODUCT_NAME = "Music Rating Helper";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		5A7E1A0000000000000000BC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "StarBar";
+			};
+			name = Debug;
+		};
+		5A7E1A0000000000000000BD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.musicrating.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = "StarBar";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		DB106C3D22C53D4B00502D7C /* Build configuration list for PBXProject "StarBar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB106C5B22C53D4C00502D7C /* Debug */,
+				DB106C5C22C53D4C00502D7C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DB106C5D22C53D4C00502D7C /* Build configuration list for PBXNativeTarget "StarBar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB106C5E22C53D4C00502D7C /* Debug */,
+				DB106C5F22C53D4C00502D7C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DB106C6022C53D4C00502D7C /* Build configuration list for PBXNativeTarget "StarBarTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB106C6122C53D4C00502D7C /* Debug */,
+				DB106C6222C53D4C00502D7C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		DB9D9B652363FC6D008C53C3 /* Build configuration list for PBXNativeTarget "StarBar Helper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DB9D9B632363FC6D008C53C3 /* Debug */,
+				DB9D9B642363FC6D008C53C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5A7E1A0000000000000000BB /* Build configuration list for PBXNativeTarget "StarBarUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5A7E1A0000000000000000BC /* Debug */,
+				5A7E1A0000000000000000BD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DB398D142CB522CA00E722A1 /* SDK */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SDK;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = DB106C3A22C53D4B00502D7C /* Project object */;
+}
