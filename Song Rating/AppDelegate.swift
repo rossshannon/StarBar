@@ -14,7 +14,6 @@ import MASShortcut
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
 
-    let radioStation = iTunesRadioStation.shared
     private(set) var menuBarRatingControl: MenuBarRatingControl?
     
     private var launchAtLoginObservation: NSKeyValueObservation?
@@ -33,8 +32,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         setupUserDefaults()
-        // UI tests run without Music, so don't ask for permission to control it
+        // UI tests run without Music: don't connect to it (Music notifications, the current
+        // track and the rating shortcuts) or ask for permission to control it
         if !MenuBarRatingControl.isUITesting {
+            _ = iTunesRadioStation.shared
             setupAppleEvent()
         }
         
