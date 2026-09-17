@@ -131,6 +131,9 @@ extension RatingControl {
     }
 
     /// True when `positionX` (from `imagePositionX(in:)`) is over the favorite heart.
+    /// This is the click area for toggling the favorite: 2pt left of the heart to 4pt right of it.
+    /// `rating(atPositionX:)` deliberately uses a wider zone (from the same left edge to
+    /// infinity), so don't make the two match.
     func isFavoriteHit(positionX: CGFloat) -> Bool {
         let favoriteMinX = self.favoriteMinX
         return positionX >= favoriteMinX - 0.5 * spacing && positionX <= favoriteMinX + starSize.width + spacing
@@ -140,7 +143,8 @@ extension RatingControl {
     ///
     /// Star i is drawn from spacing + i * slot to that plus starSize.width.
     /// Each gap between neighbouring stars is split, so no click position is dead.
-    /// Positions past the last star clamp to star 5; callers check `isFavoriteHit` first.
+    /// Positions past the last star clamp to star 5. This ignores the heart; use
+    /// `rating(atPositionX:)`, which returns nil from the heart rightwards.
     func starRating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int {
         guard positionX >= spacing else { return 0 }
 
@@ -158,6 +162,8 @@ extension RatingControl {
     /// Rating (0 ~ 100) at `positionX` inside `starsImage`, or nil over the heart.
     /// Everything from the heart's hit area rightwards counts as the heart, so a drag that
     /// carries on past the heart keeps its last star rating instead of setting 5 stars.
+    /// This zone is wider than `isFavoriteHit(positionX:)` on purpose: a click there toggles
+    /// the favorite, but a drag released there must not save a rating.
     func rating(atPositionX positionX: CGFloat, behavior: Behavior) -> Int? {
         guard positionX < favoriteMinX - 0.5 * spacing else { return nil }
 

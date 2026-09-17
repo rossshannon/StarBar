@@ -9,9 +9,9 @@ updates:
     cooldown:
       default-days: 7
 
-  # Swift packages used by the SDK package. MASShortcut follows its master branch rather
-  # than a version, so Dependabot may not propose updates for it; version-pinned packages
-  # added later are covered.
+  # Swift packages used by the SDK package. MASShortcut is required by branch (master),
+  # not by version, so don't expect Dependabot pull requests for it: update it with
+  # `swift package update` in SDK/. Packages required by version are covered.
   - package-ecosystem: swift
     directory: /SDK
     schedule:
