@@ -176,7 +176,7 @@ xcode_test() {
 }
 
 run_tests() {
-    # Test identifiers use the target name ("StarBarTests"); the module name is silently ignored.
+    # Test identifiers look like "StarBarTests/ClassName"; a wrong identifier is silently ignored.
     # The UI tests take over the screen, so they have their own scheme and run only with --ui-test.
     local selection=()
     # These test classes read from Music, so they fail unless Music is playing a track

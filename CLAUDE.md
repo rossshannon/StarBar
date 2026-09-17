@@ -17,7 +17,7 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 - Pre-commit hook (opt in): `git config core.hooksPath .githooks`
 - Release: push a `v*` tag; `.github/workflows/release.yml` tests, builds with `MARKETING_VERSION` from the tag, and attaches a zip to a GitHub release
 - Test (unit tests only, including the ones that need Music): `xcodebuild -project "StarBar.xcodeproj" -scheme "StarBar" test`
-- Run specific test: `xcodebuild -project "StarBar.xcodeproj" -scheme "StarBar" test -only-testing:"StarBarTests/TestClassName/testMethodName"` (target name with the space, not the module name; a wrong identifier is silently ignored)
+- Run specific test: `xcodebuild -project "StarBar.xcodeproj" -scheme "StarBar" test -only-testing:"StarBarTests/TestClassName/testMethodName"` (a wrong identifier is silently ignored)
 - SDK Tests: `cd SDK && swift test`
 - Clean: `xcodebuild -project "StarBar.xcodeproj" clean`
 
