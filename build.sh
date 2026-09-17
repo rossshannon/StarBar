@@ -214,7 +214,12 @@ run_ui_tests() {
             echo "Error: --ui-test takes over the screen, so it needs confirmation. Run it in a terminal, or pass --yes."
             return 2
         fi
-        read -r -p "Take over the screen now? [y/N] " answer
+        # read fails at end of input (Ctrl-D); without the || the script would exit silently
+        if ! read -r -p "Take over the screen now? [y/N] " answer; then
+            echo ""
+            echo "UI tests not run."
+            return 2
+        fi
         case "$answer" in
             [yY]|[yY][eE][sS]) ;;
             *) echo "UI tests not run."; return 2 ;;
