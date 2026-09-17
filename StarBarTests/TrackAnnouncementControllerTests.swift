@@ -353,14 +353,47 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         live = .loaded(.init(rating: 20))
         update(snapshot(track: "A"))
         let timer = clock.pendingOneShot
-        let liveReads = artworkRequests.count
 
         controller.userDidRate(80)
 
-        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
-        XCTAssertEqual(artworkRequests.count, liveReads, "Music doesn't have the rating yet, so don't ask it")
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80], "Music still has 20, so the strip can't have read it from there")
+        XCTAssertEqual(wantsArtworkFlags, [true, false], "the check that Music is still on this track doesn't re-read the artwork")
         XCTAssertEqual(playerReads, 1)
         XCTAssertTrue(clock.pendingOneShot === timer, "the hold timer is untouched")
+    }
+
+    func testARatingForATrackMusicHasMovedOnFromLeavesTheStripAlone() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+
+        // Music is on another track already; its notification hasn't arrived yet
+        live = .trackChanged
+        controller.userDidRate(100)
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+
+        // …and the rating isn't remembered for A either
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testMusicIsBelievedAgainAsSoonAsItReportsTheSavedRating() {
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80)
+
+        // Music saves it and says so, still inside the waiting time
+        clock.advance(by: iTunesRadioStation.ratingSaveDelay + 0.1)
+        live = .loaded(.init(rating: 80))
+        update(snapshot(track: "A"))
+
+        // The song is then rated in Music itself
+        clock.advance(by: 0.4)
+        live = .loaded(.init(rating: 40))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 40])
     }
 
     func testMusicsOldRatingDoesNotUndoARatingItHasYetToSave() {
@@ -404,6 +437,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         update(snapshot(track: "A"))
         // Skipped to B while paused: the strip still shows A, the menu bar shows B
         update(snapshot(track: "B", state: .paused))
+        live = .trackChanged
 
         controller.userDidRate(100)
         controller.userDidFavorite(true)

@@ -214,15 +214,32 @@ extension TrackAnnouncementController {
     ///
     /// - Parameter rating: 0 to 100
     func userDidRate(_ rating: Int) {
-        guard let identity = lastSnapshot?.identity else { return }
+        guard let identity = ratedTrackIdentity() else { return }
         pendingRating = (identity, rating, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime))
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, rating: rating) }
     }
 
     /// The user toggled the current track's heart in StarBar. Shows it on the strip now.
     func userDidFavorite(_ isFavorited: Bool) {
-        guard let identity = lastSnapshot?.identity else { return }
+        guard let identity = ratedTrackIdentity() else { return }
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
+    }
+
+    /// The track a rating chosen in StarBar belongs to: the one Music is playing.
+    ///
+    /// While the strip is up, that is checked against Music, so a rating chosen in the gap
+    /// between Music changing track and its notification arriving never lands on the song
+    /// the strip is showing. With no strip up there is nothing to draw and nothing to check,
+    /// so the last update's track is good enough, and no Apple Event is sent.
+    private func ratedTrackIdentity() -> String? {
+        guard let current = currentAnnouncement, hideTimer != nil else { return lastSnapshot?.identity }
+        switch loadLiveTrack(current.identity, false) {
+        case .loaded:
+            return current.identity
+        case .trackChanged:
+            os_log(.debug, "%{public}s[%{public}ld], %{public}s: the rating is for a track Music has already moved on to", ((#file as NSString).lastPathComponent), #line, #function)
+            return nil
+        }
     }
 
     /// Redraw the strip if it is up and showing the track with this identity
@@ -236,15 +253,22 @@ extension TrackAnnouncementController {
     }
 
     /// The rating to show: the user's own rating while Music has yet to save it, otherwise
-    /// the first of `ratings` that is known
+    /// the first of `ratings` that is known.
+    ///
+    /// Music is believed again as soon as it reports the saved rating, so a change made in
+    /// Music straight afterwards isn't held back for the rest of the wait.
     private func rating(for identity: String, _ ratings: Int?...) -> Int? {
         if let pending = pendingRating, clock.now() >= pending.expires {
             pendingRating = nil
         }
-        if let pending = pendingRating, pending.identity == identity {
-            return pending.rating
+        let known = ratings.lazy.compactMap { $0 }.first
+        guard let pending = pendingRating, pending.identity == identity else { return known }
+        guard known != pending.rating else {
+            // Music has the rating now
+            pendingRating = nil
+            return known
         }
-        return ratings.lazy.compactMap { $0 }.first
+        return pending.rating
     }
 
     private func announce(_ snapshot: PlayerSnapshot, identity: String) {
