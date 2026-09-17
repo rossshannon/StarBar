@@ -362,6 +362,26 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(view.backdropView).frame, view.bounds, "a blur fills the strip")
     }
 
+    func testOnlyTheGlassStyleDrawsTheSheenAndTheKnobTurnsItOff() {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        XCTAssertFalse(view.hasSheen, "classic: no sheen")
+
+        view.style = .glass
+        XCTAssertTrue(view.hasSheen, "glass: the rim light and shade suggest a dome")
+        XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty, "draws with the sheen")
+
+        view.style = .blur
+        XCTAssertFalse(view.hasSheen, "blur: no sheen")
+
+        TrackAnnouncementGlassKnobs.read = {
+            var knobs = TrackAnnouncementGlassKnobs()
+            knobs.sheen = false
+            return knobs
+        }
+        view.style = .glass
+        XCTAssertFalse(view.hasSheen, "the knob turns the sheen off")
+    }
+
     func testSwitchingBackToClassicRemovesTheBackdrop() {
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
         view.style = .blur

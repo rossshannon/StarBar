@@ -52,6 +52,13 @@ enum TrackAnnouncementLayout {
     static let glassCornerRadius: CGFloat = 20
     /// How far the glass stands in from each screen edge, so that the top corners exist
     static let glassSideInset: CGFloat = 16
+    /// The sheen that suggests a domed surface: a rim light fading down from the top edge
+    /// over the top part of the strip, and a soft shade rising from the bottom. Drawn over
+    /// the glass, clipped to its shape, because the glass view's own geometry is flat.
+    static let glassSheenHighlightAlpha: CGFloat = 0.28
+    static let glassSheenHighlightFraction: CGFloat = 0.45
+    static let glassSheenShadeAlpha: CGFloat = 0.14
+    static let glassSheenShadeFraction: CGFloat = 0.5
 
     /// The glass view's frame inside the strip: inset from the sides, and hanging below the
     /// strip by its corner radius so that the bottom corners are always below the screen edge

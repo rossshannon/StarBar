@@ -12,13 +12,15 @@ import os.log
 /// rebuild: `announcementGlassRegular` (bool; false, the clear style, by default),
 /// `announcementGlassTintAlpha` (0 to 1; `TrackAnnouncementLayout.glassTint`'s alpha by
 /// default, 0 for no tint at all) and `announcementGlassCornerRadius` (points at scale 1;
-/// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more). They
-/// are read when the glass is built, so switch the strip style away and back after changing
-/// one.
+/// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more) and
+/// `announcementGlassSheen` (bool; true by default: the drawn rim light and shade that
+/// suggest a domed surface). They are read when the glass is built, so switch the strip
+/// style away and back after changing one.
 struct TrackAnnouncementGlassKnobs: Equatable {
     var regular = false
     var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
     var cornerRadius = TrackAnnouncementLayout.glassCornerRadius
+    var sheen = true
 
     /// Where the strip gets its knobs. The tests are hosted in the app, so they replace this
     /// with fixed values rather than read whatever is set on the machine.
@@ -33,6 +35,9 @@ struct TrackAnnouncementGlassKnobs: Equatable {
         }
         if defaults.object(forKey: "announcementGlassCornerRadius") != nil {
             knobs.cornerRadius = max(0, CGFloat(defaults.double(forKey: "announcementGlassCornerRadius")))
+        }
+        if defaults.object(forKey: "announcementGlassSheen") != nil {
+            knobs.sheen = defaults.bool(forKey: "announcementGlassSheen")
         }
         return knobs
     }
@@ -139,6 +144,11 @@ final class TrackAnnouncementView: NSView {
         return TrackAnnouncementGlassKnobs.read().cornerRadius
     }
 
+    /// Whether the content draws the sheen over the glass
+    var hasSheen: Bool {
+        return content.sheen != nil
+    }
+
     private func applyInsets() {
         let insets = TrackAnnouncementLayout.contentInsets(for: style, scale: scale, leadingInset: leadingInset, trailingInset: trailingInset)
         content.leadingInset = insets.leading
@@ -146,6 +156,9 @@ final class TrackAnnouncementView: NSView {
     }
 
     private func layoutBackdrop() {
+        content.sheen = (style == .glass && TrackAnnouncementGlassKnobs.read().sheen)
+            ? TrackAnnouncementContentView.Sheen(rect: backdropFrame, cornerRadius: glassCornerRadius * scale)
+            : nil
         guard let backdrop = backdropView else { return }
         backdrop.frame = backdropFrame
         TrackAnnouncementView.applyCornerRadius(to: backdrop, radius: glassCornerRadius * scale)
@@ -249,6 +262,20 @@ final class TrackAnnouncementContentView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// The glass's shape in this view's coordinates, for the sheen drawn over it
+    struct Sheen: Equatable {
+        var rect: NSRect
+        var cornerRadius: CGFloat
+    }
+
+    /// Set for the glass style: a rim light and a shade that suggest a domed surface
+    var sheen: Sheen? {
+        didSet {
+            guard sheen != oldValue else { return }
+            needsDisplay = true
+        }
+    }
+
     var scale: CGFloat = 1 {
         didSet { needsDisplay = true }
     }
@@ -277,6 +304,10 @@ final class TrackAnnouncementContentView: NSView {
             tintColor.withAlphaComponent(tintAlpha).setFill()
             bounds.fill()
         }
+        // Under Reduce Transparency's opaque wash the sheen has no glass to sit on
+        if let sheen = sheen, tintAlpha < 1 {
+            drawSheen(sheen)
+        }
 
         let frames = TrackAnnouncementLayout.frames(
             in: bounds.size,
@@ -296,6 +327,24 @@ final class TrackAnnouncementContentView: NSView {
             draw(announcement.album, in: albumRect, font: detailFont)
         }
         drawRating(in: frames.rating)
+    }
+
+    /// A rim light fading down from the top edge and a shade rising from the bottom, clipped
+    /// to the glass's rounded shape, so the flat glass reads as a dome
+    private func drawSheen(_ sheen: Sheen) {
+        let shape = NSBezierPath(roundedRect: sheen.rect, xRadius: sheen.cornerRadius, yRadius: sheen.cornerRadius)
+        NSGraphicsContext.saveGraphicsState()
+        shape.addClip()
+        let highlightHeight = bounds.height * TrackAnnouncementLayout.glassSheenHighlightFraction
+        let highlight = NSRect(x: sheen.rect.minX, y: bounds.maxY - highlightHeight, width: sheen.rect.width, height: highlightHeight)
+        // Angle -90 draws the starting colour at the top
+        NSGradient(starting: NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenHighlightAlpha), ending: .clear)?
+            .draw(in: highlight, angle: -90)
+        let shadeHeight = bounds.height * TrackAnnouncementLayout.glassSheenShadeFraction
+        let shade = NSRect(x: sheen.rect.minX, y: bounds.minY, width: sheen.rect.width, height: shadeHeight)
+        NSGradient(starting: NSColor.black.withAlphaComponent(TrackAnnouncementLayout.glassSheenShadeAlpha), ending: .clear)?
+            .draw(in: shade, angle: 90)
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawArtwork(in slot: NSRect) {
