@@ -58,7 +58,7 @@ The Release workflow runs the tests, builds the app with that version number, an
 
 ## Using the menu bar
 - **Click a star** to set that rating.
-- **Half stars**: turn on "Half star" in Preferences. Then click the left half of a star, or the gap just before it, to set a half star. For example, click just left of the third star for 3½ stars.
+- **Half stars**: turn on "Half star" in Preferences. Then click the left half of a star, or the gap just before it, to set a half star. For example, click the left half of the fourth star for 3½ stars.
 - **Drag** across the stars and they fill in as you move. Let go to set the rating, the same as clicking at that spot. With half stars on, dragging across the gap between two stars shows where the half star begins. Let go over the heart to keep the last rating.
 - **Heart**: click the heart after the stars to mark the song as a favourite in Music. A filled heart means the song is a favourite.
 - **Right-click** to open the player popover.
