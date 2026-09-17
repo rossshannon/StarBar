@@ -171,7 +171,8 @@ extension TrackAnnouncementController {
 
     /// Show the current track now, whatever the setting and whether or not it is playing.
     /// Reads the player afresh; falls back to the last update when the read has no track.
-    /// Returns false when there is no track to show.
+    /// Returns false when there is no track to show, or the track changed while its details
+    /// were loading and the announcement was dropped.
     @discardableResult
     func showCurrentTrack() -> Bool {
         let fresh = readPlayer()
@@ -180,16 +181,15 @@ extension TrackAnnouncementController {
             os_log(.debug, "%{public}s[%{public}ld], %{public}s: no current track to show", ((#file as NSString).lastPathComponent), #line, #function)
             return false
         }
-        announce(snapshot, identity: identity)
-        return true
+        return announce(snapshot, identity: identity)
     }
 
     /// The Preferences Preview button: the current track when Music has one, so the preview
-    /// is the real thing, else the sample strip
+    /// is the real thing, else the sample strip. A track change under the first read gets
+    /// one more read, which sees the new track, before the sample.
     func preview() {
-        if !showCurrentTrack() {
-            present(TrackAnnouncement.preview)
-        }
+        if showCurrentTrack() || showCurrentTrack() { return }
+        present(TrackAnnouncement.preview)
     }
 
     /// The Preferences checkbox changed
@@ -201,8 +201,10 @@ extension TrackAnnouncementController {
         showCurrentTrack()
     }
 
-    private func announce(_ snapshot: PlayerSnapshot, identity: String) {
-        guard let live = loadLive(identity: identity, wantsArtwork: snapshot.hasArtwork) else { return }
+    /// Returns false when the announcement was dropped because the track changed under it
+    @discardableResult
+    private func announce(_ snapshot: PlayerSnapshot, identity: String) -> Bool {
+        guard let live = loadLive(identity: identity, wantsArtwork: snapshot.hasArtwork) else { return false }
         let announcement = TrackAnnouncement(
             identity: identity,
             title: snapshot.title,
@@ -214,6 +216,7 @@ extension TrackAnnouncementController {
         )
         os_log("%{public}s[%{public}ld], %{public}s: announcing %{public}s", ((#file as NSString).lastPathComponent), #line, #function, announcement.accessibilityLabel)
         present(announcement)
+        return true
     }
 
     /// The song on the strip changed while the strip is up: redraw its rating and heart,
