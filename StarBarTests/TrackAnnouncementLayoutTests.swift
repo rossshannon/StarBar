@@ -193,6 +193,16 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: 2), CGPoint(x: 0, y: -192))
     }
 
+    func testEaseInOutIsSlowAtBothEnds() {
+        XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(0), 0)
+        XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(0.5), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(1), 1)
+        XCTAssertLessThan(TrackAnnouncementPlacement.easeInOut(0.25), 0.25)
+        XCTAssertGreaterThan(TrackAnnouncementPlacement.easeInOut(0.75), 0.75)
+        XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(2), 1)
+        XCTAssertEqual(TrackAnnouncementPlacement.easeInOut(-1), 0)
+    }
+
     func testReduceMotionSelectsFade() {
         XCTAssertEqual(TrackAnnouncementPlacement.transition(reduceMotion: false), .slide)
         XCTAssertEqual(TrackAnnouncementPlacement.transition(reduceMotion: true), .fade)

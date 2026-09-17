@@ -144,4 +144,10 @@ enum TrackAnnouncementPlacement {
         return reduceMotion ? .fade : .slide
     }
 
+    /// Growl's slide curve (NSAnimationEaseInOut): slow at both ends, 0 to 1 over 0 to 1
+    static func easeInOut(_ progress: Double) -> Double {
+        let clamped = min(1, max(0, progress))
+        return 0.5 - 0.5 * cos(.pi * clamped)
+    }
+
 }

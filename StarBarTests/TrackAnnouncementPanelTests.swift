@@ -132,6 +132,82 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(panel.phase, .hidden)
     }
 
+    /// The slide, stepped by a fake clock: part-way up after half the duration, on screen
+    /// part-way down on the way out, and only then ordered out
+    func testSlideInAndOutStepWithTheClock() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        defer { animated.orderOut(nil) }
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.phase, .slidingIn)
+        // The scale, and so the hidden offset, is known once the panel has picked a screen
+        let hiddenScaled = TrackAnnouncementPlacement.stripOrigin(shown: false, scale: animated.scale).y
+        XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled)
+
+        clock.advance(by: 0.15)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled / 2, accuracy: 0.5, "half way at half time on an ease-in-out curve")
+        XCTAssertEqual(animated.phase, .slidingIn)
+
+        clock.advance(by: 0.2)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.frame.origin.y, 0)
+        XCTAssertEqual(animated.phase, .shown)
+
+        animated.hide()
+        XCTAssertEqual(animated.phase, .slidingOut)
+        clock.advance(by: 0.1)
+        clock.fireRepeating()
+        XCTAssertTrue(animated.isVisible, "the panel stays up while the strip slides down")
+        XCTAssertLessThan(animated.stripView.frame.origin.y, 0)
+        XCTAssertGreaterThan(animated.stripView.frame.origin.y, hiddenScaled)
+
+        clock.advance(by: 0.3)
+        clock.fireRepeating()
+        XCTAssertFalse(animated.isVisible)
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled)
+    }
+
+    func testShowDuringSlideOutTurnsRoundFromWhereItIs() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+        animated.hide()
+        clock.advance(by: 0.1)
+        clock.fireRepeating()
+        let midway = animated.stripView.frame.origin.y
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.phase, .slidingIn)
+        XCTAssertEqual(animated.stripView.frame.origin.y, midway, "no jump when turning round")
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.frame.origin.y, 0)
+        XCTAssertTrue(animated.isVisible)
+    }
+
+    func testFadeStepsAlphaWithTheClock() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        defer { animated.orderOut(nil) }
+
+        animated.show(sample, reduceMotion: true, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.alphaValue, 0)
+        XCTAssertEqual(animated.stripView.frame.origin.y, 0)
+        clock.advance(by: 0.15)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.alphaValue, 0.5, accuracy: 0.01)
+        clock.advance(by: 0.2)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.alphaValue, 1)
+        XCTAssertEqual(animated.phase, .shown)
+    }
+
     func testStripHasAnAccessibilityLabel() {
         panel.show(sample, reduceMotion: false, reduceTransparency: false)
 

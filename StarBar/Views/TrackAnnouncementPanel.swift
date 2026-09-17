@@ -32,22 +32,29 @@ final class TrackAnnouncementPanel: NSPanel {
     private let slideDuration: TimeInterval
     private let screens: () -> [NSScreen]
     private let mouseLocation: () -> NSPoint
-    /// Bumped by every animation and by a cancel, so a stale completion handler does nothing
+    /// Time for the slide, and its ticks: a display link when the system has one, else a timer
+    private var clock: RatingReminderClock
+    /// Bumped by every animation and by a cancel, so a stale timer tick does nothing
     private var animationGeneration = 0
+    private var slideTimer: RatingReminderTimer?
     private var screenObserver: NSObjectProtocol?
 
     /// - Parameters:
     ///   - slideDuration: 0 applies the final state at once, for tests
     ///   - screens: the screens to choose from
     ///   - mouseLocation: where the pointer is, to pick the screen the user is looking at
+    ///   - clock: steps the slide; a fake one in tests. By default a display link on the
+    ///     panel's screen, so each step lands on a refresh, with a timer before macOS 14.
     init(
         slideDuration: TimeInterval = TrackAnnouncementLayout.slideDuration,
         screens: @escaping () -> [NSScreen] = { NSScreen.screens },
-        mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation }
+        mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
+        clock: RatingReminderClock? = nil
     ) {
         self.slideDuration = slideDuration
         self.screens = screens
         self.mouseLocation = mouseLocation
+        self.clock = clock ?? RunLoopClock()
         let size = CGSize(width: 800, height: TrackAnnouncementLayout.height)
         stripView = TrackAnnouncementView(announcement: .preview, frame: NSRect(origin: .zero, size: size))
         super.init(
@@ -77,6 +84,12 @@ final class TrackAnnouncementPanel: NSPanel {
         container.autoresizesSubviews = false
         contentView = container
         container.addSubview(stripView)
+        // Moving the strip must not redraw it: its contents change only with the announcement
+        stripView.layerContentsRedrawPolicy = .onSetNeedsDisplay
+
+        if clock == nil {
+            self.clock = DisplayLinkClock(screen: { [weak self] in self?.screen })
+        }
 
         screenObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -88,6 +101,7 @@ final class TrackAnnouncementPanel: NSPanel {
     }
 
     deinit {
+        slideTimer?.invalidate()
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -141,6 +155,9 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
                 stripView.alphaValue = 0
                 stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
             }
+            // Draw the first frame before the window shows, so the slide starts clean
+            stripView.needsDisplay = true
+            stripView.displayIfNeeded()
             orderFrontRegardless()
             slide(in: true, transition: transition)
         }
@@ -153,12 +170,24 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         slide(in: false, transition: transition)
     }
 
+    /// Move the strip up or down over `slideDuration`, stepping the view's frame from a
+    /// 60 Hz timer with an ease-in-out curve, as Growl's NSAnimation did.
+    ///
+    /// The frame is stepped by hand rather than through `animator()`: on macOS 27 the panel's
+    /// on-screen image follows the view's frame, not the layer's presentation values, so a
+    /// Core Animation slide ran to completion without ever being drawn. A timer also keeps the
+    /// motion testable with a fake clock.
     private func slide(in shown: Bool, transition: TrackAnnouncementPlacement.Transition) {
         phase = shown ? .slidingIn : .slidingOut
         lastTransition = transition
+        slideTimer?.invalidate()
+        slideTimer = nil
         animationGeneration += 1
         let generation = animationGeneration
-        let targetOrigin = TrackAnnouncementPlacement.stripOrigin(shown: shown, scale: scale)
+
+        let startY = stripView.frame.origin.y
+        let targetY = TrackAnnouncementPlacement.stripOrigin(shown: shown, scale: scale).y
+        let startAlpha = stripView.alphaValue
         let targetAlpha: CGFloat = shown ? 1 : 0
 
         let finish = { [weak self] in
@@ -171,24 +200,32 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             }
         }
 
-        guard slideDuration > 0 else {
+        let apply = { [weak self] (progress: Double) in
+            guard let self = self else { return }
+            let eased = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
             switch transition {
-            case .slide: stripView.setFrameOrigin(targetOrigin)
-            case .fade: stripView.alphaValue = targetAlpha
+            case .slide: self.stripView.setFrameOrigin(CGPoint(x: 0, y: startY + (targetY - startY) * eased))
+            case .fade: self.stripView.alphaValue = startAlpha + (targetAlpha - startAlpha) * eased
             }
+        }
+
+        guard slideDuration > 0 else {
+            apply(1)
             finish()
             return
         }
 
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = slideDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            context.allowsImplicitAnimation = true
-            switch transition {
-            case .slide: stripView.animator().setFrameOrigin(targetOrigin)
-            case .fade: stripView.animator().alphaValue = targetAlpha
+        let start = clock.now()
+        slideTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            guard let self = self, self.animationGeneration == generation else { return }
+            let progress = min(1, self.clock.now().timeIntervalSince(start) / self.slideDuration)
+            apply(progress)
+            if progress >= 1 {
+                self.slideTimer?.invalidate()
+                self.slideTimer = nil
+                finish()
             }
-        }, completionHandler: finish)
+        }
     }
 
     /// Size the panel to the bottom of `screen`'s visible frame, scaled to the screen, and
@@ -219,8 +256,66 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     private func screenParametersDidChange() {
         guard phase != .hidden else { return }
         animationGeneration += 1
+        slideTimer?.invalidate()
+        slideTimer = nil
         orderOut(nil)
         phase = .hidden
+    }
+
+}
+
+// MARK: - Display link clock
+
+/// `RunLoopClock` for one-shot timers, and a display link for the slide's repeating ticks, so
+/// each step lands on the screen's refresh instead of drifting against it. Falls back to the
+/// run loop timer before macOS 14, where AppKit has no display link.
+final class DisplayLinkClock: RatingReminderClock {
+
+    /// Ticks below this interval are frame steps and go to the display link
+    static let frameInterval: TimeInterval = 0.1
+
+    private let screen: () -> NSScreen?
+    private let fallback = RunLoopClock()
+
+    init(screen: @escaping () -> NSScreen?) {
+        self.screen = screen
+    }
+
+    func now() -> Date {
+        return Date()
+    }
+
+    func schedule(after seconds: TimeInterval, repeats: Bool, action: @escaping () -> Void) -> RatingReminderTimer {
+        if repeats, seconds < DisplayLinkClock.frameInterval, #available(macOS 14.0, *),
+           let screen = screen() ?? NSScreen.main {
+            return DisplayLinkTimer(screen: screen, action: action)
+        }
+        return fallback.schedule(after: seconds, repeats: repeats, action: action)
+    }
+
+}
+
+@available(macOS 14.0, *)
+private final class DisplayLinkTimer: NSObject, RatingReminderTimer {
+
+    private var link: CADisplayLink?
+    private let action: () -> Void
+
+    init(screen: NSScreen, action: @escaping () -> Void) {
+        self.action = action
+        super.init()
+        let link = screen.displayLink(target: self, selector: #selector(DisplayLinkTimer.tick(_:)))
+        link.add(to: .main, forMode: .common)
+        self.link = link
+    }
+
+    @objc private func tick(_ link: CADisplayLink) {
+        action()
+    }
+
+    func invalidate() {
+        link?.invalidate()
+        link = nil
     }
 
 }
