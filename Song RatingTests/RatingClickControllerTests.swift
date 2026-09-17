@@ -215,6 +215,18 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertFalse(move(to: 97))
         XCTAssertFalse(controller.isDragging)
         XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertEqual(ratingControl.rating, 40, "the unsaved preview is replaced by the original rating")
+    }
+
+    /// A press just right of the heart's hit area (x > 128) starts a drag with no rating.
+    /// Released there, nothing is saved and the rating is unchanged.
+    func testDragThatNeverReachesStarsSavesNothing() {
+        XCTAssertTrue(press(at: 130))
+        XCTAssertEqual(ratingControl.rating, 40)
+        XCTAssertFalse(release(at: 130))
+        XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertEqual(ratingControl.rating, 40)
+        XCTAssertEqual(favoriteToggles, 0)
     }
 
     func testLostCursorPositionKeepsLastRating() {

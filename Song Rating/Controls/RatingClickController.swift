@@ -90,6 +90,11 @@ final class RatingClickController {
             if !isStopped(), let releaseRating = drag.releaseRating(at: rating) {
                 os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, releaseRating)
                 ratingControl.commit(rating: releaseRating)
+            } else {
+                // Nothing saved: put back the rating the stars showed before the drag,
+                // so later changes (such as the rating shortcuts) don't build on the preview
+                os_log("%{public}s[%{public}ld], %{public}s: drag cancelled, restoring rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, drag.originalRating)
+                preview(drag.originalRating)
             }
             return false
         }
