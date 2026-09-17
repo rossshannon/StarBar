@@ -51,6 +51,45 @@ if [ -z "$DEVELOPER_DIR" ] && ! xcodebuild -version > /dev/null 2>&1; then
     echo "Using Xcode at $XCODE_APP"
 fi
 
+# Prove the app now running is the build we just made. Prints a verification block and
+# returns non-zero if the installed binary differs from the build or the new app isn't running.
+verify_install() {
+    local built_binary="$APP_PATH/Contents/MacOS/$APP_NAME"
+    local installed_binary="$INSTALL_PATH/Contents/MacOS/$APP_NAME"
+    local built_hash installed_hash pid="" started version
+
+    built_hash=$(shasum -a 256 "$built_binary" | cut -d' ' -f1)
+    installed_hash=$(shasum -a 256 "$installed_binary" | cut -d' ' -f1)
+
+    # open returns before the app starts, so wait up to 10 seconds for the process
+    for _ in $(seq 1 20); do
+        pid=$(pgrep -f "^$installed_binary" | head -1 || true)
+        [ -n "$pid" ] && break
+        sleep 0.5
+    done
+
+    version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$INSTALL_PATH/Contents/Info.plist" 2>/dev/null)
+    version="$version ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$INSTALL_PATH/Contents/Info.plist" 2>/dev/null))"
+
+    echo ""
+    echo "=== Install verification ==="
+    echo "Commit:     $(git rev-parse --short HEAD 2>/dev/null)$(git diff --quiet 2>/dev/null || echo ' + uncommitted changes')"
+    echo "Version:    $version"
+    echo "Binary:     $(stat -f '%Sm' "$installed_binary")  sha256 ${installed_hash:0:12}"
+
+    if [ "$built_hash" != "$installed_hash" ]; then
+        echo "FAILED: the installed binary is not the one just built (build ${built_hash:0:12})"
+        return 1
+    fi
+    if [ -z "$pid" ]; then
+        echo "FAILED: $APP_NAME is not running from $INSTALL_PATH"
+        return 1
+    fi
+    started=$(ps -o lstart= -p "$pid")
+    echo "Running:    PID $pid, started $started"
+    echo "Verified: /Applications has the new build, and it is running."
+}
+
 build_and_install() {
     echo ""
     echo "=== Building $APP_NAME... ==="
@@ -93,7 +132,7 @@ build_and_install() {
         cp -R "$APP_PATH" /Applications/
         echo "Launching..."
         open "$INSTALL_PATH"
-        echo "Done!"
+        verify_install
     else
         echo "App location: $APP_PATH"
         echo "To install, run: ./build.sh --install"

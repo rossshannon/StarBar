@@ -4,7 +4,7 @@ The app is named "Music Rating". The Xcode project, scheme, targets, source fold
 
 ## Build & Test Commands
 - Build (Release, into `build/`): `./build.sh`
-- Build, install to /Applications, and relaunch: `./build.sh --install`
+- Build, install to /Applications, and relaunch: `./build.sh --install`. It ends with an install verification block (commit, binary hash, running PID). Always follow the `install-and-verify` skill (`.claude/skills/install-and-verify/`): never report an install as done without that block and log evidence that the changed code runs.
 - Rebuild on file changes: `./build.sh --watch --install` (needs `brew install fswatch`)
 - Xcode is at `~/Downloads/Xcode-beta.app` and `xcode-select` points at the Command Line Tools. `build.sh` finds Xcode itself; for raw `xcodebuild` or `swift test`, prefix with `DEVELOPER_DIR=/Users/ross/Downloads/Xcode-beta.app/Contents/Developer`.
 - Signing: ad-hoc ("Sign to Run Locally"), no development team. Bundle IDs are `com.rossshannon.musicrating`, `.helper`, `.tests`. The helper and main app IDs are also hard-coded in both `AppDelegate.swift` files.
