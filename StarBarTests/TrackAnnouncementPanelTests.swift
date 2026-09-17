@@ -329,8 +329,8 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             let glass = try XCTUnwrap(backdrop as? NSGlassEffectView)
-            XCTAssertEqual(glass.tintColor, TrackAnnouncementLayout.glassTint)
-            XCTAssertLessThan(TrackAnnouncementLayout.glassTint.alphaComponent, 0.3, "a heavy tint flattens the glass")
+            XCTAssertNil(glass.tintColor, "untinted by default: the glass itself is what shows")
+            XCTAssertEqual(TrackAnnouncementLayout.glassTint.alphaComponent, 0)
             XCTAssertEqual(glass.cornerRadius, TrackAnnouncementLayout.glassCornerRadius)
         } else {
             XCTAssertTrue(backdrop is NSVisualEffectView, "before macOS 26 the glass style falls back to the blur")

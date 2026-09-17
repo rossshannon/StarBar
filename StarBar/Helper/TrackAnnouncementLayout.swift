@@ -43,13 +43,13 @@ enum TrackAnnouncementLayout {
     static let glassTintAlpha: CGFloat = 0
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
-    /// The colour Liquid Glass is tinted with: a light black, so the glass's lensing and
-    /// highlights stay visible and the text shadow does the work of legibility
-    static let glassTint = NSColor.black.withAlphaComponent(0.2)
+    /// The colour Liquid Glass is tinted with. Alpha 0 means no tint at all: the glass's
+    /// own frost and lensing are what shows, and the text shadow does the work of legibility.
+    static let glassTint = NSColor.black.withAlphaComponent(0)
     /// The glass strip's top corners. Liquid Glass shows its lensing and highlights along a
     /// curved rim; a straight edge shows almost nothing, which is why a plain band reads as
-    /// a blur.
-    static let glassCornerRadius: CGFloat = 24
+    /// a blur. Shallow enough that the curve clears the square artwork beside it.
+    static let glassCornerRadius: CGFloat = 20
     /// How far the glass stands in from each screen edge, so that the top corners exist
     static let glassSideInset: CGFloat = 16
 
