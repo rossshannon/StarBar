@@ -30,6 +30,10 @@ enum TrackAnnouncementLayout {
     static let detailHeight: CGFloat = 16
     /// Vertical gap between text lines
     static let lineGap: CGFloat = 2
+    /// The rating row: five stars and the heart, drawn like the menu bar's
+    static let ratingHeight: CGFloat = 16
+    static let ratingStarSize: CGFloat = 12
+    static let ratingSpacing: CGFloat = 3
     static let backgroundAlpha: CGFloat = 0.6
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
@@ -61,10 +65,12 @@ enum TrackAnnouncementLayout {
         let artist: CGRect?
         /// Nil when the announcement has no album
         let album: CGRect?
+        /// The stars and heart, always the last row
+        let rating: CGRect
     }
 
-    /// Lay out a strip of `size` drawn at `scale`. The text block (title and the detail lines
-    /// that exist) is centred vertically.
+    /// Lay out a strip of `size` drawn at `scale`. The text block (title, the detail lines
+    /// that exist, and the rating row) is centred vertically.
     ///
     /// - Parameters:
     ///   - leadingInset: space at the left the content must keep clear, such as a Dock the
@@ -77,12 +83,13 @@ enum TrackAnnouncementLayout {
         let textWidth = max(0, size.width - trailingInset - textX - textTrailingPad * scale)
         let titleHeight = TrackAnnouncementLayout.titleHeight * scale
         let detailHeight = TrackAnnouncementLayout.detailHeight * scale
+        let ratingHeight = TrackAnnouncementLayout.ratingHeight * scale
         let lineGap = TrackAnnouncementLayout.lineGap * scale
 
         let artwork = CGRect(x: inset, y: (size.height - artworkSize) / 2, width: artworkSize, height: artworkSize)
 
         let detailLines = (hasArtist ? 1 : 0) + (hasAlbum ? 1 : 0)
-        let blockHeight = titleHeight + CGFloat(detailLines) * (detailHeight + lineGap)
+        let blockHeight = titleHeight + CGFloat(detailLines) * (detailHeight + lineGap) + ratingHeight + lineGap
         var y = (size.height + blockHeight) / 2
         y -= titleHeight
         let title = CGRect(x: textX, y: y, width: textWidth, height: titleHeight)
@@ -96,7 +103,9 @@ enum TrackAnnouncementLayout {
             y -= lineGap + detailHeight
             album = CGRect(x: textX, y: y, width: textWidth, height: detailHeight)
         }
-        return Frames(artwork: artwork, title: title, artist: artist, album: album)
+        y -= lineGap + ratingHeight
+        let rating = CGRect(x: textX, y: y, width: textWidth, height: ratingHeight)
+        return Frames(artwork: artwork, title: title, artist: artist, album: album, rating: rating)
     }
 
     /// Where to draw an image of `imageSize` inside `slot`: scaled down to fit, never scaled

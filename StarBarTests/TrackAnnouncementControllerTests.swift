@@ -17,8 +17,9 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var clock: FakeClock!
     private var player: Snapshot?
     private var playerReads = 0
-    private var artwork: TrackAnnouncementController.ArtworkLoad = .loaded(nil)
+    private var live: TrackAnnouncementController.LiveTrackLoad = .loaded(.init())
     private var artworkRequests: [String] = []
+    private var wantsArtworkFlags: [Bool] = []
     private var reduceMotion = false
     private var reduceTransparency = false
     private var controller: TrackAnnouncementController!
@@ -29,8 +30,9 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         clock = FakeClock()
         player = nil
         playerReads = 0
-        artwork = .loaded(nil)
+        live = .loaded(.init())
         artworkRequests = []
+        wantsArtworkFlags = []
         reduceMotion = false
         reduceTransparency = false
         controller = makeController(enabled: true)
@@ -49,9 +51,10 @@ final class TrackAnnouncementControllerTests: XCTestCase {
                 self.playerReads += 1
                 return self.player
             },
-            loadArtwork: { [unowned self] identity in
+            loadLiveTrack: { [unowned self] identity, wantsArtwork in
                 self.artworkRequests.append(identity)
-                return self.artwork
+                self.wantsArtworkFlags.append(wantsArtwork)
+                return self.live
             },
             presenter: presenter,
             clock: clock,
@@ -247,7 +250,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     // MARK: - Artwork
 
     func testArtworkLoaderFailureStillAnnouncesWithoutArtwork() {
-        artwork = .loaded(nil)
+        live = .loaded(.init())
         update(snapshot(track: "A"))
 
         XCTAssertEqual(presenter.shown.count, 1)
@@ -258,9 +261,9 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         let imageA = NSImage(size: CGSize(width: 1, height: 1))
         let imageB = NSImage(size: CGSize(width: 2, height: 2))
 
-        artwork = .loaded(imageA)
+        live = .loaded(.init(artwork: imageA))
         update(snapshot(track: "A"))
-        artwork = .loaded(imageB)
+        live = .loaded(.init(artwork: imageB))
         update(snapshot(track: "B"))
 
         XCTAssertEqual(artworkRequests, ["A", "B"])
@@ -269,24 +272,79 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     }
 
     func testTrackChangedDuringArtworkLoadSkipsTheAnnouncement() {
-        artwork = .trackChanged
+        live = .trackChanged
         update(snapshot(track: "A"))
 
         XCTAssertTrue(presenter.shown.isEmpty)
         XCTAssertNil(clock.pendingOneShot)
 
         // The identity is still recorded: a later notification for A must not announce
-        artwork = .loaded(nil)
+        live = .loaded(.init())
         update(snapshot(track: "A"))
         XCTAssertTrue(presenter.shown.isEmpty)
     }
 
-    func testNoArtworkSkipsTheLoader() {
+    func testNoArtworkStillReadsTheLiveTrackButNotItsArtwork() {
         update(snapshot(track: "A", hasArtwork: false))
 
-        XCTAssertTrue(artworkRequests.isEmpty)
+        XCTAssertEqual(artworkRequests, ["A"])
+        XCTAssertEqual(wantsArtworkFlags, [false])
         XCTAssertEqual(presenter.shown.count, 1)
         XCTAssertNil(presenter.shown.first?.artwork)
+    }
+
+    // MARK: - Rating and heart
+
+    func testRatingAndHeartComeFromTheLiveTrack() {
+        live = .loaded(.init(rating: 80, isFavorited: true))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.first?.rating, 80)
+        XCTAssertEqual(presenter.shown.first?.isFavorited, true)
+    }
+
+    func testRatingFallsBackToThePayloadAndThenToUnrated() {
+        live = .loaded(.init())
+        update(Snapshot(identity: "A", state: .playing, title: "Song A", artist: "", album: "", hasArtwork: true, rating: 40))
+        XCTAssertEqual(presenter.shown.first?.rating, 40)
+        XCTAssertEqual(presenter.shown.first?.isFavorited, false)
+
+        update(snapshot(track: "B"))
+        XCTAssertEqual(presenter.shown.last?.rating, 0)
+    }
+
+    func testRatingTheSongWhileTheStripIsUpRefreshesIt() {
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+        let timer = clock.pendingOneShot
+
+        live = .loaded(.init(rating: 60, isFavorited: true))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.count, 1, "not a new strip")
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [60])
+        XCTAssertEqual(presenter.refreshed.first?.isFavorited, true)
+        XCTAssertEqual(wantsArtworkFlags, [true, false], "the refresh does not re-read the artwork")
+        XCTAssertTrue(clock.pendingOneShot === timer, "the hold timer is untouched")
+    }
+
+    func testAnUnchangedUpdateWhileUpDoesNotRefresh() {
+        live = .loaded(.init(rating: 60))
+        update(snapshot(track: "A"))
+        update(snapshot(track: "A"))
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testNoRefreshAfterTheStripHasHidden() {
+        update(snapshot(track: "A"))
+        clock.fireOneShot()
+
+        live = .loaded(.init(rating: 100))
+        update(snapshot(track: "A"))
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+        XCTAssertEqual(presenter.shown.count, 1)
     }
 
     // MARK: - On demand
@@ -380,6 +438,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(snapshot.artist, "Band")
         XCTAssertEqual(snapshot.album, "LP")
         XCTAssertTrue(snapshot.hasArtwork)
+        XCTAssertNil(snapshot.rating)
+        XCTAssertNil(snapshot.isFavorited, "the notification says nothing about the heart")
 
         XCTAssertEqual(Snapshot(playInfo: try playInfo(["Player State": "Paused"])).state, .paused)
         XCTAssertEqual(Snapshot(playInfo: try playInfo(["Player State": "Stopped"])).state, .stopped)
@@ -422,6 +482,11 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(nothing.title, "")
     }
 
+    func testSnapshotFromPlayInfoReadsTheUserRatingOnly() throws {
+        XCTAssertEqual(Snapshot(playInfo: try playInfo(["Rating": 60])).rating, 60)
+        XCTAssertEqual(Snapshot(playInfo: try playInfo(["Rating": 60, "Rating Computed": 1])).rating, 0, "a computed rating is not the user's")
+    }
+
     func testSnapshotFromPlayInfoReadsArtworkCount() throws {
         XCTAssertFalse(Snapshot(playInfo: try playInfo(["Artwork Count": 0])).hasArtwork)
         XCTAssertTrue(Snapshot(playInfo: try playInfo(["Artwork Count": 2])).hasArtwork)
@@ -445,6 +510,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
 
 private final class FakePresenter: TrackAnnouncementPresenter {
     private(set) var shown: [TrackAnnouncement] = []
+    private(set) var refreshed: [TrackAnnouncement] = []
     private(set) var reduceMotionFlags: [Bool] = []
     private(set) var reduceTransparencyFlags: [Bool] = []
     private(set) var hideCount = 0
@@ -453,6 +519,10 @@ private final class FakePresenter: TrackAnnouncementPresenter {
         shown.append(announcement)
         reduceMotionFlags.append(reduceMotion)
         reduceTransparencyFlags.append(reduceTransparency)
+    }
+
+    func refresh(_ announcement: TrackAnnouncement) {
+        refreshed.append(announcement)
     }
 
     func hide() {

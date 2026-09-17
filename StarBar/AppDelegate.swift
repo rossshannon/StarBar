@@ -83,7 +83,7 @@ extension AppDelegate {
         let panel = TrackAnnouncementPanel()
         let controller = TrackAnnouncementController(
             readPlayer: { AppDelegate.readAnnouncementSnapshot() },
-            loadArtwork: { identity in AppDelegate.loadAnnouncementArtwork(for: identity) },
+            loadLiveTrack: { identity, wantsArtwork in AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork) },
             presenter: panel,
             isEnabled: UserDefaults.standard.announceNewTracks
         )
@@ -134,14 +134,14 @@ extension AppDelegate {
         } ?? nil
     }
 
-    /// The current track's artwork, if the current track is still the one being announced.
-    /// The announcement's text comes from a queued notification while the artwork comes from
-    /// the live track, so during rapid skips they can disagree; then a newer notification is
-    /// on its way and this announcement is dropped.
-    static func loadAnnouncementArtwork(for identity: String) -> TrackAnnouncementController.ArtworkLoad {
-        guard !MenuBarRatingControl.isUITesting else { return .loaded(nil) }
-        return MenuBarRatingControl.withShortTimeout { _ -> TrackAnnouncementController.ArtworkLoad in
-            guard let track = iTunesPlayer.shared.currentTrack else { return .loaded(nil) }
+    /// The current track's rating, favourite flag and (when asked) artwork, if the current
+    /// track is still the one being announced. The announcement's text comes from a queued
+    /// notification while these come from the live track, so during rapid skips they can
+    /// disagree; then a newer notification is on its way and this announcement is dropped.
+    static func loadAnnouncementLiveTrack(for identity: String, wantsArtwork: Bool) -> TrackAnnouncementController.LiveTrackLoad {
+        guard !MenuBarRatingControl.isUITesting else { return .loaded(.init()) }
+        return MenuBarRatingControl.withShortTimeout { _ -> TrackAnnouncementController.LiveTrackLoad in
+            guard let track = iTunesPlayer.shared.currentTrack else { return .loaded(.init()) }
             let liveID = track.persistentID
             let match = TrackAnnouncementController.PlayerSnapshot.liveTrackMatch(
                 identity: identity,
@@ -152,14 +152,20 @@ extension AppDelegate {
             )
             switch match {
             case .same:
-                return .loaded(track.firstArtworkImage())
+                var live = TrackAnnouncementController.LiveTrack()
+                live.rating = track.userRating
+                live.isFavorited = track.isFavorited
+                if wantsArtwork {
+                    live.artwork = track.firstArtworkImage()
+                }
+                return .loaded(live)
             case .changed:
                 os_log(.debug, "%{public}s[%{public}ld], %{public}s: live track %{public}s is not the announced %{public}s", ((#file as NSString).lastPathComponent), #line, #function, liveID ?? "nil", identity)
                 return .trackChanged
             case .unknown:
-                return .loaded(nil)
+                return .loaded(.init())
             }
-        } ?? .loaded(nil)
+        } ?? .loaded(.init())
     }
 
 }

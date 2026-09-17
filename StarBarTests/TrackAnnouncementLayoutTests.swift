@@ -32,12 +32,32 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
     func testTextBlockIsCentredVertically() {
         let frames = TrackAnnouncementLayout.frames(in: normal)
-        let album = try! XCTUnwrap(frames.album)
 
         let topMargin = normal.height - frames.title.maxY
-        let bottomMargin = album.minY
+        let bottomMargin = frames.rating.minY
         XCTAssertEqual(topMargin, bottomMargin, accuracy: 0.5)
-        XCTAssertGreaterThan(bottomMargin, 12, "the text must not hug the bottom edge")
+        XCTAssertGreaterThan(bottomMargin, 8, "the block must not hug the bottom edge")
+    }
+
+    func testRatingRowIsAlwaysLast() {
+        let full = TrackAnnouncementLayout.frames(in: normal)
+        let album = try! XCTUnwrap(full.album)
+        XCTAssertLessThanOrEqual(full.rating.maxY, album.minY)
+        XCTAssertEqual(full.rating.minX, full.title.minX)
+        XCTAssertEqual(full.rating.height, 16)
+
+        let bare = TrackAnnouncementLayout.frames(in: normal, hasArtist: false, hasAlbum: false)
+        XCTAssertLessThanOrEqual(bare.rating.maxY, bare.title.minY)
+        XCTAssertEqual(normal.height - bare.title.maxY, bare.rating.minY, accuracy: 0.5)
+    }
+
+    func testStarStylesForARating() {
+        XCTAssertEqual(Stars.styles(forRating: 0), [.dot, .dot, .dot, .dot, .dot])
+        XCTAssertEqual(Stars.styles(forRating: 70), [.full, .full, .full, .half, .dot])
+        XCTAssertEqual(Stars.styles(forRating: 100), [.full, .full, .full, .full, .full])
+        XCTAssertEqual(Stars.styles(forRating: 10), [.half, .dot, .dot, .dot, .dot])
+        XCTAssertEqual(Stars.styles(forRating: 140), [.full, .full, .full, .full, .full], "clamped")
+        XCTAssertEqual(Stars.styles(forRating: -20), [.dot, .dot, .dot, .dot, .dot], "clamped")
     }
 
     func testDetailLinesSitBelowTheTitleWithoutOverlapping() {
@@ -51,12 +71,13 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(artist.width, frames.title.width)
     }
 
-    func testMissingAlbumKeepsTheTwoLinesCentred() {
+    func testMissingAlbumKeepsTheBlockCentred() {
         let frames = TrackAnnouncementLayout.frames(in: normal, hasArtist: true, hasAlbum: false)
         let artist = try! XCTUnwrap(frames.artist)
 
         XCTAssertNil(frames.album)
-        XCTAssertEqual(normal.height - frames.title.maxY, artist.minY, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(frames.rating.maxY, artist.minY)
+        XCTAssertEqual(normal.height - frames.title.maxY, frames.rating.minY, accuracy: 0.5)
     }
 
     func testMissingArtistPutsTheAlbumOnTheSecondLine() {
@@ -68,12 +89,13 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertLessThan(noArtist.album!.maxY, noArtist.title.minY)
     }
 
-    func testTitleAloneIsCentredWhenBothDetailsAreMissing() {
+    func testTitleAndRatingOnlyWhenBothDetailsAreMissing() {
         let frames = TrackAnnouncementLayout.frames(in: normal, hasArtist: false, hasAlbum: false)
 
         XCTAssertNil(frames.artist)
         XCTAssertNil(frames.album)
-        XCTAssertEqual(frames.title.midY, normal.height / 2, accuracy: 0.5)
+        let blockMidY = (frames.title.maxY + frames.rating.minY) / 2
+        XCTAssertEqual(blockMidY, normal.height / 2, accuracy: 0.5)
     }
 
     func testFramesScaleWithWidthOnly() {
@@ -84,6 +106,7 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(wide.title.minY, narrow.title.minY)
         XCTAssertEqual(wide.artist?.minY, narrow.artist?.minY)
         XCTAssertEqual(wide.album?.minY, narrow.album?.minY)
+        XCTAssertEqual(wide.rating.minY, narrow.rating.minY)
         XCTAssertEqual(wide.artwork, narrow.artwork)
     }
 
@@ -112,8 +135,8 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(scaled.title.height, 30)
         XCTAssertEqual(scaled.artist?.height, 24)
         XCTAssertEqual(scaled.title.width, 2160 - 156 - 24)
-        let album = try! XCTUnwrap(scaled.album)
-        XCTAssertEqual(144 - scaled.title.maxY, album.minY, accuracy: 0.5)
+        XCTAssertEqual(scaled.rating.height, 24)
+        XCTAssertEqual(144 - scaled.title.maxY, scaled.rating.minY, accuracy: 0.5)
     }
 
     // MARK: - Artwork scaling
@@ -216,7 +239,9 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertFalse(preview.title.isEmpty)
         XCTAssertFalse(preview.artist.isEmpty)
         XCTAssertFalse(preview.album.isEmpty)
-        XCTAssertEqual(preview.accessibilityLabel, "Now playing: Music Video by StarBar")
+        XCTAssertEqual(preview.rating, 70)
+        XCTAssertTrue(preview.isFavorited)
+        XCTAssertEqual(preview.accessibilityLabel, "Now playing: Music Video by StarBar. 3½ stars, favourite")
     }
 
 }

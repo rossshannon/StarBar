@@ -33,23 +33,7 @@ class RatingControl {
     var didChange: (() -> Void)?
     
     var stars: Stars {
-        let fullStarCount = rating / 20
-        let halfStarCount: Int = {
-            let remainRating = rating - 20 * fullStarCount
-            return remainRating / 10
-        }()
-        let dotCount = 5 - fullStarCount - halfStarCount
-        
-        var stars: [Star] = []
-        if fullStarCount > 0 {
-            stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .full), count: fullStarCount))
-        }
-        if halfStarCount > 0 {
-            stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .half), count: halfStarCount))
-        }
-        if dotCount > 0 {
-            stars.append(contentsOf: Array(repeating: Star(size: starSize, style: .dot), count: dotCount))
-        }
+        var stars = Stars.styles(forRating: rating).map { Star(size: starSize, style: $0) }
         // The sweep only replaces a dot, never a star the user chose
         if let sweepPosition = sweepPosition, stars.indices.contains(sweepPosition), stars[sweepPosition].style == .dot {
             stars[sweepPosition] = Star(size: starSize, style: .outline)

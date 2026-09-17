@@ -268,7 +268,20 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     func testStripHasAnAccessibilityLabel() {
         panel.show(sample, reduceMotion: false, reduceTransparency: false)
 
-        XCTAssertEqual(panel.stripView.accessibilityLabel(), "Now playing: Title by Artist")
+        XCTAssertEqual(panel.stripView.accessibilityLabel(), "Now playing: Title by Artist. No rating")
+    }
+
+    func testRefreshRedrawsOnlyWhileUp() {
+        let rated = TrackAnnouncement(identity: "1", title: "Title", artist: "Artist", album: "Album", rating: 80, isFavorited: true)
+
+        panel.refresh(rated)
+        XCTAssertFalse(panel.isVisible, "a refresh never shows a hidden strip")
+        XCTAssertNotEqual(panel.stripView.announcement, rated)
+
+        panel.show(sample, reduceMotion: false, reduceTransparency: false)
+        panel.refresh(rated)
+        XCTAssertEqual(panel.stripView.announcement, rated)
+        XCTAssertEqual(panel.phase, .shown)
     }
 
     func testStripDrawsWithAndWithoutArtwork() {
@@ -280,7 +293,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
             rect.fill()
             return true
         }
-        view.announcement = TrackAnnouncement(identity: "2", title: "T", artist: "", album: "", artwork: image)
+        view.announcement = TrackAnnouncement(identity: "2", title: "T", artist: "", album: "", rating: 70, isFavorited: true, artwork: image)
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty)
     }
 

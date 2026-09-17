@@ -71,6 +71,29 @@ final class TrackAnnouncementView: NSView {
         if let albumRect = frames.album {
             draw(announcement.album, in: albumRect, font: detailFont)
         }
+        drawRating(in: frames.rating)
+    }
+
+    /// The five stars and the heart, white like the text, with the same shadow. The menu
+    /// bar's template image is tinted white; a favourite's heart is drawn in colour on top,
+    /// as the menu bar does.
+    private func drawRating(in rect: NSRect) {
+        let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
+        let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+        let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
+        let template = stars.image
+        template.isTemplate = true
+        let image = template.withTintColor(.white)
+        let origin = NSPoint(x: rect.minX, y: rect.midY - image.size.height / 2)
+
+        NSGraphicsContext.saveGraphicsState()
+        textShadow.set()
+        image.draw(at: origin, from: .zero, operation: .sourceOver, fraction: 1)
+        if announcement.isFavorited {
+            let heart = Stars.filledFavoriteHeartImage(size: starSize)
+            heart.draw(at: NSPoint(x: rect.minX + stars.starsWidth + spacing, y: origin.y), from: .zero, operation: .sourceOver, fraction: 1)
+        }
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     private func drawArtwork(in slot: NSRect) {
@@ -99,8 +122,8 @@ final class TrackAnnouncementView: NSView {
         return symbol.withTintColor(.white)
     }()
 
-    private func draw(_ text: String, in rect: NSRect, font: NSFont) {
-        guard !text.isEmpty else { return }
+    /// Growl's soft downward shadow, scaled with the strip
+    private var textShadow: NSShadow {
         let shadow = NSShadow()
         shadow.shadowOffset = CGSize(
             width: TrackAnnouncementLayout.shadowOffset.width * scale,
@@ -108,6 +131,12 @@ final class TrackAnnouncementView: NSView {
         )
         shadow.shadowBlurRadius = TrackAnnouncementLayout.shadowBlurRadius * scale
         shadow.shadowColor = NSColor.black
+        return shadow
+    }
+
+    private func draw(_ text: String, in rect: NSRect, font: NSFont) {
+        guard !text.isEmpty else { return }
+        let shadow = textShadow
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
         let attributes: [NSAttributedString.Key: Any] = [

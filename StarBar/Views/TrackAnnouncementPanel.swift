@@ -176,6 +176,11 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         )
     }
 
+    func refresh(_ announcement: TrackAnnouncement) {
+        guard phase != .hidden, stripView.announcement != announcement else { return }
+        stripView.announcement = announcement
+    }
+
     func hide() {
         guard phase == .shown || phase == .slidingIn else { return }
         // Fade back out if the strip faded in; the flag only matters for the way in

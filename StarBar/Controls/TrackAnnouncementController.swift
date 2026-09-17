@@ -38,13 +38,36 @@ final class TrackAnnouncementController: NSObject {
         let title: String
         let artist: String
         let album: String
-        /// False when Music says the track has no artwork, so the loader is skipped
+        /// False when Music says the track has no artwork, so the artwork read is skipped
         let hasArtwork: Bool
+        /// Music's rating, 0 to 100, when the source carried it
+        let rating: Int?
+        /// Music's favourite flag, when the source carried it
+        let isFavorited: Bool?
+
+        init(identity: String?, state: State, title: String, artist: String, album: String, hasArtwork: Bool, rating: Int? = nil, isFavorited: Bool? = nil) {
+            self.identity = identity
+            self.state = state
+            self.title = title
+            self.artist = artist
+            self.album = album
+            self.hasArtwork = hasArtwork
+            self.rating = rating
+            self.isFavorited = isFavorited
+        }
     }
 
-    /// What the artwork loader found
-    enum ArtworkLoad {
-        case loaded(NSImage?)
+    /// What Music says about the announced track right now
+    struct LiveTrack {
+        var artwork: NSImage? = nil
+        /// 0 to 100; nil when it could not be read
+        var rating: Int? = nil
+        var isFavorited: Bool? = nil
+    }
+
+    /// What the live-track loader found
+    enum LiveTrackLoad {
+        case loaded(LiveTrack)
         /// Music has already moved on to another track; a notification for it is on its way
         case trackChanged
     }
@@ -57,8 +80,9 @@ final class TrackAnnouncementController: NSObject {
 
     /// Reads the player now, or returns nil when Music isn't running
     private let readPlayer: () -> PlayerSnapshot?
-    /// Loads the artwork for the track with this identity
-    private let loadArtwork: (String) -> ArtworkLoad
+    /// Reads the live track's rating, favourite flag and, when asked, artwork, for the track
+    /// with this identity
+    private let loadLiveTrack: (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad
     private let presenter: TrackAnnouncementPresenter
     private let clock: RatingReminderClock
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
@@ -69,11 +93,13 @@ final class TrackAnnouncementController: NSObject {
     /// The last snapshot that identified a track, for menu validation and on-demand showing
     /// without another read of the player
     private var lastSnapshot: PlayerSnapshot?
+    /// What the strip is showing while the hold timer runs
+    private var currentAnnouncement: TrackAnnouncement?
     private var hideTimer: RatingReminderTimer?
 
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
-        loadArtwork: @escaping (String) -> ArtworkLoad,
+        loadLiveTrack: @escaping (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad,
         presenter: TrackAnnouncementPresenter,
         clock: RatingReminderClock = RunLoopClock(),
         accessibility: @escaping () -> (reduceMotion: Bool, reduceTransparency: Bool) = {
@@ -83,7 +109,7 @@ final class TrackAnnouncementController: NSObject {
         isEnabled: Bool
     ) {
         self.readPlayer = readPlayer
-        self.loadArtwork = loadArtwork
+        self.loadLiveTrack = loadLiveTrack
         self.presenter = presenter
         self.clock = clock
         self.accessibility = accessibility
@@ -127,6 +153,11 @@ extension TrackAnnouncementController {
         if snapshot.state == .playing || seedOnly {
             lastIdentity = identity
         }
+        if !isNewTrack, let current = currentAnnouncement, current.identity == identity, hideTimer != nil {
+            // The song on the strip changed (a rating, the heart): show the new state
+            refresh(current, from: snapshot, identity: identity)
+            return
+        }
         guard isNewTrack, snapshot.state == .playing, isEnabled, !seedOnly else { return }
         announce(snapshot, identity: identity)
     }
@@ -165,35 +196,59 @@ extension TrackAnnouncementController {
     }
 
     private func announce(_ snapshot: PlayerSnapshot, identity: String) {
-        var artwork: NSImage?
-        if snapshot.hasArtwork {
-            switch loadArtwork(identity) {
-            case .loaded(let image):
-                artwork = image
-            case .trackChanged:
-                os_log(.debug, "%{public}s[%{public}ld], %{public}s: track changed before its artwork loaded; waiting for the next update", ((#file as NSString).lastPathComponent), #line, #function)
-                return
-            }
-        }
+        guard let live = loadLive(identity: identity, wantsArtwork: snapshot.hasArtwork) else { return }
         let announcement = TrackAnnouncement(
             identity: identity,
             title: snapshot.title,
             artist: snapshot.artist,
             album: snapshot.album,
-            artwork: artwork
+            rating: live.rating ?? snapshot.rating ?? 0,
+            isFavorited: live.isFavorited ?? snapshot.isFavorited ?? false,
+            artwork: live.artwork
         )
         os_log("%{public}s[%{public}ld], %{public}s: announcing %{public}s", ((#file as NSString).lastPathComponent), #line, #function, announcement.accessibilityLabel)
         present(announcement)
     }
 
+    /// The song on the strip changed while the strip is up: redraw its rating and heart,
+    /// keeping the artwork and the hold timer
+    private func refresh(_ current: TrackAnnouncement, from snapshot: PlayerSnapshot, identity: String) {
+        guard let live = loadLive(identity: identity, wantsArtwork: false) else { return }
+        let updated = TrackAnnouncement(
+            identity: identity,
+            title: snapshot.title.isEmpty ? current.title : snapshot.title,
+            artist: snapshot.artist.isEmpty ? current.artist : snapshot.artist,
+            album: snapshot.album.isEmpty ? current.album : snapshot.album,
+            rating: live.rating ?? snapshot.rating ?? current.rating,
+            isFavorited: live.isFavorited ?? snapshot.isFavorited ?? current.isFavorited,
+            artwork: current.artwork
+        )
+        guard updated != current else { return }
+        currentAnnouncement = updated
+        presenter.refresh(updated)
+    }
+
+    /// Music's live view of the track, or nil when Music has moved on to another track
+    private func loadLive(identity: String, wantsArtwork: Bool) -> LiveTrack? {
+        switch loadLiveTrack(identity, wantsArtwork) {
+        case .loaded(let live):
+            return live
+        case .trackChanged:
+            os_log(.debug, "%{public}s[%{public}ld], %{public}s: track changed before its details loaded; waiting for the next update", ((#file as NSString).lastPathComponent), #line, #function)
+            return nil
+        }
+    }
+
     /// Show the strip and start (or restart) the hold timer
     private func present(_ announcement: TrackAnnouncement) {
         let preferences = accessibility()
+        currentAnnouncement = announcement
         presenter.show(announcement, reduceMotion: preferences.reduceMotion, reduceTransparency: preferences.reduceTransparency)
         hideTimer?.invalidate()
         let hold = TrackAnnouncementController.holdDuration + TrackAnnouncementController.slideDuration
         hideTimer = clock.schedule(after: hold, repeats: false) { [weak self] in
             self?.hideTimer = nil
+            self?.currentAnnouncement = nil
             self?.presenter.hide()
         }
     }
@@ -292,6 +347,9 @@ extension TrackAnnouncementController.PlayerSnapshot {
         artist = playInfo.artist ?? ""
         album = playInfo.album ?? ""
         hasArtwork = playInfo.artworkCount != 0
+        rating = playInfo.notComputedRating
+        // The notification says nothing about the heart; the live read fills it in
+        isFavorited = nil
     }
 
     /// From the Scripting Bridge, for the launch gap before Music's first notification.
@@ -310,6 +368,8 @@ extension TrackAnnouncementController.PlayerSnapshot {
         self.artist = artist
         self.album = album
         hasArtwork = true
+        rating = track.userRating
+        isFavorited = track.isFavorited
     }
 
 }
@@ -320,5 +380,7 @@ extension TrackAnnouncementController.PlayerSnapshot {
 protocol TrackAnnouncementPresenter: AnyObject {
     /// Show this announcement, replacing whatever is showing
     func show(_ announcement: TrackAnnouncement, reduceMotion: Bool, reduceTransparency: Bool)
+    /// Redraw the strip with this announcement if it is up; do nothing if it is hidden
+    func refresh(_ announcement: TrackAnnouncement)
     func hide()
 }
