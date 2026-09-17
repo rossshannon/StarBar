@@ -87,8 +87,6 @@ final class TrackAnnouncementPanel: NSPanel {
         container.autoresizesSubviews = false
         contentView = container
         container.addSubview(stripView)
-        // Moving the strip must not redraw it: its contents change only with the announcement
-        stripView.layerContentsRedrawPolicy = .onSetNeedsDisplay
 
         if clock == nil {
             self.clock = DisplayLinkClock(screen: { [weak self] in self?.screen })
@@ -118,6 +116,12 @@ final class TrackAnnouncementPanel: NSPanel {
 
     /// The scale the strip is drawn at, from the screen it was last placed on
     private(set) var scale: CGFloat = 1
+
+    /// The strip's background, from Preferences
+    var style: TrackAnnouncementStyle {
+        get { return stripView.style }
+        set { stripView.style = newValue }
+    }
 
 }
 

@@ -7,6 +7,7 @@
 
 import Foundation
 import CoreGraphics
+import AppKit
 
 /// Where everything goes on the announcement strip. The base numbers are the original Growl
 /// "Music Video" display's: a 96 point strip, 80 point artwork inset 8 points, bold 16 point
@@ -35,8 +36,15 @@ enum TrackAnnouncementLayout {
     static let ratingStarSize: CGFloat = 12
     static let ratingSpacing: CGFloat = 3
     static let backgroundAlpha: CGFloat = 0.6
+    /// The black wash over a blurred backdrop, lighter than the classic strip
+    static let blurTintAlpha: CGFloat = 0.25
+    /// The black wash over Liquid Glass, just enough for the white text; the blue is the
+    /// glass view's own tint
+    static let glassTintAlpha: CGFloat = 0.1
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
+    /// The colour Liquid Glass is tinted with
+    static let glassTint = NSColor.systemBlue.withAlphaComponent(0.35)
     /// Slide in and slide out, each
     static let slideDuration: TimeInterval = 0.3
     /// Time fully on screen between the slides

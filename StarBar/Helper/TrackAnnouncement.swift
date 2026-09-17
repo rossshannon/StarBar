@@ -8,6 +8,32 @@
 import Foundation
 import Cocoa
 
+/// The strip's background, chosen in Preferences
+enum TrackAnnouncementStyle: String, CaseIterable {
+    /// Growl's flat black at 60 percent
+    case classic
+    /// A blur of whatever is behind the strip, under a lighter black wash
+    case blur
+    /// Liquid Glass with a blue tint on macOS 26 and later; the blur before that
+    case glass
+
+    /// The default, and what an unknown stored value falls back to
+    static let `default`: TrackAnnouncementStyle = .classic
+
+    init(storedValue: String?) {
+        self = storedValue.flatMap(TrackAnnouncementStyle.init(rawValue:)) ?? .default
+    }
+
+    /// The Preferences pop-up's wording
+    var title: String {
+        switch self {
+        case .classic: return "Classic (black)"
+        case .blur: return "Blur"
+        case .glass: return "Liquid Glass"
+        }
+    }
+}
+
 /// What the announcement strip shows for one track. A plain value, so the Preview button,
 /// the UI tests and the unit tests can show a strip without Music.
 struct TrackAnnouncement: Equatable {
