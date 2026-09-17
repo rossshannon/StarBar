@@ -14,13 +14,16 @@ import os.log
 /// default, 0 for no tint at all) and `announcementGlassCornerRadius` (points at scale 1;
 /// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more) and
 /// `announcementGlassSheen` (bool; true by default: the drawn rim light and shade that
-/// suggest a domed surface). They are read when the glass is built, so switch the strip
-/// style away and back after changing one.
+/// suggest a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default: the glass
+/// view's own opacity, which fades frost and rim together, since the API has no frost dial).
+/// They are read when the glass is built, so switch the strip style away and back after
+/// changing one.
 struct TrackAnnouncementGlassKnobs: Equatable {
     var regular = false
     var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
     var cornerRadius = TrackAnnouncementLayout.glassCornerRadius
     var sheen = true
+    var alpha: CGFloat = 1
 
     /// Where the strip gets its knobs. The tests are hosted in the app, so they replace this
     /// with fixed values rather than read whatever is set on the machine.
@@ -38,6 +41,9 @@ struct TrackAnnouncementGlassKnobs: Equatable {
         }
         if defaults.object(forKey: "announcementGlassSheen") != nil {
             knobs.sheen = defaults.bool(forKey: "announcementGlassSheen")
+        }
+        if defaults.object(forKey: "announcementGlassAlpha") != nil {
+            knobs.alpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassAlpha"))))
         }
         return knobs
     }
@@ -225,7 +231,8 @@ final class TrackAnnouncementView: NSView {
                 if knobs.tintAlpha > 0 {
                     glass.tintColor = NSColor.black.withAlphaComponent(knobs.tintAlpha)
                 }
-                os_log("%{public}s[%{public}ld], %{public}s: NSGlassEffectView style=%{public}s tint=%.2f", ((#file as NSString).lastPathComponent), #line, #function, knobs.regular ? "regular" : "clear", Double(knobs.tintAlpha))
+                glass.alphaValue = knobs.alpha
+                os_log("%{public}s[%{public}ld], %{public}s: NSGlassEffectView style=%{public}s tint=%.2f alpha=%.2f radius=%.0f sheen=%{public}s", ((#file as NSString).lastPathComponent), #line, #function, knobs.regular ? "regular" : "clear", Double(knobs.tintAlpha), Double(knobs.alpha), Double(knobs.cornerRadius), knobs.sheen ? "on" : "off")
                 return glass
             }
             #endif
