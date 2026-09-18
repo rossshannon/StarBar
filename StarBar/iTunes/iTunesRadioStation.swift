@@ -65,6 +65,18 @@ final class iTunesRadioStation {
     /// downstream has to allow for.
     static let ratingSaveDelay: TimeInterval = 2.0
 
+    /// Coalesces a run of `libraryChanged` notifications into one re-read
+    private var libraryChangedTimer: Timer?
+
+    /// How long to wait after a library change before re-reading the player.
+    ///
+    /// Music posts `libraryChanged` with no payload, and posts it for anything: a favourite
+    /// or rating set in Music itself, a song added there, a play count written at the end of
+    /// a track, a sync. A run of them all describe the same end state, so one read after the
+    /// run is worth the same as one per notification and costs a great deal less. Short
+    /// enough that a heart pressed in Music appears to change here at once.
+    static let libraryChangedReadDelay: TimeInterval = 0.3
+
     /// Runs while an add to the library is waiting to land
     private var addToLibraryTimer: Timer?
     /// How often to look for a song added to the library. Each look is an Apple Event of
@@ -79,6 +91,9 @@ final class iTunesRadioStation {
         // Note: The notification name on Catalina is same as Mojave
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.playInfoChanged(_:)), name: NSNotification.Name("com.apple.iTunes.playerInfo"), object: nil)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.sourceSaved(_:)), name: NSNotification.Name("com.apple.iTunes.sourceSaved"), object: nil)  // only set rating in iTunes edit song info panel can trigger that
+        // What Music actually sends when the user changes something in Music itself. See
+        // `libraryChanged(_:)`; `sourceSaved` is kept above for older versions.
+        DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.libraryChanged(_:)), name: NSNotification.Name("com.apple.iTunes.libraryChanged"), object: nil)
 
         // Due to iTunes may already playing before app launch,update player when app start
         iTunesPlayer.shared.update(iTunes?.currentTrackCopy)
@@ -127,6 +142,36 @@ extension iTunesRadioStation {
     @objc func sourceSaved(_ notification: Notification) {
         os_log("%{public}s[%{public}ld], %{public}s: sourceSaved", ((#file as NSString).lastPathComponent), #line, #function)
         playInfoChanged(notification)
+    }
+
+    /// Music changed something in its library: the user set a favourite or a rating **in
+    /// Music itself**, added a song there, or Music wrote a play count at the end of a track.
+    ///
+    /// This is how a change made outside StarBar reaches the stars and the heart. Measured on
+    /// 2026-09-18: pressing Favourite in Music posts this, and `sourceSaved` -- which this app
+    /// has listened for since iTunes -- did not fire once in three hours and does not appear
+    /// anywhere in Music's binary.
+    ///
+    /// The notification carries **no payload at all**, so nothing here can tell what changed
+    /// or which song it was for. Re-reading the player is the whole response: that replaces
+    /// `PlayingTrack`, so the rating track, the rating and the favourite are all resolved
+    /// again, and the menu bar and the strip redraw from them. It also picks up a song added
+    /// in Music rather than with StarBar's own button, which used to stay on the Apple Music
+    /// button until the track changed.
+    ///
+    /// Deliberately not routed through `playInfoChanged` the way `sourceSaved` is. That path
+    /// decodes the payload into a `PlayInfo`, and an empty payload only survives it by
+    /// decoding to a state of "unknown". The last real `playerInfo` still describes what is
+    /// playing, and nothing here has any reason to disturb it.
+    @objc func libraryChanged(_ notification: Notification) {
+        os_log(.debug, "%{public}s[%{public}ld], %{public}s: libraryChanged; re-reading the player", ((#file as NSString).lastPathComponent), #line, #function)
+        libraryChangedTimer?.invalidate()
+        // `.common` so a run loop tracking an open menu doesn't hold the read back
+        let timer = Timer(timeInterval: iTunesRadioStation.libraryChangedReadDelay, repeats: false) { _ in
+            iTunesPlayer.shared.update()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        libraryChangedTimer = timer
     }
 
     @objc func playInfoChanged(_ notification: Notification) {
