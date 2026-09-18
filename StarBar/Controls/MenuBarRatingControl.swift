@@ -377,12 +377,12 @@ extension MenuBarRatingControl {
 
         // Same geometry as the heart overlay, so both sit on their slots in the strip
         let leftMargin = 0.5 * (button.bounds.width - ratingControl.starsImage.size.width)
-        let size = ratingControl.starSize
+        let size = ratingControl.addToLibrarySpinnerSize
         addToLibrarySpinner.frame = NSRect(
-            x: leftMargin + ratingControl.addToLibraryPlusMinX,
-            y: 0.5 * (button.bounds.height - size.height),
-            width: size.width,
-            height: size.height
+            x: leftMargin + ratingControl.addToLibrarySpinnerMinX,
+            y: 0.5 * (button.bounds.height - size),
+            width: size,
+            height: size
         )
         addToLibrarySpinner.isHidden = false
 

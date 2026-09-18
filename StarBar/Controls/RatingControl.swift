@@ -209,6 +209,17 @@ extension RatingControl {
         return AddToLibraryBadge(glyphSize: starSize, spacing: spacing).plusMinX
     }
 
+    /// Diameter of the spinner shown while the song is being added. It is smaller than the
+    /// plus it replaces, so it doesn't sit tight against the Apple Music icon.
+    var addToLibrarySpinnerSize: CGFloat {
+        return starSize.width * AddToLibrarySpinnerView.sizeRatio
+    }
+
+    /// Left edge of that spinner inside `starsImage`: the plus's slot, nudged right
+    var addToLibrarySpinnerMinX: CGFloat {
+        return addToLibraryPlusMinX + AddToLibrarySpinnerView.leadingGap
+    }
+
     /// Left edge of the favorite heart inside `starsImage`, for a mode
     static func favoriteMinX(mode: Mode, starSize: NSSize, spacing: CGFloat) -> CGFloat {
         return contentWidth(mode: mode, starSize: starSize, spacing: spacing) + spacing

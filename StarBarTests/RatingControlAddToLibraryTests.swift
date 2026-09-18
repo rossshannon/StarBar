@@ -240,8 +240,32 @@ final class RatingControlAddToLibraryTests: XCTestCase {
 
         XCTAssertEqual(badge.plusMinX, 20)
         XCTAssertEqual(control.addToLibraryPlusMinX, badge.plusMinX)
-        // and it sits between the note and the heart
+        // and it sits between the icon and the heart
         XCTAssertLessThan(badge.plusMinX, control.favoriteMinX)
+    }
+
+    func testTheSpinnerIsSmallerThanThePlusItReplaces() {
+        XCTAssertLessThan(control.addToLibrarySpinnerSize, control.starSize.width)
+        XCTAssertEqual(control.addToLibrarySpinnerSize, 16 * AddToLibrarySpinnerView.sizeRatio)
+    }
+
+    func testTheSpinnerIsNudgedAwayFromTheAppleMusicIcon() {
+        // It sat tight against the icon at full size
+        XCTAssertGreaterThan(control.addToLibrarySpinnerMinX, control.addToLibraryPlusMinX)
+    }
+
+    func testTheSpinnerStillClearsTheHeart() {
+        // Shrinking and shifting it must not push it into the heart's slot
+        let spinnerMaxX = control.addToLibrarySpinnerMinX + control.addToLibrarySpinnerSize
+
+        XCTAssertLessThan(spinnerMaxX, control.favoriteMinX)
+    }
+
+    func testTheSpinnerStaysInsideTheStrip() {
+        let spinnerMaxX = control.addToLibrarySpinnerMinX + control.addToLibrarySpinnerSize
+
+        XCTAssertGreaterThan(control.addToLibrarySpinnerMinX, 0)
+        XCTAssertLessThan(spinnerMaxX, control.starsImage.size.width)
     }
 
     func testTheControlStartsNotAdding() {

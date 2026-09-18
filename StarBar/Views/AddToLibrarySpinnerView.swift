@@ -23,6 +23,11 @@ final class AddToLibrarySpinnerView: NSView {
     static let lineWidthRatio: CGFloat = 0.12
     /// Turns per second
     static let turnsPerSecond: CGFloat = 1.0
+    /// Diameter, as a fraction of the glyph slot it replaces. Smaller than the plus, which at
+    /// full size sat too close to the Apple Music icon beside it.
+    static let sizeRatio: CGFloat = 0.8
+    /// Extra space to its left, so it doesn't crowd the icon as the plus turns into it
+    static let leadingGap: CGFloat = 2
 
     /// Where the gap is, in degrees. Set it from a timer to make the circle turn.
     var angle: CGFloat = 0 {
