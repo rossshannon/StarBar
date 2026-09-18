@@ -254,6 +254,16 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         XCTAssertGreaterThan(control.addToLibrarySpinnerMinX, control.addToLibraryPlusMinX)
     }
 
+    func testTheSpinnerGeometryScalesWithTheStarSize() {
+        // Everything here is a fraction of the glyph, so a bigger control keeps the proportions
+        let big = RatingControl(rating: 0, starSize: NSSize(width: 32, height: 32), spacing: 8)
+        big.update(mode: .addToLibrary)
+
+        XCTAssertEqual(big.addToLibrarySpinnerSize, 2 * control.addToLibrarySpinnerSize)
+        XCTAssertEqual(big.addToLibrarySpinnerMinX - big.addToLibraryPlusMinX,
+                       2 * (control.addToLibrarySpinnerMinX - control.addToLibraryPlusMinX))
+    }
+
     func testTheSpinnerStillClearsTheHeart() {
         // Shrinking and shifting it must not push it into the heart's slot
         let spinnerMaxX = control.addToLibrarySpinnerMinX + control.addToLibrarySpinnerSize

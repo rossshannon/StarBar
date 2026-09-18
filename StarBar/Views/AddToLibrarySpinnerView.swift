@@ -26,8 +26,10 @@ final class AddToLibrarySpinnerView: NSView {
     /// Diameter, as a fraction of the glyph slot it replaces. Smaller than the plus, which at
     /// full size sat too close to the Apple Music icon beside it.
     static let sizeRatio: CGFloat = 0.8
-    /// Extra space to its left, so it doesn't crowd the icon as the plus turns into it
-    static let leadingGap: CGFloat = 2
+    /// Extra space to its left, as a fraction of the glyph slot, so it doesn't crowd the icon
+    /// as the plus turns into it. A fraction rather than a fixed number of points, so it holds
+    /// if the star size ever changes.
+    static let leadingGapRatio: CGFloat = 0.125
 
     /// Where the gap is, in degrees. Set it from a timer to make the circle turn.
     var angle: CGFloat = 0 {

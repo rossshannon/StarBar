@@ -217,7 +217,7 @@ extension RatingControl {
 
     /// Left edge of that spinner inside `starsImage`: the plus's slot, nudged right
     var addToLibrarySpinnerMinX: CGFloat {
-        return addToLibraryPlusMinX + AddToLibrarySpinnerView.leadingGap
+        return addToLibraryPlusMinX + starSize.width * AddToLibrarySpinnerView.leadingGapRatio
     }
 
     /// Left edge of the favorite heart inside `starsImage`, for a mode
