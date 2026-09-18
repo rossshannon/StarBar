@@ -70,9 +70,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ aNotification: Notification) {
         os_log("%{public}s[%{public}ld], %{public}s: Application will terminate", ((#file as NSString).lastPathComponent), #line, #function)
-        // A rating chosen in the last two seconds may still be waiting for its window
+        // A rating chosen in the last two seconds may still be waiting for its window. Under
+        // the short timeout: a hung Music must not hold the quit until macOS kills the app.
+        // When Music isn't running there is nothing to write to.
         if !MenuBarRatingControl.isUITesting {
-            iTunesRadioStation.shared.flushHeldRatingWrite()
+            _ = MenuBarRatingControl.withShortTimeout { _ in
+                iTunesRadioStation.shared.flushHeldRatingWrite()
+            }
         }
     }
 

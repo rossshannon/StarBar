@@ -62,6 +62,13 @@ final class FakeTrack: NSObject, iTunesTrack {
         favoritesWritten.append(favorited)
     }
 
+    /// `iTunesTrack.scriptingClassCode` reads `objectClass` by key-value coding, which a real
+    /// Scripting Bridge object answers. The fake answers nil, which the app treats as a class
+    /// that won't read, instead of raising the exception KVC would.
+    override func value(forUndefinedKey key: String) -> Any? {
+        return nil
+    }
+
     // MARK: SBObjectProtocol and iTunesGenericMethods
 
     /// A live Scripting Bridge object resolves to a copy; the fake is its own copy

@@ -86,6 +86,21 @@ final class RatingWriterTests: XCTestCase {
         XCTAssertEqual(written.last?.identity, 2)
     }
 
+    /// The immediate path too: a rating for a new song arriving just as the window closes
+    /// (the hold timer has up to 200 ms of tolerance) must not discard the held one
+    func testAHeldRatingForAnotherSongIsSentWhenTheNextRatingGoesAtOnce() {
+        rate(60, song: 1)
+        clock.advance(by: 0.5)
+        rate(80, song: 1)       // held for song 1, timer due in 1.5 s
+        clock.advance(by: 1.5)  // the window has closed but the timer has not fired yet
+        rate(40, song: 2)
+
+        XCTAssertEqual(written.map { $0.rating }, [60, 80, 40], "song 1's held rating, then song 2's at once")
+        XCTAssertEqual(written.map { $0.identity }, [1, 1, 2])
+        XCTAssertNil(writer.heldRating)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty, "the old timer was cancelled")
+    }
+
     func testAHeldRatingForTheSameSongIsReplaced() {
         rate(60, song: 1)
         clock.advance(by: 0.5)

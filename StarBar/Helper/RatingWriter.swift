@@ -58,9 +58,19 @@ final class RatingWriter {
 
     /// The user chose a rating
     func rate(_ request: Request) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        // A held rating for another song is never discarded: the user chose it, so it goes
+        // now, whichever way this request is handled. The window stays where it is, because
+        // a track change is not the burst the throttle exists for.
+        if let held = held, held.identity != request.identity {
+            os_log("%{public}s[%{public}ld], %{public}s: the song changed, sending the held rating for %{public}s %{public}ld now", ((#file as NSString).lastPathComponent), #line, #function, held.name, held.rating)
+            self.held = nil
+            write(held)
+        }
+
         switch throttle.decide(at: clock.now()) {
         case .now:
-            // Nothing held can be newer than this
+            // Nothing held for this song can be newer than this
             held = nil
             holdTimer?.invalidate()
             holdTimer = nil
@@ -68,12 +78,6 @@ final class RatingWriter {
             write(request)
 
         case .hold(let until):
-            if let held = held, held.identity != request.identity {
-                // A rating for another song: the user chose it, so it goes now, and the
-                // window stays where it is because this is a track change, not a burst
-                os_log("%{public}s[%{public}ld], %{public}s: the song changed, sending the held rating for %{public}s %{public}ld now", ((#file as NSString).lastPathComponent), #line, #function, held.name, held.rating)
-                write(held)
-            }
             // Keep only the newest rating for this song. The timer is already counting to
             // the same moment, so holding a shortcut down must not push the write further away.
             held = request
@@ -89,6 +93,7 @@ final class RatingWriter {
 
     /// Send a held rating now, without waiting for the window. For quitting.
     func flush() {
+        dispatchPrecondition(condition: .onQueue(.main))
         guard held != nil else { return }
         holdTimer?.invalidate()
         sendHeld()

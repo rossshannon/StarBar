@@ -64,6 +64,13 @@ final class iTunesRadioStation {
     /// downstream has to allow for.
     static let ratingSaveDelay: TimeInterval = 2.0
 
+    /// How long after Music refuses a write the player is read again, so the stars fall back
+    /// to what Music has. Long enough for Music to have settled after the refusal, short
+    /// enough that the wrong stars are not on screen for long.
+    static let refusedWriteRereadDelay: TimeInterval = 0.5
+    /// The re-read scheduled after a refused write, so several refusals mean one read
+    private var refusedWriteReread: DispatchWorkItem?
+
     private init() {
         // Listen iTunes play state change notification
         // Note: The notification name on Catalina is same as Mojave
@@ -192,8 +199,9 @@ extension iTunesRadioStation {
         // that track, not whatever has started playing by then.
         let targetTrack = track ?? iTunes?.currentTrack?.copy()
 
-        // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification
-        let name = latestPlayInfo?.name ?? iTunes?.currentTrack?.name ?? "nil"
+        // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification.
+        // The track is already resolved, so its name costs no further round trip to Music.
+        let name = latestPlayInfo?.name ?? targetTrack?.name ?? "nil"
 
         // The notification's ID says which song the rating was chosen for, at no Apple Event
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: targetTrack, identity: latestPlayInfo?.persistentID, name: name))
@@ -314,11 +322,28 @@ extension iTunesRadioStation: SBApplicationDelegate {
         os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
 
         if eventClass == "core" && eventID == "setd" {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                iTunesPlayer.shared.update()
-            }
+            DispatchQueue.main.async { [weak self] in self?.scheduleRereadAfterRefusedWrite() }
         }
         return nil
+    }
+
+    /// Read the player again shortly, once, however many writes were refused. The read and
+    /// the update's observers run under the short Apple Event timeout: a hung Music is a
+    /// likely reason for the refusal, and the default timeout would hold the main thread
+    /// for about two minutes.
+    private func scheduleRereadAfterRefusedWrite() {
+        refusedWriteReread?.cancel()
+        let reread = DispatchWorkItem { [weak self] in
+            self?.refusedWriteReread = nil
+            let updated: Void? = MenuBarRatingControl.withShortTimeout { iTunes in
+                iTunesPlayer.shared.update(iTunes.currentTrackCopy)
+            }
+            if updated == nil {
+                iTunesPlayer.shared.update(nil)
+            }
+        }
+        refusedWriteReread = reread
+        DispatchQueue.main.asyncAfter(deadline: .now() + iTunesRadioStation.refusedWriteRereadDelay, execute: reread)
     }
 
     /// The event class and ID (such as `core`/`setd` for a property write) as four-character
