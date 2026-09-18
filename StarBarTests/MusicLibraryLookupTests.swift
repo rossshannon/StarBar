@@ -133,6 +133,64 @@ final class MusicLibraryLookupTests: XCTestCase {
         XCTAssertNotNil(copy.scriptingClassCode, "a nil class code would make every track look ratable")
     }
 
+    // MARK: - The one record everything reads
+
+    /// A library song carries its own rating, so the record points back at it
+    func testTheRecordPointsAtTheSongItselfWhenItIsInTheLibrary() throws {
+        let track = try firstLibraryTrack()
+
+        let playing = PlayingTrack(track: track)
+
+        XCTAssertFalse(playing.isCatalogStream)
+        XCTAssertTrue(playing.canRate)
+        XCTAssertEqual(playing.ratingTrack?.databaseID, track.databaseID)
+    }
+
+    /// The invariant that broke: a catalog track of a song the user owns must resolve to
+    /// their copy, not to the playing track, whose rating is always 0 and cannot be written.
+    ///
+    /// This is what the menu bar and the track announcement both read, so it is also what
+    /// stops them showing different ratings for the same song.
+    func testTheRecordPointsAtTheUsersCopyWhenACatalogTrackPlays() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        try XCTSkipUnless(playing.canRate, "this song is not in the library")
+
+        XCTAssertNotEqual(playing.ratingTrack?.databaseID, track.databaseID,
+                          "the rating must not come from the catalog track, which always reads 0")
+        XCTAssertEqual(playing.ratingTrack?.name, track.name)
+        XCTAssertFalse((playing.ratingTrack?.name ?? "").isEmpty, "and it must be a live track")
+    }
+
+    /// A catalog track of a song they don't have has nowhere to put a rating, which is what
+    /// puts the Apple Music button in the menu bar instead of the stars
+    func testTheRecordSaysWhenThereIsNowhereToPutARating() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        try XCTSkipUnless(playing.ratingTrack == nil, "this song is in the library")
+
+        XCTAssertFalse(playing.canRate)
+    }
+
+    /// Adding the song is the one thing the record cannot notice for itself, because the
+    /// playing track stays a catalog track for the rest of the song
+    func testTheRecordTakesTheCopyItIsToldAbout() throws {
+        let playingTrack = try firstLibraryTrack()
+        let other = try XCTUnwrap(iTunesRadioStation.shared.libraryCopy(of: playingTrack))
+
+        let playing = PlayingTrack(track: playingTrack)
+        playing.didAddToLibrary(other)
+
+        XCTAssertEqual(playing.ratingTrack?.databaseID, other.databaseID)
+        XCTAssertTrue(playing.canRate)
+    }
+
     /// Only meaningful while a catalog track is playing, so it steps aside otherwise
     func testAPlayingCatalogTrackIsRecognised() throws {
         let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
