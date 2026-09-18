@@ -129,8 +129,58 @@ After the add, the track Music reports as playing is still the `URL track`, stil
 for the rest of the song. It does not become the library copy. Anything that should show the
 new song's rating has to switch to the library copy itself.
 
-## Open question
+## The favourite is held separately on each object
 
-Whether the favourite on a catalog track reaches the user's Apple Music account or only the
-session. Setting it on a streamed copy of a song that was also in the library left the library
-copy reading as favourited, but it may have been favourited already — untested either way.
+Measured 2026-09-18, resolving what this document previously listed as an open question.
+
+While one song played from the catalog, the two objects disagreed:
+
+| Object | `database ID` | `favorited` | `rating` |
+|---|---|---|---|
+| The playing catalog track | 373758 | `false` | 0, computed |
+| The user's library copy | 376525 | `true` | 80, user |
+
+Music keeps a separate flag on each and does not keep them in step, so a heart written to the
+playing track never reads back. The heart therefore goes where the rating goes, through
+`PlayingTrack.favoriteTrack`.
+
+Two further findings the same day:
+
+- **Setting Favourite on a catalog track in Music adds the song to the library.** A song for
+  which StarBar was showing the Apple Music button was in the library minutes later, with no
+  add from StarBar in its log, and stayed there after the favourite was removed again.
+- **The favourite is a network round trip.** Music's own star took about 3 s to fill after the
+  press, and the scripting flags changed at the same time, not at the moment of the click.
+
+## Artwork is not reliably the playing track's
+
+Measured 2026-09-18 by sampling Music across track changes: its own `current track` name and
+album, the artwork count, and an md5 of the artwork bytes.
+
+Three distinct behaviours, all on `URL track`s:
+
+| Behaviour | Example | What the strip showed |
+|---|---|---|
+| Artwork is present and correct | Bowie, *The Shel Talmy Recordings*; Sam Smith, *Music Room* | the right sleeve |
+| Artwork is present and **another song's** | "Strawberry Blonde"; Music returned the sleeve of the *Another Green World* album played before it | the wrong sleeve |
+| Artwork is absent at first | "Virginia Isn't for Lovers": count went `0 0 ERR 1 1 1 …`, filling in after about 7 s | the placeholder |
+
+The wrong-sleeve case persisted for minutes, so it is not a race at the track boundary. The
+absent case is a race, but often a slower one than the strip's 5.3 s life, so re-reading would
+frequently fill in artwork nobody is still looking at.
+
+A library song's own artwork is reliable, and the library copy of a song playing from the
+catalog returns the correct sleeve when the catalog track does not. So artwork is read through
+`PlayingTrack.artworkTrack`, the user's copy first.
+
+**It still falls back to the playing track.** Refusing to read a catalog track's artwork at all
+was tried and reverted within minutes: the sampling above shows catalog artwork is usually
+correct, so the strict rule blanked every Apple Music song's artwork to avoid an occasional
+wrong one.
+
+### Open question
+
+How to tell a wrong sleeve from a right one. Nothing on an artwork says which song it belongs
+to, and the catalog object and the library copy hold different resolutions (800×800 against
+600×600 for the same album), so the bytes cannot be compared either. Eliminating this would
+mean fetching artwork by song identifier rather than through the Scripting Bridge.
