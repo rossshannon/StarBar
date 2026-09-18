@@ -490,18 +490,33 @@ extension MenuBarRatingControl {
     }
 
     /// The Apple Music button was pressed: add the song, then show its stars.
+    ///
+    /// Music's add is asynchronous, so the stars appear a moment later, once the song is
+    /// really in the library. Waiting is the point: stars shown before then would have
+    /// nowhere to write.
     func addCurrentTrackToLibrary() {
-        guard let added = iTunesRadioStation.shared.addCurrentTrackToLibrary() else {
-            // The add failed and was logged. Leave the button up rather than showing stars
-            // that would go nowhere.
-            return
-        }
+        let pressedForPlayingID = iTunesRadioStation.shared.latestPlayInfo?.persistentID
 
-        addedLibraryTrack = added
-        addedLibraryTrackPlayingID = iTunesRadioStation.shared.latestPlayInfo?.persistentID
-        updateMode(.rating)
-        ratingControl.update(rating: added.userRating ?? 0)
-        updateFavoriteHeartView()
+        iTunesRadioStation.shared.addCurrentTrackToLibrary { [weak self] added in
+            guard let self = self else { return }
+            guard let added = added else {
+                // The add failed and was logged. Leave the button up rather than showing
+                // stars that would go nowhere.
+                return
+            }
+            // The song can change while the add is in flight, and the stars would then belong
+            // to the wrong one. The song is still in the library either way.
+            guard iTunesRadioStation.shared.latestPlayInfo?.persistentID == pressedForPlayingID else {
+                os_log("%{public}s[%{public}ld], %{public}s: the song changed while it was being added, leaving the stars alone", ((#file as NSString).lastPathComponent), #line, #function)
+                return
+            }
+
+            self.addedLibraryTrack = added
+            self.addedLibraryTrackPlayingID = pressedForPlayingID
+            self.updateMode(.rating)
+            self.ratingControl.update(rating: added.userRating ?? 0)
+            self.updateFavoriteHeartView()
+        }
     }
 
     /// Run the rating reminder's own reads with a 1 second Apple Event timeout. Returns nil

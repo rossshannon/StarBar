@@ -64,6 +64,15 @@ final class iTunesRadioStation {
     /// downstream has to allow for.
     static let ratingSaveDelay: TimeInterval = 2.0
 
+    /// Runs while an add to the library is waiting to land
+    private var addToLibraryTimer: Timer?
+    /// How often to look for a song added to the library. Each look is an Apple Event of
+    /// about 35 ms, and the add usually lands on the first or second one.
+    static let addToLibraryPollInterval: TimeInterval = 0.25
+    /// How long to keep looking. The add goes through the cloud library, so allow for a slow
+    /// network rather than giving up while it is still on its way.
+    static let addToLibraryTimeout: TimeInterval = 10.0
+
     private init() {
         // Listen iTunes play state change notification
         // Note: The notification name on Catalina is same as Mojave
@@ -255,15 +264,27 @@ extension iTunesRadioStation {
     /// The playing track stays a URL track for the rest of the song -- it never turns into the
     /// library copy -- so the caller has to keep the track this returns and rate that instead.
     ///
-    /// - Returns: the new library track, or nil if the add failed
-    func addCurrentTrackToLibrary() -> iTunesTrack? {
+    /// **The add is asynchronous.** `duplicate` returns before the song is in the library --
+    /// measured at under a second, but not immediately -- so the new entry is looked for on a
+    /// timer. Checking straight after the call finds nothing and is the reason this used to
+    /// report that the song "did not appear in the library".
+    ///
+    /// - Parameter completion: the new library track, or nil if the add failed or timed out.
+    ///   Always called on the main thread, and never before `duplicate` has been sent.
+    func addCurrentTrackToLibrary(completion: @escaping (iTunesTrack?) -> Void) {
+        guard addToLibraryTimer == nil else {
+            // The button is still showing while the add is in flight; a second press must not
+            // add the song twice
+            os_log("%{public}s[%{public}ld], %{public}s: already adding a song to the library, ignoring", ((#file as NSString).lastPathComponent), #line, #function)
+            return
+        }
         guard let iTunes = iTunes, let track = iTunes.currentTrack else {
             os_log("%{public}s[%{public}ld], %{public}s: no track to add to the library", ((#file as NSString).lastPathComponent), #line, #function)
-            return nil
+            return completion(nil)
         }
         guard let library = librarySource(of: iTunes), let libraryPlaylist = libraryPlaylist(of: library) else {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: no library source to add to", ((#file as NSString).lastPathComponent), #line, #function)
-            return nil
+            return completion(nil)
         }
 
         let name = track.name ?? "nil"
@@ -272,19 +293,38 @@ extension iTunesRadioStation {
 
         _ = (track as? iTunesGenericMethods)?.duplicateTo?(library as? SBObject)
 
-        let added = databaseIDs(matching: track, in: libraryPlaylist).subtracting(existingIDs)
-        guard let databaseID = added.first else {
-            os_log(.error, "%{public}s[%{public}ld], %{public}s: %{public}s did not appear in the library after the add", ((#file as NSString).lastPathComponent), #line, #function, name)
-            return nil
-        }
-        if added.count > 1 {
-            // Two songs appearing at once shouldn't happen; rate neither rather than guess
-            os_log(.error, "%{public}s[%{public}ld], %{public}s: %{public}ld songs appeared at once, not rating any of them", ((#file as NSString).lastPathComponent), #line, #function, added.count)
-            return nil
-        }
+        let giveUpAt = Date().addingTimeInterval(iTunesRadioStation.addToLibraryTimeout)
+        addToLibraryTimer = Timer.scheduledTimer(withTimeInterval: iTunesRadioStation.addToLibraryPollInterval, repeats: true) { [weak self] timer in
+            guard let self = self else { return timer.invalidate() }
 
-        os_log("%{public}s[%{public}ld], %{public}s: added %{public}s to the library as %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, name, databaseID)
-        return libraryPlaylist.tracks?().object(withID: databaseID) as? iTunesTrack
+            let result = LibraryAdd.result(
+                before: existingIDs,
+                after: self.databaseIDs(matching: track, in: libraryPlaylist)
+            )
+
+            switch result {
+            case .pending:
+                guard Date() >= giveUpAt else { return }
+                self.finishAddToLibrary(timer)
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: %{public}s did not appear in the library within %{public}.0f s", ((#file as NSString).lastPathComponent), #line, #function, name, iTunesRadioStation.addToLibraryTimeout)
+                completion(nil)
+
+            case .ambiguous(let count):
+                self.finishAddToLibrary(timer)
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: %{public}ld songs appeared at once, not rating any of them", ((#file as NSString).lastPathComponent), #line, #function, count)
+                completion(nil)
+
+            case .added(let databaseID):
+                self.finishAddToLibrary(timer)
+                os_log("%{public}s[%{public}ld], %{public}s: added %{public}s to the library as %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, name, databaseID)
+                completion(libraryPlaylist.tracks?().object(withID: databaseID) as? iTunesTrack)
+            }
+        }
+    }
+
+    private func finishAddToLibrary(_ timer: Timer) {
+        timer.invalidate()
+        addToLibraryTimer = nil
     }
 
     /// The user's own library, as opposed to a shared library, an iPod or the store
