@@ -21,7 +21,8 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest
-    timeout-minutes: 45
+    # Notarisation alone may wait up to 30 minutes
+    timeout-minutes: 75
     env:
       # Secrets can't be tested in a step's `if` directly, so the decision is made here once
       HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
@@ -34,6 +35,15 @@ jobs:
         run: |
           if ! [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Release tags must look like v1.1.0, not $GITHUB_REF_NAME"
+            exit 1
+          fi
+
+      # A Developer ID signature without notarisation is still blocked by Gatekeeper, so a
+      # half-configured repository fails here rather than shipping something worse than ad hoc
+      - name: Check the secrets go together
+        run: |
+          if [ "$HAS_SIGNING" = "true" ] && [ "$HAS_NOTARY" != "true" ]; then
+            echo "::error::Signing secrets are set but APPLE_ID or APPLE_APP_SPECIFIC_PASSWORD is missing; add them or remove the certificate secrets"
             exit 1
           fi
 
@@ -72,12 +82,12 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" login.keychain
           rm "$RUNNER_TEMP/certificate.p12"
-          # The identity's full name, for build.sh
-          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
-          if [ -z "$IDENTITY" ]; then
-            echo "::error::The certificate is not a Developer ID Application identity"
-            exit 1
-          fi
+          # The identity's full name, for build.sh: the quoted field of the first matching line
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | awk -F'"' '{print $2}')
+          case "$IDENTITY" in
+            "Developer ID Application:"*) ;;
+            *) echo "::error::The certificate is not a Developer ID Application identity (found '$IDENTITY')"; exit 1 ;;
+          esac
           echo "STARBAR_CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           echo "STARBAR_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
 

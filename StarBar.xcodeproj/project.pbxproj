@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		FA0000000000000000000003 /* MASShortcut in Frameworks */ = {isa = PBXBuildFile; productRef = FA0000000000000000000002 /* MASShortcut */; };
-		FA0000000000000000000003 /* MASShortcut in Frameworks */ = {isa = PBXBuildFile; productRef = FA0000000000000000000002 /* MASShortcut */; };
 		5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C1 /* RatingClickController.swift */; };
 		5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */; };
 		5A7E1A0000000000000000B2 /* MenuBarRatingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */; };

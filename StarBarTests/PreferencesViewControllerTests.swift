@@ -13,8 +13,7 @@ final class PreferencesViewControllerTests: XCTestCase {
     /// The stars are a template image tinted with the label colour, so AppKit recolours
     /// them for light and dark mode. An image baked with a fixed colour would not follow.
     func testStarsLabelFollowsTheLabelColour() throws {
-        let label = PreferencesViewController.starsLabel(count: 3, fontSize: 13)
-        let stack = try XCTUnwrap(label as? NSStackView)
+        let stack = PreferencesViewController.starsLabel(count: 3, fontSize: 13)
         let imageView = try XCTUnwrap(stack.arrangedSubviews.first as? NSImageView)
 
         XCTAssertEqual(try XCTUnwrap(imageView.image).isTemplate, true)
@@ -27,7 +26,7 @@ final class PreferencesViewControllerTests: XCTestCase {
     func testStarsLabelWidthGrowsWithTheCount() throws {
         var previousWidth: CGFloat = 0
         for count in 1...5 {
-            let stack = try XCTUnwrap(PreferencesViewController.starsLabel(count: count, fontSize: 13) as? NSStackView)
+            let stack = PreferencesViewController.starsLabel(count: count, fontSize: 13)
             let image = try XCTUnwrap((stack.arrangedSubviews.first as? NSImageView)?.image)
             XCTAssertEqual(image.size.height, 13)
             XCTAssertGreaterThan(image.size.width, previousWidth, "count \(count)")

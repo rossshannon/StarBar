@@ -124,6 +124,8 @@ collect_build_settings() {
         BUILD_SETTINGS+=("MARKETING_VERSION=$VERSION")
     elif tag=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null); then
         BUILD_SETTINGS+=("MARKETING_VERSION=${tag#v}")
+    else
+        echo "Note: no v* tag reachable, so the version stays the project's own"
     fi
     if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "false" ]; then
         BUILD_SETTINGS+=("CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD)")

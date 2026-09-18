@@ -43,19 +43,19 @@ final class PreferencesViewController: NSViewController {
     lazy var showOrClosePopoverTextField: NSTextField = {
         return NSTextField(labelWithString: "Show/Close popover: ")
     }()
-    lazy var rating5TextField: NSView = {
+    lazy var rating5TextField: NSStackView = {
         return PreferencesViewController.starsLabel(count: 5, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating4TextField: NSView = {
+    lazy var rating4TextField: NSStackView = {
         return PreferencesViewController.starsLabel(count: 4, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating3TextField: NSView = {
+    lazy var rating3TextField: NSStackView = {
         return PreferencesViewController.starsLabel(count: 3, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating2TextField: NSView = {
+    lazy var rating2TextField: NSStackView = {
         return PreferencesViewController.starsLabel(count: 2, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating1TextField: NSView = {
+    lazy var rating1TextField: NSStackView = {
         return PreferencesViewController.starsLabel(count: 1, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
     lazy var rating0TextField: NSTextField = {
@@ -224,7 +224,7 @@ extension PreferencesViewController {
     /// they follow light and dark mode like the text beside them. An image baked with the
     /// label colour at creation time (the earlier text-attachment approach) kept the colour
     /// of whichever appearance the window opened in.
-    static func starsLabel(count: Int, fontSize: CGFloat) -> NSView {
+    static func starsLabel(count: Int, fontSize: CGFloat) -> NSStackView {
         let stars = Stars(
             stars: Array(repeating: Star(size: CGSize(width: fontSize, height: fontSize), style: .full), count: count),
             spacing: 3
