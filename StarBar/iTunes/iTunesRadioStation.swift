@@ -7,6 +7,7 @@
 //
 
 import Foundation
+import AppKit
 import ScriptingBridge
 import os
 import MASShortcut
@@ -64,6 +65,7 @@ final class iTunesRadioStation {
 
         // Due to iTunes may already playing before app launch,update player when app start
         iTunesPlayer.shared.update(iTunes?.currentTrackCopy)
+        observeMusicLifecycle()
 
         // Bind and broadcast keyboard
         // Notify control directly without trigger player update notification
@@ -209,6 +211,57 @@ extension iTunesRadioStation {
 
     func playPause() {
         iTunes?.playpause?()
+    }
+
+}
+
+// MARK: - Music lifecycle
+extension iTunesRadioStation {
+
+    /// Read the player again when Music launches or quits, or the Mac wakes.
+    ///
+    /// Music's own notifications cover playback, and a normal quit sends a Stopped one, but
+    /// a crash or force quit sends nothing, and after sleep the track can have changed under
+    /// a menu bar that never heard about it. Each of these costs at most one short-timeout
+    /// read, and none of them sends Music anything when it isn't running.
+    private func observeMusicLifecycle() {
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(self, selector: #selector(iTunesRadioStation.musicDidLaunch(_:)), name: NSWorkspace.didLaunchApplicationNotification, object: nil)
+        center.addObserver(self, selector: #selector(iTunesRadioStation.musicDidTerminate(_:)), name: NSWorkspace.didTerminateApplicationNotification, object: nil)
+        center.addObserver(self, selector: #selector(iTunesRadioStation.systemDidWake(_:)), name: NSWorkspace.didWakeNotification, object: nil)
+    }
+
+    /// True when a workspace notification is about Music
+    static func isMusic(_ notification: Notification) -> Bool {
+        let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        return application?.bundleIdentifier == OSVersionHelper.bundleIdentifier
+    }
+
+    @objc private func musicDidLaunch(_ notification: Notification) {
+        guard iTunesRadioStation.isMusic(notification) else { return }
+        // Music answers Apple Events only once it has finished launching. It will post its
+        // own notification when playback starts; this read is for the menu bar's state.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.readPlayerAgain(because: "Music launched")
+        }
+    }
+
+    @objc private func musicDidTerminate(_ notification: Notification) {
+        guard iTunesRadioStation.isMusic(notification) else { return }
+        os_log("%{public}s[%{public}ld], %{public}s: Music quit, clearing the player", ((#file as NSString).lastPathComponent), #line, #function)
+        // The observer runs iTunesPlayer.shared.update(), which finds Music not running
+        latestPlayInfo = nil
+    }
+
+    @objc private func systemDidWake(_ notification: Notification) {
+        readPlayerAgain(because: "the Mac woke")
+    }
+
+    /// One short-timeout read of the current track, then the usual player update
+    private func readPlayerAgain(because reason: String) {
+        os_log("%{public}s[%{public}ld], %{public}s: reading the player again because %{public}s", ((#file as NSString).lastPathComponent), #line, #function, reason)
+        let track = MenuBarRatingControl.withShortTimeout { $0.currentTrackCopy } ?? nil
+        iTunesPlayer.shared.update(track)
     }
 
 }
