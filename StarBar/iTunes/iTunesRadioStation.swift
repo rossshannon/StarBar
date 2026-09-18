@@ -144,13 +144,20 @@ extension iTunesRadioStation {
         playInfoChanged(notification)
     }
 
-    /// Music changed something in its library: the user set a favourite or a rating **in
-    /// Music itself**, added a song there, or Music wrote a play count at the end of a track.
+    /// Music saved its library: the user set a favourite or a rating **in Music itself**,
+    /// added a song there, or Music wrote a play count at the end of a track.
     ///
-    /// This is how a change made outside StarBar reaches the stars and the heart. Measured on
-    /// 2026-09-18: pressing Favourite in Music posts this, and `sourceSaved` -- which this app
-    /// has listened for since iTunes -- did not fire once in three hours and does not appear
-    /// anywhere in Music's binary.
+    /// This is how a change made outside StarBar reaches the stars and the heart -- but
+    /// **late, and not once per change**. Measured 2026-09-18, a favourite set and then unset
+    /// in Music: the flags changed at 16:11:39.2 and 16:11:48.4, and this arrived once, at
+    /// 16:12:03.7. Fifteen seconds after the second change, and never for the first. Treat it
+    /// as a periodic save signal that eventually reconciles, not as an event. Keeping the
+    /// heart in step with Music as the user presses it would need polling, which Ross was
+    /// asked about and chose not to have.
+    ///
+    /// `sourceSaved` -- which this app has listened for since iTunes -- did not fire once in
+    /// three hours and does not appear anywhere in Music's binary, so this replaces it as the
+    /// path that actually runs.
     ///
     /// The notification carries **no payload at all**, so nothing here can tell what changed
     /// or which song it was for. Re-reading the player is the whole response: that replaces
