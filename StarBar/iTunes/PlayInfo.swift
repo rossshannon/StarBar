@@ -68,7 +68,26 @@ extension PlayInfo {
         guard rating != nil else { return nil }
         return ratingComputed != 1 ? rating : 0
     }
-    
+
+    /// Which song this payload describes, for telling two songs apart at no cost.
+    ///
+    /// The persistent ID when Music sent one, otherwise `name|artist|album`: some Apple Music
+    /// catalog tracks arrive with no ID field at all, and comparing a missing ID only ever
+    /// compares nil with nil. Nil when the payload names no song. Not for matching against a
+    /// track read through the Scripting Bridge, whose persistent ID is a hex string.
+    ///
+    /// **It lags.** It describes the last notification, and Music posts that after the song
+    /// has changed, so anything read from the player in the meantime is about a newer song
+    /// than this is. `RatingWriter` uses it only as a fallback for that reason. Two songs with
+    /// the same three names and no ID also compare equal.
+    var songIdentity: String? {
+        if let persistentID = persistentID {
+            return String(persistentID)
+        }
+        guard let name = name, !name.isEmpty else { return nil }
+        return [name, artist ?? "", album ?? ""].joined(separator: "|")
+    }
+
 }
 
 extension PlayInfo {
