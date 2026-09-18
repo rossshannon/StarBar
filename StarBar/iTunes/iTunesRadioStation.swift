@@ -54,7 +54,7 @@ final class iTunesRadioStation {
     /// When a chosen rating is sent to Music: the first goes at once, the rest wait
     private var ratingWriteThrottle = RatingWriteThrottle(interval: iTunesRadioStation.ratingSaveDelay)
     /// The newest rating waiting for the throttle window to close, with the track it belongs to
-    private var heldRatingWrite: (rating: Int, track: iTunesTrack?, name: String)?
+    private var heldRatingWrite: (rating: Int, track: iTunesTrack, name: String)?
     private var heldRatingWriteTimer: Timer?
 
     /// The longest `setRating(_:)` can hold a rating before saving it to Music.
@@ -188,21 +188,23 @@ extension iTunesRadioStation {
     ///   fresh is held and sent when the window closes, so a held-down rating shortcut doesn't
     ///   send Music a burst of Apple Events. A drag doesn't come through here repeatedly:
     ///   `RatingClickController` previews it and commits once, on release.
-    /// - Parameter track: the track to rate, or nil for whatever is playing. The menu bar
-    ///   passes the library copy of a song just added with the Apple Music button, because the
-    ///   playing track stays a catalog track that Music will not store a rating on.
-    func setRating(_ rating: Int, on track: iTunesTrack? = nil) {
-        guard track != nil || latestPlayInfo != nil || !(iTunes?.currentTrack?.name ?? "").isEmpty else {
-            os_log("%{public}s[%{public}ld], %{public}s: try to set rating but no current track info", ((#file as NSString).lastPathComponent), #line, #function)
+    /// - Parameter track: the track to rate. Nil means there is nowhere to put a rating -- a
+    ///   song playing from the Apple Music catalog that isn't in the library -- and the rating
+    ///   is dropped rather than sent somewhere Music refuses it.
+    ///
+    ///   There is deliberately no "whatever is playing" fallback. When nil meant both "no
+    ///   target" and "use the default", the rating shortcuts still wrote to catalog tracks --
+    ///   the bug this branch exists to fix -- and a held write could resolve the *next* song.
+    ///   Callers pass `PlayingTrack.ratingTrack`, which is already the user's own copy when
+    ///   the playing track cannot hold a rating.
+    func setRating(_ rating: Int, on track: iTunesTrack?) {
+        guard let targetTrack = track else {
+            os_log("%{public}s[%{public}ld], %{public}s: nowhere to put a rating for this song, dropping it", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
 
-        // Hold on to the track the user was looking at. A write that lands later must rate
-        // that track, not whatever has started playing by then.
-        let targetTrack = track ?? iTunes?.currentTrack?.copy()
-
         // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification
-        let name = latestPlayInfo?.name ?? iTunes?.currentTrack?.name ?? "nil"
+        let name = latestPlayInfo?.name ?? targetTrack.name ?? "nil"
 
         switch ratingWriteThrottle.decide(at: Date()) {
         case .now:
@@ -224,7 +226,10 @@ extension iTunesRadioStation {
                 self?.sendHeldRatingWrite()
             })
             heldRatingWriteTimer = timer
-            RunLoop.current.add(timer, forMode: .default)
+            // .common, like every other timer here: a .default timer doesn't fire while AppKit
+            // is tracking the mouse, which would push the write past the bound that
+            // ratingSaveDelay promises to everything downstream
+            RunLoop.main.add(timer, forMode: .common)
         }
     }
 
@@ -243,9 +248,11 @@ extension iTunesRadioStation {
     /// Music can refuse: a song streamed from the Apple Music catalog isn't in the library,
     /// so there is nothing to store a rating on and the write comes back as OSStatus -54
     /// through `eventDidFail`, after this returns. See `iTunesTrack.isCatalogStream`.
-    private func write(rating: Int, to targetTrack: iTunesTrack?, name: String) {
-        let track = targetTrack ?? iTunes?.currentTrack
-        track?.setRating?(rating)
+    private func write(rating: Int, to track: iTunesTrack, name: String) {
+        // No fallback to whatever is playing: a held write fires up to `ratingSaveDelay`
+        // later, and resolving the current track then would rate the next song -- the FIXME
+        // this file used to carry.
+        track.setRating?(rating)
         logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(name, privacy: .public): \(rating)")
     }
 
@@ -270,7 +277,10 @@ extension iTunesRadioStation {
     /// report that the song "did not appear in the library".
     ///
     /// - Parameter completion: the new library track, or nil if the add failed or timed out.
-    ///   Always called on the main thread, and never before `duplicate` has been sent.
+    ///   Called on the main thread, and never before `duplicate` has been sent. **Not called
+    ///   at all** when an add is already in flight -- the press is ignored, and the completion
+    ///   for the add that is running will answer for it. Calling it here would clear the
+    ///   spinner while that first add is still going.
     func addCurrentTrackToLibrary(completion: @escaping (iTunesTrack?) -> Void) {
         guard addToLibraryTimer == nil else {
             // The button is still showing while the add is in flight; a second press must not
@@ -278,7 +288,10 @@ extension iTunesRadioStation {
             os_log("%{public}s[%{public}ld], %{public}s: already adding a song to the library, ignoring", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
-        guard let iTunes = iTunes, let track = iTunes.currentTrack else {
+        // A resolved copy, not the live `currentTrack` specifier: that one re-resolves on
+        // every Apple Event, so a song change between the press and the send -- or during the
+        // ten seconds of polling -- would add the wrong song to the user's library.
+        guard let iTunes = iTunes, let track = iTunes.currentTrackCopy else {
             os_log("%{public}s[%{public}ld], %{public}s: no track to add to the library", ((#file as NSString).lastPathComponent), #line, #function)
             return completion(nil)
         }
@@ -370,9 +383,13 @@ extension iTunesRadioStation {
     /// rather than looking them up again by database ID, which does not work: see
     /// `libraryCopy(of:)`.
     private func libraryMatches(for track: iTunesTrack, in libraryPlaylist: iTunesPlaylist) -> [iTunesTrack] {
-        guard let name = track.name else { return [] }
-        let predicate = NSPredicate(format: "name == %@ AND artist == %@ AND album == %@",
-                                    name, track.artist ?? "", track.album ?? "")
+        // All three have to be readable. Coercing a failed read to "" would match library
+        // songs that genuinely have blank metadata, which is a different song.
+        guard let name = track.name, let artist = track.artist, let album = track.album else {
+            os_log("%{public}s[%{public}ld], %{public}s: name, artist and album could not all be read, so no library copy is matched", ((#file as NSString).lastPathComponent), #line, #function)
+            return []
+        }
+        let predicate = NSPredicate(format: "name == %@ AND artist == %@ AND album == %@", name, artist, album)
         return libraryPlaylist.tracks?().filtered(using: predicate) as? [iTunesTrack] ?? []
     }
 

@@ -11,7 +11,8 @@ import Cocoa
 /// curves and close, in both absolute and relative form, plus the horizontal and vertical
 /// line shorthands and the smooth-curve shorthand.
 ///
-/// Arcs (`A`/`a`) and quadratic curves (`Q`/`T`) are not supported and are skipped; nothing
+/// Arcs (`A`/`a`) and quadratic curves (`Q`/`T`) are not supported: the parse **stops** at one
+/// rather than skipping it, because skipping would draw a shape that is quietly wrong. Nothing
 /// here needs them. The result is in SVG coordinates, where y grows downwards -- flip it
 /// before drawing, as `MusicNoteGlyph` does.
 enum SVGPath {
@@ -29,15 +30,22 @@ enum SVGPath {
 
         while true {
             scanner.skipSeparators()
+            var readACommand = false
             if let next = scanner.peekCommand() {
                 command = next
                 scanner.advance()
+                readACommand = true
             } else if command == nil || scanner.isAtEnd {
                 break
             }
             // Otherwise the previous command repeats with fresh numbers, which SVG allows
 
             guard let verb = command else { break }
+
+            // Close takes no numbers, so repeating it implicitly would consume nothing and
+            // spin here forever, appending a close element each time. Only honour it when the
+            // letter was actually read this time round.
+            if (verb == "Z" || verb == "z") && !readACommand { return path }
             let isRelative = verb.isLowercase
 
             func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
@@ -165,6 +173,31 @@ enum SVGPath {
                     break
                 }
                 index += 1
+            }
+
+            // Exponent notation, which many SVG exporters emit. Without this "1e-5" would
+            // scan as 1, and the "e" would then be read as an unknown command and end the
+            // parse -- most of a path lost with nothing said about it.
+            if !digits.isEmpty, index < characters.count,
+               characters[index] == "e" || characters[index] == "E" {
+                var lookahead = index + 1
+                var exponent = String(characters[index])
+                if lookahead < characters.count,
+                   characters[lookahead] == "-" || characters[lookahead] == "+" {
+                    exponent.append(characters[lookahead])
+                    lookahead += 1
+                }
+                var exponentDigits = ""
+                while lookahead < characters.count, characters[lookahead].isNumber {
+                    exponentDigits.append(characters[lookahead])
+                    lookahead += 1
+                }
+                // Only take it when there are digits after the e, so a stray letter is still
+                // treated as a command
+                if !exponentDigits.isEmpty {
+                    digits += exponent + exponentDigits
+                    index = lookahead
+                }
             }
 
             return Double(digits).map { CGFloat($0) }

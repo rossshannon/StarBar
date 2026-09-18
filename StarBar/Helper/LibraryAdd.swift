@@ -30,16 +30,12 @@ enum LibraryAdd: Equatable {
     static func result(before: Set<Int>, after: Set<Int>) -> LibraryAdd {
         let appeared = after.subtracting(before)
 
-        switch appeared.count {
-        case 0:
-            return .pending
-        case 1:
-            // `first` is safe: the count is exactly one
-            return .added(databaseID: appeared.first!)
-        default:
-            // Rating the wrong song is worse than rating none, so don't guess
-            return .ambiguous(count: appeared.count)
+        guard let onlyOne = appeared.first, appeared.count == 1 else {
+            // Nothing yet, or several at once. Rating the wrong song is worse than rating
+            // none, so an ambiguous answer is refused rather than guessed at.
+            return appeared.isEmpty ? .pending : .ambiguous(count: appeared.count)
         }
+        return .added(databaseID: onlyOne)
     }
 
 }

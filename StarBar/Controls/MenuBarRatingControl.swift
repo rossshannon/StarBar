@@ -178,6 +178,19 @@ final class MenuBarRatingControl {
     var isStop: Bool {
         return playState == .unknown
     }
+
+    /// Say why a rating shortcut did nothing. Silence here reads as a broken shortcut.
+    private func logUnratableShortcut() {
+        os_log("%{public}s[%{public}ld], %{public}s: this song has nowhere to keep a rating, so the shortcut does nothing", ((#file as NSString).lastPathComponent), #line, #function)
+    }
+
+    /// Where a rating the user chooses should go, or nil when this song cannot be rated.
+    ///
+    /// Read once per gesture: it reaches `PlayingTrack`, which asks Music whether the track
+    /// still exists.
+    private var ratingTarget: iTunesTrack? {
+        return iTunesPlayer.shared.playing?.ratingTrack
+    }
     
     func updateGestureRecognizerBehavior() {
         // deliver .leftMouseUp action without delay when player stop
@@ -317,7 +330,7 @@ extension MenuBarRatingControl {
 
         widthTimer?.invalidate()
         let start = Date()
-        widthTimer = widthClock.schedule(after: 0, repeats: true) { [weak self] in
+        widthTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             guard let self = self else { return }
             let progress = Date().timeIntervalSince(start) / MenuBarRatingControl.modeChangeDuration
             let eased = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
@@ -382,7 +395,7 @@ extension MenuBarRatingControl {
         // than animating it: Core Animation on this kind of window has been seen not to draw
         let start = Date()
         spinnerStart = start
-        spinnerTimer = widthClock.schedule(after: 0, repeats: true) { [weak self] in
+        spinnerTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             guard let self = self else { return }
             let turns = Date().timeIntervalSince(start) * Double(AddToLibrarySpinnerView.turnsPerSecond)
             // Clockwise, which is the direction Music turns it
@@ -443,6 +456,13 @@ extension MenuBarRatingControl {
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard sender.state == .ended else { return }
+        // The strip is mid-resize: the mode and image have already changed but the button has
+        // not finished narrowing, so a click maps to the wrong position. Over 0.22 s that is
+        // enough to add a song the user did not mean to add.
+        guard widthTimer == nil else {
+            os_log("%{public}s[%{public}ld], %{public}s: ignoring a click while the strip is still resizing", ((#file as NSString).lastPathComponent), #line, #function)
+            return
+        }
         handlePress()
     }
 
@@ -485,7 +505,7 @@ extension MenuBarRatingControl: RatingControlDelegate {
         TrackAnnouncementController.shared?.userDidRate(rating)
         // Update iTunes current track rating
         if !MenuBarRatingControl.isUITesting {
-            iTunesRadioStation.shared.setRating(rating, on: iTunesPlayer.shared.playing?.ratingTrack)
+            iTunesRadioStation.shared.setRating(rating, on: ratingTarget)
         }
         statusItem.button?.needsDisplay = true
     }
@@ -601,9 +621,13 @@ extension MenuBarRatingControl {
         guard !isStop else {
             return
         }
+        // The stars aren't showing for a song that can't be rated, and the keyboard must not
+        // put a rating where the mouse can't -- Music would refuse it and the user would see
+        // a rating that never saved
+        guard let target = ratingTarget else { return logUnratableShortcut() }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating + ratingChange)
-        iTunesRadioStation.shared.setRating(ratingControl.rating, on: iTunesPlayer.shared.playing?.ratingTrack)
+        iTunesRadioStation.shared.setRating(ratingControl.rating, on: target)
         reminderController?.userDidRate()
         TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
@@ -614,9 +638,10 @@ extension MenuBarRatingControl {
             return
         }
 
+        guard let target = ratingTarget else { return logUnratableShortcut() }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating - ratingChange)
-        iTunesRadioStation.shared.setRating(ratingControl.rating, on: iTunesPlayer.shared.playing?.ratingTrack)
+        iTunesRadioStation.shared.setRating(ratingControl.rating, on: target)
         reminderController?.userDidRate()
         TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
@@ -651,8 +676,9 @@ extension MenuBarRatingControl {
           return
       }
 
+      guard let target = ratingTarget else { return logUnratableShortcut() }
       ratingControl.update(rating: stars * 20)
-      iTunesRadioStation.shared.setRating(ratingControl.rating, on: iTunesPlayer.shared.playing?.ratingTrack)
+      iTunesRadioStation.shared.setRating(ratingControl.rating, on: target)
       reminderController?.userDidRate()
       TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }

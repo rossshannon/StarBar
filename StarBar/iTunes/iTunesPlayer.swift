@@ -25,12 +25,20 @@ final class iTunesPlayer {
         }
     }
 
+    private var _playing: PlayingTrack?
+
     /// The song playing and the track its rating belongs to, worked out once and shared.
     ///
     /// Read this rather than `currentTrack` for anything to do with ratings: a catalog track
     /// cannot hold one, and the user's own copy of the song may be somewhere else. See
     /// `PlayingTrack`.
-    private(set) var playing: PlayingTrack?
+    ///
+    /// Nil once the track stops existing, on the same terms as `currentTrack`. The two have to
+    /// agree: a record that outlived its track would have the menu bar offering stars for a
+    /// song Music has already let go of.
+    var playing: PlayingTrack? {
+        return currentTrack == nil ? nil : _playing
+    }
     
     var isPlaying: Bool {
         return iTunesRadioStation.shared.iTunes?.playerState == .playing
@@ -53,7 +61,7 @@ extension iTunesPlayer {
         // Replaced rather than refreshed: a new record is what expires the old answers.
         // Nothing is read from Music here; `PlayingTrack` asks only when it is first asked,
         // which keeps this safe to call from `iTunesRadioStation`'s own init.
-        playing = track.map { PlayingTrack(track: $0) }
+        _playing = track.map { PlayingTrack(track: $0) }
         _currentTrack.flatMap { history.insert($0) }
         
         if broadcast {

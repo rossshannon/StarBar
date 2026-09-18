@@ -66,7 +66,13 @@ extension iTunesTrack {
     /// as on the live track. Read it once when the track changes, next to the rating, rather
     /// than from anything the drawing path can reach.
     var scriptingClassCode: FourCharCode? {
-        guard let descriptor = (self as AnyObject).value(forKey: "objectClass") as? NSAppleEventDescriptor else { return nil }
+        guard let descriptor = (self as AnyObject).value(forKey: "objectClass") as? NSAppleEventDescriptor else {
+            // A nil here makes every track look ratable, which is exactly the symptom this
+            // branch removes. `objectClass` is a stringly-typed key, so a future macOS could
+            // move it -- leave a trace rather than only "my ratings stopped saving again".
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: could not read the track's class; treating it as ratable", ((#file as NSString).lastPathComponent), #line, #function)
+            return nil
+        }
         return descriptor.typeCodeValue
     }
 
