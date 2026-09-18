@@ -70,6 +70,7 @@
 		5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D3 /* StarSweep.swift */; };
 		5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D5 /* RatingReminderController.swift */; };
 		5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D7 /* RatingReminderTests.swift */; };
+		5A7E1A00000000000001B0 /* MusicLibraryLookupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */; };
 		5A7E1A00000000000001A8 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A7 /* SVGPathTests.swift */; };
 		5A7E1A00000000000001A0 /* LibraryAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FF /* LibraryAddTests.swift */; };
 		5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */; };
@@ -190,6 +191,7 @@
 		5A7E1A0000000000000000D3 /* StarSweep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarSweep.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D5 /* RatingReminderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D7 /* RatingReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryLookupTests.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001A7 /* SVGPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPathTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000FF /* LibraryAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryAddTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottleTests.swift; sourceTree = "<group>"; };
@@ -302,6 +304,7 @@
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
 				5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */,
 				5A7E1A0000000000000000D7 /* RatingReminderTests.swift */,
+				5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */,
 				5A7E1A00000000000001A7 /* SVGPathTests.swift */,
 				5A7E1A0000000000000000FF /* LibraryAddTests.swift */,
 				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
@@ -690,6 +693,7 @@
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
 				5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */,
 				5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */,
+				5A7E1A00000000000001B0 /* MusicLibraryLookupTests.swift in Sources */,
 				5A7E1A00000000000001A8 /* SVGPathTests.swift in Sources */,
 				5A7E1A00000000000001A0 /* LibraryAddTests.swift in Sources */,
 				5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */,

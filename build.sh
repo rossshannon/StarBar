@@ -185,6 +185,7 @@ run_tests() {
         selection+=(
             "-skip-testing:StarBarTests/ScriptBridgeTests"
             "-skip-testing:StarBarTests/iTunesLibraryTests"
+            "-skip-testing:StarBarTests/MusicLibraryLookupTests"
         )
     fi
     local status=0
