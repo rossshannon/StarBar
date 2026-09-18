@@ -27,6 +27,8 @@ jobs:
       # Secrets can't be tested in a step's `if` directly, so the decision is made here once
       HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
       HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+      # Any of the five set means all five are meant to be
+      HAS_ANY_SECRET: ${{ secrets.MACOS_CERTIFICATE_P12 != '' || secrets.MACOS_CERTIFICATE_PASSWORD != '' || secrets.APPLE_TEAM_ID != '' || secrets.APPLE_ID != '' || secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
 
     steps:
       # The tag becomes CFBundleShortVersionString, which must be three numbers, so refuse
@@ -38,12 +40,13 @@ jobs:
             exit 1
           fi
 
-      # A Developer ID signature without notarisation is still blocked by Gatekeeper, so a
-      # half-configured repository fails here rather than shipping something worse than ad hoc
+      # A Developer ID signature without notarisation is still blocked by Gatekeeper, and a
+      # partly configured repository would silently ship ad hoc, so anything short of all five
+      # secrets fails here
       - name: Check the secrets go together
         run: |
-          if [ "$HAS_SIGNING" = "true" ] && [ "$HAS_NOTARY" != "true" ]; then
-            echo "::error::Signing secrets are set but APPLE_ID or APPLE_APP_SPECIFIC_PASSWORD is missing; add them or remove the certificate secrets"
+          if [ "$HAS_ANY_SECRET" = "true" ] && { [ "$HAS_SIGNING" != "true" ] || [ "$HAS_NOTARY" != "true" ]; }; then
+            echo "::error::Some signing secrets are set but not all five (MACOS_CERTIFICATE_P12, MACOS_CERTIFICATE_PASSWORD, APPLE_TEAM_ID, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD); add the rest or remove them all"
             exit 1
           fi
 
@@ -78,7 +81,7 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" \
-            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+            -T /usr/bin/codesign -T /usr/bin/security -t cert -f pkcs12 -k "$KEYCHAIN"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           security list-keychains -d user -s "$KEYCHAIN" login.keychain
           rm "$RUNNER_TEMP/certificate.p12"
@@ -122,10 +125,18 @@ jobs:
           # The ticket is stapled to the app, so it opens offline; the zip is rebuilt to carry it
           xcrun stapler staple "build/Build/Products/Release/StarBar.app"
           xcrun stapler validate "build/Build/Products/Release/StarBar.app"
+          # What Gatekeeper will say when the user opens it
+          spctl --assess --type execute --verbose=2 "build/Build/Products/Release/StarBar.app"
           rm "StarBar-$GITHUB_REF_NAME.zip"
           ditto -c -k --sequesterRsrc --keepParent \
             "build/Build/Products/Release/StarBar.app" \
             "StarBar-$GITHUB_REF_NAME.zip"
+
+      - name: Remove the signing keychain
+        if: always() && env.HAS_SIGNING == 'true'
+        run: |
+          security list-keychains -d user -s login.keychain
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
 
       - name: Checksum
         run: shasum -a 256 "StarBar-$GITHUB_REF_NAME.zip" | tee "StarBar-$GITHUB_REF_NAME.zip.sha256"

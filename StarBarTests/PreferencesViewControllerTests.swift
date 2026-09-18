@@ -19,7 +19,7 @@ final class PreferencesViewControllerTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(imageView.image).isTemplate, true)
         XCTAssertEqual(imageView.contentTintColor, .labelColor)
         XCTAssertEqual(imageView.accessibilityLabel(), "3 stars")
-        XCTAssertEqual((stack.arrangedSubviews.last as? NSTextField)?.stringValue, ":")
+        XCTAssertEqual((stack.arrangedSubviews.last as? NSTextField)?.stringValue, ": ")
     }
 
     /// Each label draws as many stars as its shortcut sets, at the label's font size

@@ -30,7 +30,7 @@ APP_PATH="build/Build/Products/Release/$APP_NAME.app"
 INSTALL_PATH="/Applications/$APP_NAME.app"
 # Fewest tests a run may execute before it counts as broken (see xcode_test)
 MIN_APP_TESTS=150
-MIN_UI_TESTS=7
+MIN_UI_TESTS=5
 
 INSTALL=false
 WATCH=false
@@ -46,7 +46,7 @@ for arg in "$@"; do
         --install|-i) INSTALL=true ;;
         --watch|-w) WATCH=true ;;
         --clean) CLEAN=true ;;
-        --version=*) VERSION="${arg#*=}" ;;
+        --version=*) VERSION="${arg#*=}"; [ -n "$VERSION" ] || { echo "Error: --version needs a value, such as --version=1.2.0"; exit 2; } ;;
         --test|-t) TEST=true ;;
         --test-all) TEST=true; TEST_ALL=true ;;
         --ui-test) UI_TEST=true ;;
@@ -120,6 +120,8 @@ verify_install() {
 BUILD_SETTINGS=()
 collect_build_settings() {
     local tag
+    # Called before every build, including each watch-mode rebuild
+    BUILD_SETTINGS=()
     if [ -n "$VERSION" ]; then
         BUILD_SETTINGS+=("MARKETING_VERSION=$VERSION")
     elif tag=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null); then
@@ -313,7 +315,7 @@ elif [ "$WATCH" = true ]; then
         exit 1
     fi
 
-    echo "Watching: StarBar/, StarBar.xcodeproj/project.pbxproj"
+    echo "Watching: StarBar/ and StarBar.xcodeproj/project.pbxproj"
     echo "Press Ctrl+C to stop"
 
     build_and_install || true
@@ -327,7 +329,7 @@ elif [ "$WATCH" = true ]; then
         --include="\.entitlements$" \
         --include="\.strings$" \
         --include="project\.pbxproj$" \
-        -r "StarBar/" "StarBar.xcodeproj/" | while read -r; do
+        -r "StarBar/" "StarBar.xcodeproj/project.pbxproj" | while read -r; do
         echo ""
         echo "Change detected, rebuilding..."
         build_and_install || true

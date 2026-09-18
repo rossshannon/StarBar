@@ -237,7 +237,8 @@ extension PreferencesViewController {
         imageView.contentTintColor = .labelColor
         imageView.setAccessibilityLabel(RatingControl.accessibilityDescription(rating: 20 * count, isFavorited: false))
 
-        let colon = NSTextField(labelWithString: ":")
+        // The trailing space matches the text labels, so the gap to the recorder is the same
+        let colon = NSTextField(labelWithString: ": ")
         let stack = NSStackView(views: [imageView, colon])
         stack.orientation = .horizontal
         stack.alignment = .centerY

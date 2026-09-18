@@ -22,7 +22,7 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 ./build.sh --ui-test    # Click and drag the real menu bar (see below)
 ```
 
-Every build takes its version from the latest `v*` tag and its build number from the commit count, so the About window says which commit it came from.
+Every build takes its version from the nearest `v*` tag behind it and its build number from the commit count, so a newer build always has a higher number and the About window's build number can be matched to a commit with `git log`.
 
 The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 

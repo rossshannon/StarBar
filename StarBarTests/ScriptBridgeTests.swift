@@ -15,12 +15,19 @@ class ScriptBridgeTests: XCTestCase {
 
     static let optInVariable = "STARBAR_LIVE_MUSIC_TESTS"
 
+    struct MusicNotRunning: Error {}
+
     override func setUpWithError() throws {
         try XCTSkipUnless(
             ProcessInfo.processInfo.environment[ScriptBridgeTests.optInVariable] == "1",
             "Live Music tests are opt-in: run ./build.sh --test-all with a track playing"
         )
-        try XCTSkipUnless(iTunesRadioStation.shared.iTunes != nil, "Music is not running")
+        // Opted in but no Music is a failure, not a skip: a skip would let --test-all pass
+        // without ever running these
+        guard iTunesRadioStation.shared.iTunes != nil else {
+            XCTFail("STARBAR_LIVE_MUSIC_TESTS is set but Music is not running")
+            throw MusicNotRunning()
+        }
     }
 
     func testApplicationReportsAVersion() {
@@ -33,11 +40,15 @@ class ScriptBridgeTests: XCTestCase {
         XCTAssertNotNil(track.firstArtworkImage(), "The playing track needs artwork")
     }
 
-    func testCurrentTrackRatingRoundsToHalfStars() throws {
+    /// The app's reading of the track: a user rating is nil or in Music's range, and the
+    /// favourite flag answers through whichever property name this Music version has
+    func testCurrentTrackReadsThroughTheAppsAccessors() throws {
         let track = try XCTUnwrap(iTunesRadioStation.shared.iTunes?.currentTrackCopy, "Play a track before running this test")
-        let rating = track.rating ?? 0
-        XCTAssertTrue((0...100).contains(rating))
-        XCTAssertEqual(rating % 10, 0, "Music stores whole and half stars as multiples of 10")
+        if let rating = track.userRating {
+            XCTAssertTrue((0...100).contains(rating))
+            XCTAssertEqual(rating % 10, 0, "Music stores whole and half stars as multiples of 10")
+        }
+        XCTAssertEqual(track.isFavorited, track.favorited ?? track.loved ?? false)
     }
 
 }
