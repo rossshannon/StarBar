@@ -9,6 +9,22 @@
 import Foundation
 import Cocoa
 import os
+import ScriptingBridge
+
+/// The four character codes Music uses for its track classes in Apple Events.
+/// `iTunesTrack` is a protocol, so these can't live on it as static properties.
+/// `iTunes/Vendor/iTunes.swift` declares `SBObject` as conforming to its other protocols but
+/// not this one, so `duplicateTo` -- Music's "add to library" -- can't be reached without it.
+/// The methods are `@objc optional`, and Scripting Bridge turns each one into an Apple Event,
+/// exactly as it does for the protocols the header already declares.
+extension SBObject: iTunesGenericMethods {}
+
+enum MusicTrackClass {
+    /// `'cURT'`: a song streamed from the Apple Music catalog, not in the library
+    static let urlTrack: FourCharCode = 0x63555254
+    /// `'cFlT'`: a song in the library, whether local, purchased or added from Apple Music
+    static let fileTrack: FourCharCode = 0x63466c54
+}
 
 extension iTunesTrack {
 
@@ -38,6 +54,41 @@ extension iTunesTrack {
 
     var userRating: Int? {
         return ratingKind == .user ? rating : nil
+    }
+
+    /// Music's own class for this track, as the four character code it uses in Apple Events.
+    ///
+    /// Don't reach for `is iTunesURLTrack` instead. `iTunes/Vendor/iTunes.swift` declares
+    /// `SBObject` as conforming to the file, shared *and* URL track protocols, so every one of
+    /// those casts succeeds for every track and tells us nothing.
+    ///
+    /// This is an Apple Event, about 17 ms, and it works the same on a `get()`-resolved copy
+    /// as on the live track. Read it once when the track changes, next to the rating, rather
+    /// than from anything the drawing path can reach.
+    var scriptingClassCode: FourCharCode? {
+        guard let descriptor = (self as AnyObject).value(forKey: "objectClass") as? NSAppleEventDescriptor else {
+            // A nil here makes every track look ratable, which is exactly the symptom this
+            // branch removes. `objectClass` is a stringly-typed key, so a future macOS could
+            // move it -- leave a trace rather than only "my ratings stopped saving again".
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: could not read the track's class; treating it as ratable", ((#file as NSString).lastPathComponent), #line, #function)
+            return nil
+        }
+        return descriptor.typeCodeValue
+    }
+
+    /// A song playing straight from the Apple Music catalog that the user has not added to
+    /// their library. Music calls this a "URL track".
+    ///
+    /// Ratings can't be stored on one: Music refuses the write with a permission error
+    /// (OSStatus -54), which arrives through `SBApplicationDelegate.eventDidFail` after the
+    /// fact, so the write looks like it worked. The favorite heart does save. Adding the song
+    /// to the library turns it into a `file track`, and then ratings work normally.
+    ///
+    /// Being an Apple Music song is not the same thing: a song added to the library from Apple
+    /// Music is a `file track` like any other, and rates normally whether or not it is
+    /// downloaded. Library membership is what matters here, not where the audio comes from.
+    var isCatalogStream: Bool {
+        return scriptingClassCode == MusicTrackClass.urlTrack
     }
     
     /// Favorite status in Music.

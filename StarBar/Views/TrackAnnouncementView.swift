@@ -372,7 +372,7 @@ final class TrackAnnouncementContentView: NSView {
             draw(announcement.artist, in: artistRect, font: detailFont)
         }
         if let albumRect = frames.album {
-            draw(announcement.album, in: albumRect, font: detailFont)
+            draw(announcement.album, in: albumRect, font: detailFont.italic)
         }
         drawRating(in: frames.rating)
     }
@@ -442,6 +442,12 @@ final class TrackAnnouncementContentView: NSView {
     private func drawRating(in rect: NSRect) {
         let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+
+        guard announcement.canRate else {
+            drawCannotRate(in: rect, starSize: starSize, spacing: spacing)
+            return
+        }
+
         let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
         let template = stars.image
         template.isTemplate = true
@@ -458,6 +464,37 @@ final class TrackAnnouncementContentView: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
+    /// The heart on its own, then why there are no stars.
+    ///
+    /// Five empty dots would say "unrated", which is not what is true: the song is playing
+    /// from the Apple Music catalog and isn't in the library, so it has no rating to show and
+    /// cannot be given one until it is added.
+    private func drawCannotRate(in rect: NSRect, starSize: NSSize, spacing: CGFloat) {
+        let heartRect = NSRect(x: rect.minX, y: rect.midY - starSize.height / 2,
+                               width: starSize.width, height: starSize.height)
+
+        NSGraphicsContext.saveGraphicsState()
+        textShadow.set()
+        if announcement.isFavorited {
+            Stars.filledFavoriteHeartImage(size: starSize).draw(in: heartRect)
+        } else {
+            let outline = NSImage(size: starSize, flipped: false) { bounds in
+                Stars.drawFavoriteHeartOutline(in: bounds)
+                return true
+            }
+            outline.isTemplate = true
+            outline.withTintColor(.white).draw(in: heartRect)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        let textMinX = heartRect.maxX + spacing * 2
+        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize * scale)
+        draw(TrackAnnouncement.cannotRateText,
+             in: TrackAnnouncementLayout.textRect(centredOn: heartRect.midY, font: font,
+                                                fromX: textMinX, toX: rect.maxX),
+             font: font)
+    }
+
     /// Growl's soft downward shadow, scaled with the strip
     private var textShadow: NSShadow {
         let shadow = NSShadow()
@@ -470,18 +507,30 @@ final class TrackAnnouncementContentView: NSView {
         return shadow
     }
 
+    /// Every line on the strip goes through here, so the typography is set in one place.
+    ///
+    /// Kerning is on because nothing turns it off: AppKit kerns by default, and setting
+    /// `.kern` to 0 is what would disable it. Ligatures are left alone for the same reason,
+    /// though they change nothing here -- the system font ships without the fi and fl
+    /// ligatures, so there is none to form.
     private func draw(_ text: String, in rect: NSRect, font: NSFont) {
         guard !text.isEmpty else { return }
-        let shadow = textShadow
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
+        // Let a slightly-too-long album name tighten instead of losing its last word
+        paragraph.allowsDefaultTighteningForTruncation = true
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
-            .shadow: shadow,
+            .shadow: textShadow,
             .paragraphStyle: paragraph,
         ]
-        (text as NSString).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attributes)
+        (text.typographicPunctuation as NSString).draw(
+            with: rect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: attributes
+        )
     }
 
 }

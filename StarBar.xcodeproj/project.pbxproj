@@ -10,6 +10,7 @@
 		FA0000000000000000000003 /* MASShortcut in Frameworks */ = {isa = PBXBuildFile; productRef = FA0000000000000000000002 /* MASShortcut */; };
 		5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C1 /* RatingClickController.swift */; };
 		5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */; };
+		5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */; };
 		5A7E1A0000000000000000B2 /* MenuBarRatingUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */; };
 		DB05F0632353909000CE6DF9 /* PlayerPanelViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */; };
 		DB05F0652353912500CE6DF9 /* PlayerInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */; };
@@ -23,14 +24,21 @@
 		DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6A22C661F900502D7C /* PlayInfo.swift */; };
 		DB106CA422CA3C7300502D7C /* Star.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA322CA3C7300502D7C /* Star.swift */; };
 		DB106CA622CA3EE700502D7C /* Stars.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA522CA3EE700502D7C /* Stars.swift */; };
+		5A7E1A00000000000001B4 /* SmartPunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B3 /* SmartPunctuation.swift */; };
+		5A7E1A00000000000001A6 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A5 /* SVGPath.swift */; };
+		5A7E1A00000000000001A2 /* AppleMusicGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A1 /* AppleMusicGlyph.swift */; };
+		5A7E1A0000000000000000FE /* LibraryAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FD /* LibraryAdd.swift */; };
+		5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */; };
 		DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA722CA45BB00502D7C /* RatingControl.swift */; };
 		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
 		DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */; };
+		5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B1 /* PlayingTrack.swift */; };
 		DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */; };
 		DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = DB334388235E102600B45ED0 /* ExceptionCatcher.m */; };
 		DB424A352307259800230C7E /* iTunesTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A342307259800230C7E /* iTunesTrack.swift */; };
 		DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3723073CB000230C7E /* PopoverViewController.swift */; };
 		DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3923086C1200230C7E /* MovableImageView.swift */; };
+		5A7E1A00000000000001A4 /* AddToLibrarySpinnerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A3 /* AddToLibrarySpinnerView.swift */; };
 		DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3B230877F400230C7E /* PlayerViewController.swift */; };
 		DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */; };
 		DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */; };
@@ -40,6 +48,7 @@
 		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
 		FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000010 /* PreferencesViewControllerTests.swift */; };
 		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
+		5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */; };
 		5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */; };
 		DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216922CB186F007FCF40 /* WindowManager.swift */; };
 		DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */; };
@@ -48,10 +57,17 @@
 		DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */; };
 		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
 		DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A937250E0A1C002C1B6C /* NSImage.swift */; };
+		5A7E1A00000000000001B8 /* NSFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B7 /* NSFont.swift */; };
 		5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D1 /* RatingReminder.swift */; };
+		5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */; };
 		5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D3 /* StarSweep.swift */; };
 		5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D5 /* RatingReminderController.swift */; };
 		5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D7 /* RatingReminderTests.swift */; };
+		5A7E1A00000000000001B6 /* SmartPunctuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */; };
+		5A7E1A00000000000001B0 /* MusicLibraryLookupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */; };
+		5A7E1A00000000000001A8 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A7 /* SVGPathTests.swift */; };
+		5A7E1A00000000000001A0 /* LibraryAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FF /* LibraryAddTests.swift */; };
+		5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */; };
 		5A7E1A0000000000000000DA /* Bell Transition.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D9 /* Bell Transition.mp3 */; };
 		5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */; };
 		5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */; };
@@ -88,6 +104,7 @@
 /* Begin PBXFileReference section */
 		5A7E1A0000000000000000C1 /* RatingClickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickControllerTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickControllerAddTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000B1 /* MenuBarRatingUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRatingUITests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000B3 /* StarBarUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "StarBarUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPanelViewController.swift; sourceTree = "<group>"; };
@@ -108,8 +125,14 @@
 		DB106C6A22C661F900502D7C /* PlayInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayInfo.swift; sourceTree = "<group>"; };
 		DB106CA322CA3C7300502D7C /* Star.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Star.swift; sourceTree = "<group>"; };
 		DB106CA522CA3EE700502D7C /* Stars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stars.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B3 /* SmartPunctuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPunctuation.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001A5 /* SVGPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPath.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001A1 /* AppleMusicGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicGlyph.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000FD /* LibraryAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryAdd.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibraryBadge.swift; sourceTree = "<group>"; };
 		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B1 /* PlayingTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayingTrack.swift; sourceTree = "<group>"; };
 		DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesApplication.swift; sourceTree = "<group>"; };
 		DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StarBar-Bridging-Header.h"; sourceTree = "<group>"; };
 		DB334388235E102600B45ED0 /* ExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExceptionCatcher.m; sourceTree = "<group>"; };
@@ -117,6 +140,7 @@
 		DB424A342307259800230C7E /* iTunesTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesTrack.swift; sourceTree = "<group>"; };
 		DB424A3723073CB000230C7E /* PopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverViewController.swift; sourceTree = "<group>"; };
 		DB424A3923086C1200230C7E /* MovableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovableImageView.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001A3 /* AddToLibrarySpinnerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibrarySpinnerView.swift; sourceTree = "<group>"; };
 		DB424A3B230877F400230C7E /* PlayerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewController.swift; sourceTree = "<group>"; };
 		DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScrollTextField.swift; sourceTree = "<group>"; };
 		DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRatingControl.swift; sourceTree = "<group>"; };
@@ -126,6 +150,7 @@
 		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
 		FA0000000000000000000010 /* PreferencesViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlAddToLibraryTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlDragTests.swift; sourceTree = "<group>"; };
 		DB95216922CB186F007FCF40 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
@@ -134,10 +159,17 @@
 		DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
 		DBD6A937250E0A1C002C1B6C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B7 /* NSFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSFont.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D1 /* RatingReminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminder.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottle.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D3 /* StarSweep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarSweep.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D5 /* RatingReminderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D7 /* RatingReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPunctuationTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryLookupTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001A7 /* SVGPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPathTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000FF /* LibraryAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryAddTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottleTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D9 /* Bell Transition.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Bell Transition.mp3"; sourceTree = "<group>"; };
 		5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncement.swift; sourceTree = "<group>"; };
@@ -229,9 +261,16 @@
 				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
 				FA0000000000000000000010 /* PreferencesViewControllerTests.swift */,
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
+				5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */,
 				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
+				5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */,
 				5A7E1A0000000000000000D7 /* RatingReminderTests.swift */,
+				5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */,
+				5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */,
+				5A7E1A00000000000001A7 /* SVGPathTests.swift */,
+				5A7E1A0000000000000000FF /* LibraryAddTests.swift */,
+				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
 				5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */,
 				DB106C5A22C53D4C00502D7C /* Info.plist */,
 				5A7E1A0000000000000000EB /* TrackAnnouncementLayoutTests.swift */,
@@ -280,6 +319,7 @@
 				DB424A36230725A800230C7E /* Extension */,
 				DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */,
 				DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */,
+				5A7E1A00000000000001B1 /* PlayingTrack.swift */,
 				DB106C6A22C661F900502D7C /* PlayInfo.swift */,
 			);
 			path = iTunes;
@@ -290,8 +330,14 @@
 			children = (
 				DB106CA322CA3C7300502D7C /* Star.swift */,
 				DB106CA522CA3EE700502D7C /* Stars.swift */,
+				5A7E1A00000000000001B3 /* SmartPunctuation.swift */,
+				5A7E1A00000000000001A5 /* SVGPath.swift */,
+				5A7E1A00000000000001A1 /* AppleMusicGlyph.swift */,
+				5A7E1A0000000000000000FD /* LibraryAdd.swift */,
+				5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
+				5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */,
 				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
 				FA0000000000000000000020 /* LaunchAtLogin.swift */,
 				DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */,
@@ -331,6 +377,7 @@
 			children = (
 				DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */,
 				DB424A3923086C1200230C7E /* MovableImageView.swift */,
+				5A7E1A00000000000001A3 /* AddToLibrarySpinnerView.swift */,
 				DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */,
 				DB05F0892354FC7700CE6DF9 /* PlayerControlView.swift */,
 				5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */,
@@ -346,6 +393,7 @@
 				DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */,
 				DBD6A935250DA48E002C1B6C /* NSBox.swift */,
 				DBD6A937250E0A1C002C1B6C /* NSImage.swift */,
+				5A7E1A00000000000001B7 /* NSFont.swift */,
 			);
 			path = Extension;
 			sourceTree = "<group>";
@@ -511,15 +559,24 @@
 				DB05F0882354CA6B00CE6DF9 /* NSViewControllerPreview.swift in Sources */,
 				DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */,
 				DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */,
+				5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */,
 				DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */,
 				DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */,
+				5A7E1A00000000000001A4 /* AddToLibrarySpinnerView.swift in Sources */,
 				DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */,
 				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
 				FA0000000000000000000021 /* LaunchAtLogin.swift in Sources */,
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
+				5A7E1A00000000000001B4 /* SmartPunctuation.swift in Sources */,
+				5A7E1A00000000000001A6 /* SVGPath.swift in Sources */,
+				5A7E1A00000000000001A2 /* AppleMusicGlyph.swift in Sources */,
+				5A7E1A0000000000000000FE /* LibraryAdd.swift in Sources */,
+				5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
 				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
+				5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */,
 				DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */,
+				5A7E1A00000000000001B8 /* NSFont.swift in Sources */,
 				DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */,
 				DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */,
 				DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */,
@@ -555,9 +612,16 @@
 				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
 				FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */,
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
+				5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */,
 				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
+				5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */,
 				5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */,
+				5A7E1A00000000000001B6 /* SmartPunctuationTests.swift in Sources */,
+				5A7E1A00000000000001B0 /* MusicLibraryLookupTests.swift in Sources */,
+				5A7E1A00000000000001A8 /* SVGPathTests.swift in Sources */,
+				5A7E1A00000000000001A0 /* LibraryAddTests.swift in Sources */,
+				5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */,
 				5A7E1A0000000000000000F2 /* FakeClock.swift in Sources */,
 				5A7E1A0000000000000000F0 /* TrackAnnouncementPanelTests.swift in Sources */,
 				5A7E1A0000000000000000EE /* TrackAnnouncementControllerTests.swift in Sources */,

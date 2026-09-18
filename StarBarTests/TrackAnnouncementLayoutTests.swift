@@ -299,4 +299,115 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(preview.accessibilityLabel, "Now playing: Music Video by StarBar. 3½ stars, favourite")
     }
 
+    // MARK: - A song that cannot be rated
+
+    /// Ink in the row, so "no stars" is not confused with "nothing drawn"
+    private func rowInk(_ announcement: TrackAnnouncement) -> Int {
+        let size = NSSize(width: 900, height: TrackAnnouncementLayout.stripHeight(scale: 2))
+        let view = TrackAnnouncementContentView(announcement: announcement, frame: NSRect(origin: .zero, size: size))
+        view.scale = 2
+        guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return 0 }
+        view.cacheDisplay(in: view.bounds, to: rep)
+
+        // The rating row is the bottom one; count the bright pixels across it
+        var bright = 0
+        let bottom = Int(Double(rep.pixelsHigh) * 0.72)
+        for x in 0..<rep.pixelsWide {
+            for y in bottom..<rep.pixelsHigh {
+                if let colour = rep.colorAt(x: x, y: y), colour.brightnessComponent > 0.85 {
+                    bright += 1
+                }
+            }
+        }
+        return bright
+    }
+
+    private func announcement(canRate: Bool, rating: Int = 0, isFavorited: Bool = false) -> TrackAnnouncement {
+        return TrackAnnouncement(identity: "x", title: "Little Sadie (Live)", artist: "Daniel Lanois",
+                                 album: "Calling My Name (Live New Orleans '89)",
+                                 rating: rating, isFavorited: isFavorited,
+                                 artwork: nil, canRate: canRate)
+    }
+
+    func testASongThatCannotBeRatedSaysSoInsteadOfShowingStars() {
+        // The message is much wider than five dots, so the row carries far more ink
+        let dots = rowInk(announcement(canRate: true, rating: 0))
+        let message = rowInk(announcement(canRate: false))
+
+        XCTAssertGreaterThan(message, dots * 2, "the row should carry the message, not five dots")
+    }
+
+    func testARatableSongStillShowsItsStars() {
+        let unrated = rowInk(announcement(canRate: true, rating: 0))
+        let rated = rowInk(announcement(canRate: true, rating: 100))
+
+        XCTAssertGreaterThan(rated, unrated, "five stars are more ink than five dots")
+    }
+
+    func testTheMessageIsTheOneAgreedWith() {
+        XCTAssertEqual(TrackAnnouncement.cannotRateText, "Add to Library in Apple Music to rate this song")
+    }
+
+    func testCanRateSurvivesARatingRefresh() {
+        // The strip redraws its rating row while it is up; that must not quietly re-enable
+        // stars for a song that still cannot be rated
+        let original = announcement(canRate: false)
+
+        let updated = TrackAnnouncement(copying: original, rating: 80)
+
+        XCTAssertFalse(updated.canRate)
+    }
+
+    func testASongIsRatableUnlessSaidOtherwise() {
+        // Everything that builds an announcement without knowing should get stars, which is
+        // the behaviour every library song relies on
+        let plain = TrackAnnouncement(identity: "x", title: "t", artist: "a", album: "b")
+
+        XCTAssertTrue(plain.canRate)
+    }
+
+    // MARK: - Typography
+
+    func testTheAlbumIsSetInItalics() {
+        // The system font has a real italic face, so this slants rather than quietly
+        // staying upright
+        let detail = NSFont.messageFont(ofSize: TrackAnnouncementLayout.detailFontSize)
+
+        XCTAssertTrue(detail.italic.fontDescriptor.symbolicTraits.contains(.italic))
+        XCTAssertNotEqual(detail.italic.fontName, detail.fontName)
+    }
+
+    func testTheExplanationIsSmallerThanTheTrackDetails() {
+        // It explains the strip rather than being part of the track's own information
+        XCTAssertEqual(TrackAnnouncementLayout.cannotRateFontSize,
+                       TrackAnnouncementLayout.detailFontSize - 4)
+    }
+
+    func testTheExplanationSitsOnTheHeartsCentreLine() {
+        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize)
+        let centreY: CGFloat = 100
+
+        let rect = TrackAnnouncementLayout.textRect(centredOn: centreY, font: font, fromX: 20, toX: 300)
+
+        // The middle of the capitals should land on the centre line, within a rounding error
+        let baseline = rect.maxY - font.ascender
+        XCTAssertEqual(baseline + font.capHeight / 2, centreY, accuracy: 0.5)
+    }
+
+    func testTheExplanationRectNeverHasANegativeWidth() {
+        // The strip can be narrow enough that the text has nowhere to go
+        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize)
+
+        let rect = TrackAnnouncementLayout.textRect(centredOn: 50, font: font, fromX: 300, toX: 20)
+
+        XCTAssertEqual(rect.width, 0)
+    }
+
+    func testAFontWithNoItalicFaceIsLeftAlone() {
+        // The helper must not return nil or a wrong face for a font without one
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+
+        XCTAssertEqual(font.italic.pointSize, font.pointSize)
+    }
+
 }

@@ -103,6 +103,12 @@ struct Stars {
     /// coloured heart drawn on top has no template-coloured edge around it.
     private func drawFavoriteHeart(in rect: NSRect, filled: Bool) {
         guard !filled else { return }
+        Stars.drawFavoriteHeartOutline(in: rect)
+    }
+
+    /// The heart outline, for other strips that show the same heart slot. `AddToLibraryBadge`
+    /// draws it so the heart looks identical whether or not the track can be rated.
+    static func drawFavoriteHeartOutline(in rect: NSRect) {
         NSColor.black.setStroke()
         Stars.heartPath(in: rect, lineWidth: 1.5).stroke()
     }
