@@ -9,13 +9,9 @@
 import Foundation
 
 enum OSVersionHelper {
-    
-    static let bundleIdentifier: String = {
-        if #available(macOS 10.15, *) {
-            return "com.apple.Music"
-        } else {
-            return "com.apple.iTunes"
-        }
-    }()
-    
+
+    /// The player this app talks to. It was iTunes before macOS 10.15; the app now needs
+    /// macOS 13, so it is always Music. The Scripting Bridge header keeps iTunes's names.
+    static let bundleIdentifier = "com.apple.Music"
+
 }

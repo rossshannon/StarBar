@@ -29,8 +29,6 @@ final class iTunesPlayer {
         return iTunesRadioStation.shared.iTunes?.playerState == .playing
     }
     
-    let history = iTunesPlayerHistory()
-    
     private init() {
         
     }
@@ -43,7 +41,6 @@ extension iTunesPlayer {
         // Use the passed-in track. The default argument already fetches a fresh copy.
         // Reading iTunesRadioStation.shared here deadlocks when called from its init.
         _currentTrack = track
-        _currentTrack.flatMap { history.insert($0) }
         
         if broadcast {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)

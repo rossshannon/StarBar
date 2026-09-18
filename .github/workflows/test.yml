@@ -50,7 +50,7 @@ jobs:
       - name: Build Release
         run: ./build.sh
 
-      # Skips the tests that need Music (ScriptBridgeTests, iTunesLibraryTests); run those
+      # The tests that read from Music (ScriptBridgeTests) skip themselves here; run those
       # locally with ./build.sh --test-all
       - name: Run tests
         run: ./build.sh --test

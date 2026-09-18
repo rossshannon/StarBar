@@ -122,4 +122,62 @@ final class RatingControlGeometryTests: XCTestCase {
         }
     }
 
+    // MARK: - Half-star round trips
+
+    /// Every rating Music can store (0 to 100 in steps of 10) draws as stars that add back
+    /// up to that rating: 20 per full star, 10 per half star.
+    func testStarStylesAddBackUpToTheRating() {
+        for rating in stride(from: 0, through: 100, by: 10) {
+            let styles = Stars.styles(forRating: rating)
+            XCTAssertEqual(styles.count, 5, "rating \(rating)")
+            let drawn = styles.reduce(0) { total, style in
+                switch style {
+                case .full: return total + 20
+                case .half: return total + 10
+                case .dot, .outline: return total
+                }
+            }
+            XCTAssertEqual(drawn, rating, "rating \(rating)")
+            XCTAssertLessThanOrEqual(styles.filter { $0 == .half }.count, 1, "rating \(rating)")
+        }
+    }
+
+    /// Clicking where the stars for a rating are drawn gives that rating back: the drawn
+    /// image and the hit-test agree for every whole and half star.
+    func testClickingTheDrawnStarsGivesTheSameRatingBack() {
+        for rating in stride(from: 10, through: 100, by: 10) {
+            control.update(rating: rating)
+            let halfStars = rating / 10
+            let lastStar = (halfStars - 1) / 2
+            let slot = control.starSize.width + control.spacing
+            let starMinX = control.spacing + CGFloat(lastStar) * slot
+            // Left half of the last drawn star for a half star, right half for a full one
+            let x = halfStars % 2 == 1 ? starMinX + 4 : starMinX + control.starSize.width - 4
+            XCTAssertEqual(control.rating(atPositionX: x, behavior: .both), rating, "rating \(rating) at x \(x)")
+            // Without half stars, the same click rounds up to the whole star
+            XCTAssertEqual(control.rating(atPositionX: x, behavior: .full), 20 * (lastStar + 1), "rating \(rating) at x \(x)")
+        }
+    }
+
+    /// What VoiceOver says for every storable rating, with and without the heart
+    func testAccessibilityDescriptionCoversEveryRating() {
+        let expected = ["No rating", "½ star", "1 star", "1½ stars", "2 stars", "2½ stars",
+                        "3 stars", "3½ stars", "4 stars", "4½ stars", "5 stars"]
+        for (halfStars, text) in expected.enumerated() {
+            XCTAssertEqual(RatingControl.accessibilityDescription(rating: 10 * halfStars, isFavorited: false), text)
+            XCTAssertEqual(RatingControl.accessibilityDescription(rating: 10 * halfStars, isFavorited: true), text + ", favourite")
+        }
+        // Out-of-range values clamp rather than crash
+        XCTAssertEqual(RatingControl.accessibilityDescription(rating: -30, isFavorited: false), "No rating")
+        XCTAssertEqual(RatingControl.accessibilityDescription(rating: 250, isFavorited: false), "5 stars")
+    }
+
+    /// `update(rating:)` clamps to Music's range, so a shortcut can't push past 5 stars or below 0
+    func testUpdateClampsToMusicsRange() {
+        control.update(rating: 130)
+        XCTAssertEqual(control.rating, 100)
+        control.update(rating: -20)
+        XCTAssertEqual(control.rating, 0)
+    }
+
 }

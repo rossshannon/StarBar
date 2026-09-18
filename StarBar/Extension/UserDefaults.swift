@@ -10,7 +10,6 @@ import Foundation
 
 enum ApplicationKey: String {
     case isFirstLaunch
-    case launchAtLogin
     case allowHalfStar
     case remindToRateUnrated
     case announceNewTracks
@@ -18,7 +17,7 @@ enum ApplicationKey: String {
 }
 
 extension UserDefaults {
-    
+
     subscript<T: RawRepresentable>(key: String) -> T? {
         get {
             if let rawValue = value(forKey: key) as? T.RawValue {
@@ -28,25 +27,16 @@ extension UserDefaults {
         }
         set { set(newValue?.rawValue, forKey: key) }
     }
-    
+
     subscript<T>(key: String) -> T? {
         get { return value(forKey: key) as? T }
         set { set(newValue, forKey: key) }
     }
-    
+
 }
 
 extension UserDefaults {
-    
-    @objc dynamic var launchAtLogin: Bool {
-        get {
-            return bool(forKey: ApplicationKey.launchAtLogin.rawValue)
-        }
-        set {
-            set(newValue, forKey: ApplicationKey.launchAtLogin.rawValue)
-        }
-    }
-    
+
     @objc dynamic var allowHalfStar: Bool {
         get {
             return bool(forKey: ApplicationKey.allowHalfStar.rawValue)
