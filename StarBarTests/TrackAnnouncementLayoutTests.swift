@@ -366,4 +366,28 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertTrue(plain.canRate)
     }
 
+    // MARK: - Typography
+
+    func testTheAlbumIsSetInItalics() {
+        // The system font has a real italic face, so this slants rather than quietly
+        // staying upright
+        let detail = NSFont.messageFont(ofSize: TrackAnnouncementLayout.detailFontSize)
+
+        XCTAssertTrue(detail.italic.fontDescriptor.symbolicTraits.contains(.italic))
+        XCTAssertNotEqual(detail.italic.fontName, detail.fontName)
+    }
+
+    func testTheExplanationIsSmallerThanTheTrackDetails() {
+        // It explains the strip rather than being part of the track's own information
+        XCTAssertEqual(TrackAnnouncementLayout.cannotRateFontSize,
+                       TrackAnnouncementLayout.detailFontSize - 2)
+    }
+
+    func testAFontWithNoItalicFaceIsLeftAlone() {
+        // The helper must not return nil or a wrong face for a font without one
+        let font = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+
+        XCTAssertEqual(font.italic.pointSize, font.pointSize)
+    }
+
 }

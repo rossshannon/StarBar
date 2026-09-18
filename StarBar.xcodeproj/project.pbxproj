@@ -24,6 +24,7 @@
 		DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6A22C661F900502D7C /* PlayInfo.swift */; };
 		DB106CA422CA3C7300502D7C /* Star.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA322CA3C7300502D7C /* Star.swift */; };
 		DB106CA622CA3EE700502D7C /* Stars.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA522CA3EE700502D7C /* Stars.swift */; };
+		5A7E1A00000000000001B4 /* SmartPunctuation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B3 /* SmartPunctuation.swift */; };
 		5A7E1A00000000000001A6 /* SVGPath.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A5 /* SVGPath.swift */; };
 		5A7E1A00000000000001A2 /* AppleMusicGlyph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A1 /* AppleMusicGlyph.swift */; };
 		5A7E1A0000000000000000FE /* LibraryAdd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FD /* LibraryAdd.swift */; };
@@ -66,11 +67,13 @@
 		DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */; };
 		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
 		DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A937250E0A1C002C1B6C /* NSImage.swift */; };
+		5A7E1A00000000000001B8 /* NSFont.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B7 /* NSFont.swift */; };
 		5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D1 /* RatingReminder.swift */; };
 		5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */; };
 		5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D3 /* StarSweep.swift */; };
 		5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D5 /* RatingReminderController.swift */; };
 		5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D7 /* RatingReminderTests.swift */; };
+		5A7E1A00000000000001B6 /* SmartPunctuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */; };
 		5A7E1A00000000000001B0 /* MusicLibraryLookupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */; };
 		5A7E1A00000000000001A8 /* SVGPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A7 /* SVGPathTests.swift */; };
 		5A7E1A00000000000001A0 /* LibraryAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FF /* LibraryAddTests.swift */; };
@@ -143,6 +146,7 @@
 		DB106C6A22C661F900502D7C /* PlayInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayInfo.swift; sourceTree = "<group>"; };
 		DB106CA322CA3C7300502D7C /* Star.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Star.swift; sourceTree = "<group>"; };
 		DB106CA522CA3EE700502D7C /* Stars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stars.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B3 /* SmartPunctuation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPunctuation.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001A5 /* SVGPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPath.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001A1 /* AppleMusicGlyph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicGlyph.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000FD /* LibraryAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryAdd.swift; sourceTree = "<group>"; };
@@ -188,11 +192,13 @@
 		DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
 		DBD6A937250E0A1C002C1B6C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B7 /* NSFont.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSFont.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D1 /* RatingReminder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminder.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottle.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D3 /* StarSweep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarSweep.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D5 /* RatingReminderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D7 /* RatingReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPunctuationTests.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryLookupTests.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001A7 /* SVGPathTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SVGPathTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000FF /* LibraryAddTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryAddTests.swift; sourceTree = "<group>"; };
@@ -306,6 +312,7 @@
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
 				5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */,
 				5A7E1A0000000000000000D7 /* RatingReminderTests.swift */,
+				5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */,
 				5A7E1A00000000000001A9 /* MusicLibraryLookupTests.swift */,
 				5A7E1A00000000000001A7 /* SVGPathTests.swift */,
 				5A7E1A0000000000000000FF /* LibraryAddTests.swift */,
@@ -371,6 +378,7 @@
 			children = (
 				DB106CA322CA3C7300502D7C /* Star.swift */,
 				DB106CA522CA3EE700502D7C /* Stars.swift */,
+				5A7E1A00000000000001B3 /* SmartPunctuation.swift */,
 				5A7E1A00000000000001A5 /* SVGPath.swift */,
 				5A7E1A00000000000001A1 /* AppleMusicGlyph.swift */,
 				5A7E1A0000000000000000FD /* LibraryAdd.swift */,
@@ -447,6 +455,7 @@
 				DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */,
 				DBD6A935250DA48E002C1B6C /* NSBox.swift */,
 				DBD6A937250E0A1C002C1B6C /* NSImage.swift */,
+				5A7E1A00000000000001B7 /* NSFont.swift */,
 			);
 			path = Extension;
 			sourceTree = "<group>";
@@ -645,6 +654,7 @@
 				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
 				DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */,
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
+				5A7E1A00000000000001B4 /* SmartPunctuation.swift in Sources */,
 				5A7E1A00000000000001A6 /* SVGPath.swift in Sources */,
 				5A7E1A00000000000001A2 /* AppleMusicGlyph.swift in Sources */,
 				5A7E1A0000000000000000FE /* LibraryAdd.swift in Sources */,
@@ -653,6 +663,7 @@
 				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
 				5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */,
 				DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */,
+				5A7E1A00000000000001B8 /* NSFont.swift in Sources */,
 				DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */,
 				DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */,
 				DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */,
@@ -697,6 +708,7 @@
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,
 				5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */,
 				5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */,
+				5A7E1A00000000000001B6 /* SmartPunctuationTests.swift in Sources */,
 				5A7E1A00000000000001B0 /* MusicLibraryLookupTests.swift in Sources */,
 				5A7E1A00000000000001A8 /* SVGPathTests.swift in Sources */,
 				5A7E1A00000000000001A0 /* LibraryAddTests.swift in Sources */,

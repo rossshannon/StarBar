@@ -29,6 +29,9 @@ enum TrackAnnouncementLayout {
     static let textTrailingPad: CGFloat = 16
     static let titleFontSize: CGFloat = 16
     static let detailFontSize: CGFloat = 12
+    /// The "add it to rate it" line, two points below the detail lines: it is an explanation
+    /// rather than part of the track's own information
+    static let cannotRateFontSize: CGFloat = 10
     static let titleHeight: CGFloat = 20
     static let detailHeight: CGFloat = 16
     /// Vertical gap between text lines

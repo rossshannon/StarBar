@@ -372,7 +372,7 @@ final class TrackAnnouncementContentView: NSView {
             draw(announcement.artist, in: artistRect, font: detailFont)
         }
         if let albumRect = frames.album {
-            draw(announcement.album, in: albumRect, font: detailFont)
+            draw(announcement.album, in: albumRect, font: detailFont.italic)
         }
         drawRating(in: frames.rating)
     }
@@ -491,7 +491,7 @@ final class TrackAnnouncementContentView: NSView {
         let textRect = NSRect(x: textMinX, y: rect.minY,
                               width: max(0, rect.maxX - textMinX), height: rect.height)
         draw(TrackAnnouncement.cannotRateText, in: textRect,
-             font: NSFont.systemFont(ofSize: TrackAnnouncementLayout.detailFontSize * scale))
+             font: NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize * scale))
     }
 
     /// Growl's soft downward shadow, scaled with the strip
@@ -506,18 +506,30 @@ final class TrackAnnouncementContentView: NSView {
         return shadow
     }
 
+    /// Every line on the strip goes through here, so the typography is set in one place.
+    ///
+    /// Kerning is on because nothing turns it off: AppKit kerns by default, and setting
+    /// `.kern` to 0 is what would disable it. Ligatures are left alone for the same reason,
+    /// though they change nothing here -- the system font ships without the fi and fl
+    /// ligatures, so there is none to form.
     private func draw(_ text: String, in rect: NSRect, font: NSFont) {
         guard !text.isEmpty else { return }
-        let shadow = textShadow
         let paragraph = NSMutableParagraphStyle()
         paragraph.lineBreakMode = .byTruncatingTail
+        // Let a slightly-too-long album name tighten instead of losing its last word
+        paragraph.allowsDefaultTighteningForTruncation = true
+
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: NSColor.white,
-            .shadow: shadow,
+            .shadow: textShadow,
             .paragraphStyle: paragraph,
         ]
-        (text as NSString).draw(with: rect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine], attributes: attributes)
+        (text.typographicPunctuation as NSString).draw(
+            with: rect,
+            options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine],
+            attributes: attributes
+        )
     }
 
 }
