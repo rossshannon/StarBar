@@ -202,6 +202,12 @@ extension RatingControl {
         return CGFloat(glyphCount) * starSize.width + CGFloat(glyphCount + 1) * spacing
     }
 
+    /// Left edge of the plus in the Apple Music button, inside `starsImage`. The menu bar
+    /// spins a progress indicator here while the song is being added.
+    var addToLibraryPlusMinX: CGFloat {
+        return AddToLibraryBadge(glyphSize: starSize, spacing: spacing).plusMinX
+    }
+
     /// Left edge of the favorite heart inside `starsImage`, for a mode
     static func favoriteMinX(mode: Mode, starSize: NSSize, spacing: CGFloat) -> CGFloat {
         return contentWidth(mode: mode, starSize: starSize, spacing: spacing) + spacing

@@ -191,23 +191,25 @@ final class RatingControlAddToLibraryTests: XCTestCase {
 
     // MARK: - While the song is being added
 
-    func testTheButtonDimsWhileTheAddIsInFlight() {
-        // Music takes about 3.5 seconds, so an unchanged button would look unpressed
+    func testThePlusMakesWayForTheSpinner() {
+        // `MenuBarRatingControl` spins a real NSProgressIndicator in that slot, so the plus
+        // must not be drawn underneath it
+        let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
+
+        XCTAssertEqual(ink(in: pending.image, fromX: 24, toX: 40), 0, "the plus slot")
+    }
+
+    func testTheNoteStaysWhileTheAddIsInFlight() {
         let solid = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
         let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
 
-        let solidWeight = inkWeight(in: solid.image, fromX: 4, toX: 40)
-        let pendingWeight = inkWeight(in: pending.image, fromX: 4, toX: 40)
-
-        XCTAssertGreaterThan(solidWeight, 0)
-        XCTAssertGreaterThan(pendingWeight, 0, "the glyphs are dimmed, not removed")
-        XCTAssertEqual(pendingWeight / solidWeight,
-                       AddToLibraryBadge.pendingAlpha,
-                       accuracy: 0.02,
-                       "the button should be drawn at the pending alpha")
+        XCTAssertEqual(inkWeight(in: pending.image, fromX: 4, toX: 20),
+                       inkWeight(in: solid.image, fromX: 4, toX: 20),
+                       accuracy: 0.001,
+                       "the note is untouched, only the plus goes")
     }
 
-    func testTheHeartDoesNotDimWhileTheAddIsInFlight() {
+    func testTheHeartStaysWhileTheAddIsInFlight() {
         // Favouriting works whether or not the song is in the library, so the heart is
         // still live while we wait
         let solid = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
@@ -216,6 +218,23 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         XCTAssertEqual(inkWeight(in: pending.image, fromX: 48, toX: 64),
                        inkWeight(in: solid.image, fromX: 48, toX: 64),
                        accuracy: 0.001)
+    }
+
+    func testTheStripKeepsItsWidthWhileTheAddIsInFlight() {
+        // Losing the plus must not resize the menu bar item mid-press
+        let solid = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+        let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
+
+        XCTAssertEqual(pending.image.size.width, solid.image.size.width)
+    }
+
+    func testTheSpinnerGoesWhereThePlusWas() {
+        let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+
+        XCTAssertEqual(badge.plusMinX, 24)
+        XCTAssertEqual(control.addToLibraryPlusMinX, badge.plusMinX)
+        // and it sits between the note and the heart
+        XCTAssertLessThan(badge.plusMinX, control.favoriteMinX)
     }
 
     func testTheControlStartsNotAdding() {

@@ -69,6 +69,20 @@ final class MenuBarRatingControl {
         return imageView
     }()
     
+    /// Real macOS spinner shown in the plus's place while the song is being added. Music
+    /// takes about 3.5 seconds over it, so the button has to look busy.
+    private let addToLibrarySpinner: NSProgressIndicator = {
+        let indicator = PassthroughProgressIndicator()
+        indicator.style = .spinning
+        indicator.controlSize = .small
+        indicator.isIndeterminate = true
+        indicator.isDisplayedWhenStopped = false
+        indicator.isHidden = true
+        // Stay centred with the strip when the button resizes after statusItem.length changes
+        indicator.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        return indicator
+    }()
+
     private let clickGestureRecognizer: NSClickGestureRecognizer = {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
@@ -190,6 +204,7 @@ final class MenuBarRatingControl {
         button.image = ratingControl.starsImage
         favoriteHeartView.image = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
         button.addSubview(favoriteHeartView)
+        button.addSubview(addToLibrarySpinner)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         button.action = #selector(MenuBarRatingControl.action(_:))
         button.target = self
@@ -275,6 +290,7 @@ extension MenuBarRatingControl {
         statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
         updateFavoriteHeartView()
+        updateAddToLibrarySpinner()
         updateAccessibility()
     }
 
@@ -317,6 +333,7 @@ extension MenuBarRatingControl {
             self.statusItem.length = fromWidth + (toWidth - fromWidth) * eased
             // The heart is positioned against the button's live width, so it has to follow
             self.updateFavoriteHeartView()
+            self.updateAddToLibrarySpinner()
 
             guard progress >= 1 else { return }
             self.widthTimer?.invalidate()
@@ -343,6 +360,32 @@ extension MenuBarRatingControl {
         )
     }
     
+    /// Spin a progress indicator where the plus is while the song is being added.
+    ///
+    /// `AddToLibraryBadge` leaves that slot empty while it waits, so the two never overlap.
+    private func updateAddToLibrarySpinner() {
+        guard let button = statusItem.button else { return }
+
+        let isWaiting = !isStop && ratingControl.mode == .addToLibrary && ratingControl.isAddingToLibrary
+        guard isWaiting else {
+            addToLibrarySpinner.stopAnimation(nil)
+            addToLibrarySpinner.isHidden = true
+            return
+        }
+
+        // Same geometry as the heart overlay, so both sit on their slots in the strip
+        let leftMargin = 0.5 * (button.bounds.width - ratingControl.starsImage.size.width)
+        let size = ratingControl.starSize
+        addToLibrarySpinner.frame = NSRect(
+            x: leftMargin + ratingControl.addToLibraryPlusMinX,
+            y: 0.5 * (button.bounds.height - size.height),
+            width: size.width,
+            height: size.height
+        )
+        addToLibrarySpinner.isHidden = false
+        addToLibrarySpinner.startAnimation(nil)
+    }
+
     /// Toggle the favorite status of the current track
     func toggleFavorite() {
         if MenuBarRatingControl.isUITesting {
@@ -498,11 +541,13 @@ extension MenuBarRatingControl {
         let pressedForPlayingID = iTunesRadioStation.shared.latestPlayInfo?.persistentID
         // Music takes seconds over this, so say so rather than leaving the button untouched
         ratingControl.update(isAddingToLibrary: true)
+        updateAddToLibrarySpinner()
         statusItem.button?.needsDisplay = true
 
         iTunesRadioStation.shared.addCurrentTrackToLibrary { [weak self] added in
             guard let self = self else { return }
             self.ratingControl.update(isAddingToLibrary: false)
+            self.updateAddToLibrarySpinner()
             self.statusItem.button?.needsDisplay = true
 
             guard let added = added else {
@@ -676,6 +721,13 @@ extension NSPopover {
 
 /// Image view that never takes mouse events, so clicks on the favorite heart reach the status bar button.
 private final class PassthroughImageView: NSImageView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
+}
+
+/// The spinner sits on top of the button, so it has to let clicks through to it
+private final class PassthroughProgressIndicator: NSProgressIndicator {
     override func hitTest(_ point: NSPoint) -> NSView? {
         return nil
     }

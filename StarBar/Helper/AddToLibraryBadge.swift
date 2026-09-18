@@ -24,7 +24,8 @@ struct AddToLibraryBadge {
     let spacing: CGFloat
     let isFavorited: Bool
     /// The song is being added and we're waiting for Music. Measured at about 3.5 seconds,
-    /// which is far too long for the button to look untouched, so it dims while it waits.
+    /// which is far too long for the button to look untouched, so the plus is left out and
+    /// `MenuBarRatingControl` spins a real progress indicator in its place.
     let isPending: Bool
 
     init(glyphSize: NSSize, spacing: CGFloat, isFavorited: Bool = false, isPending: Bool = false) {
@@ -34,11 +35,14 @@ struct AddToLibraryBadge {
         self.isPending = isPending
     }
 
-    /// How solid the note and plus are while the add is in flight
-    static let pendingAlpha: CGFloat = 0.35
-
     /// Number of glyphs before the heart: the note and the plus
     static let glyphCount = 2
+
+    /// Left edge of the plus, where the spinner goes while the add is in flight.
+    /// Same layout as `Stars`: a spacing before each glyph.
+    var plusMinX: CGFloat {
+        return CGFloat(2) * spacing + glyphSize.width
+    }
 
     /// Width of the note and plus with their spacing, before the heart slot.
     /// `Stars.starsWidth` is the same shape with five glyphs instead of two.
@@ -55,16 +59,15 @@ struct AddToLibraryBadge {
         let canvasImage = NSImage(size: NSSize(width: width, height: height))
         canvasImage.lockFocus()
 
-        for (index, symbol) in ["music.note", "plus"].enumerated() {
+        // The plus is left out while the add is in flight: a spinner takes its place, and
+        // drawing both would overlap
+        let symbols = isPending ? ["music.note"] : ["music.note", "plus"]
+        for (index, symbol) in symbols.enumerated() {
             let origin = CGPoint(
                 x: spacing * CGFloat(1 + index) + glyphSize.width * CGFloat(index),
                 y: 0
             )
-            AddToLibraryBadge.drawSymbol(
-                symbol,
-                in: NSRect(origin: origin, size: glyphSize),
-                alpha: isPending ? AddToLibraryBadge.pendingAlpha : 1.0
-            )
+            AddToLibraryBadge.drawSymbol(symbol, in: NSRect(origin: origin, size: glyphSize))
         }
 
         // The heart keeps the slot it has in the stars strip. A favorited track leaves it
@@ -85,7 +88,7 @@ struct AddToLibraryBadge {
     ///
     /// There is no combined "add this music" symbol -- `music.note.plus` doesn't exist -- so
     /// the note and the plus are drawn as two glyphs that read as one control.
-    private static func drawSymbol(_ name: String, in rect: NSRect, alpha: CGFloat) {
+    private static func drawSymbol(_ name: String, in rect: NSRect) {
         let configuration = NSImage.SymbolConfiguration(pointSize: rect.height * 0.72, weight: .semibold)
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
                 .withSymbolConfiguration(configuration) else { return }
@@ -99,7 +102,7 @@ struct AddToLibraryBadge {
         )
 
         NSColor.black.set()
-        symbol.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: alpha)
+        symbol.draw(in: drawRect, from: .zero, operation: .sourceOver, fraction: 1.0)
     }
 
 }
