@@ -2,12 +2,22 @@
 
 # Build script for StarBar
 #
-#   ./build.sh              Clean Release build into build/
-#   ./build.sh --install    Also replace /Applications/StarBar.app and launch it
-#   ./build.sh --watch      Rebuild on source changes (combine with --install)
-#   ./build.sh --test       Run the tests that don't need Music
-#   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
-#   ./build.sh --ui-test    Run the UI tests, which take over the screen (asks first; --yes skips)
+#   ./build.sh                  Release build into build/ (incremental)
+#   ./build.sh --clean          Clean first
+#   ./build.sh --install        Also replace /Applications/StarBar.app and launch it
+#   ./build.sh --watch          Rebuild on source changes (combine with --install)
+#   ./build.sh --version=1.2.0  Build with this marketing version (the release workflow does)
+#   ./build.sh --test           Run the tests that don't need Music
+#   ./build.sh --test-all       Also run the tests that talk to Music (needs a track playing)
+#   ./build.sh --ui-test        Run the UI tests, which take over the screen (asks first; --yes skips)
+#
+# Version numbers: the marketing version is --version, else the latest v* tag, else the
+# project's own. The build number (CFBundleVersion) is the commit count, so it rises with
+# every commit and a newer build always compares higher, which is what LaunchServices and
+# any update feed go by. A shallow clone can't count, so it keeps the project's number.
+#
+# Signing: builds are ad hoc unless STARBAR_CODESIGN_IDENTITY (a "Developer ID Application"
+# identity) and STARBAR_TEAM_ID are set, as the release workflow sets them from its secrets.
 
 set -e
 set -o pipefail
@@ -24,15 +34,19 @@ MIN_UI_TESTS=7
 
 INSTALL=false
 WATCH=false
+CLEAN=false
 TEST=false
 TEST_ALL=false
 UI_TEST=false
 ASSUME_YES=false
+VERSION=""
 
 for arg in "$@"; do
     case $arg in
         --install|-i) INSTALL=true ;;
         --watch|-w) WATCH=true ;;
+        --clean) CLEAN=true ;;
+        --version=*) VERSION="${arg#*=}" ;;
         --test|-t) TEST=true ;;
         --test-all) TEST=true; TEST_ALL=true ;;
         --ui-test) UI_TEST=true ;;
@@ -40,6 +54,11 @@ for arg in "$@"; do
         *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
+
+if [ -n "$VERSION" ] && ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: --version must look like 1.2.0, not $VERSION"
+    exit 2
+fi
 
 if { [ "$TEST" = true ] || [ "$UI_TEST" = true ]; } && { [ "$INSTALL" = true ] || [ "$WATCH" = true ]; }; then
     echo "Error: --test and --ui-test run on their own. Don't combine them with --install or --watch."
@@ -97,9 +116,41 @@ verify_install() {
     echo "Verified: /Applications has the new build, and it is running."
 }
 
+# xcodebuild settings for the version numbers and signing, appended to BUILD_SETTINGS
+BUILD_SETTINGS=()
+collect_build_settings() {
+    local tag
+    if [ -n "$VERSION" ]; then
+        BUILD_SETTINGS+=("MARKETING_VERSION=$VERSION")
+    elif tag=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null); then
+        BUILD_SETTINGS+=("MARKETING_VERSION=${tag#v}")
+    fi
+    if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "false" ]; then
+        BUILD_SETTINGS+=("CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD)")
+    else
+        echo "Note: shallow or missing git history, so the build number stays the project's own"
+    fi
+    if [ -n "$STARBAR_CODESIGN_IDENTITY" ] && [ -n "$STARBAR_TEAM_ID" ]; then
+        BUILD_SETTINGS+=(
+            "CODE_SIGN_STYLE=Manual"
+            "CODE_SIGN_IDENTITY=$STARBAR_CODESIGN_IDENTITY"
+            "DEVELOPMENT_TEAM=$STARBAR_TEAM_ID"
+            # Notarisation needs a secure timestamp on the signature
+            "OTHER_CODE_SIGN_FLAGS=--timestamp"
+        )
+        echo "Signing with $STARBAR_CODESIGN_IDENTITY"
+    fi
+}
+
 build_and_install() {
     echo ""
     echo "=== Building $APP_NAME... ==="
+
+    local actions=(build)
+    if [ "$CLEAN" = true ]; then
+        actions=(clean build)
+    fi
+    collect_build_settings
 
     # Capture build output so a failure shows the full log
     BUILD_LOG=$(mktemp)
@@ -107,7 +158,8 @@ build_and_install() {
         -scheme "$PROJECT_NAME" \
         -configuration Release \
         -derivedDataPath build \
-        clean build > "$BUILD_LOG" 2>&1; then
+        "${BUILD_SETTINGS[@]}" \
+        "${actions[@]}" > "$BUILD_LOG" 2>&1; then
         tail -10 "$BUILD_LOG"
         rm -f "$BUILD_LOG"
     else
@@ -123,7 +175,7 @@ build_and_install() {
     fi
 
     echo ""
-    echo "Build successful!"
+    echo "Build successful: version $(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist"))"
 
     if [ "$INSTALL" = true ]; then
         if [ -d "$INSTALL_PATH" ] && ! command -v trash &> /dev/null; then

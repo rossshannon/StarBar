@@ -40,7 +40,9 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 ## CI and release
 
 - `.github/workflows/test.yml` runs `./build.sh` and `./build.sh --test` on macos-15, macos-26 and xcode-27 (the macOS 27 preview, non-blocking), and `--ui-test` on macos-26 and xcode-27.
-- Release: push a `v*` tag. `.github/workflows/release.yml` tests, builds with `MARKETING_VERSION` from the tag, and attaches a zip to a GitHub release.
+- Release: push a `v*` tag. `.github/workflows/release.yml` tests, builds through `./build.sh --clean --version=X.Y.Z`, and attaches a zip and its SHA-256 to a GitHub release. It signs with Developer ID and notarises when the repository has the secrets the README lists, and falls back to ad hoc signing without them.
+- Version numbers come from `build.sh`, not the project file: the marketing version is `--version`, else the latest `v*` tag; the build number (`CFBundleVersion`) is the commit count, so it rises with every commit. Never hand-edit `CURRENT_PROJECT_VERSION`; a shallow clone keeps the project's number. There is no Sparkle or other update feed; if one is added, the commit-count build number is what its appcast should compare.
+- Builds are incremental. `./build.sh --clean` cleans first, and the release workflow always does.
 
 ## Architecture
 

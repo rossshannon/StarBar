@@ -2,6 +2,14 @@ name: Release
 
 # Push a tag like v1.1.0 to test, build and publish a GitHub release with the zipped app.
 # The v prefix keeps these tags apart from upstream's version tags (1.5.0).
+#
+# Signing and notarisation run only when the repository has these secrets; without them
+# the app is signed ad hoc and macOS asks the user to allow it once, as the README says.
+#   MACOS_CERTIFICATE_P12          Developer ID Application certificate + key, base64 of the .p12
+#   MACOS_CERTIFICATE_PASSWORD     the .p12's password
+#   APPLE_TEAM_ID                  the ten-character team ID on the certificate
+#   APPLE_ID                       the Apple ID that submits to the notary service
+#   APPLE_APP_SPECIFIC_PASSWORD    an app-specific password for that Apple ID (appleid.apple.com)
 on:
   push:
     tags:
@@ -13,7 +21,11 @@ permissions:
 jobs:
   release:
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      # Secrets can't be tested in a step's `if` directly, so the decision is made here once
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.MACOS_CERTIFICATE_PASSWORD != '' && secrets.APPLE_TEAM_ID != '' }}
+      HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
 
     steps:
       # The tag becomes CFBundleShortVersionString, which must be three numbers, so refuse
@@ -30,6 +42,8 @@ jobs:
         with:
           # The build and tests don't need the write token; only gh release create uses it
           persist-credentials: false
+          # build.sh takes the build number from the commit count, which a shallow clone can't give
+          fetch-depth: 0
 
       - name: Select Xcode
         run: |
@@ -39,26 +53,86 @@ jobs:
       - name: Run tests
         run: ./build.sh --test
 
-      - name: Build Release
+      - name: Import the signing certificate
+        if: env.HAS_SIGNING == 'true'
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          xcodebuild build \
-            -project "StarBar.xcodeproj" \
-            -scheme "StarBar" \
-            -configuration Release \
-            -derivedDataPath build \
-            MARKETING_VERSION="${GITHUB_REF_NAME#v}"
+          # A throwaway keychain, so nothing lands in the runner's login keychain
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD=$(uuidgen)
+          echo "$MACOS_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$MACOS_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain
+          rm "$RUNNER_TEMP/certificate.p12"
+          # The identity's full name, for build.sh
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::The certificate is not a Developer ID Application identity"
+            exit 1
+          fi
+          echo "STARBAR_CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
+          echo "STARBAR_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
 
-      # ditto keeps the bundle's symlinks, extended attributes and ad-hoc signature intact
+      # build.sh signs with STARBAR_CODESIGN_IDENTITY when it is set, ad hoc otherwise, and
+      # takes the build number from the commit count
+      - name: Build Release
+        run: ./build.sh --clean --version="${GITHUB_REF_NAME#v}"
+
+      - name: Check the signature
+        run: |
+          APP="build/Build/Products/Release/StarBar.app"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --display --verbose=2 "$APP" 2>&1 | grep -E "^(Identifier|Authority|TeamIdentifier|Timestamp)=" || true
+
+      # ditto keeps the bundle's symlinks, extended attributes and signature intact
       - name: Zip app
         run: |
           ditto -c -k --sequesterRsrc --keepParent \
             "build/Build/Products/Release/StarBar.app" \
             "StarBar-$GITHUB_REF_NAME.zip"
 
+      - name: Notarise
+        if: env.HAS_SIGNING == 'true' && env.HAS_NOTARY == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit "StarBar-$GITHUB_REF_NAME.zip" \
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" --team-id "$APPLE_TEAM_ID" \
+            --wait --timeout 30m
+          # The ticket is stapled to the app, so it opens offline; the zip is rebuilt to carry it
+          xcrun stapler staple "build/Build/Products/Release/StarBar.app"
+          xcrun stapler validate "build/Build/Products/Release/StarBar.app"
+          rm "StarBar-$GITHUB_REF_NAME.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "build/Build/Products/Release/StarBar.app" \
+            "StarBar-$GITHUB_REF_NAME.zip"
+
+      - name: Checksum
+        run: shasum -a 256 "StarBar-$GITHUB_REF_NAME.zip" | tee "StarBar-$GITHUB_REF_NAME.zip.sha256"
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "StarBar-$GITHUB_REF_NAME.zip" \
+          APP="build/Build/Products/Release/StarBar.app"
+          BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
+          if [ "$HAS_SIGNING" = "true" ] && [ "$HAS_NOTARY" = "true" ]; then
+            SIGNING="Signed with Developer ID and notarised."
+          else
+            SIGNING="Signed ad hoc, not notarised: macOS blocks it the first time it opens. Allow it under System Settings > Privacy & Security > Open Anyway."
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "StarBar-$GITHUB_REF_NAME.zip" "StarBar-$GITHUB_REF_NAME.zip.sha256" \
             --title "StarBar ${GITHUB_REF_NAME#v}" \
+            --notes "Build $BUILD. $SIGNING" \
             --generate-notes
