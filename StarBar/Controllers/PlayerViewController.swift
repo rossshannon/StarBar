@@ -147,39 +147,37 @@ extension PlayerViewController {
             coverImageView.layer?.add(transition, forKey: nil)
 
             coverImageView.image = image
-            backCoverImageView.layer?.contents = NSImage(size: coverImageView.frame.size, flipped: true) { rect -> Bool in
-                let context = CIContext()
-                guard let tiffData = image.tiffRepresentation, let ciImage = CIImage(data: tiffData),
-                let clampFilter = CIFilter(name: "CIAffineClamp"),
-                let gaussianBlur = CIFilter(name: "CIGaussianBlur") else {
-                    return true
-                }
-                let extent = ciImage.extent
-
-                clampFilter.setValue(ciImage, forKey: kCIInputImageKey)
-                clampFilter.setValue(NSAffineTransform(transform: .identity), forKey: kCIInputTransformKey)
-                guard let clampFilterOutput = clampFilter.outputImage else {
-                    return true
-                }
-
-                gaussianBlur.setValue(clampFilterOutput, forKey: kCIInputImageKey)
-                gaussianBlur.setValue(100, forKey: kCIInputRadiusKey)
-
-                guard let outputImage = gaussianBlur.outputImage,
-                let cgImage = context.createCGImage(outputImage, from: extent) else {
-                    return true
-                }
-
-                let nsImage = NSImage(cgImage: cgImage, size: .zero)
-                nsImage.draw(in: rect)
-
-                return true
-            }
-
+            // Rendered once here. A drawing-handler NSImage would run the blur again on
+            // every redraw of the popover.
+            backCoverImageView.layer?.contents = PlayerViewController.blurredBackdrop(for: image)
         } else {
             coverImageView.image = nil
             backCoverImageView.layer?.contents = nil
         }
+    }
+
+    /// One Core Image context for every blur: creating one is expensive, and it is safe
+    /// to reuse from the main thread, where the popover draws.
+    private static let blurContext = CIContext()
+
+    /// The artwork blurred for the backdrop behind the cover, as a bitmap the layer can show
+    /// directly, or nil when the image has no bitmap form.
+    static func blurredBackdrop(for image: NSImage) -> CGImage? {
+        guard let source = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let clampFilter = CIFilter(name: "CIAffineClamp"),
+              let gaussianBlur = CIFilter(name: "CIGaussianBlur") else {
+            return nil
+        }
+        let ciImage = CIImage(cgImage: source)
+
+        // Clamp first, so the blur samples the edge colours instead of transparent black
+        clampFilter.setValue(ciImage, forKey: kCIInputImageKey)
+        clampFilter.setValue(NSAffineTransform(transform: .identity), forKey: kCIInputTransformKey)
+        gaussianBlur.setValue(clampFilter.outputImage, forKey: kCIInputImageKey)
+        gaussianBlur.setValue(100, forKey: kCIInputRadiusKey)
+
+        guard let outputImage = gaussianBlur.outputImage else { return nil }
+        return blurContext.createCGImage(outputImage, from: ciImage.extent)
     }
 
 }
