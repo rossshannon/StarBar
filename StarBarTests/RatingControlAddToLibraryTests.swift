@@ -11,9 +11,9 @@ import XCTest
 
 final class RatingControlAddToLibraryTests: XCTestCase {
 
-    // Default layout: 16pt glyphs, 4pt spacing. In `.addToLibrary` there are two glyphs
-    // before the heart instead of five, so the strip is 64pt wide rather than 124pt:
-    // 4 | note 16 | 4 | plus 16 | 4 || 4 | heart 16. The heart starts at x = 48.
+    // Default layout: 16pt glyphs, 4pt spacing. In `.addToLibrary` the note and the plus
+    // touch, so they read as one control: 4 | note 16 | plus 16 | 4 || 4 | heart 16.
+    // That makes the strip 60pt wide against the stars' 124pt, and the heart starts at 44.
     private var control: RatingControl!
 
     override func setUp() {
@@ -30,7 +30,7 @@ final class RatingControlAddToLibraryTests: XCTestCase {
     // MARK: - Layout
 
     func testStripIsNarrowerThanTheStars() {
-        XCTAssertEqual(control.starsImage.size.width, 64)
+        XCTAssertEqual(control.starsImage.size.width, 60)
         XCTAssertLessThan(
             RatingControl.imageWidth(mode: .addToLibrary, starSize: control.starSize, spacing: control.spacing),
             RatingControl.imageWidth(mode: .rating, starSize: control.starSize, spacing: control.spacing)
@@ -43,7 +43,7 @@ final class RatingControlAddToLibraryTests: XCTestCase {
     }
 
     func testHeartIsStillTheLastSlot() {
-        XCTAssertEqual(control.favoriteMinX, 48)
+        XCTAssertEqual(control.favoriteMinX, 44)
         XCTAssertEqual(control.favoriteMinX + control.starSize.width, control.starsImage.size.width)
     }
 
@@ -65,15 +65,15 @@ final class RatingControlAddToLibraryTests: XCTestCase {
 
     func testEverythingLeftOfTheHeartAddsToTheLibrary() {
         // Both glyphs and the gap between them, with no dead space anywhere
-        for positionX in stride(from: CGFloat(0), to: CGFloat(46), by: 1) {
+        for positionX in stride(from: CGFloat(0), to: CGFloat(42), by: 1) {
             XCTAssertTrue(control.isAddToLibraryHit(positionX: positionX), "x = \(positionX)")
         }
     }
 
     func testTheButtonStopsWhereTheHeartBegins() {
-        XCTAssertTrue(control.isAddToLibraryHit(positionX: 45.9))
-        XCTAssertFalse(control.isAddToLibraryHit(positionX: 46))
-        XCTAssertTrue(control.isFavoriteHit(positionX: 46))
+        XCTAssertTrue(control.isAddToLibraryHit(positionX: 41.9))
+        XCTAssertFalse(control.isAddToLibraryHit(positionX: 42))
+        XCTAssertTrue(control.isFavoriteHit(positionX: 42))
     }
 
     func testEveryPositionBelongsToExactlyOneControl() {
@@ -108,7 +108,7 @@ final class RatingControlAddToLibraryTests: XCTestCase {
     func testTheStarsAreNotTheAddButton() {
         control.update(mode: .rating)
 
-        for positionX in stride(from: CGFloat(0), to: CGFloat(104), by: 4) {
+        for positionX in stride(from: CGFloat(0), to: CGFloat(100), by: 4) {
             XCTAssertFalse(control.isAddToLibraryHit(positionX: positionX), "x = \(positionX)")
         }
     }
@@ -168,8 +168,8 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         let image = badge.image
 
         XCTAssertGreaterThan(ink(in: image, fromX: 4, toX: 20), 0, "the music note")
-        XCTAssertGreaterThan(ink(in: image, fromX: 24, toX: 40), 0, "the plus")
-        XCTAssertGreaterThan(ink(in: image, fromX: 48, toX: 64), 0, "the heart")
+        XCTAssertGreaterThan(ink(in: image, fromX: 20, toX: 36), 0, "the plus")
+        XCTAssertGreaterThan(ink(in: image, fromX: 44, toX: 60), 0, "the heart")
 
     }
 
@@ -178,7 +178,7 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         // show as an edge around it
         let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isFavorited: true)
 
-        XCTAssertEqual(ink(in: badge.image, fromX: 48, toX: 64), 0)
+        XCTAssertEqual(ink(in: badge.image, fromX: 44, toX: 60), 0)
         XCTAssertGreaterThan(ink(in: badge.image, fromX: 4, toX: 20), 0, "the note is still drawn")
     }
 
@@ -186,7 +186,7 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
 
         // The spacing between the plus and the heart, so the two don't run together
-        XCTAssertEqual(ink(in: badge.image, fromX: 41, toX: 47), 0)
+        XCTAssertEqual(ink(in: badge.image, fromX: 37, toX: 43), 0)
     }
 
     // MARK: - While the song is being added
@@ -196,7 +196,7 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         // must not be drawn underneath it
         let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
 
-        XCTAssertEqual(ink(in: pending.image, fromX: 24, toX: 40), 0, "the plus slot")
+        XCTAssertEqual(ink(in: pending.image, fromX: 21, toX: 35), 0, "the plus slot")
     }
 
     func testTheNoteStaysWhileTheAddIsInFlight() {
@@ -215,8 +215,8 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         let solid = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
         let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
 
-        XCTAssertEqual(inkWeight(in: pending.image, fromX: 48, toX: 64),
-                       inkWeight(in: solid.image, fromX: 48, toX: 64),
+        XCTAssertEqual(inkWeight(in: pending.image, fromX: 44, toX: 60),
+                       inkWeight(in: solid.image, fromX: 44, toX: 60),
                        accuracy: 0.001)
     }
 
@@ -228,10 +228,17 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         XCTAssertEqual(pending.image.size.width, solid.image.size.width)
     }
 
+    func testTheNoteAndPlusTouch() {
+        // Ross asked for no gap between them, so they read as one control
+        let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+
+        XCTAssertEqual(badge.plusMinX, badge.noteMinX + 16, "no spacing between the two glyphs")
+    }
+
     func testTheSpinnerGoesWhereThePlusWas() {
         let badge = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
 
-        XCTAssertEqual(badge.plusMinX, 24)
+        XCTAssertEqual(badge.plusMinX, 20)
         XCTAssertEqual(control.addToLibraryPlusMinX, badge.plusMinX)
         // and it sits between the note and the heart
         XCTAssertLessThan(badge.plusMinX, control.favoriteMinX)

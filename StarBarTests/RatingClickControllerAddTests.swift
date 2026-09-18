@@ -4,7 +4,7 @@
 //
 //  Clicking the Apple Music button that replaces the stars for a track which isn't in the
 //  library. Driven by a fake mouse, so no Music app is needed.
-//  Positions are x inside the strip: the button spans 0 ..< 46, the heart 46 ... 68.
+//  Positions are x inside the strip: the button spans 0 ..< 42, the heart 42 ... 64.
 //
 
 import XCTest
@@ -82,21 +82,21 @@ final class RatingClickControllerAddTests: XCTestCase {
     }
 
     func testPressingThePlusAddsToTheLibrary() {
-        press(at: 32)
+        press(at: 30)
 
         XCTAssertEqual(addsToLibrary, 1)
     }
 
     func testPressingTheGapBetweenThemAddsToTheLibrary() {
         // The two glyphs are one button, so the gap must not be dead
-        press(at: 22)
+        press(at: 19)
 
         XCTAssertEqual(addsToLibrary, 1)
     }
 
     func testPressingAddsExactlyOnce() {
         press(at: 12)
-        press(at: 32)
+        press(at: 30)
 
         XCTAssertEqual(addsToLibrary, 2)
     }
@@ -104,7 +104,7 @@ final class RatingClickControllerAddTests: XCTestCase {
     // MARK: - The heart still works
 
     func testPressingTheHeartTogglesTheFavouriteAndDoesNotAdd() {
-        press(at: 56)
+        press(at: 52)
 
         XCTAssertEqual(favoriteToggles, 1)
         XCTAssertEqual(addsToLibrary, 0)
@@ -113,7 +113,7 @@ final class RatingClickControllerAddTests: XCTestCase {
     // MARK: - No rating, no drag
 
     func testNothingIsEverSaved() {
-        for positionX in stride(from: CGFloat(0), through: CGFloat(68), by: 2) {
+        for positionX in stride(from: CGFloat(0), through: CGFloat(64), by: 2) {
             press(at: positionX)
         }
 

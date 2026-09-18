@@ -38,17 +38,22 @@ struct AddToLibraryBadge {
     /// Number of glyphs before the heart: the note and the plus
     static let glyphCount = 2
 
-    /// Left edge of the plus, where the spinner goes while the add is in flight.
-    /// Same layout as `Stars`: a spacing before each glyph.
-    var plusMinX: CGFloat {
-        return CGFloat(2) * spacing + glyphSize.width
+    /// Left edge of the note
+    var noteMinX: CGFloat {
+        return spacing
     }
 
-    /// Width of the note and plus with their spacing, before the heart slot.
-    /// `Stars.starsWidth` is the same shape with five glyphs instead of two.
+    /// Left edge of the plus, where the spinner goes while the add is in flight.
+    /// The plus sits straight after the note with no gap, so the two read as one control
+    /// rather than as a note and a separate button.
+    var plusMinX: CGFloat {
+        return spacing + glyphSize.width
+    }
+
+    /// Width of the note and plus, before the heart slot: a spacing, the two glyphs touching,
+    /// then a spacing. `Stars.starsWidth` is the same shape but spaces its five stars apart.
     var contentWidth: CGFloat {
-        return CGFloat(AddToLibraryBadge.glyphCount) * glyphSize.width
-            + CGFloat(AddToLibraryBadge.glyphCount + 1) * spacing
+        return CGFloat(AddToLibraryBadge.glyphCount) * glyphSize.width + CGFloat(2) * spacing
     }
 
     /// The strip, drawn as a template image the menu bar recolours
@@ -59,15 +64,13 @@ struct AddToLibraryBadge {
         let canvasImage = NSImage(size: NSSize(width: width, height: height))
         canvasImage.lockFocus()
 
-        // The plus is left out while the add is in flight: a spinner takes its place, and
-        // drawing both would overlap
-        let symbols = isPending ? ["music.note"] : ["music.note", "plus"]
-        for (index, symbol) in symbols.enumerated() {
-            let origin = CGPoint(
-                x: spacing * CGFloat(1 + index) + glyphSize.width * CGFloat(index),
-                y: 0
-            )
-            AddToLibraryBadge.drawSymbol(symbol, in: NSRect(origin: origin, size: glyphSize))
+        NSColor.black.set()
+        AppleMusicGlyph().draw(in: NSRect(origin: CGPoint(x: noteMinX, y: 0), size: glyphSize))
+
+        // The plus is left out while the add is in flight: the spinner takes its place, and
+        // drawing both would show the plus through the gaps in the circle
+        if !isPending {
+            AddToLibraryBadge.drawSymbol("plus", in: NSRect(origin: CGPoint(x: plusMinX, y: 0), size: glyphSize))
         }
 
         // The heart keeps the slot it has in the stars strip. A favorited track leaves it
@@ -86,8 +89,8 @@ struct AddToLibraryBadge {
 
     /// Draw one SF Symbol centred in `rect`, in black so the template image picks it up.
     ///
-    /// There is no combined "add this music" symbol -- `music.note.plus` doesn't exist -- so
-    /// the note and the plus are drawn as two glyphs that read as one control.
+    /// Only the plus comes from SF Symbols. The note is drawn by `AppleMusicGlyph`, because
+    /// SF Symbols has no beamed pair and a single note doesn't read as Apple Music.
     private static func drawSymbol(_ name: String, in rect: NSRect) {
         let configuration = NSImage.SymbolConfiguration(pointSize: rect.height * 0.72, weight: .semibold)
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?

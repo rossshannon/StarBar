@@ -194,12 +194,13 @@ extension RatingControl {
     /// Both strips lay out the same way -- a spacing before each glyph and one after -- so
     /// only the number of glyphs differs: five stars, or the note and the plus.
     static func contentWidth(mode: Mode, starSize: NSSize, spacing: CGFloat) -> CGFloat {
-        let glyphCount: Int
         switch mode {
-        case .rating:       glyphCount = 5
-        case .addToLibrary: glyphCount = AddToLibraryBadge.glyphCount
+        case .rating:
+            return CGFloat(5) * starSize.width + CGFloat(6) * spacing
+        case .addToLibrary:
+            // The badge owns its own layout: its two glyphs touch, so the formula differs
+            return AddToLibraryBadge(glyphSize: starSize, spacing: spacing).contentWidth
         }
-        return CGFloat(glyphCount) * starSize.width + CGFloat(glyphCount + 1) * spacing
     }
 
     /// Left edge of the plus in the Apple Music button, inside `starsImage`. The menu bar

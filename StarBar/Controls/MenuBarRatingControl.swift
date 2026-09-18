@@ -69,19 +69,19 @@ final class MenuBarRatingControl {
         return imageView
     }()
     
-    /// Real macOS spinner shown in the plus's place while the song is being added. Music
-    /// takes about 3.5 seconds over it, so the button has to look busy.
-    private let addToLibrarySpinner: NSProgressIndicator = {
-        let indicator = PassthroughProgressIndicator()
-        indicator.style = .spinning
-        indicator.controlSize = .small
-        indicator.isIndeterminate = true
-        indicator.isDisplayedWhenStopped = false
-        indicator.isHidden = true
+    /// Shown in the plus's place while the song is being added: the turning circle with a gap
+    /// that Apple Music itself shows. Music takes about 3.5 seconds, so the button has to look
+    /// busy, and this is the indicator the user has just seen in Music.
+    private let addToLibrarySpinner: AddToLibrarySpinnerView = {
+        let view = AddToLibrarySpinnerView()
+        view.isHidden = true
         // Stay centred with the strip when the button resizes after statusItem.length changes
-        indicator.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
-        return indicator
+        view.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        return view
     }()
+    /// Turns the spinner while the add is in flight
+    private var spinnerTimer: RatingReminderTimer?
+    private var spinnerStart: Date?
 
     private let clickGestureRecognizer: NSClickGestureRecognizer = {
         let gestureRecognizer = NSClickGestureRecognizer()
@@ -368,7 +368,9 @@ extension MenuBarRatingControl {
 
         let isWaiting = !isStop && ratingControl.mode == .addToLibrary && ratingControl.isAddingToLibrary
         guard isWaiting else {
-            addToLibrarySpinner.stopAnimation(nil)
+            spinnerTimer?.invalidate()
+            spinnerTimer = nil
+            spinnerStart = nil
             addToLibrarySpinner.isHidden = true
             return
         }
@@ -383,7 +385,18 @@ extension MenuBarRatingControl {
             height: size.height
         )
         addToLibrarySpinner.isHidden = false
-        addToLibrarySpinner.startAnimation(nil)
+
+        guard spinnerTimer == nil else { return }
+        // Step the angle on each display refresh, like the track announcement's slide, rather
+        // than animating it: Core Animation on this kind of window has been seen not to draw
+        let start = Date()
+        spinnerStart = start
+        spinnerTimer = widthClock.schedule(after: 0, repeats: true) { [weak self] in
+            guard let self = self else { return }
+            let turns = Date().timeIntervalSince(start) * Double(AddToLibrarySpinnerView.turnsPerSecond)
+            // Clockwise, which is the direction Music turns it
+            self.addToLibrarySpinner.angle = CGFloat(-360.0 * turns.truncatingRemainder(dividingBy: 1))
+        }
     }
 
     /// Toggle the favorite status of the current track
@@ -726,9 +739,4 @@ private final class PassthroughImageView: NSImageView {
     }
 }
 
-/// The spinner sits on top of the button, so it has to let clicks through to it
-private final class PassthroughProgressIndicator: NSProgressIndicator {
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        return nil
-    }
-}
+
