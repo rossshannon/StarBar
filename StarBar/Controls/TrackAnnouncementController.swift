@@ -115,6 +115,8 @@ final class TrackAnnouncementController: NSObject {
     /// that arrives in the shadow of another can wait up to `iTunesRadioStation.ratingSaveDelay`,
     /// so until this expires it wins over Music's reads.
     private var pendingRating: (identity: String, rating: Int, expires: Date)?
+    /// The heart the user just set in StarBar, for the same reason as `pendingRating`
+    private var pendingFavorite: (identity: String, isFavorited: Bool, expires: Date)?
 
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
@@ -243,10 +245,13 @@ extension TrackAnnouncementController {
 
     /// The user toggled the current track's heart in StarBar. Shows it on the strip now.
     ///
-    /// The heart needs no counterpart to `pendingRating`: `iTunesTrack.updateFavorited(_:)`
-    /// writes to Music at once, so Music's next read already has it.
+    /// It needs the same treatment as `pendingRating`, for the same reason. The comment here
+    /// used to say the heart was different because `iTunesTrack.updateFavorited(_:)` reaches
+    /// Music at once -- it does not. A read taken straight after the write can still report
+    /// the old value, and the strip would then put the heart back.
     func userDidFavorite(_ isFavorited: Bool) {
         guard let identity = ratedTrackIdentity() else { return }
+        pendingFavorite = (identity, isFavorited, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime))
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
     }
 
@@ -297,6 +302,22 @@ extension TrackAnnouncementController {
         pendingRating = nil
     }
 
+    /// The heart to show, on the same terms as the rating: the user's own while Music has yet
+    /// to report it, otherwise Music's.
+    private func favorite(for identity: String, live: Bool?, payload: Bool?) -> Bool? {
+        if let pending = pendingFavorite, clock.now() >= pending.expires {
+            pendingFavorite = nil
+        }
+        let known = live ?? payload
+        guard let pending = pendingFavorite, pending.identity == identity else { return known }
+        guard known != pending.isFavorited else {
+            // Music has the heart now
+            pendingFavorite = nil
+            return known
+        }
+        return pending.isFavorited
+    }
+
     /// Returns false when the announcement was dropped because the track changed under it
     @discardableResult
     private func announce(_ snapshot: PlayerSnapshot, identity: String) -> Bool {
@@ -307,7 +328,7 @@ extension TrackAnnouncementController {
             artist: snapshot.artist,
             album: snapshot.album,
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
-            isFavorited: live.isFavorited ?? snapshot.isFavorited ?? false,
+            isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? false,
             artwork: live.artwork,
             canRate: live.canRate ?? true
         )
@@ -326,7 +347,7 @@ extension TrackAnnouncementController {
             artist: snapshot.artist.isEmpty ? current.artist : snapshot.artist,
             album: snapshot.album.isEmpty ? current.album : snapshot.album,
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
-            isFavorited: live.isFavorited ?? snapshot.isFavorited ?? current.isFavorited,
+            isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? current.isFavorited,
             artwork: current.artwork,
             canRate: live.canRate ?? current.canRate
         )
@@ -342,7 +363,7 @@ extension TrackAnnouncementController {
         let updated = TrackAnnouncement(
             copying: current,
             rating: rating(for: current.identity, live: live.rating, payload: nil) ?? current.rating,
-            isFavorited: live.isFavorited ?? current.isFavorited,
+            isFavorited: favorite(for: current.identity, live: live.isFavorited, payload: nil) ?? current.isFavorited,
             canRate: live.canRate ?? current.canRate
         )
         guard updated != current else { return }

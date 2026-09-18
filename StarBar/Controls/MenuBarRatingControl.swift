@@ -92,6 +92,15 @@ final class MenuBarRatingControl {
     }()
     /// Calls `clickController.tick()` while a drag is under way
     private var dragTimer: Timer?
+    /// The heart the user just set, which song it was for, and when to stop believing it.
+    ///
+    /// Music takes a moment to apply the write, so its reads are ignored until they agree or
+    /// this expires. Without it a player update arriving in between flips the heart back.
+    private var pendingFavorite: (value: Bool, trackID: String?, expires: Date)?
+
+    /// How long a heart the user set wins over Music's reads
+    static let favoriteWriteWindow: TimeInterval = 2.0
+
     /// Steps `statusItem.length` while the strip changes width between the two modes
     private var widthTimer: RatingReminderTimer?
     private let widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main })
@@ -389,17 +398,36 @@ extension MenuBarRatingControl {
 
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
 
-        let isFavorited = !track.isFavorited
+        // Flip the heart the user can see, not the one Music last answered with. Music applies
+        // the write a moment later, so asking it again straight away can still report the old
+        // value -- and two presses in a row then set the same thing, which is how the heart
+        // got stuck.
+        let isFavorited = !ratingControl.isFavorited
         track.updateFavorited(isFavorited)
+        pendingFavorite = (isFavorited, iTunesPlayer.shared.playing?.persistentID,
+                           Date().addingTimeInterval(MenuBarRatingControl.favoriteWriteWindow))
 
         // Update our local state immediately
         ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
-        
-        // Also trigger a full update to refresh data from iTunes
-        iTunesPlayer.shared.update()
+
+        // Deliberately no forced player update here: it reads Music back before the write has
+        // landed, and the stale answer would put the heart straight back.
+    }
+
+    /// The heart to show: the user's own while Music has yet to report it, otherwise Music's.
+    ///
+    /// Music is believed again as soon as it agrees, so a change made in Music straight
+    /// afterwards isn't held back for the rest of the window.
+    private func favoriteToShow(musicSays: Bool, trackID: String?, now: Date = Date()) -> Bool {
+        guard let pending = pendingFavorite else { return musicSays }
+        guard pending.trackID == trackID, now < pending.expires, musicSays != pending.value else {
+            pendingFavorite = nil
+            return musicSays
+        }
+        return pending.value
     }
 
 }
@@ -510,7 +538,8 @@ extension MenuBarRatingControl {
         if !clickController.isDragging {
             ratingControl.update(rating: userRating ?? 0)
         }
-        ratingControl.updateFavorited(track?.isFavorited ?? false)
+        ratingControl.updateFavorited(favoriteToShow(musicSays: track?.isFavorited ?? false,
+                                                     trackID: playing?.persistentID))
         updateFavoriteHeartView()
         // A catalog track is permanently unrated, so without this the reminder would ring for
         // every one of them and sweep a star across a control that has no stars

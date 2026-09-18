@@ -423,6 +423,47 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(identityReadsFor, [identity])
     }
 
+    func testTheHeartTheUserSetSurvivesAStaleReadFromMusic() {
+        // Music applies the write a moment later, so a refresh in between still reports the
+        // old value. Without holding the user's own answer the strip puts the heart back.
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidFavorite(true)
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, true)
+
+        // Music still says false, because it has not caught up
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, true, "the heart must not flip back")
+    }
+
+    func testMusicIsBelievedAgainOnceItReportsTheHeart() {
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+        controller.userDidFavorite(true)
+
+        // Music agrees, so a change made in Music straight afterwards is not held back
+        live = .loaded(.init(rating: 0, isFavorited: true))
+        update(snapshot(track: "A"))
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, false)
+    }
+
+    func testTheHeldHeartExpires() {
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+        controller.userDidFavorite(true)
+
+        clock.advance(by: TrackAnnouncementController.pendingRatingLifetime + 0.1)
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, false, "Music wins once it has had time")
+    }
+
     func testAnIdentityMusicCannotAnswerLeavesTheStripAsTheBestGuess() {
         live = .loaded(.init(rating: 20))
         update(snapshot(track: "A"))
