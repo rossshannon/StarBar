@@ -317,7 +317,10 @@ extension iTunesRadioStation {
             case .added(let databaseID):
                 self.finishAddToLibrary(timer)
                 os_log("%{public}s[%{public}ld], %{public}s: added %{public}s to the library as %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, name, databaseID)
-                completion(libraryPlaylist.tracks?().object(withID: databaseID) as? iTunesTrack)
+                // Pick it out of the search results, not with `object(withID:)`, which takes a
+                // track's `id` rather than its database ID and answers with a dead specifier
+                completion(self.libraryMatches(for: track, in: libraryPlaylist)
+                    .first(where: { $0.databaseID == databaseID }))
             }
         }
     }
@@ -344,10 +347,11 @@ extension iTunesRadioStation {
               let library = librarySource(of: iTunes),
               let libraryPlaylist = libraryPlaylist(of: library) else { return nil }
 
-        let databaseID = databaseIDs(matching: track, in: libraryPlaylist).min()
-        guard let databaseID = databaseID else { return nil }
-
-        return libraryPlaylist.tracks?().object(withID: databaseID) as? iTunesTrack
+        // Keep the track the search returned. Don't look it up again by database ID:
+        // `object(withID:)` matches a track's `id`, which is a different number, and answers
+        // with a dead specifier that reads as nil and rates as nothing.
+        return libraryMatches(for: track, in: libraryPlaylist)
+            .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) })
     }
 
     /// The user's own library, as opposed to a shared library, an iPod or the store
@@ -359,16 +363,21 @@ extension iTunesRadioStation {
         return source.libraryPlaylists?().firstObject as? iTunesPlaylist
     }
 
-    /// Database IDs of the library songs that look like `track`.
+    /// The library's songs that look like `track`: same name, artist and album.
     ///
-    /// Name, artist and album together, so the set stays small; it is only ever used to spot
-    /// which ID is new, never to decide which song to rate on its own.
-    private func databaseIDs(matching track: iTunesTrack, in libraryPlaylist: iTunesPlaylist) -> Set<Int> {
+    /// All three together, so the list stays short. Callers keep the tracks this returns
+    /// rather than looking them up again by database ID, which does not work: see
+    /// `libraryCopy(of:)`.
+    private func libraryMatches(for track: iTunesTrack, in libraryPlaylist: iTunesPlaylist) -> [iTunesTrack] {
         guard let name = track.name else { return [] }
         let predicate = NSPredicate(format: "name == %@ AND artist == %@ AND album == %@",
                                     name, track.artist ?? "", track.album ?? "")
-        guard let matches = libraryPlaylist.tracks?().filtered(using: predicate) as? [iTunesTrack] else { return [] }
-        return Set(matches.compactMap { $0.databaseID })
+        return libraryPlaylist.tracks?().filtered(using: predicate) as? [iTunesTrack] ?? []
+    }
+
+    /// Database IDs of those songs, for spotting which one is new after an add
+    private func databaseIDs(matching track: iTunesTrack, in libraryPlaylist: iTunesPlaylist) -> Set<Int> {
+        return Set(libraryMatches(for: track, in: libraryPlaylist).compactMap { $0.databaseID })
     }
 
     func backward() {
