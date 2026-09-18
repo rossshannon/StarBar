@@ -173,6 +173,7 @@ extension AppDelegate {
                 // The heart does belong to the playing track, which is where it is written.
                 live.rating = iTunesPlayer.shared.playing?.ratingTrack?.userRating
                 live.isFavorited = track.isFavorited
+                live.canRate = iTunesPlayer.shared.playing?.canRate ?? true
                 if wantsArtwork {
                     live.artwork = track.firstArtworkImage()
                 }

@@ -442,6 +442,12 @@ final class TrackAnnouncementContentView: NSView {
     private func drawRating(in rect: NSRect) {
         let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+
+        guard announcement.canRate else {
+            drawCannotRate(in: rect, starSize: starSize, spacing: spacing)
+            return
+        }
+
         let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
         let template = stars.image
         template.isTemplate = true
@@ -456,6 +462,36 @@ final class TrackAnnouncementContentView: NSView {
             heart.draw(at: NSPoint(x: rect.minX + stars.starsWidth + spacing, y: origin.y), from: .zero, operation: .sourceOver, fraction: 1)
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    /// The heart on its own, then why there are no stars.
+    ///
+    /// Five empty dots would say "unrated", which is not what is true: the song is playing
+    /// from the Apple Music catalog and isn't in the library, so it has no rating to show and
+    /// cannot be given one until it is added.
+    private func drawCannotRate(in rect: NSRect, starSize: NSSize, spacing: CGFloat) {
+        let heartRect = NSRect(x: rect.minX, y: rect.midY - starSize.height / 2,
+                               width: starSize.width, height: starSize.height)
+
+        NSGraphicsContext.saveGraphicsState()
+        textShadow.set()
+        if announcement.isFavorited {
+            Stars.filledFavoriteHeartImage(size: starSize).draw(in: heartRect)
+        } else {
+            let outline = NSImage(size: starSize, flipped: false) { bounds in
+                Stars.drawFavoriteHeartOutline(in: bounds)
+                return true
+            }
+            outline.isTemplate = true
+            outline.withTintColor(.white).draw(in: heartRect)
+        }
+        NSGraphicsContext.restoreGraphicsState()
+
+        let textMinX = heartRect.maxX + spacing * 2
+        let textRect = NSRect(x: textMinX, y: rect.minY,
+                              width: max(0, rect.maxX - textMinX), height: rect.height)
+        draw(TrackAnnouncement.cannotRateText, in: textRect,
+             font: NSFont.systemFont(ofSize: TrackAnnouncementLayout.detailFontSize * scale))
     }
 
     /// Growl's soft downward shadow, scaled with the strip

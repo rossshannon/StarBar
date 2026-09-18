@@ -50,8 +50,12 @@ struct TrackAnnouncement: Equatable {
     let isFavorited: Bool
     /// Album artwork, or nil to show the placeholder
     let artwork: NSImage?
+    /// False for a song playing from the Apple Music catalog that isn't in the library.
+    /// There is no rating to show, so the strip says how to get one instead of drawing five
+    /// empty dots that suggest the song is merely unrated.
+    let canRate: Bool
 
-    init(identity: String, title: String, artist: String, album: String, rating: Int = 0, isFavorited: Bool = false, artwork: NSImage? = nil) {
+    init(identity: String, title: String, artist: String, album: String, rating: Int = 0, isFavorited: Bool = false, artwork: NSImage? = nil, canRate: Bool = true) {
         self.identity = identity
         self.title = title
         self.artist = artist
@@ -59,11 +63,12 @@ struct TrackAnnouncement: Equatable {
         self.rating = rating
         self.isFavorited = isFavorited
         self.artwork = artwork
+        self.canRate = canRate
     }
 
     /// The same announcement with a new rating or heart. Nil means "leave as it was";
     /// unrated is 0 and the heart off is false, so both are still passed as themselves.
-    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil) {
+    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil, canRate: Bool? = nil) {
         self.init(
             identity: other.identity,
             title: other.title,
@@ -71,9 +76,13 @@ struct TrackAnnouncement: Equatable {
             album: other.album,
             rating: rating ?? other.rating,
             isFavorited: isFavorited ?? other.isFavorited,
-            artwork: other.artwork
+            artwork: other.artwork,
+            canRate: canRate ?? other.canRate
         )
     }
+
+    /// What the strip says in place of the stars when the song cannot be rated
+    static let cannotRateText = "Add to Library in Apple Music to rate this song"
 
     /// What the Preferences Preview button shows when Music has no track to show instead
     static var preview: TrackAnnouncement {

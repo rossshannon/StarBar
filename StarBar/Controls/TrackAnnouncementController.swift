@@ -65,6 +65,9 @@ final class TrackAnnouncementController: NSObject {
         /// 0 to 100; nil when it could not be read
         var rating: Int? = nil
         var isFavorited: Bool? = nil
+        /// False when the song is playing from the Apple Music catalog and isn't in the
+        /// library, so there is nowhere for a rating to live
+        var canRate: Bool? = nil
     }
 
     /// What the live-track loader found
@@ -301,7 +304,8 @@ extension TrackAnnouncementController {
             album: snapshot.album,
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? false,
-            artwork: live.artwork
+            artwork: live.artwork,
+            canRate: live.canRate ?? true
         )
         os_log("%{public}s[%{public}ld], %{public}s: announcing %{public}s", ((#file as NSString).lastPathComponent), #line, #function, announcement.accessibilityLabel)
         present(announcement)
@@ -319,7 +323,8 @@ extension TrackAnnouncementController {
             album: snapshot.album.isEmpty ? current.album : snapshot.album,
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
             isFavorited: live.isFavorited ?? snapshot.isFavorited ?? current.isFavorited,
-            artwork: current.artwork
+            artwork: current.artwork,
+            canRate: live.canRate ?? current.canRate
         )
         guard updated != current else { return }
         currentAnnouncement = updated
@@ -333,7 +338,8 @@ extension TrackAnnouncementController {
         let updated = TrackAnnouncement(
             copying: current,
             rating: rating(for: current.identity, live: live.rating, payload: nil) ?? current.rating,
-            isFavorited: live.isFavorited ?? current.isFavorited
+            isFavorited: live.isFavorited ?? current.isFavorited,
+            canRate: live.canRate ?? current.canRate
         )
         guard updated != current else { return }
         currentAnnouncement = updated
