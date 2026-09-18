@@ -18,6 +18,9 @@ PROJECT_NAME="StarBar"
 APP_NAME="StarBar"
 APP_PATH="build/Build/Products/Release/$APP_NAME.app"
 INSTALL_PATH="/Applications/$APP_NAME.app"
+# Fewest tests a run may execute before it counts as broken (see xcode_test)
+MIN_APP_TESTS=150
+MIN_UI_TESTS=7
 
 INSTALL=false
 WATCH=false
@@ -143,13 +146,16 @@ build_and_install() {
     fi
 }
 
-# Run xcodebuild test with the given scheme and selection arguments.
-# Usage: xcode_test <name> <scheme> [-only-testing:... | -skip-testing:...]...
+# Run xcodebuild test with the given scheme and extra arguments.
+# Usage: xcode_test <name> <scheme> <min_tests> [xcodebuild args...]
 # Writes build/test/<name>.log and a result bundle under build/test/results/.
+# Fails when fewer than <min_tests> tests ran: a test bundle that fails to load, or a scheme
+# that no longer includes the tests, would otherwise pass with "Executed 0 tests".
 xcode_test() {
     local name="$1"
     local scheme="$2"
-    shift 2
+    local min_tests="$3"
+    shift 3
     local test_dir="build/test"
     local test_log="$test_dir/$name.log"
     # xcodebuild won't overwrite a result bundle, so each run gets its own
@@ -164,6 +170,12 @@ xcode_test() {
         "$@" \
         test > "$test_log" 2>&1; then
         grep -E "Executed [0-9]+ tests|\*\* TEST" "$test_log" | tail -2
+        local executed
+        executed=$(grep -E "Executed [0-9]+ tests" "$test_log" | tail -1 | sed -E 's/.*Executed ([0-9]+) tests.*/\1/')
+        if [ "${executed:-0}" -lt "$min_tests" ]; then
+            echo "Only ${executed:-0} tests ran, but at least $min_tests were expected. Full log: $test_log"
+            return 1
+        fi
     else
         # Failed tests first, then the end of the log, which explains crashes and build errors
         grep -E ": error:|Test Case .* failed" "$test_log" || true
@@ -176,23 +188,20 @@ xcode_test() {
 }
 
 run_tests() {
-    # Test identifiers look like "StarBarTests/ClassName"; a wrong identifier is silently ignored.
     # The UI tests take over the screen, so they have their own scheme and run only with --ui-test.
-    local selection=()
-    # These test classes read from Music, so they fail unless Music is playing a track
-    # with artwork and StarBar may access the media library. CI has no Music.
-    if [ "$TEST_ALL" = false ]; then
-        selection+=(
-            "-skip-testing:StarBarTests/ScriptBridgeTests"
-            "-skip-testing:StarBarTests/iTunesLibraryTests"
-        )
+    # ScriptBridgeTests reads from Music, so it skips itself unless the test host sees
+    # STARBAR_LIVE_MUSIC_TESTS=1 (xcodebuild passes TEST_RUNNER_ variables through). It needs
+    # Music playing a track with artwork. CI has no Music.
+    local extra=()
+    if [ "$TEST_ALL" = true ]; then
+        extra+=("TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS=1")
     fi
     local status=0
 
     echo ""
     echo "=== Testing $APP_NAME... ==="
     # The app hosts the unit tests, so a test run launches it
-    xcode_test test "$PROJECT_NAME" "${selection[@]}" || status=1
+    xcode_test test "$PROJECT_NAME" "$MIN_APP_TESTS" "${extra[@]}" || status=1
 
     echo ""
     echo "=== Testing SDK... ==="
@@ -235,7 +244,7 @@ run_ui_tests() {
     fi
 
     local status=0
-    xcode_test ui-test "$PROJECT_NAME UI Tests" || status=1
+    xcode_test ui-test "$PROJECT_NAME UI Tests" "$MIN_UI_TESTS" || status=1
 
     if [ "$was_running" = true ] && [ -d "$INSTALL_PATH" ]; then
         open "$INSTALL_PATH"

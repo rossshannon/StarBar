@@ -25,9 +25,9 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 
 ### Tests and CI
-The app tests are hosted in the app, so a test run launches StarBar. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
+The app tests are hosted in the app, so a test run launches StarBar. `--test` never touches Music: `ScriptBridgeTests`, which reads the playing track, skips itself unless `--test-all` opts it in.
 
-The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerTests`) and the star geometry (`RatingControlGeometryTests`).
+The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerTests`), the star geometry and half-star round trips (`RatingControlGeometryTests`), the rating reminder and the track announcement strip, all with fakes in place of Music.
 
 `--ui-test` runs `MenuBarRatingUITests` from the separate `StarBar UI Tests` scheme, which clicks and drags the real menu bar item. The app runs with `-UITesting YES`, so it shows the stars as if a song is playing and doesn't talk to Music. The tests take over the mouse and screen for about two minutes, so the script asks before it starts (`--yes` skips the question). The installed StarBar is quit while they run and reopened afterwards. macOS asks for authentication before UI tests can control the Mac. To stop it asking each time, run:
 

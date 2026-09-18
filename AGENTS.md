@@ -14,7 +14,7 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 | Build, install to /Applications, relaunch | `./build.sh --install` |
 | Rebuild on file changes | `./build.sh --watch --install` (needs `brew install fswatch`) |
 | App tests that don't need Music, plus SDK tests | `./build.sh --test` |
-| All tests, including `ScriptBridgeTests` and `iTunesLibraryTests` | `./build.sh --test-all` |
+| All tests, including `ScriptBridgeTests`, which reads from Music | `./build.sh --test-all` |
 | UI tests (take over the screen, see below) | `./build.sh --ui-test` |
 | One test | `xcodebuild -project StarBar.xcodeproj -scheme StarBar test -only-testing:StarBarTests/TestClassName/testMethodName` |
 | SDK tests only | `cd SDK && swift test` |
@@ -24,7 +24,8 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 - Prefer `build.sh` over raw `xcodebuild`. When `xcode-select` points at the Command Line Tools, the script finds an Xcode app with Spotlight and prints "Using Xcode at …". For raw `xcodebuild`, `swift test` or `sdef` on such a machine, set `DEVELOPER_DIR` to that app's `Contents/Developer`.
 - `-only-testing` silently ignores a wrong identifier, so check the log shows the test ran.
 - Test logs are in `build/test/test.log` and `build/test/ui-test.log`. Result bundles are in `build/test/results/`.
-- `--test-all` needs Music playing a track with artwork and media library access, so it runs locally only. The skip list for `--test` lives only in `build.sh`.
+- `--test-all` needs Music playing a track with artwork, so it runs locally only. `ScriptBridgeTests` skips itself unless the test host's environment has `STARBAR_LIVE_MUSIC_TESTS=1`; `build.sh` sets it through `TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS`, and a plain `xcodebuild test` or Xcode's Product > Test never reaches Music. Live tests only read from Music; a test that writes needs the user's say-so and disposable data.
+- `build.sh` fails a test run that executed fewer tests than `MIN_APP_TESTS` / `MIN_UI_TESTS`, so a test bundle that fails to load can't pass as "Executed 0 tests". Raise the floor when the suite grows well past it.
 - An install only counts when three things are proven: the new binary is in `/Applications`, the running app is that binary, and the changed code runs. `./build.sh --install` ends with a verification block (commit, binary hash, running PID) that covers the first two; read it rather than the exit code. For the third, check the app's log for the code path you changed. Claude Code has an `install-and-verify` skill for this.
 
 ## Testing gotchas
