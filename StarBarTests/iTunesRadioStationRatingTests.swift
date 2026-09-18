@@ -65,6 +65,35 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         XCTAssertEqual(first.ratingsWritten.count, 2, "and the first song got nothing more")
     }
 
+    /// Only a refused property write schedules the re-read; a failed read does not
+    func testOnlyARefusedWriteSchedulesARereadOfThePlayer() {
+        let station = iTunesRadioStation.shared
+        let error = NSError(domain: NSOSStatusErrorDomain, code: -54, userInfo: nil)
+
+        _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x67657464).aeDesc!, withError: error)   // core/getd
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite, "a failed read changes nothing")
+
+        _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)   // core/setd
+        _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "a refused write schedules one re-read")
+
+        // Let it run, so it doesn't fire under a later test
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.2))
+        XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite)
+    }
+
+    private func appleEvent(eventClass: UInt32, eventID: UInt32) -> NSAppleEventDescriptor {
+        return NSAppleEventDescriptor.appleEvent(
+            withEventClass: AEEventClass(eventClass),
+            eventID: AEEventID(eventID),
+            targetDescriptor: nil,
+            returnID: AEReturnID(kAutoGenerateReturnID),
+            transactionID: AETransactionID(kAnyTransactionID)
+        )
+    }
+
     /// What Music posts on a track change, with the keys the station decodes
     private func playerInfoNotification(name: String, persistentID: Int) -> Notification {
         return Notification(name: Notification.Name("com.apple.iTunes.playerInfo"), object: nil, userInfo: [
@@ -79,13 +108,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
     /// The failed-event handler tells a property write from a read by the event's class and
     /// ID, which have to be read as attributes: the descriptor type is always 'aevt'
     func testFailedEventClassAndIDAreDecoded() {
-        let descriptor = NSAppleEventDescriptor.appleEvent(
-            withEventClass: AEEventClass(0x636F7265),   // 'core'
-            eventID: AEEventID(0x73657464),             // 'setd'
-            targetDescriptor: nil,
-            returnID: AEReturnID(kAutoGenerateReturnID),
-            transactionID: AETransactionID(kAnyTransactionID)
-        )
+        let descriptor = appleEvent(eventClass: 0x636F7265, eventID: 0x73657464)   // 'core' / 'setd'
         let (eventClass, eventID) = iTunesRadioStation.classAndID(of: descriptor.aeDesc!)
         XCTAssertEqual(eventClass, "core")
         XCTAssertEqual(eventID, "setd")

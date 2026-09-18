@@ -70,6 +70,10 @@ final class iTunesRadioStation {
     static let refusedWriteRereadDelay: TimeInterval = 0.5
     /// The re-read scheduled after a refused write, so several refusals mean one read
     private var refusedWriteReread: DispatchWorkItem?
+    /// True while a re-read after a refused write is waiting to run
+    var hasPendingRereadAfterRefusedWrite: Bool {
+        return refusedWriteReread != nil
+    }
 
     private init() {
         // Listen iTunes play state change notification

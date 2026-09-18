@@ -74,8 +74,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // the short timeout: a hung Music must not hold the quit until macOS kills the app.
         // When Music isn't running there is nothing to write to.
         if !MenuBarRatingControl.isUITesting {
-            _ = MenuBarRatingControl.withShortTimeout { _ in
+            let flushed: Void? = MenuBarRatingControl.withShortTimeout { _ in
                 iTunesRadioStation.shared.flushHeldRatingWrite()
+            }
+            if flushed == nil {
+                os_log("%{public}s[%{public}ld], %{public}s: Music isn't running, so no held rating could be flushed", ((#file as NSString).lastPathComponent), #line, #function)
             }
         }
     }
