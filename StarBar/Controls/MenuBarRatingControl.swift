@@ -117,9 +117,12 @@ final class MenuBarRatingControl {
     /// The playing track stays a catalog track for the rest of the song, so its rating would
     /// go nowhere; ratings go to this instead until the song changes.
     private var addedLibraryTrack: iTunesTrack?
-    /// Which playing song `addedLibraryTrack` belongs to, taken from the notification so that
-    /// noticing a song change costs no Apple Event
-    private var addedLibraryTrackPlayingID: Int?
+    /// The catalog track `addedLibraryTrack` belongs to, by its persistent ID.
+    ///
+    /// Music's own ID for the playing track, not the one in its notification: that one is
+    /// missing for these tracks, so comparing it never noticed the song changing and the
+    /// library copy outlived the song it was added for.
+    private var addedLibraryTrackPlayingID: String?
 
     /// Steps `statusItem.length` while the strip changes width between the two modes
     private var widthTimer: RatingReminderTimer?
@@ -511,10 +514,10 @@ extension MenuBarRatingControl {
         // Each property read is an Apple Event, so read the track once
         let track = player.currentTrack
 
-        // Forget the library copy when the song changes. The notification already carries the
-        // ID, so this costs no Apple Event.
-        let playingID = iTunesRadioStation.shared.latestPlayInfo?.persistentID
-        if playingID != addedLibraryTrackPlayingID {
+        // Forget the library copy when the song changes. Read once: the reminder's snapshot
+        // wants the same ID.
+        let trackID = track?.persistentID
+        if trackID != addedLibraryTrackPlayingID {
             addedLibraryTrack = nil
             addedLibraryTrackPlayingID = nil
         }
@@ -538,7 +541,7 @@ extension MenuBarRatingControl {
         // A catalog track is permanently unrated, so without this the reminder would ring for
         // every one of them and sweep a star across a control that has no stars
         if UserDefaults.standard.remindToRateUnrated && ratingControl.mode == .rating {
-            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: userRating, isPlaying: isPlaying) }
+            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: userRating, isPlaying: isPlaying, trackID: ratedTrack === track ? trackID : nil) }
             reminderController?.playerDidUpdate(snapshot)
         } else {
             reminderController?.playerDidUpdate(nil)
@@ -551,7 +554,7 @@ extension MenuBarRatingControl {
     /// really in the library. Waiting is the point: stars shown before then would have
     /// nowhere to write.
     func addCurrentTrackToLibrary() {
-        let pressedForPlayingID = iTunesRadioStation.shared.latestPlayInfo?.persistentID
+        let pressedForPlayingID = iTunesPlayer.shared.currentTrack?.persistentID
         // Music takes seconds over this, so say so rather than leaving the button untouched
         ratingControl.update(isAddingToLibrary: true)
         updateAddToLibrarySpinner()
@@ -570,7 +573,8 @@ extension MenuBarRatingControl {
             }
             // The song can change while the add is in flight, and the stars would then belong
             // to the wrong one. The song is still in the library either way.
-            guard iTunesRadioStation.shared.latestPlayInfo?.persistentID == pressedForPlayingID else {
+            guard pressedForPlayingID != nil,
+                  iTunesPlayer.shared.currentTrack?.persistentID == pressedForPlayingID else {
                 os_log("%{public}s[%{public}ld], %{public}s: the song changed while it was being added, leaving the stars alone", ((#file as NSString).lastPathComponent), #line, #function)
                 return
             }
@@ -600,9 +604,10 @@ extension MenuBarRatingControl {
     /// values already read. Call only while Music is running.
     ///
     /// - Parameter isPlaying: the player state, or nil to read it
-    static func readPlayerSnapshot(track: iTunesTrack, userRating: Int?, isPlaying: Bool? = nil) -> RatingReminderController.PlayerSnapshot? {
+    static func readPlayerSnapshot(track: iTunesTrack, userRating: Int?, isPlaying: Bool? = nil, trackID: String? = nil) -> RatingReminderController.PlayerSnapshot? {
         // A read that timed out gives an empty ID, which would look like a different track
-        guard let iTunes = iTunesRadioStation.shared.iTunes, let trackID = track.persistentID, !trackID.isEmpty else { return nil }
+        guard let iTunes = iTunesRadioStation.shared.iTunes,
+              let trackID = trackID ?? track.persistentID, !trackID.isEmpty else { return nil }
         return RatingReminderController.PlayerSnapshot(
             trackID: trackID,
             isPlaying: isPlaying ?? (iTunes.playerState == .playing),
