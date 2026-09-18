@@ -8,6 +8,7 @@
 
 import Cocoa
 import MASShortcut
+import os
 
 final class PreferencesViewController: NSViewController {
 
@@ -197,7 +198,6 @@ final class PreferencesViewController: NSViewController {
         return gridView
     }()
 
-    var launchAtLoginObservation: NSKeyValueObservation?
     var halfStarObservation: NSKeyValueObservation?
     var reminderObservation: NSKeyValueObservation?
     var announceObservation: NSKeyValueObservation?
@@ -208,7 +208,6 @@ final class PreferencesViewController: NSViewController {
     }
 
     deinit {
-        launchAtLoginObservation?.invalidate()
         halfStarObservation?.invalidate()
         reminderObservation?.invalidate()
         announceObservation?.invalidate()
@@ -250,7 +249,27 @@ extension PreferencesViewController {
 extension PreferencesViewController {
 
     @objc private func launchAtLoginCheckboxButtonChanged(_ sender: NSButton) {
-        UserDefaults.standard.launchAtLogin = sender.state == .on
+        let wantsLaunchAtLogin = sender.state == .on
+        do {
+            try LaunchAtLogin.setEnabled(wantsLaunchAtLogin)
+        } catch {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: launch at login could not be changed: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
+        }
+        if wantsLaunchAtLogin, LaunchAtLogin.needsApproval {
+            // The user switched StarBar off in System Settings earlier; only they can switch it back on there
+            LaunchAtLogin.openSystemSettings()
+        }
+        refreshLaunchAtLogin()
+    }
+
+    /// The checkbox shows what the system will do, not what was last asked for
+    private func refreshLaunchAtLogin() {
+        launchAtLoginCheckboxButton.state = LaunchAtLogin.isEnabled ? .on : .off
+    }
+
+    @objc private func applicationDidBecomeActive(_ notification: Notification) {
+        // Back from System Settings, where the item may have been switched
+        refreshLaunchAtLogin()
     }
 
     @objc private func halfStarCheckboxButtonChanged(_ sender: NSButton) {
@@ -304,9 +323,8 @@ extension PreferencesViewController {
 
         launchAtLoginCheckboxButton.target = self
         launchAtLoginCheckboxButton.action = #selector(PreferencesViewController.launchAtLoginCheckboxButtonChanged(_:))
-        launchAtLoginObservation = UserDefaults.standard.observe(\.launchAtLogin, options: [.initial, .new]) { [weak self] defaults, launchAtLogin in
-            self?.launchAtLoginCheckboxButton.state = defaults.launchAtLogin ? .on : .off
-        }
+        refreshLaunchAtLogin()
+        NotificationCenter.default.addObserver(self, selector: #selector(PreferencesViewController.applicationDidBecomeActive(_:)), name: NSApplication.didBecomeActiveNotification, object: nil)
 
         halfStarCheckboxButton.target = self
         halfStarCheckboxButton.action = #selector(PreferencesViewController.halfStarCheckboxButtonChanged(_:))
@@ -338,6 +356,7 @@ extension PreferencesViewController {
 
     override func viewDidAppear() {
         setupWindow()
+        refreshLaunchAtLogin()
     }
 
 }

@@ -44,11 +44,11 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 
 ## Architecture
 
-- Targets macOS 12+. Swift 5 language mode. The one dependency comes through SPM.
+- Targets macOS 13+ (for `SMAppService`, which registers the app itself as a login item). Swift 5 language mode. The one dependency comes through SPM.
 - `StarBar/`: the app. `Controls/` holds the menu bar rating control and click and reminder controllers, `Controllers/` the view controllers, `Views/` the views, `Helper/` pure logic (`RatingReminder`, `StarSweep`, `Stars`), and `iTunes/` the Scripting Bridge layer (`iTunesPlayer`, `iTunesTrack`, vendored header in `iTunes/Vendor/iTunes.swift`).
-- `StarBar Helper/`: login-item helper that launches the main app.
 - MASShortcut comes straight into the app target as a Swift package, pinned to a revision because no tag of it has a `Package.swift`. To move the pin, change the revision in the project's package reference and let Xcode rewrite `Package.resolved`.
-- Signing is ad hoc ("Sign to Run Locally"), with no development team. Bundle IDs are the main app's ID plus `.helper`, `.tests` and `.uitests`. The main app and helper IDs are also hard-coded in both `AppDelegate.swift` files, so change them together.
+- Signing is ad hoc ("Sign to Run Locally"), with no development team. Bundle IDs are the main app's ID plus `.tests` and `.uitests`.
+- Launch at login goes through `LaunchAtLogin` (`SMAppService.mainApp`). The system is the source of truth: the Preferences checkbox reads the service's status when the window appears and when the app becomes active, and nothing about it is stored in UserDefaults. A `.requiresApproval` status means the user switched it off in System Settings, so the checkbox sends them there.
 - Shared services are singletons (`iTunesPlayer.shared`, `WindowManager.shared`). App-wide events go through NotificationCenter; views talk to controllers through delegates.
 
 ## Conventions

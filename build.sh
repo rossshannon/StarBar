@@ -258,7 +258,7 @@ elif [ "$WATCH" = true ]; then
         exit 1
     fi
 
-    echo "Watching: StarBar/, StarBar Helper/, StarBar.xcodeproj/project.pbxproj"
+    echo "Watching: StarBar/, StarBar.xcodeproj/project.pbxproj"
     echo "Press Ctrl+C to stop"
 
     build_and_install || true
@@ -272,7 +272,7 @@ elif [ "$WATCH" = true ]; then
         --include="\.entitlements$" \
         --include="\.strings$" \
         --include="project\.pbxproj$" \
-        -r "StarBar/" "StarBar Helper/" "StarBar.xcodeproj/" | while read -r; do
+        -r "StarBar/" "StarBar.xcodeproj/" | while read -r; do
         echo ""
         echo "Change detected, rebuilding..."
         build_and_install || true

@@ -8,7 +8,7 @@ macOS menu bar app for rating music in iTunes/Music.app
 StarBar is based on [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
 
 ## Requirements
-- macOS 12 +
+- macOS 13 or later
 
 ## Build and install
 Needs Xcode. The build script finds Xcode even when `xcode-select` points at the Command Line Tools.
@@ -78,7 +78,7 @@ osascript -e 'tell application "Music" to get {name, rating, favorited} of curre
 ### Why is the favourite a heart when Music uses a star?
 Music now uses a star for favourites and stars for ratings. In the menu bar, a heart keeps the favourite separate from the five rating stars. It is the same setting: Music's "Favorite" (called `favorited` in AppleScript, and `loved` in older versions).
 
-### How can I check the track rating in iTunes/Music.app?  
+### How can I check the track rating in iTunes/Music.app?
 Check the checkbox for "Star Ratings" in General preferences. [More info](https://support.apple.com/guide/music/general-preferences-mus4130f48/mac)
 
 ### Why the popover player sometimes follows to new screen scenes but sometimes not?
