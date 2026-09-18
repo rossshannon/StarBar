@@ -282,7 +282,7 @@ extension MenuBarRatingControl {
     private func updateAccessibility() {
         let value = isStop
             ? "Not playing"
-            : RatingControl.accessibilityDescription(mode: ratingControl.mode, rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
+            : RatingControl.accessibilityDescription(mode: ratingControl.mode, rating: ratingControl.rating, isFavorited: ratingControl.isFavorited, isAddingToLibrary: ratingControl.isAddingToLibrary)
         statusItem.button?.setAccessibilityValue(value)
     }
 
@@ -496,9 +496,15 @@ extension MenuBarRatingControl {
     /// nowhere to write.
     func addCurrentTrackToLibrary() {
         let pressedForPlayingID = iTunesRadioStation.shared.latestPlayInfo?.persistentID
+        // Music takes seconds over this, so say so rather than leaving the button untouched
+        ratingControl.update(isAddingToLibrary: true)
+        statusItem.button?.needsDisplay = true
 
         iTunesRadioStation.shared.addCurrentTrackToLibrary { [weak self] added in
             guard let self = self else { return }
+            self.ratingControl.update(isAddingToLibrary: false)
+            self.statusItem.button?.needsDisplay = true
+
             guard let added = added else {
                 // The add failed and was logged. Leave the button up rather than showing
                 // stars that would go nowhere.

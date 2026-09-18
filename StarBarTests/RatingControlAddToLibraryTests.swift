@@ -139,6 +139,28 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         return count
     }
 
+    /// Total alpha between two x positions, in points. Counting pixels is not enough to
+    /// show that something is dimmed: a glyph at 35% still has pixels everywhere it had them
+    /// before, so only the weight of the ink changes.
+    private func inkWeight(in image: NSImage, fromX: CGFloat, toX: CGFloat) -> CGFloat {
+        guard let data = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: data),
+              image.size.width > 0 else { return 0 }
+
+        let scale = CGFloat(bitmap.pixelsWide) / image.size.width
+        let first = max(0, Int((fromX * scale).rounded()))
+        let last = min(bitmap.pixelsWide, Int((toX * scale).rounded()))
+        guard first < last else { return 0 }
+
+        var total: CGFloat = 0
+        for x in first..<last {
+            for y in 0..<bitmap.pixelsHigh {
+                total += bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0
+            }
+        }
+        return total
+    }
+
     /// A wrong SF Symbol name draws nothing at all rather than failing, which would leave a
     /// blank space in the menu bar. Every slot must have ink in it.
     func testEverySlotIsActuallyDrawn() {
@@ -167,7 +189,68 @@ final class RatingControlAddToLibraryTests: XCTestCase {
         XCTAssertEqual(ink(in: badge.image, fromX: 41, toX: 47), 0)
     }
 
+    // MARK: - While the song is being added
+
+    func testTheButtonDimsWhileTheAddIsInFlight() {
+        // Music takes about 3.5 seconds, so an unchanged button would look unpressed
+        let solid = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+        let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
+
+        let solidWeight = inkWeight(in: solid.image, fromX: 4, toX: 40)
+        let pendingWeight = inkWeight(in: pending.image, fromX: 4, toX: 40)
+
+        XCTAssertGreaterThan(solidWeight, 0)
+        XCTAssertGreaterThan(pendingWeight, 0, "the glyphs are dimmed, not removed")
+        XCTAssertEqual(pendingWeight / solidWeight,
+                       AddToLibraryBadge.pendingAlpha,
+                       accuracy: 0.02,
+                       "the button should be drawn at the pending alpha")
+    }
+
+    func testTheHeartDoesNotDimWhileTheAddIsInFlight() {
+        // Favouriting works whether or not the song is in the library, so the heart is
+        // still live while we wait
+        let solid = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4)
+        let pending = AddToLibraryBadge(glyphSize: NSSize(width: 16, height: 16), spacing: 4, isPending: true)
+
+        XCTAssertEqual(inkWeight(in: pending.image, fromX: 48, toX: 64),
+                       inkWeight(in: solid.image, fromX: 48, toX: 64),
+                       accuracy: 0.001)
+    }
+
+    func testTheControlStartsNotAdding() {
+        XCTAssertFalse(control.isAddingToLibrary)
+    }
+
+    func testTheControlRemembersThatItIsAdding() {
+        control.update(isAddingToLibrary: true)
+
+        XCTAssertTrue(control.isAddingToLibrary)
+    }
+
+    func testLeavingTheButtonEndsTheWait() {
+        control.update(isAddingToLibrary: true)
+        control.update(mode: .rating)
+
+        XCTAssertFalse(control.isAddingToLibrary, "the stars must never come up still waiting")
+    }
+
+    func testTheButtonStillWorksWhileWaiting() {
+        // A second press is refused further down, in iTunesRadioStation, so the hit test
+        // itself stays live
+        control.update(isAddingToLibrary: true)
+
+        XCTAssertTrue(control.isAddToLibraryHit(positionX: 12))
+    }
+
     // MARK: - Accessibility
+
+    func testSpokenDescriptionSaysWhenItIsAdding() {
+        XCTAssertEqual(
+            RatingControl.accessibilityDescription(mode: .addToLibrary, rating: 0, isFavorited: false, isAddingToLibrary: true),
+            "Adding to your library"
+        )
+    }
 
     func testSpokenDescriptionSaysWhyThereAreNoStars() {
         XCTAssertEqual(

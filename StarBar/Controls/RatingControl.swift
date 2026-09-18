@@ -28,6 +28,9 @@ class RatingControl {
     private(set) var rating: Int
     /// Stars and heart, or the Apple Music button and heart
     private(set) var mode: Mode = .rating
+    /// True while the song is being added to the library and we're waiting for Music. The
+    /// button dims, because the add takes seconds and an unchanged button looks unpressed.
+    private(set) var isAddingToLibrary = false
     /// True if the track is a favorite in Music (see `iTunesTrack.isFavorited`)
     private(set) var isFavorited: Bool = false
     /// Position (0 ~ 4) of the hollow star in the rating reminder sweep, or nil when no sweep
@@ -116,6 +119,8 @@ extension RatingControl {
     func update(mode: Mode) {
         guard mode != self.mode else { return }
         self.mode = mode
+        // Leaving the button behind ends any wait it was showing
+        isAddingToLibrary = false
 
         starsImage = RatingControl.makeImage(
             width: RatingControl.imageWidth(mode: mode, starSize: starSize, spacing: spacing),
@@ -123,6 +128,16 @@ extension RatingControl {
         )
         drawStars()
         os_log("%{public}s[%{public}ld], %{public}s: rating control mode is now %{public}s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: mode))
+    }
+
+    /// Dim the Apple Music button while the song is on its way into the library.
+    ///
+    /// - Parameter isAdding: true from the press until Music has the song
+    func update(isAddingToLibrary isAdding: Bool) {
+        guard isAdding != isAddingToLibrary else { return }
+        isAddingToLibrary = isAdding
+
+        drawStars()
     }
 
     /// Move the rating reminder's hollow star, or remove it with nil
@@ -153,7 +168,7 @@ extension RatingControl {
         case .rating:
             return stars.image
         case .addToLibrary:
-            return AddToLibraryBadge(glyphSize: starSize, spacing: spacing, isFavorited: isFavorited).image
+            return AddToLibraryBadge(glyphSize: starSize, spacing: spacing, isFavorited: isFavorited, isPending: isAddingToLibrary).image
         }
     }
     
@@ -278,12 +293,12 @@ extension RatingControl {
 
     /// Spoken description for a mode. In `.addToLibrary` there is no rating to read out, so it
     /// says why and what the button does.
-    static func accessibilityDescription(mode: Mode, rating: Int, isFavorited: Bool) -> String {
+    static func accessibilityDescription(mode: Mode, rating: Int, isFavorited: Bool, isAddingToLibrary: Bool = false) -> String {
         switch mode {
         case .rating:
             return accessibilityDescription(rating: rating, isFavorited: isFavorited)
         case .addToLibrary:
-            let text = "Not in your library, add to rate"
+            let text = isAddingToLibrary ? "Adding to your library" : "Not in your library, add to rate"
             return isFavorited ? text + ", favourite" : text
         }
     }
