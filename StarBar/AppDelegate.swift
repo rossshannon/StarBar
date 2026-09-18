@@ -22,7 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
-    
+
     @IBAction func openAboutWindow(_ sender: NSMenuItem) {
         WindowManager.shared.open(.about)
     }
@@ -32,10 +32,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let validator = MASShortcutValidator.shared() {
             validator.allowAnyShortcutWithOptionModifier = true
         } else {
-            os_log("%{public}s[%{public}ld], %{public}s: WARNING - Failed to initialize MASShortcutValidator", 
+            os_log("%{public}s[%{public}ld], %{public}s: WARNING - Failed to initialize MASShortcutValidator",
                    ((#file as NSString).lastPathComponent), #line, #function)
         }
-        
+
         setupUserDefaults()
         // UI tests run without Music: don't connect to it (Music notifications, the current
         // track and the rating shortcuts) or ask for permission to control it
@@ -62,7 +62,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
             WindowManager.shared.open(.preferences)
         }
-        
+
         #if DEBUG
         // WindowManager.shared.open(.preferences)
         #endif
@@ -70,6 +70,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ aNotification: Notification) {
         os_log("%{public}s[%{public}ld], %{public}s: Application will terminate", ((#file as NSString).lastPathComponent), #line, #function)
+        // A rating chosen in the last two seconds may still be waiting for its window
+        if !MenuBarRatingControl.isUITesting {
+            iTunesRadioStation.shared.flushHeldRatingWrite()
+        }
     }
 
 }
@@ -191,30 +195,30 @@ extension AppDelegate {
     func setupAppleEvent() {
         DispatchQueue.global().async {
             // Check if Music/iTunes is running
-            let isRunning = NSWorkspace.shared.runningApplications.contains { 
-                $0.bundleIdentifier == OSVersionHelper.bundleIdentifier 
+            let isRunning = NSWorkspace.shared.runningApplications.contains {
+                $0.bundleIdentifier == OSVersionHelper.bundleIdentifier
             }
-            
+
             if !isRunning {
                 os_log("%{public}s[%{public}ld], %{public}s: iTunes/Music is not currently running", ((#file as NSString).lastPathComponent), #line, #function)
                 return
             }
-            
+
             let target = NSAppleEventDescriptor(bundleIdentifier: OSVersionHelper.bundleIdentifier)
             let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, true)
-            
+
             DispatchQueue.main.async {
                 switch status {
                 case noErr:
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: noErr", ((#file as NSString).lastPathComponent), #line, #function)
                     iTunesPlayer.shared.update()
-                    
+
                 case OSStatus(procNotFound):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes/Music not running", ((#file as NSString).lastPathComponent), #line, #function)
-                    
+
                 case OSStatus(errAEEventNotPermitted):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: not permitted", ((#file as NSString).lastPathComponent), #line, #function)
-                    
+
                     // Explain once; after that, only log, so a denied permission doesn't nag at every login
                     let shownKey = "hasShownAutomationPermissionAlert"
                     guard !UserDefaults.standard.bool(forKey: shownKey) else { break }
@@ -233,14 +237,14 @@ extension AppDelegate {
                        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
                         NSWorkspace.shared.open(url)
                     }
-                    
+
                 default:
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: %s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: status))
                 }
             }
         }   // end DispatchQueue.global().async
     }
-    
+
     func setupUserDefaults() {
         // register shortcut
         do {
@@ -281,7 +285,7 @@ extension AppDelegate {
         } catch {
             os_log("%{public}s[%{public}ld], %{public}s: Default shortcut set fail", ((#file as NSString).lastPathComponent), #line, #function)
         }
-        
+
         // register application default behavior
         UserDefaults.standard.register(defaults: [
             ApplicationKey.isFirstLaunch.rawValue : true,
@@ -291,20 +295,20 @@ extension AppDelegate {
             ApplicationKey.announceNewTracks.rawValue : false,
             ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue
         ])
-        
+
         // setup observer
         launchAtLoginObservation = UserDefaults.standard.observe(\.launchAtLogin, options: [.initial, .new]) { [weak self] defaults, change in
             os_log("%{public}s[%{public}ld], %{public}s: launchAtLoginObservation observe .launchAtLogin get newValue: %{public}s | oldValue: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, change.newValue?.description ?? "nil", change.oldValue?.description ?? "nil")
             self?.setupLaunchAtLogin()
         }
-        
+
     }
-    
+
     private func setupLaunchAtLogin() {
         let launcherAppId = "com.rossshannon.starbar.helper"
         let runningApps = NSWorkspace.shared.runningApplications
         let isRunning = runningApps.contains(where: { $0.bundleIdentifier == launcherAppId })
-        
+
         let shouldLaunchAtLogin = UserDefaults.standard.launchAtLogin
         SMLoginItemSetEnabled(launcherAppId as CFString, shouldLaunchAtLogin)
         os_log("%{public}s[%{public}ld], %{public}s: set launchAtLogin to %{public}s", ((#file as NSString).lastPathComponent), #line, #function, shouldLaunchAtLogin.description)
@@ -312,6 +316,6 @@ extension AppDelegate {
         if isRunning {
             DistributedNotificationCenter.default().post(name: .killLauncher, object: Bundle.main.bundleIdentifier)
         }
-        
+
     }
 }
