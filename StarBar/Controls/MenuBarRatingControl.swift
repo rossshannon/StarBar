@@ -10,25 +10,6 @@ import Cocoa
 import ScriptingBridge
 import os
 
-protocol TrackingAreaResponderDelegate: AnyObject {
-    func mouseEntered(with event: NSEvent)
-    func mouseExited(with event: NSEvent)
-}
-
-final class TrackingAreaResponder: NSView {
-
-    weak var delegate: TrackingAreaResponderDelegate?
-
-    override func mouseEntered(with event: NSEvent) {
-        delegate?.mouseEntered(with: event)
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        delegate?.mouseExited(with: event)
-    }
-
-}
-
 protocol PopoverProxyDelegate: AnyObject {
     func popoverDidClose(_ notification: Notification)
     func popoverShouldDetach(_ popover: NSPopover) -> Bool
@@ -58,7 +39,6 @@ final class MenuBarRatingControl {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     let ratingControl = RatingControl(rating: 0)
     let menuBarIcon: MenuBarIcon
-    let trackingAreaResponser = TrackingAreaResponder()
     /// Coloured heart shown over the empty heart slot in the template stars image
     private let favoriteHeartView: NSImageView = {
         let imageView = PassthroughImageView()
@@ -68,7 +48,7 @@ final class MenuBarRatingControl {
         imageView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         return imageView
     }()
-    
+
     private let clickGestureRecognizer: NSClickGestureRecognizer = {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
@@ -157,7 +137,7 @@ final class MenuBarRatingControl {
     var isStop: Bool {
         return playState == .unknown
     }
-    
+
     func updateGestureRecognizerBehavior() {
         // deliver .leftMouseUp action without delay when player stop
         clickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
@@ -178,7 +158,7 @@ final class MenuBarRatingControl {
         button.action = #selector(MenuBarRatingControl.action(_:))
         button.target = self
         button.setButtonType(.momentaryChange)
-        
+
         // On macOS 27 the menu bar sends the app one synthesised click when the mouse goes down,
         // and no drag events, so the click recognizer starts drags too. On earlier macOS a drag
         // makes the click recognizer fail, and the pan recognizer starts it instead. Either way
@@ -190,11 +170,6 @@ final class MenuBarRatingControl {
         panGestureRecognizer.action = #selector(MenuBarRatingControl.panGestureRecognizerHandler(_:))
         panGestureRecognizer.target = self
         button.addGestureRecognizer(panGestureRecognizer)
-
-        let trackingArea = NSTrackingArea(rect: button.bounds, options: [.activeAlways, .mouseEnteredAndExited, .mouseMoved], owner: trackingAreaResponser, userInfo: nil)
-        button.addTrackingArea(trackingArea)
-
-        trackingAreaResponser.delegate = self
 
         ratingControl.delegate = self
         ratingControl.didChange = { [unowned self] in self.updateAccessibility() }
@@ -281,7 +256,7 @@ extension MenuBarRatingControl {
             height: size.height
         )
     }
-    
+
     /// Toggle the favorite status of the current track
     func toggleFavorite() {
         if MenuBarRatingControl.isUITesting {
@@ -301,7 +276,7 @@ extension MenuBarRatingControl {
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
-        
+
         // Also trigger a full update to refresh data from iTunes
         iTunesPlayer.shared.update()
     }
@@ -331,7 +306,7 @@ extension MenuBarRatingControl {
             os_log("%{public}s[%{public}ld], %{public}s: no handler for event %s", ((#file as NSString).lastPathComponent), #line, #function, event.debugDescription)
         }
     }
-    
+
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard sender.state == .ended else { return }
@@ -507,50 +482,6 @@ extension MenuBarRatingControl {
         }
 
         os_log("%{public}s[%{public}ld], %{public}s: window size change to %{public}s", ((#file as NSString).lastPathComponent), #line, #function, window.frame.debugDescription)
-    }
-
-}
-
-// MARK: - TrackingAreaResponderDelegate
-extension MenuBarRatingControl: TrackingAreaResponderDelegate {
-
-    func mouseEntered(with event: NSEvent) {
-        os_log("%{public}s[%{public}ld], %{public}s: mouse entered", ((#file as NSString).lastPathComponent), #line, #function)
-    }
-
-    func mouseExited(with event: NSEvent) {
-        os_log("%{public}s[%{public}ld], %{public}s: mouse exited", ((#file as NSString).lastPathComponent), #line, #function)
-    }
-
-}
-
-extension NSPopover {
-
-    // tweak NSPopoverFrame: https://github.com/mstg/OSX-Runtime-Headers/blob/master/AppKit/NSPopoverFrame.h
-    func configureCloseButton() {
-        guard let popoverViewController = contentViewController as? PopoverViewController,
-        let superView = popoverViewController.view.superview else {
-            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Unable to find popover superview", ((#file as NSString).lastPathComponent), #line, #function)
-            return
-        }
-
-        guard NSStringFromClass(type(of: superView)) == "NSPopoverFrame" else {
-            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Superview is not NSPopoverFrame: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, NSStringFromClass(type(of: superView)))
-            return
-        }
-
-        guard let closeButton = superView.value(forKey: "closeButton") as? NSButton else {
-            os_log("%{public}s[%{public}ld], %{public}s: ERROR - Unable to find closeButton in popover", ((#file as NSString).lastPathComponent), #line, #function)
-            return
-        }
-
-        // Tweak works under 10.14, 10.15
-
-        closeButton.image = nil
-        closeButton.isEnabled = false
-
-        // tell view controller we tweak it
-        popoverViewController.hostPopover = self
     }
 
 }

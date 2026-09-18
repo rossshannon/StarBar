@@ -220,7 +220,6 @@ extension WindowManager: PopoverProxyDelegate {
     }
 
     func popoverShouldDetach(_ popover: NSPopover) -> Bool {
-        popover.configureCloseButton()
         return true
     }
 
