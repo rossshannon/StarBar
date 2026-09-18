@@ -380,7 +380,27 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
     func testTheExplanationIsSmallerThanTheTrackDetails() {
         // It explains the strip rather than being part of the track's own information
         XCTAssertEqual(TrackAnnouncementLayout.cannotRateFontSize,
-                       TrackAnnouncementLayout.detailFontSize - 2)
+                       TrackAnnouncementLayout.detailFontSize - 4)
+    }
+
+    func testTheExplanationSitsOnTheHeartsCentreLine() {
+        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize)
+        let centreY: CGFloat = 100
+
+        let rect = TrackAnnouncementLayout.textRect(centredOn: centreY, font: font, fromX: 20, toX: 300)
+
+        // The middle of the capitals should land on the centre line, within a rounding error
+        let baseline = rect.maxY - font.ascender
+        XCTAssertEqual(baseline + font.capHeight / 2, centreY, accuracy: 0.5)
+    }
+
+    func testTheExplanationRectNeverHasANegativeWidth() {
+        // The strip can be narrow enough that the text has nowhere to go
+        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize)
+
+        let rect = TrackAnnouncementLayout.textRect(centredOn: 50, font: font, fromX: 300, toX: 20)
+
+        XCTAssertEqual(rect.width, 0)
     }
 
     func testAFontWithNoItalicFaceIsLeftAlone() {

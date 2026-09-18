@@ -29,9 +29,9 @@ enum TrackAnnouncementLayout {
     static let textTrailingPad: CGFloat = 16
     static let titleFontSize: CGFloat = 16
     static let detailFontSize: CGFloat = 12
-    /// The "add it to rate it" line, two points below the detail lines: it is an explanation
+    /// The "add it to rate it" line, four points below the detail lines: it is an explanation
     /// rather than part of the track's own information
-    static let cannotRateFontSize: CGFloat = 10
+    static let cannotRateFontSize: CGFloat = 8
     static let titleHeight: CGFloat = 20
     static let detailHeight: CGFloat = 16
     /// Vertical gap between text lines
@@ -188,6 +188,21 @@ enum TrackAnnouncementLayout {
         )
     }
 
+
+    /// A one-line text rect whose letters sit centred on `centreY`.
+    ///
+    /// Text is drawn with `usesLineFragmentOrigin`, which lays it out from the top of the rect
+    /// downwards, so the rect has to be placed by where its baseline will land. Centring the
+    /// line box instead sits the text visibly high, because the box carries descender space
+    /// under letters that mostly don't use it.
+    static func textRect(centredOn centreY: CGFloat, font: NSFont, fromX: CGFloat, toX: CGFloat) -> NSRect {
+        let lineHeight = ceil(font.ascender - font.descender + font.leading)
+        // Put the middle of the capitals on the centre line, which is what reads as aligned
+        let baseline = centreY - font.capHeight / 2
+        let top = baseline + font.ascender
+        return NSRect(x: fromX, y: top - lineHeight,
+                      width: max(0, toX - fromX), height: lineHeight)
+    }
 }
 
 /// Where the strip's panel goes on a screen, and how it moves

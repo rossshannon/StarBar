@@ -488,10 +488,11 @@ final class TrackAnnouncementContentView: NSView {
         NSGraphicsContext.restoreGraphicsState()
 
         let textMinX = heartRect.maxX + spacing * 2
-        let textRect = NSRect(x: textMinX, y: rect.minY,
-                              width: max(0, rect.maxX - textMinX), height: rect.height)
-        draw(TrackAnnouncement.cannotRateText, in: textRect,
-             font: NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize * scale))
+        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize * scale)
+        draw(TrackAnnouncement.cannotRateText,
+             in: TrackAnnouncementLayout.textRect(centredOn: heartRect.midY, font: font,
+                                                fromX: textMinX, toX: rect.maxX),
+             font: font)
     }
 
     /// Growl's soft downward shadow, scaled with the strip
