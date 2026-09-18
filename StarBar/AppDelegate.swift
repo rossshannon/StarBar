@@ -84,7 +84,7 @@ extension AppDelegate {
         let controller = TrackAnnouncementController(
             readPlayer: { AppDelegate.readAnnouncementSnapshot() },
             loadLiveTrack: { identity, wantsArtwork in AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork) },
-            readCurrentIdentity: { AppDelegate.readCurrentTrackIdentity() },
+            readCurrentIdentity: { announced in AppDelegate.readCurrentTrackIdentity(matching: announced) },
             presenter: panel,
             isEnabled: UserDefaults.standard.announceNewTracks
         )
@@ -138,12 +138,25 @@ extension AppDelegate {
         } ?? nil
     }
 
-    /// Which track Music has now, as an announcement identity. One Apple Event; nil when
-    /// Music isn't running, the read timed out, or the track has no persistent ID.
-    static func readCurrentTrackIdentity() -> String? {
+    /// Which track Music has now, as an announcement identity, in the same shape as
+    /// `announced` so the two can be compared.
+    ///
+    /// An announcement built from a notification that carried no persistent ID -- which is
+    /// what Apple Music catalog tracks send -- is identified by name, artist and album. A live
+    /// persistent ID could never equal that, and answering with one made a rating chosen in
+    /// the menu bar look like it belonged to a different song, so the strip never showed it.
+    ///
+    /// Nil when Music isn't running, the read timed out, or the track can't be identified.
+    static func readCurrentTrackIdentity(matching announced: String) -> String? {
         guard !MenuBarRatingControl.isUITesting else { return nil }
         return MenuBarRatingControl.withShortTimeout { _ -> String? in
-            guard let id = iTunesPlayer.shared.currentTrack?.persistentID, !id.isEmpty else { return nil }
+            guard let track = iTunesPlayer.shared.currentTrack else { return nil }
+            guard TrackAnnouncementController.PlayerSnapshot.isPersistentID(announced) else {
+                return TrackAnnouncementController.PlayerSnapshot.identity(
+                    name: track.name, artist: track.artist, album: track.album
+                )
+            }
+            guard let id = track.persistentID, !id.isEmpty else { return nil }
             return id.uppercased()
         } ?? nil
     }

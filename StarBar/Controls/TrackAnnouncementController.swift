@@ -93,7 +93,11 @@ final class TrackAnnouncementController: NSObject {
     private let loadLiveTrack: (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad
     /// Reads the identity of the track Music has now, or nil when it can't say. One Apple
     /// Event, so a rating can be matched to its track without a full live read.
-    private let readCurrentIdentity: () -> String?
+    /// Reads the identity of the track Music has now, **in the same shape** as the identity
+    /// passed in, so the two can be compared. An announcement for an Apple Music catalog track
+    /// has no persistent ID -- the notification doesn't carry one -- so it is identified by
+    /// name, artist and album, and a live persistent ID could never match it.
+    private let readCurrentIdentity: (_ matching: String) -> String?
     private let presenter: TrackAnnouncementPresenter
     private let clock: RatingReminderClock
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
@@ -115,7 +119,7 @@ final class TrackAnnouncementController: NSObject {
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
         loadLiveTrack: @escaping (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad,
-        readCurrentIdentity: @escaping () -> String?,
+        readCurrentIdentity: @escaping (_ matching: String) -> String?,
         presenter: TrackAnnouncementPresenter,
         clock: RatingReminderClock = RunLoopClock(),
         accessibility: @escaping () -> (reduceMotion: Bool, reduceTransparency: Bool) = {
@@ -255,7 +259,7 @@ extension TrackAnnouncementController {
     private func ratedTrackIdentity() -> String? {
         guard let current = currentAnnouncement, hideTimer != nil else { return lastSnapshot?.identity }
         // A read Music can't answer leaves the strip as the best guess, as elsewhere here
-        guard let live = readCurrentIdentity(), live != current.identity else { return current.identity }
+        guard let live = readCurrentIdentity(current.identity), live != current.identity else { return current.identity }
         os_log(.debug, "%{public}s[%{public}ld], %{public}s: the rating is for %{public}s, which the strip isn't showing", ((#file as NSString).lastPathComponent), #line, #function, live)
         return nil
     }

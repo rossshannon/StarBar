@@ -25,6 +25,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var reduceTransparency = false
     /// What Music answers when asked which track it is playing; nil when it can't say
     private var musicsCurrentIdentity: String?
+    /// The identities the controller asked Music to match against
+    private var identityReadsFor: [String] = []
     private var identityReads = 0
     private var controller: TrackAnnouncementController!
 
@@ -40,6 +42,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         reduceMotion = false
         reduceTransparency = false
         musicsCurrentIdentity = nil
+        identityReadsFor = []
         identityReads = 0
         controller = makeController(enabled: true)
     }
@@ -63,8 +66,9 @@ final class TrackAnnouncementControllerTests: XCTestCase {
                 // A queued result, when a test wants the loads to differ, else the same one
                 return self.liveQueue.isEmpty ? self.live : self.liveQueue.removeFirst()
             },
-            readCurrentIdentity: { [unowned self] in
+            readCurrentIdentity: { [unowned self] announced in
                 self.identityReads += 1
+                self.identityReadsFor.append(announced)
                 return self.musicsCurrentIdentity
             },
             presenter: presenter,
@@ -389,6 +393,34 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         musicsCurrentIdentity = nil
         update(snapshot(track: "A"))
         XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testARatingReachesTheStripForATrackWithNoPersistentID() {
+        // An Apple Music catalog track's notification carries no persistent ID, so the
+        // announcement is identified by name, artist and album. The live read has to answer in
+        // that shape or the two can never match, and a rating chosen in the menu bar looks
+        // like it belongs to another song -- which is how the strip stopped following the
+        // stars.
+        live = .loaded(.init(rating: 0))
+        let identity = "Silium's Hill (Live)|Daniel Lanois|Calling My Name"
+        update(snapshot(track: identity))
+
+        musicsCurrentIdentity = identity
+        controller.userDidRate(60)
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [60])
+    }
+
+    func testTheLiveIdentityIsAskedForInTheShapeTheStripIsUsing() {
+        // The controller has to say which identity it wants matched, or the reader cannot know
+        // whether to answer with a persistent ID or with name, artist and album
+        live = .loaded(.init(rating: 0))
+        let identity = "Silium's Hill (Live)|Daniel Lanois|Calling My Name"
+        update(snapshot(track: identity))
+
+        controller.userDidRate(60)
+
+        XCTAssertEqual(identityReadsFor, [identity])
     }
 
     func testAnIdentityMusicCannotAnswerLeavesTheStripAsTheBestGuess() {
