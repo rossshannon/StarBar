@@ -10,7 +10,7 @@ import Cocoa
 import MASShortcut
 
 final class PreferencesViewController: NSViewController {
-    
+
     static var defaultTextFieldFontSize: CGFloat {
         return NSTextField(labelWithString: "sample").font!.pointSize
     }
@@ -42,35 +42,25 @@ final class PreferencesViewController: NSViewController {
     lazy var showOrClosePopoverTextField: NSTextField = {
         return NSTextField(labelWithString: "Show/Close popover: ")
     }()
-    lazy var rating5TextField: NSTextField = {
-        let attributedString = PreferencesViewController.starsAttributedString(count: 5, fontSize: PreferencesViewController.defaultTextFieldFontSize)
-        attributedString.append(NSAttributedString(string: ": "))
-        return NSTextField(labelWithAttributedString: attributedString)
+    lazy var rating5TextField: NSView = {
+        return PreferencesViewController.starsLabel(count: 5, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating4TextField: NSTextField = {
-        let attributedString = PreferencesViewController.starsAttributedString(count: 4, fontSize: PreferencesViewController.defaultTextFieldFontSize)
-        attributedString.append(NSAttributedString(string: ": "))
-        return NSTextField(labelWithAttributedString: attributedString)
+    lazy var rating4TextField: NSView = {
+        return PreferencesViewController.starsLabel(count: 4, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating3TextField: NSTextField = {
-        let attributedString = PreferencesViewController.starsAttributedString(count: 3, fontSize: PreferencesViewController.defaultTextFieldFontSize)
-        attributedString.append(NSAttributedString(string: ": "))
-        return NSTextField(labelWithAttributedString: attributedString)
+    lazy var rating3TextField: NSView = {
+        return PreferencesViewController.starsLabel(count: 3, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating2TextField: NSTextField = {
-        let attributedString = PreferencesViewController.starsAttributedString(count: 2, fontSize: PreferencesViewController.defaultTextFieldFontSize)
-        attributedString.append(NSAttributedString(string: ": "))
-        return NSTextField(labelWithAttributedString: attributedString)
+    lazy var rating2TextField: NSView = {
+        return PreferencesViewController.starsLabel(count: 2, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
-    lazy var rating1TextField: NSTextField = {
-        let attributedString = PreferencesViewController.starsAttributedString(count: 1, fontSize: PreferencesViewController.defaultTextFieldFontSize)
-        attributedString.append(NSAttributedString(string: ": "))
-        return NSTextField(labelWithAttributedString: attributedString)
+    lazy var rating1TextField: NSView = {
+        return PreferencesViewController.starsLabel(count: 1, fontSize: PreferencesViewController.defaultTextFieldFontSize)
     }()
     lazy var rating0TextField: NSTextField = {
         return NSTextField(labelWithString: "Remove stars: ")
     }()
-    
+
     let launchAtLoginCheckboxButton: NSButton = {
         let button = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
         return button
@@ -166,7 +156,7 @@ final class PreferencesViewController: NSViewController {
 
     lazy var gridView: NSGridView = {
         let empty = NSGridCell.emptyContentView
-        
+
         let gridView = NSGridView(views: [
             [startupTextField, launchAtLoginCheckboxButton],
             [halfStarTextField, halfStarCheckboxButton],
@@ -193,7 +183,7 @@ final class PreferencesViewController: NSViewController {
         gridView.column(at: 0).xPlacement = .trailing
         gridView.column(at: 1).xPlacement = .leading
         gridView.rowSpacing = 8
-        
+
         let lines = gridView.subviews.filter { ($0 as? NSBox)?.boxType == .separator }
         for line in lines {
             guard let lineRow = gridView.cell(for: line)?.row else {
@@ -228,33 +218,32 @@ final class PreferencesViewController: NSViewController {
 }
 
 extension PreferencesViewController {
-    private static func starsAttributedString(count: Int, fontSize: CGFloat) -> NSMutableAttributedString {
-        let font = NSFont.systemFont(ofSize: fontSize)
+
+    /// A row label of `count` stars followed by a colon, for the rating shortcuts.
+    ///
+    /// The stars are a template image in an image view tinted with the label colour, so
+    /// they follow light and dark mode like the text beside them. An image baked with the
+    /// label colour at creation time (the earlier text-attachment approach) kept the colour
+    /// of whichever appearance the window opened in.
+    static func starsLabel(count: Int, fontSize: CGFloat) -> NSView {
         let stars = Stars(
             stars: Array(repeating: Star(size: CGSize(width: fontSize, height: fontSize), style: .full), count: count),
             spacing: 3
         )
-        var image = stars.image
+        let image = stars.image
         image.isTemplate = true
-        image = image.withTintColor(.labelColor)
-        
-        let attachment = NSTextAttachment()
-        attachment.image = image
-        // center vertical image
-        attachment.bounds = CGRect(
-            x: 0,
-            y: (font.capHeight - image.size.height) * 0.5,
-            width: image.size.width,
-            height: image.size.height
-        )
 
-        let attributedString = NSMutableAttributedString()
-        let attachmentAttributedString = NSAttributedString(attachment: attachment)
-        attributedString.append(attachmentAttributedString)
-        // not works. use tinted image workaround it
-        attributedString.addAttribute(.foregroundColor, value: NSColor.labelColor, range: NSRange(location: 0, length: attributedString.length))
-   
-        return attributedString
+        let imageView = NSImageView(image: image)
+        imageView.imageScaling = .scaleNone
+        imageView.contentTintColor = .labelColor
+        imageView.setAccessibilityLabel(RatingControl.accessibilityDescription(rating: 20 * count, isFavorited: false))
+
+        let colon = NSTextField(labelWithString: ":")
+        let stack = NSStackView(views: [imageView, colon])
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 0
+        return stack
     }
 }
 
@@ -263,7 +252,7 @@ extension PreferencesViewController {
     @objc private func launchAtLoginCheckboxButtonChanged(_ sender: NSButton) {
         UserDefaults.standard.launchAtLogin = sender.state == .on
     }
-    
+
     @objc private func halfStarCheckboxButtonChanged(_ sender: NSButton) {
         UserDefaults.standard.allowHalfStar = sender.state == .on
     }
@@ -318,7 +307,7 @@ extension PreferencesViewController {
         launchAtLoginObservation = UserDefaults.standard.observe(\.launchAtLogin, options: [.initial, .new]) { [weak self] defaults, launchAtLogin in
             self?.launchAtLoginCheckboxButton.state = defaults.launchAtLogin ? .on : .off
         }
-        
+
         halfStarCheckboxButton.target = self
         halfStarCheckboxButton.action = #selector(PreferencesViewController.halfStarCheckboxButtonChanged(_:))
         halfStarObservation = UserDefaults.standard.observe(\.allowHalfStar, options: [.initial, .new]) { [weak self] defaults, launchAtLogin in
