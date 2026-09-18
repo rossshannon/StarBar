@@ -52,11 +52,11 @@ final class iTunesRadioStation {
         }
     }
 
-    /// When a chosen rating is sent to Music: the first goes at once, the rest wait
-    private var ratingWriteThrottle = RatingWriteThrottle(interval: iTunesRadioStation.ratingSaveDelay)
-    /// The newest rating waiting for the throttle window to close, with the track it belongs to
-    private var heldRatingWrite: (rating: Int, track: iTunesTrack, name: String)?
-    private var heldRatingWriteTimer: Timer?
+    /// When a chosen rating is sent to Music: the first goes at once, the rest wait.
+    /// The writer decides when; `write(_:)` below is what it performs.
+    private lazy var ratingWriter = RatingWriter(interval: iTunesRadioStation.ratingSaveDelay) { [unowned self] request in
+        self.write(request)
+    }
 
     /// The longest `setRating(_:)` can hold a rating before saving it to Music.
     ///
@@ -64,6 +64,17 @@ final class iTunesRadioStation {
     /// fresh waits, and never longer than this, so it stays the upper bound anything
     /// downstream has to allow for.
     static let ratingSaveDelay: TimeInterval = 2.0
+
+    /// How long after Music refuses a write the player is read again, so the stars fall back
+    /// to what Music has. Long enough for Music to have settled after the refusal, short
+    /// enough that the wrong stars are not on screen for long.
+    static let refusedWriteRereadDelay: TimeInterval = 0.5
+    /// The re-read scheduled after a refused write, so several refusals mean one read
+    private var refusedWriteReread: DispatchWorkItem?
+    /// True while a re-read after a refused write is waiting to run
+    var hasPendingRereadAfterRefusedWrite: Bool {
+        return refusedWriteReread != nil
+    }
 
     /// Coalesces a run of `libraryChanged` notifications into one re-read
     private var libraryChangedTimer: Timer?
@@ -261,54 +272,29 @@ extension iTunesRadioStation {
         // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification
         let name = latestPlayInfo?.name ?? targetTrack.name ?? "nil"
 
-        switch ratingWriteThrottle.decide(at: Date()) {
-        case .now:
-            // Supersede anything still waiting: this rating is newer
-            heldRatingWrite = nil
-            heldRatingWriteTimer?.invalidate()
-            heldRatingWriteTimer = nil
-            os_log("%{public}s[%{public}ld], %{public}s: set rating for %{public}s %{public}ld…", ((#file as NSString).lastPathComponent), #line, #function, name, rating)
-            write(rating: rating, to: targetTrack, name: name)
-
-        case .hold(let until):
-            // Keep only the newest rating. The timer is already counting to the same moment,
-            // so holding a shortcut down must not push the write further away each press.
-            heldRatingWrite = (rating, targetTrack, name)
-            guard heldRatingWriteTimer == nil else { return }
-
-            os_log("%{public}s[%{public}ld], %{public}s: holding rating for %{public}s %{public}ld until the window closes…", ((#file as NSString).lastPathComponent), #line, #function, name, rating)
-            let timer = Timer(fire: until, interval: 0, repeats: false, block: { [weak self] _ in
-                self?.sendHeldRatingWrite()
-            })
-            heldRatingWriteTimer = timer
-            // .common, like every other timer here: a .default timer doesn't fire while AppKit
-            // is tracking the mouse, which would push the write past the bound that
-            // ratingSaveDelay promises to everything downstream
-            RunLoop.main.add(timer, forMode: .common)
-        }
+        // Which song the rating was chosen for comes from the last notification, which costs
+        // nothing: the rating shortcuts replace the `PlayingTrack` record on every press, so
+        // neither the track object nor a fresh read of its ID would do for a held-down key
+        ratingWriter.rate(RatingWriter.Request(rating: rating, track: targetTrack, songIdentity: latestPlayInfo?.songIdentity, name: name))
     }
 
-    /// Send the rating that was waiting for the throttle window to close.
-    private func sendHeldRatingWrite() {
-        heldRatingWriteTimer = nil
-        guard let held = heldRatingWrite else { return }
-        heldRatingWrite = nil
-
-        ratingWriteThrottle.didWrite(at: Date())
-        write(rating: held.rating, to: held.track, name: held.name)
+    /// Send a rating still waiting for the throttle window, now. `applicationWillTerminate`
+    /// calls this so quitting inside the window doesn't lose the last rating.
+    func flushHeldRatingWrite() {
+        ratingWriter.flush()
     }
 
-    /// Ask Music to store `rating` on `track`, falling back to whatever is playing.
+    /// Ask Music to store the request's rating on its track.
     ///
     /// Music can refuse: a song streamed from the Apple Music catalog isn't in the library,
     /// so there is nothing to store a rating on and the write comes back as OSStatus -54
     /// through `eventDidFail`, after this returns. See `iTunesTrack.isCatalogStream`.
-    private func write(rating: Int, to track: iTunesTrack, name: String) {
+    private func write(_ request: RatingWriter.Request) {
         // No fallback to whatever is playing: a held write fires up to `ratingSaveDelay`
         // later, and resolving the current track then would rate the next song -- the FIXME
         // this file used to carry.
-        track.setRating?(rating)
-        logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(name, privacy: .public): \(rating)")
+        request.track.setRating?(request.rating)
+        logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(request.name, privacy: .public): \(request.rating)")
     }
 
     /// Add the playing song to the library, so Music has somewhere to keep a rating.
@@ -528,17 +514,64 @@ extension iTunesRadioStation {
 // MARK: - SBApplicationDelegate
 extension iTunesRadioStation: SBApplicationDelegate {
 
+    /// Music refused or failed an Apple Event. Scripting Bridge reports it here, after the
+    /// call that sent it has already returned, so the UI has shown the value as if it stuck.
+    ///
+    /// For a failed *set*, what is on screen is now wrong, so the player is read again a
+    /// moment later and the stars and heart fall back to what Music has. The known case, a
+    /// rating on an Apple Music catalog track (OSStatus -54), is no longer sent at all; this
+    /// covers whatever else Music may refuse. It is not the "re-read straight after a write"
+    /// that the project guide warns against: that one races a write that is about to succeed,
+    /// and this one follows a write that has already failed.
     func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
-        var appleEvent = event.pointee
-        let chars = [UInt8](Data(bytes: &appleEvent.descriptorType, count: 4))
-        let id = chars.map { String(format: "%c", $0) }.joined()    // appleEvent 4 char id (descType)
-        os_log("%{public}s[%{public}ld], %{public}s: AppleEvent (%{public}s) call fail with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, id, error.localizedDescription)
+        let (eventClass, eventID) = iTunesRadioStation.classAndID(of: event)
+        os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
+
+        if eventClass == "core" && eventID == "setd" {
+            // The delegate runs on whichever thread sent the event; the rest is main-thread work
+            DispatchQueue.main.async { [weak self] in self?.scheduleRereadAfterRefusedWrite() }
+        }
         return nil
+    }
+
+    /// Read the player again shortly, once, however many writes were refused. It goes through
+    /// `readPlayerAgain`, so the read and the update's observers run under the short Apple
+    /// Event timeout: a hung Music is a likely reason for the refusal, and the default
+    /// timeout would hold the main thread for about two minutes.
+    private func scheduleRereadAfterRefusedWrite() {
+        refusedWriteReread?.cancel()
+        let reread = DispatchWorkItem { [weak self] in
+            self?.refusedWriteReread = nil
+            self?.readPlayerAgain(because: "Music refused a write")
+        }
+        refusedWriteReread = reread
+        DispatchQueue.main.asyncAfter(deadline: .now() + iTunesRadioStation.refusedWriteRereadDelay, execute: reread)
+    }
+
+    /// The event class and ID (such as `core`/`setd` for a property write) as four-character
+    /// codes. The descriptor type on the event itself is always `aevt`, which is why this log
+    /// used to print `tvea` for every failure.
+    static func classAndID(of event: UnsafePointer<AppleEvent>) -> (eventClass: String, eventID: String) {
+        func attribute(_ key: AEKeyword) -> String {
+            var code: DescType = 0
+            var actualType: DescType = 0
+            var actualSize = 0
+            let status = AEGetAttributePtr(event, key, typeType, &actualType, &code, MemoryLayout<DescType>.size, &actualSize)
+            guard status == noErr else { return "????" }
+            return String(fourCharCode: code)
+        }
+        return (attribute(AEKeyword(keyEventClassAttr)), attribute(AEKeyword(keyEventIDAttr)))
     }
 
 }
 
 extension String {
+
+    /// The four ASCII characters of a code such as `'setd'`
+    init(fourCharCode code: FourCharCode) {
+        let bytes = [24, 16, 8, 0].map { UInt8((code >> UInt32($0)) & 0xFF) }
+        self = String(bytes: bytes, encoding: .macOSRoman) ?? "????"
+    }
 
     var snakeCaseKey: String {
         let joined = self.split(separator: " ").joined()
