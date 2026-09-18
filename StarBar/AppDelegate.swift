@@ -191,7 +191,11 @@ extension AppDelegate {
                 live.isFavorited = playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
                 live.canRate = playing?.canRate ?? true
                 if wantsArtwork {
-                    live.artwork = track.firstArtworkImage()
+                    // The user's own copy first: a catalog track's artwork read can come back
+                    // empty and raise even when the same song sits in the library with its
+                    // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
+                    // back to the playing track rather than refusing.
+                    live.artwork = (playing?.artworkTrack ?? track).firstArtworkImage()
                 }
                 return .loaded(live)
             case .changed:

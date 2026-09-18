@@ -275,6 +275,51 @@ final class MusicLibraryLookupTests: XCTestCase {
                        "the heart and the stars must not read different tracks")
     }
 
+    // MARK: - Where the artwork comes from
+
+    /// A song the user has is its own artwork source, so ordinary playback still shows a cover
+    func testALibrarySongIsItsOwnArtworkSource() throws {
+        let track = try firstLibraryTrack()
+
+        let playing = PlayingTrack(track: track)
+
+        XCTAssertEqual(playing.artworkTrack?.databaseID, track.databaseID,
+                       "a library song's own artwork is trustworthy and must still be used")
+    }
+
+    /// A song the user does not have still has an artwork source: the playing track.
+    ///
+    /// Blanking it instead was tried on 2026-09-18 and reverted within minutes, because it
+    /// left every Apple Music song with the placeholder. Music's artwork for a catalog track
+    /// is usually its own; it is only sometimes another song's, and that cannot be detected
+    /// from the image. This pins the trade so the stricter rule isn't quietly reinstated.
+    func testASongTheUserDoesNotHaveStillShowsTheCatalogArtwork() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        try XCTSkipUnless(playing.ratingTrack == nil, "this song is in the library")
+
+        XCTAssertEqual(playing.artworkTrack?.databaseID, track.databaseID,
+                       "with no copy to read from, the playing track is the only source there is")
+    }
+
+    /// And when the user does have the song, the artwork comes from their copy rather than
+    /// from the catalog track playing it
+    func testACatalogTracksArtworkComesFromTheUsersCopy() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        try XCTSkipUnless(playing.canRate, "this song is not in the library")
+
+        XCTAssertNotEqual(playing.artworkTrack?.databaseID, track.databaseID,
+                          "the catalog track is the object that answers with the wrong cover")
+        XCTAssertEqual(playing.artworkTrack?.databaseID, playing.ratingTrack?.databaseID)
+    }
+
     /// Only meaningful while a catalog track is playing, so it steps aside otherwise
     func testAPlayingCatalogTrackIsRecognised() throws {
         let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
