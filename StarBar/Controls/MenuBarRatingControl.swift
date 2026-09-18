@@ -112,19 +112,6 @@ final class MenuBarRatingControl {
     }()
     /// Calls `clickController.tick()` while a drag is under way
     private var dragTimer: Timer?
-    /// The library's copy of the song playing from the Apple Music catalog: either one the
-    /// user just added with the button, or one they already had.
-    ///
-    /// The playing track stays a catalog track for the rest of the song, so its rating would
-    /// go nowhere; ratings go to this instead until the song changes.
-    private var addedLibraryTrack: iTunesTrack?
-    /// The catalog track `addedLibraryTrack` belongs to, by its persistent ID.
-    ///
-    /// Music's own ID for the playing track, not the one in its notification: that one is
-    /// missing for these tracks, so comparing it never noticed the song changing and the
-    /// library copy outlived the song it was added for.
-    private var addedLibraryTrackPlayingID: String?
-
     /// Steps `statusItem.length` while the strip changes width between the two modes
     private var widthTimer: RatingReminderTimer?
     private let widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main })
@@ -498,7 +485,7 @@ extension MenuBarRatingControl: RatingControlDelegate {
         TrackAnnouncementController.shared?.userDidRate(rating)
         // Update iTunes current track rating
         if !MenuBarRatingControl.isUITesting {
-            iTunesRadioStation.shared.setRating(rating, on: addedLibraryTrack)
+            iTunesRadioStation.shared.setRating(rating, on: iTunesPlayer.shared.playing?.ratingTrack)
         }
         statusItem.button?.needsDisplay = true
     }
@@ -512,35 +499,16 @@ extension MenuBarRatingControl {
         let player = iTunesPlayer.shared
 
         isPlaying = player.isPlaying
-        // Each property read is an Apple Event, so read the track once
+        // One record answers what is playing and where its rating lives, so the stars, the
+        // shortcuts and the track announcement cannot disagree about it
+        let playing = player.playing
         let track = player.currentTrack
+        let ratedTrack = playing?.ratingTrack
 
-        // Forget the library copy when the song changes. Read once: the reminder's snapshot
-        // wants the same ID.
-        let trackID = track?.persistentID
-        if trackID != addedLibraryTrackPlayingID {
-            addedLibraryTrack = nil
-            addedLibraryTrackPlayingID = nil
-        }
-
-        // Another Apple Event, about 17 ms, so it belongs here with the others and not in the
-        // drawing path. A track whose class won't read counts as ratable: showing stars that
-        // don't save is the bug we already had, while wrongly offering to add a song that is
-        // in the library would duplicate it, and that touches the user's library.
-        let isCatalogStream = track?.isCatalogStream ?? false
-
-        // A song can be in the library and still play as a catalog track, when the album is
-        // opened in Apple Music. Rate the copy they already have rather than offering to add
-        // a song they own -- which would leave them with two of it.
-        if isCatalogStream, addedLibraryTrack == nil, let track = track,
-           let existing = iTunesRadioStation.shared.libraryCopy(of: track) {
-            os_log("%{public}s[%{public}ld], %{public}s: %{public}s is already in the library, rating that copy", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "nil")
-            addedLibraryTrack = existing
-            addedLibraryTrackPlayingID = trackID
-        }
-        // Once the song has been added, the library copy is the one that carries the rating
-        let ratedTrack = addedLibraryTrack ?? track
-        updateMode(isCatalogStream && addedLibraryTrack == nil ? .addToLibrary : .rating)
+        // Nowhere to put a rating means the button instead of the stars. A song with no
+        // record at all counts as ratable: stars that don't save is the bug we already had,
+        // while wrongly offering to add a song already in the library would duplicate it.
+        updateMode(playing.map { $0.canRate ? .rating : .addToLibrary } ?? .rating)
 
         let userRating = ratedTrack?.userRating
         // Don't overwrite the stars the user is dragging across
@@ -552,7 +520,7 @@ extension MenuBarRatingControl {
         // A catalog track is permanently unrated, so without this the reminder would ring for
         // every one of them and sweep a star across a control that has no stars
         if UserDefaults.standard.remindToRateUnrated && ratingControl.mode == .rating {
-            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: userRating, isPlaying: isPlaying, trackID: ratedTrack === track ? trackID : nil) }
+            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: userRating, isPlaying: isPlaying, trackID: playing?.persistentID) }
             reminderController?.playerDidUpdate(snapshot)
         } else {
             reminderController?.playerDidUpdate(nil)
@@ -565,7 +533,7 @@ extension MenuBarRatingControl {
     /// really in the library. Waiting is the point: stars shown before then would have
     /// nowhere to write.
     func addCurrentTrackToLibrary() {
-        let pressedForPlayingID = iTunesPlayer.shared.currentTrack?.persistentID
+        let pressedForPlayingID = iTunesPlayer.shared.playing?.persistentID
         // Music takes seconds over this, so say so rather than leaving the button untouched
         ratingControl.update(isAddingToLibrary: true)
         updateAddToLibrarySpinner()
@@ -584,14 +552,14 @@ extension MenuBarRatingControl {
             }
             // The song can change while the add is in flight, and the stars would then belong
             // to the wrong one. The song is still in the library either way.
-            guard pressedForPlayingID != nil,
-                  iTunesPlayer.shared.currentTrack?.persistentID == pressedForPlayingID else {
+            guard let playing = iTunesPlayer.shared.playing,
+                  pressedForPlayingID != nil,
+                  playing.persistentID == pressedForPlayingID else {
                 os_log("%{public}s[%{public}ld], %{public}s: the song changed while it was being added, leaving the stars alone", ((#file as NSString).lastPathComponent), #line, #function)
                 return
             }
 
-            self.addedLibraryTrack = added
-            self.addedLibraryTrackPlayingID = pressedForPlayingID
+            playing.didAddToLibrary(added)
             self.updateMode(.rating)
             self.ratingControl.update(rating: added.userRating ?? 0)
             self.updateFavoriteHeartView()
@@ -635,7 +603,7 @@ extension MenuBarRatingControl {
         }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating + ratingChange)
-        iTunesRadioStation.shared.setRating(ratingControl.rating, on: addedLibraryTrack)
+        iTunesRadioStation.shared.setRating(ratingControl.rating, on: iTunesPlayer.shared.playing?.ratingTrack)
         reminderController?.userDidRate()
         TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
@@ -648,7 +616,7 @@ extension MenuBarRatingControl {
 
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating - ratingChange)
-        iTunesRadioStation.shared.setRating(ratingControl.rating, on: addedLibraryTrack)
+        iTunesRadioStation.shared.setRating(ratingControl.rating, on: iTunesPlayer.shared.playing?.ratingTrack)
         reminderController?.userDidRate()
         TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }
@@ -684,7 +652,7 @@ extension MenuBarRatingControl {
       }
 
       ratingControl.update(rating: stars * 20)
-      iTunesRadioStation.shared.setRating(ratingControl.rating, on: addedLibraryTrack)
+      iTunesRadioStation.shared.setRating(ratingControl.rating, on: iTunesPlayer.shared.playing?.ratingTrack)
       reminderController?.userDidRate()
       TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
     }

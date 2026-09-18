@@ -32,6 +32,7 @@
 		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
 		DB11065323047E7F001DA02A /* iTunesPlayerHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */; };
 		DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */; };
+		5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B1 /* PlayingTrack.swift */; };
 		DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */; };
 		DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = DB334388235E102600B45ED0 /* ExceptionCatcher.m */; };
 		DB398D152CB522CA00E722A1 /* SDK in Frameworks */ = {isa = PBXBuildFile; productRef = DB398D142CB522CA00E722A1 /* SDK */; };
@@ -149,6 +150,7 @@
 		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
 		DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayerHistory.swift; sourceTree = "<group>"; };
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000001B1 /* PlayingTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayingTrack.swift; sourceTree = "<group>"; };
 		DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesApplication.swift; sourceTree = "<group>"; };
 		DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StarBar-Bridging-Header.h"; sourceTree = "<group>"; };
 		DB334388235E102600B45ED0 /* ExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExceptionCatcher.m; sourceTree = "<group>"; };
@@ -357,6 +359,7 @@
 				DB424A36230725A800230C7E /* Extension */,
 				DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */,
 				DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */,
+				5A7E1A00000000000001B1 /* PlayingTrack.swift */,
 				DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */,
 				DB106C6A22C661F900502D7C /* PlayInfo.swift */,
 			);
@@ -634,6 +637,7 @@
 				DB05F0882354CA6B00CE6DF9 /* NSViewControllerPreview.swift in Sources */,
 				DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */,
 				DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */,
+				5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */,
 				DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */,
 				DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */,
 				5A7E1A00000000000001A4 /* AddToLibrarySpinnerView.swift in Sources */,

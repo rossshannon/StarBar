@@ -341,7 +341,8 @@ extension iTunesRadioStation {
     /// same song, so the oldest is taken -- deterministic, and the one the user has had
     /// longest.
     ///
-    /// One Apple Event, so call it once per track change, not from the drawing path.
+    /// An Apple Event. Callers go through `PlayingTrack`, which asks once per song and
+    /// remembers the answer, so everything on screen agrees about which track it means.
     func libraryCopy(of track: iTunesTrack) -> iTunesTrack? {
         guard let iTunes = iTunes,
               let library = librarySource(of: iTunes),
@@ -349,7 +350,7 @@ extension iTunesRadioStation {
 
         // Keep the track the search returned. Don't look it up again by database ID:
         // `object(withID:)` matches a track's `id`, which is a different number, and answers
-        // with a dead specifier that reads as nil and rates as nothing.
+        // with a dead specifier that reads as empty and rates as nothing.
         return libraryMatches(for: track, in: libraryPlaylist)
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) })
     }

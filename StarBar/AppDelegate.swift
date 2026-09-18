@@ -168,7 +168,10 @@ extension AppDelegate {
             switch match {
             case .same:
                 var live = TrackAnnouncementController.LiveTrack()
-                live.rating = track.userRating
+                // A catalog track carries no rating of its own, so read the user's own copy --
+                // the same one the menu bar's stars read, or the two disagree on screen.
+                // The heart does belong to the playing track, which is where it is written.
+                live.rating = iTunesPlayer.shared.playing?.ratingTrack?.userRating
                 live.isFavorited = track.isFavorited
                 if wantsArtwork {
                     live.artwork = track.firstArtworkImage()
