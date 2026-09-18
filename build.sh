@@ -5,7 +5,7 @@
 #   ./build.sh              Clean Release build into build/
 #   ./build.sh --install    Also replace /Applications/StarBar.app and launch it
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
-#   ./build.sh --test       Run the app and SDK tests that don't need Music
+#   ./build.sh --test       Run the tests that don't need Music
 #   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
 #   ./build.sh --ui-test    Run the UI tests, which take over the screen (asks first; --yes skips)
 
@@ -203,10 +203,6 @@ run_tests() {
     # The app hosts the unit tests, so a test run launches it
     xcode_test test "$PROJECT_NAME" "$MIN_APP_TESTS" "${extra[@]}" || status=1
 
-    echo ""
-    echo "=== Testing SDK... ==="
-    (cd SDK && swift test) || status=1
-
     return $status
 }
 
@@ -262,7 +258,7 @@ elif [ "$WATCH" = true ]; then
         exit 1
     fi
 
-    echo "Watching: StarBar/, StarBar Helper/, SDK/Sources/"
+    echo "Watching: StarBar/, StarBar Helper/, StarBar.xcodeproj/project.pbxproj"
     echo "Press Ctrl+C to stop"
 
     build_and_install || true
@@ -275,7 +271,8 @@ elif [ "$WATCH" = true ]; then
         --include="\.storyboard$" \
         --include="\.entitlements$" \
         --include="\.strings$" \
-        -r "StarBar/" "StarBar Helper/" "SDK/Sources/" | while read -r; do
+        --include="project\.pbxproj$" \
+        -r "StarBar/" "StarBar Helper/" "StarBar.xcodeproj/" | while read -r; do
         echo ""
         echo "Change detected, rebuilding..."
         build_and_install || true

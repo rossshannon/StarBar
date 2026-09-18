@@ -13,15 +13,14 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 | Build (Release, into `build/`) | `./build.sh` |
 | Build, install to /Applications, relaunch | `./build.sh --install` |
 | Rebuild on file changes | `./build.sh --watch --install` (needs `brew install fswatch`) |
-| App tests that don't need Music, plus SDK tests | `./build.sh --test` |
+| Tests that don't need Music | `./build.sh --test` |
 | All tests, including `ScriptBridgeTests`, which reads from Music | `./build.sh --test-all` |
 | UI tests (take over the screen, see below) | `./build.sh --ui-test` |
 | One test | `xcodebuild -project StarBar.xcodeproj -scheme StarBar test -only-testing:StarBarTests/TestClassName/testMethodName` |
-| SDK tests only | `cd SDK && swift test` |
 | Clean | `xcodebuild -project StarBar.xcodeproj clean` |
 | Enable the pre-commit hook | `git config core.hooksPath .githooks` |
 
-- Prefer `build.sh` over raw `xcodebuild`. When `xcode-select` points at the Command Line Tools, the script finds an Xcode app with Spotlight and prints "Using Xcode at …". For raw `xcodebuild`, `swift test` or `sdef` on such a machine, set `DEVELOPER_DIR` to that app's `Contents/Developer`.
+- Prefer `build.sh` over raw `xcodebuild`. When `xcode-select` points at the Command Line Tools, the script finds an Xcode app with Spotlight and prints "Using Xcode at …". For raw `xcodebuild` or `sdef` on such a machine, set `DEVELOPER_DIR` to that app's `Contents/Developer`.
 - `-only-testing` silently ignores a wrong identifier, so check the log shows the test ran.
 - Test logs are in `build/test/test.log` and `build/test/ui-test.log`. Result bundles are in `build/test/results/`.
 - `--test-all` needs Music playing a track with artwork, so it runs locally only. `ScriptBridgeTests` skips itself unless the test host's environment has `STARBAR_LIVE_MUSIC_TESTS=1`; `build.sh` sets it through `TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS`, and a plain `xcodebuild test` or Xcode's Product > Test never reaches Music. Live tests only read from Music; a test that writes needs the user's say-so and disposable data.
@@ -45,10 +44,10 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 
 ## Architecture
 
-- Targets macOS 12+. Swift 5 language mode. Dependencies come through SPM.
+- Targets macOS 12+. Swift 5 language mode. The one dependency comes through SPM.
 - `StarBar/`: the app. `Controls/` holds the menu bar rating control and click and reminder controllers, `Controllers/` the view controllers, `Views/` the views, `Helper/` pure logic (`RatingReminder`, `StarSweep`, `Stars`), and `iTunes/` the Scripting Bridge layer (`iTunesPlayer`, `iTunesTrack`, vendored header in `iTunes/Vendor/iTunes.swift`).
 - `StarBar Helper/`: login-item helper that launches the main app.
-- `SDK/`: local Swift package with shared extensions; depends on MASShortcut.
+- MASShortcut comes straight into the app target as a Swift package, pinned to a revision because no tag of it has a `Package.swift`. To move the pin, change the revision in the project's package reference and let Xcode rewrite `Package.resolved`.
 - Signing is ad hoc ("Sign to Run Locally"), with no development team. Bundle IDs are the main app's ID plus `.helper`, `.tests` and `.uitests`. The main app and helper IDs are also hard-coded in both `AppDelegate.swift` files, so change them together.
 - Shared services are singletons (`iTunesPlayer.shared`, `WindowManager.shared`). App-wide events go through NotificationCenter; views talk to controllers through delegates.
 

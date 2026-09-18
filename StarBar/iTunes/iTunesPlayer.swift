@@ -13,42 +13,39 @@ extension Notification.Name {
 }
 
 final class iTunesPlayer {
-    
+
     // MARK: - Singleton
     public static let shared = iTunesPlayer()
-    
+
     private var _currentTrack: iTunesTrack?
-    
+
     var currentTrack: iTunesTrack? {
         get {
             return _currentTrack?.exists?() == true ? _currentTrack : nil
         }
     }
-    
+
     var isPlaying: Bool {
         return iTunesRadioStation.shared.iTunes?.playerState == .playing
     }
-    
-    let history = iTunesPlayerHistory()
-    
+
     private init() {
-        
+
     }
-    
+
 }
 
 extension iTunesPlayer {
-    
+
     func update(_ track: iTunesTrack? = iTunesRadioStation.shared.iTunes?.currentTrackCopy, broadcast: Bool = true) {
         // Use the passed-in track. The default argument already fetches a fresh copy.
         // Reading iTunesRadioStation.shared here deadlocks when called from its init.
         _currentTrack = track
-        _currentTrack.flatMap { history.insert($0) }
-        
+
         if broadcast {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)
         }
     }
-    
+
 }
 
