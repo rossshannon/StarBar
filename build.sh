@@ -4,12 +4,12 @@
 #
 #   ./build.sh                  Release build into build/ (incremental)
 #   ./build.sh --clean          Clean first
-#   ./build.sh --install        Also replace /Applications/StarBar.app and launch it
-#   ./build.sh --watch          Rebuild on source changes (combine with --install)
+#   ./build.sh --install    Also replace /Applications/StarBar.app and launch it
+#   ./build.sh --watch      Rebuild on source changes (combine with --install)
 #   ./build.sh --version=1.2.0  Build with this marketing version (the release workflow does)
 #   ./build.sh --test           Run the tests that don't need Music
-#   ./build.sh --test-all       Also run the tests that talk to Music (needs a track playing)
-#   ./build.sh --ui-test        Run the UI tests, which take over the screen (asks first; --yes skips)
+#   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
+#   ./build.sh --ui-test    Run the UI tests, which take over the screen (asks first; --yes skips)
 #
 # Version numbers: the marketing version is --version, else the latest v* tag, else the
 # project's own. The build number (CFBundleVersion) is the commit count, so it rises with

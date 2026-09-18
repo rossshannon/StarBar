@@ -88,9 +88,9 @@ extension AboutViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-
+        
         title = "About"
-
+        
         visualEffectBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(visualEffectBackgroundView)
         NSLayoutConstraint.activate([
@@ -167,13 +167,13 @@ import SwiftUI
 
 @available(OSX 10.15.0, *)
 struct AboutViewController_Preview: PreviewProvider {
-
+    
     static var previews: some View {
         NSViewControllerPreview {
             return AboutViewController()
         }
     }
-
+    
 }
 
 #endif

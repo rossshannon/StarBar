@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
-
+    
     @IBAction func openAboutWindow(_ sender: NSMenuItem) {
         WindowManager.shared.open(.about)
     }
@@ -30,10 +30,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let validator = MASShortcutValidator.shared() {
             validator.allowAnyShortcutWithOptionModifier = true
         } else {
-            os_log("%{public}s[%{public}ld], %{public}s: WARNING - Failed to initialize MASShortcutValidator",
+            os_log("%{public}s[%{public}ld], %{public}s: WARNING - Failed to initialize MASShortcutValidator", 
                    ((#file as NSString).lastPathComponent), #line, #function)
         }
-
+        
         setupUserDefaults()
         // UI tests run without Music: don't connect to it (Music notifications, the current
         // track and the rating shortcuts) or ask for permission to control it
@@ -61,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(false, forKey: ApplicationKey.isFirstLaunch.rawValue)
             WindowManager.shared.open(.preferences)
         }
-
+        
         #if DEBUG
         // WindowManager.shared.open(.preferences)
         #endif
@@ -190,30 +190,30 @@ extension AppDelegate {
     func setupAppleEvent() {
         DispatchQueue.global().async {
             // Check if Music/iTunes is running
-            let isRunning = NSWorkspace.shared.runningApplications.contains {
-                $0.bundleIdentifier == OSVersionHelper.bundleIdentifier
+            let isRunning = NSWorkspace.shared.runningApplications.contains { 
+                $0.bundleIdentifier == OSVersionHelper.bundleIdentifier 
             }
-
+            
             if !isRunning {
                 os_log("%{public}s[%{public}ld], %{public}s: iTunes/Music is not currently running", ((#file as NSString).lastPathComponent), #line, #function)
                 return
             }
-
+            
             let target = NSAppleEventDescriptor(bundleIdentifier: OSVersionHelper.bundleIdentifier)
             let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, typeWildCard, typeWildCard, true)
-
+            
             DispatchQueue.main.async {
                 switch status {
                 case noErr:
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: noErr", ((#file as NSString).lastPathComponent), #line, #function)
                     iTunesPlayer.shared.update()
-
+                    
                 case OSStatus(procNotFound):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: iTunes/Music not running", ((#file as NSString).lastPathComponent), #line, #function)
-
+                    
                 case OSStatus(errAEEventNotPermitted):
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: not permitted", ((#file as NSString).lastPathComponent), #line, #function)
-
+                    
                     // Explain once; after that, only log, so a denied permission doesn't nag at every login
                     let shownKey = "hasShownAutomationPermissionAlert"
                     guard !UserDefaults.standard.bool(forKey: shownKey) else { break }
@@ -232,14 +232,14 @@ extension AppDelegate {
                        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
                         NSWorkspace.shared.open(url)
                     }
-
+                    
                 default:
                     os_log("%{public}s[%{public}ld], %{public}s: AppleEvent permission status: %s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: status))
                 }
             }
         }   // end DispatchQueue.global().async
     }
-
+    
     func setupUserDefaults() {
         // register shortcut
         do {
@@ -280,7 +280,7 @@ extension AppDelegate {
         } catch {
             os_log("%{public}s[%{public}ld], %{public}s: Default shortcut set fail", ((#file as NSString).lastPathComponent), #line, #function)
         }
-
+        
         // register application default behavior
         UserDefaults.standard.register(defaults: [
             ApplicationKey.isFirstLaunch.rawValue : true,

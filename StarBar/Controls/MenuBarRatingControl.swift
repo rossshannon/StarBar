@@ -48,7 +48,7 @@ final class MenuBarRatingControl {
         imageView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
         return imageView
     }()
-
+    
     private let clickGestureRecognizer: NSClickGestureRecognizer = {
         let gestureRecognizer = NSClickGestureRecognizer()
         return gestureRecognizer
@@ -137,7 +137,7 @@ final class MenuBarRatingControl {
     var isStop: Bool {
         return playState == .unknown
     }
-
+    
     func updateGestureRecognizerBehavior() {
         // deliver .leftMouseUp action without delay when player stop
         clickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
@@ -158,7 +158,7 @@ final class MenuBarRatingControl {
         button.action = #selector(MenuBarRatingControl.action(_:))
         button.target = self
         button.setButtonType(.momentaryChange)
-
+        
         // On macOS 27 the menu bar sends the app one synthesised click when the mouse goes down,
         // and no drag events, so the click recognizer starts drags too. On earlier macOS a drag
         // makes the click recognizer fail, and the pan recognizer starts it instead. Either way
@@ -256,7 +256,7 @@ extension MenuBarRatingControl {
             height: size.height
         )
     }
-
+    
     /// Toggle the favorite status of the current track
     func toggleFavorite() {
         if MenuBarRatingControl.isUITesting {
@@ -276,7 +276,7 @@ extension MenuBarRatingControl {
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
-
+        
         // Also trigger a full update to refresh data from iTunes
         iTunesPlayer.shared.update()
     }
@@ -306,7 +306,7 @@ extension MenuBarRatingControl {
             os_log("%{public}s[%{public}ld], %{public}s: no handler for event %s", ((#file as NSString).lastPathComponent), #line, #function, event.debugDescription)
         }
     }
-
+    
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard sender.state == .ended else { return }
