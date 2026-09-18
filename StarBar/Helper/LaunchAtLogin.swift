@@ -43,4 +43,43 @@ enum LaunchAtLogin {
         SMAppService.openSystemSettingsLoginItems()
     }
 
+    /// The key the old implementation stored the choice under, and the helper it registered
+    static let legacyDefaultsKey = "launchAtLogin"
+    static let legacyHelperIdentifier = "com.rossshannon.starbar.helper"
+
+    /// One-time move from the helper-app login item.
+    ///
+    /// Until the deployment target rose to 13, "Launch at login" registered a helper bundle
+    /// inside the app with `SMLoginItemSetEnabled` and stored the choice in UserDefaults. The
+    /// helper is no longer in the bundle, so that registration launches nothing. If the stored
+    /// choice was on, this registers the app itself once, drops the old registration, and
+    /// forgets the key, so the system is the only record from then on.
+    ///
+    /// Not run under tests: the test host is a build in DerivedData, and registering it would
+    /// put that path in the user's login items.
+    static func migrateLegacyHelperItem() {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: legacyDefaultsKey) != nil, !isRunningTests else { return }
+        let wanted = defaults.bool(forKey: legacyDefaultsKey)
+        defaults.removeObject(forKey: legacyDefaultsKey)
+
+        // launchd may still hold the helper's registration; it points at nothing now
+        try? SMAppService.loginItem(identifier: legacyHelperIdentifier).unregister()
+
+        guard wanted, SMAppService.mainApp.status == .notRegistered else {
+            os_log("%{public}s[%{public}ld], %{public}s: legacy launch at login was %{public}s, status %{public}ld, nothing to migrate", ((#file as NSString).lastPathComponent), #line, #function, wanted ? "on" : "off", SMAppService.mainApp.status.rawValue)
+            return
+        }
+        do {
+            try SMAppService.mainApp.register()
+            os_log("%{public}s[%{public}ld], %{public}s: migrated launch at login from the helper to the app, status now %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, SMAppService.mainApp.status.rawValue)
+        } catch {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: could not migrate launch at login: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
+        }
+    }
+
+    private static var isRunningTests: Bool {
+        return ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
 }

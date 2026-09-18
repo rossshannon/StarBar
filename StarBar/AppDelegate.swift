@@ -38,6 +38,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // UI tests run without Music: don't connect to it (Music notifications, the current
         // track and the rating shortcuts) or ask for permission to control it
         if !MenuBarRatingControl.isUITesting {
+            LaunchAtLogin.migrateLegacyHelperItem()
             _ = iTunesRadioStation.shared
             setupAppleEvent()
         }

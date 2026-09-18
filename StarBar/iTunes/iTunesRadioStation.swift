@@ -257,11 +257,18 @@ extension iTunesRadioStation {
         readPlayerAgain(because: "the Mac woke")
     }
 
-    /// One short-timeout read of the current track, then the usual player update
+    /// Read the current track and run the usual player update, all under the short Apple
+    /// Event timeout: the update's observers read Music too (the play state, the rating),
+    /// and if Music is hung after wake those reads would otherwise wait the default two
+    /// minutes on the main thread. When Music isn't running the update just clears the player.
     private func readPlayerAgain(because reason: String) {
         os_log("%{public}s[%{public}ld], %{public}s: reading the player again because %{public}s", ((#file as NSString).lastPathComponent), #line, #function, reason)
-        let track = MenuBarRatingControl.withShortTimeout { $0.currentTrackCopy } ?? nil
-        iTunesPlayer.shared.update(track)
+        let updated: Void? = MenuBarRatingControl.withShortTimeout { iTunes in
+            iTunesPlayer.shared.update(iTunes.currentTrackCopy)
+        }
+        if updated == nil {
+            iTunesPlayer.shared.update(nil)
+        }
     }
 
 }

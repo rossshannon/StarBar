@@ -200,8 +200,10 @@ build_and_install() {
     fi
 }
 
-# Run xcodebuild test with the given scheme and extra arguments.
-# Usage: xcode_test <name> <scheme> <min_tests> [xcodebuild args...]
+# Run xcodebuild test with the given scheme, with VAR=value entries for the test host's
+# environment. xcodebuild forwards TEST_RUNNER_<VAR> from its own environment to the host,
+# so they go through env; passed as arguments they would be build settings and never arrive.
+# Usage: xcode_test <name> <scheme> <min_tests> [TEST_RUNNER_VAR=value...]
 # Writes build/test/<name>.log and a result bundle under build/test/results/.
 # Fails when fewer than <min_tests> tests ran: a test bundle that fails to load, or a scheme
 # that no longer includes the tests, would otherwise pass with "Executed 0 tests".
@@ -216,12 +218,11 @@ xcode_test() {
     local result_bundle="$test_dir/results/$name-$(date +%Y%m%d-%H%M%S).xcresult"
 
     mkdir -p "$test_dir/results"
-    if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
+    if env "$@" xcodebuild -project "$PROJECT_NAME.xcodeproj" \
         -scheme "$scheme" \
         -destination "platform=macOS" \
         -derivedDataPath "$test_dir" \
         -resultBundlePath "$result_bundle" \
-        "$@" \
         test > "$test_log" 2>&1; then
         grep -E "Executed [0-9]+ tests|\*\* TEST" "$test_log" | tail -2
         local executed
@@ -244,8 +245,8 @@ xcode_test() {
 run_tests() {
     # The UI tests take over the screen, so they have their own scheme and run only with --ui-test.
     # ScriptBridgeTests reads from Music, so it skips itself unless the test host sees
-    # STARBAR_LIVE_MUSIC_TESTS=1 (xcodebuild passes TEST_RUNNER_ variables through). It needs
-    # Music playing a track with artwork. CI has no Music.
+    # STARBAR_LIVE_MUSIC_TESTS=1 (xcodebuild forwards TEST_RUNNER_ variables from its
+    # environment). It needs Music playing a track with artwork. CI has no Music.
     local extra=()
     if [ "$TEST_ALL" = true ]; then
         extra+=("TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS=1")
