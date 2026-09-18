@@ -327,6 +327,29 @@ extension iTunesRadioStation {
         addToLibraryTimer = nil
     }
 
+    /// The library's own copy of a song playing from the Apple Music catalog, if it has one.
+    ///
+    /// A song can be in the library and still play as a catalog track: opening the album in
+    /// Apple Music plays the catalog copy, which is a separate object with its own ID and its
+    /// own (unwritable) rating. Rating the library copy is what the user means, and it stops
+    /// the button offering to add a song they already have.
+    ///
+    /// Matched on name, artist and album together. Where several copies match they are the
+    /// same song, so the oldest is taken -- deterministic, and the one the user has had
+    /// longest.
+    ///
+    /// One Apple Event, so call it once per track change, not from the drawing path.
+    func libraryCopy(of track: iTunesTrack) -> iTunesTrack? {
+        guard let iTunes = iTunes,
+              let library = librarySource(of: iTunes),
+              let libraryPlaylist = libraryPlaylist(of: library) else { return nil }
+
+        let databaseID = databaseIDs(matching: track, in: libraryPlaylist).min()
+        guard let databaseID = databaseID else { return nil }
+
+        return libraryPlaylist.tracks?().object(withID: databaseID) as? iTunesTrack
+    }
+
     /// The user's own library, as opposed to a shared library, an iPod or the store
     private func librarySource(of iTunes: iTunesApplication) -> iTunesSource? {
         return iTunes.sources?().first(where: { ($0 as? iTunesSource)?.kind == .library }) as? iTunesSource

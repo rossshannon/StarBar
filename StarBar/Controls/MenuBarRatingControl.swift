@@ -112,7 +112,8 @@ final class MenuBarRatingControl {
     }()
     /// Calls `clickController.tick()` while a drag is under way
     private var dragTimer: Timer?
-    /// The library copy of a song the user just added with the Apple Music button.
+    /// The library's copy of the song playing from the Apple Music catalog: either one the
+    /// user just added with the button, or one they already had.
     ///
     /// The playing track stays a catalog track for the rest of the song, so its rating would
     /// go nowhere; ratings go to this instead until the song changes.
@@ -527,6 +528,16 @@ extension MenuBarRatingControl {
         // don't save is the bug we already had, while wrongly offering to add a song that is
         // in the library would duplicate it, and that touches the user's library.
         let isCatalogStream = track?.isCatalogStream ?? false
+
+        // A song can be in the library and still play as a catalog track, when the album is
+        // opened in Apple Music. Rate the copy they already have rather than offering to add
+        // a song they own -- which would leave them with two of it.
+        if isCatalogStream, addedLibraryTrack == nil, let track = track,
+           let existing = iTunesRadioStation.shared.libraryCopy(of: track) {
+            os_log("%{public}s[%{public}ld], %{public}s: %{public}s is already in the library, rating that copy", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "nil")
+            addedLibraryTrack = existing
+            addedLibraryTrackPlayingID = trackID
+        }
         // Once the song has been added, the library copy is the one that carries the rating
         let ratedTrack = addedLibraryTrack ?? track
         updateMode(isCatalogStream && addedLibraryTrack == nil ? .addToLibrary : .rating)
