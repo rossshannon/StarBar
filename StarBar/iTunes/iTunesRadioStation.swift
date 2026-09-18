@@ -120,7 +120,7 @@ extension iTunesRadioStation {
             case is String:
                 dict[key] = value as? String ?? nil
             case is Date:
-                guard let date = value as? Date else { return }
+                guard let date = value as? Date else { continue }
                 let formatter = ISO8601DateFormatter()
                 dict[key] = formatter.string(from: date)
             default:
@@ -154,8 +154,9 @@ extension iTunesRadioStation {
             self.latestPlayInfo = playInfo
 
         } catch {
+            // A payload this app can't decode is Music's business, not a bug to stop on:
+            // keep the last known state and wait for the next notification
             os_log(.error, "%s: fail to parse playInfo with error %{public}s", #function, error.localizedDescription)
-            assertionFailure(error.localizedDescription)
             return
         }
     }

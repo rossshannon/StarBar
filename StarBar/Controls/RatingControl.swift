@@ -9,17 +9,17 @@
 import Cocoa
 import os
 
-protocol RatingControlDelegate: class {
+protocol RatingControlDelegate: AnyObject {
     func ratingControl(_ ratingControl: RatingControl, shouldUpdateRating rating: Int) -> Bool
     func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int)
 }
 
 class RatingControl {
-    
+
     weak var delegate: RatingControlDelegate?
-    
+
     let starsImage: NSImage
-    
+
     let starSize: NSSize
     let spacing: CGFloat
     /// 0 ~ 100
@@ -31,7 +31,7 @@ class RatingControl {
     private(set) var sweepPosition: Int?
     /// Called after the rating or favorite changes and the stars are redrawn
     var didChange: (() -> Void)?
-    
+
     var stars: Stars {
         var stars = Stars.styles(forRating: rating).map { Star(size: starSize, style: $0) }
         // The sweep only replaces a dot, never a star the user chose
@@ -41,7 +41,7 @@ class RatingControl {
 
         return Stars(stars: stars, spacing: spacing, showsFavorite: true, isFavorited: isFavorited)
     }
-    
+
     /// Stars rating control constructor
     ///
     /// - Parameters:
@@ -52,30 +52,30 @@ class RatingControl {
         self.rating = rating
         self.starSize = starSize
         self.spacing = spacing
-        
+
         // Add extra space for heart icon
         self.starsImage = NSImage(size: NSSize(width: CGFloat(5) * starSize.width + CGFloat(7) * spacing + starSize.width, height: starSize.height))
-        
+
         starsImage.isTemplate = true
         starsImage.cacheMode = .never
         drawStars()
     }
-    
+
 }
 
 extension RatingControl {
-    
+
     /// Update control rating
     ///
     /// - Parameter rating: 0 ~ 100
     func update(rating: Int) {
         let newRating = min(100, max(0, rating))
         self.rating = newRating
-        
+
         drawStars()
         os_log("%{public}s[%{public}ld], %{public}s: draw rating control %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, newRating)
     }
-    
+
     /// Update favorite status
     ///
     /// - Parameter favorited: true if the track is a favorite in Music
@@ -85,7 +85,7 @@ extension RatingControl {
         drawStars()
         os_log(.debug, "%{public}s[%{public}ld], %{public}s: update favorite status to %{public}d", ((#file as NSString).lastPathComponent), #line, #function, favorited ? 1 : 0)
     }
-    
+
     /// Move the rating reminder's hollow star, or remove it with nil
     ///
     /// - Parameter position: 0 ~ 4, or nil
@@ -107,11 +107,11 @@ extension RatingControl {
         stars.image.draw(in: rect)
         starsImage.unlockFocus()
     }
-    
+
 }
 
 extension RatingControl {
-    
+
     /// Cursor x offset inside `starsImage`, read from the live mouse position.
     ///
     /// `NSGestureRecognizer.location(in:)` on a status bar button reports the same point for
@@ -242,9 +242,9 @@ import SwiftUI
 
 @available(macOS 10.15.0, *)
 struct RatingControl_Preview: PreviewProvider {
-    
+
     static let ratings: [Int] = Array(stride(from: 0, through: 100, by: 10))
-    
+
     static var previews: some View {
         ForEach(ratings, id: \.self) { rating in
             NSViewPreview {
@@ -253,7 +253,7 @@ struct RatingControl_Preview: PreviewProvider {
             }
         }
     }
-    
+
 }
 
 #endif

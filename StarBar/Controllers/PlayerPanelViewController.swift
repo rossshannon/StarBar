@@ -9,7 +9,7 @@
 import Cocoa
 import os
 
-protocol PlayerPanelViewControllerDelegate: class {
+protocol PlayerPanelViewControllerDelegate: AnyObject {
     func playerPanelViewController(_ playerPanelViewController: PlayerPanelViewController, menuButtonPressed button: NSButton)
     func playerPanelViewController(_ playerPanelViewController: PlayerPanelViewController, listButtonPressed button: NSButton)
     func playerPanelViewController(_ playerPanelViewController: PlayerPanelViewController, backwardButtonPressed button: NSButton)
@@ -18,12 +18,12 @@ protocol PlayerPanelViewControllerDelegate: class {
 }
 
 final class PlayerPanelViewController: NSViewController {
-    
+
     enum State {
         case info
         case control
     }
-    
+
     var isStop = false {
         didSet {
             stateDidUpdate(isStop ? .control : .info)
@@ -34,23 +34,23 @@ final class PlayerPanelViewController: NSViewController {
             stateDidUpdate(self.state)
         }
     }
-    
+
     weak var delegate: PlayerPanelViewControllerDelegate?
-    
+
     private let playerInfoView = PlayerInfoView()
     private let playerControlView = PlayerControlView()
 
     override func loadView() {
         self.view = NSView()
     }
-    
+
 }
 
 extension PlayerPanelViewController {
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
-                
+
         playerInfoView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(playerInfoView)
         NSLayoutConstraint.activate([
@@ -60,7 +60,7 @@ extension PlayerPanelViewController {
             playerInfoView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             playerInfoView.heightAnchor.constraint(equalToConstant: 60),
         ])
-        
+
         playerControlView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(playerControlView)
         NSLayoutConstraint.activate([
@@ -70,7 +70,7 @@ extension PlayerPanelViewController {
             playerControlView.bottomAnchor.constraint(equalTo: playerInfoView.bottomAnchor),
         ])
         playerControlView.alphaValue = 0
-        
+
         playerControlView.menuButton.target = self
         playerControlView.menuButton.action = #selector(PlayerPanelViewController.menuButtonPressed(_:))
         playerControlView.listButton.target = self
@@ -81,66 +81,66 @@ extension PlayerPanelViewController {
         playerControlView.forwardButton.action = #selector(PlayerPanelViewController.forwardButtonPressed(_:))
         playerControlView.playPauseButton.target = self
         playerControlView.playPauseButton.action = #selector(PlayerPanelViewController.playPauseButtonToggled(_:))
-        
+
         playerControlView.listButton.isHidden = true
-        
+
         NotificationCenter.default.addObserver(self, selector: #selector(PlayerPanelViewController.iTunesPlayerDidUpdated(_:)), name: .iTunesPlayerDidUpdated, object: nil)
     }
-    
+
     override func viewWillAppear() {
         super.viewWillAppear()
-        
+
         playerControlView.playPauseButton.state = iTunesPlayer.shared.isPlaying ? .on : .off
     }
-    
+
     override func viewWillDisappear() {
         super.viewWillDisappear()
-        
+
         playerInfoView.titleTextField.reset()
         playerInfoView.captionTextField.reset()
     }
-    
+
 }
 
 extension PlayerPanelViewController {
-    
+
     func updateCurrentTrack(_ track: iTunesTrack?) {
         isStop = track == nil
-        
+
         guard let track = track else {
             return
         }
-        
+
         // setup playInfoView
         playerInfoView.titleTextField.stringValue = track.name ?? "No Title"
         playerInfoView.titleTextField.scroll()
-        
+
         let caption = [track.artist ?? track.albumArtist, track.album].compactMap { $0 }.joined(separator: " – ")
         playerInfoView.captionTextField.stringValue = caption
         playerInfoView.captionTextField.scroll()
     }
-    
+
     func stateDidUpdate(_ state: State) {
         os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: state))
         playerControlView.backwardButton.isEnabled = !isStop
         playerControlView.forwardButton.isEnabled = !isStop
-        
+
         guard !isStop else {
             playerInfoView.alphaValue = 0
             playerControlView.alphaValue = 1
             return
         }
-        
+
         switch state {
         case .control:
             playerInfoView.alphaValue = 0
             playerControlView.alphaValue = 1
-            
+
             playerInfoView.titleTextField.reset()
             playerInfoView.titleTextField.scroll()
             playerInfoView.captionTextField.reset()
             playerInfoView.captionTextField.scroll()
-            
+
         case .info:
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.33
@@ -149,27 +149,27 @@ extension PlayerPanelViewController {
             }
         }
     }
-    
+
 }
 
 extension PlayerPanelViewController {
-    
+
     @objc private func menuButtonPressed(_ sender: NSButton) {
         delegate?.playerPanelViewController(self, menuButtonPressed: sender)
     }
-    
+
     @objc private func listButtonPressed(_ sender: NSButton) {
         delegate?.playerPanelViewController(self, listButtonPressed: sender)
     }
-    
+
     @objc private func backwardButtonPressed(_ sender: NSButton) {
         delegate?.playerPanelViewController(self, backwardButtonPressed: sender)
     }
-    
+
     @objc private func forwardButtonPressed(_ sender: NSButton) {
         delegate?.playerPanelViewController(self, forwardButtonPressed: sender)
     }
-    
+
     @objc private func playPauseButtonToggled(_ sender: NSButton) {
         delegate?.playerPanelViewController(self, playPauseButtonToggled: sender)
     }
@@ -181,7 +181,7 @@ extension PlayerPanelViewController {
             self?.playerControlView.playPauseButton.state = iTunesPlayer.shared.isPlaying ? .on : .off
         }
     }
-    
+
 }
 
 #if canImport(SwiftUI) && DEBUG
@@ -189,7 +189,7 @@ import SwiftUI
 
 @available(macOS 10.15.0, *)
 struct PlayerPanelViewController_Preview: PreviewProvider {
-    
+
     // Live preview
     static var previews: some View {
         NSViewControllerPreview {
@@ -198,11 +198,11 @@ struct PlayerPanelViewController_Preview: PreviewProvider {
                 playerPanelViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack)
             }
             playerPanelViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack)
-            
+
             return playerPanelViewController
         }.frame(width: 300, height: 60, alignment: .center)
     }
-    
+
 }
 
 #endif
