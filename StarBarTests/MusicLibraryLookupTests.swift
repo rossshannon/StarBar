@@ -51,6 +51,20 @@ final class MusicLibraryLookupTests: XCTestCase {
         return try XCTUnwrap(tracks.firstObject as? iTunesTrack, "first track unreadable")
     }
 
+    /// Two library tracks with different database IDs.
+    ///
+    /// A test about "which track does the record point at" needs two tracks that can be told
+    /// apart. Handing it one song and that song's own library copy makes the assertion pass
+    /// whichever track it reads, which is how such a test goes green over the bug it covers.
+    private func twoDifferentLibraryTracks() throws -> (iTunesTrack, iTunesTrack) {
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        try XCTSkipUnless(tracks.count > 1, "the library has fewer than two tracks")
+        let first = try XCTUnwrap(tracks.object(at: 0) as? iTunesTrack, "first track unreadable")
+        let second = try XCTUnwrap(tracks.object(at: 1) as? iTunesTrack, "second track unreadable")
+        try XCTSkipUnless(first.databaseID != second.databaseID, "the first two tracks are the same")
+        return (first, second)
+    }
+
     // MARK: - The two IDs a track has
 
     /// A track carries both an `id` and a `database ID`, and they are different numbers.
@@ -198,14 +212,67 @@ final class MusicLibraryLookupTests: XCTestCase {
     /// Adding the song is the one thing the record cannot notice for itself, because the
     /// playing track stays a catalog track for the rest of the song
     func testTheRecordTakesTheCopyItIsToldAbout() throws {
-        let playingTrack = try firstLibraryTrack()
-        let other = try XCTUnwrap(iTunesRadioStation.shared.libraryCopy(of: playingTrack))
+        // Two different songs, so the assertion can tell which track the record points at.
+        // With one song and its own copy the database IDs match and this passes either way.
+        let (playingTrack, other) = try twoDifferentLibraryTracks()
 
         let playing = PlayingTrack(track: playingTrack)
         playing.didAddToLibrary(other)
 
         XCTAssertEqual(playing.ratingTrack?.databaseID, other.databaseID)
         XCTAssertTrue(playing.canRate)
+    }
+
+    // MARK: - Where the heart goes
+
+    /// A catalog track of a song the user owns: the heart belongs to their copy, the same
+    /// place the rating goes. Measured on 2026-09-18, the two objects answered `favorited`
+    /// differently -- the copy true, the catalog track false.
+    func testTheHeartGoesToTheUsersCopyWhenACatalogTrackPlays() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        try XCTSkipUnless(playing.canRate, "this song is not in the library")
+
+        XCTAssertNotEqual(playing.favoriteTrack.databaseID, track.databaseID,
+                          "the heart must not be written to the catalog track")
+        XCTAssertFalse((playing.favoriteTrack.name ?? "").isEmpty, "and it must be a live track")
+    }
+
+    /// With no copy to write to there is still somewhere to put the heart, unlike the rating:
+    /// Music accepts a favourite on a catalog track where it refuses a star.
+    func testTheHeartFallsBackToThePlayingTrackWhenThereIsNoCopy() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        try XCTSkipUnless(playing.ratingTrack == nil, "this song is in the library")
+
+        XCTAssertFalse(playing.canRate, "there is nowhere to put a rating")
+        XCTAssertEqual(playing.favoriteTrack.databaseID, track.databaseID,
+                       "but the heart still has somewhere to go")
+    }
+
+    /// Once the song is added, the heart follows the rating onto the new copy, and the two
+    /// still name the same track. That is the invariant the bug broke: the rating had been
+    /// moved onto the user's own copy and the heart was left behind on the playing track.
+    ///
+    /// The added copy here is a *different* song on purpose. Using the same song's own copy
+    /// proves nothing, because both tracks then carry the same database ID and the assertion
+    /// holds whichever track the heart reads.
+    func testTheHeartFollowsTheCopyTheRecordIsToldAbout() throws {
+        let (playingTrack, other) = try twoDifferentLibraryTracks()
+
+        let playing = PlayingTrack(track: playingTrack)
+        playing.didAddToLibrary(other)
+
+        XCTAssertEqual(playing.favoriteTrack.databaseID, other.databaseID,
+                       "the heart must move to the copy the rating moved to")
+        XCTAssertEqual(playing.favoriteTrack.databaseID, playing.ratingTrack?.databaseID,
+                       "the heart and the stars must not read different tracks")
     }
 
     /// Only meaningful while a catalog track is playing, so it steps aside otherwise

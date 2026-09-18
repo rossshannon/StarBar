@@ -511,6 +511,10 @@ extension TrackAnnouncementController.PlayerSnapshot {
         self.artist = artist
         self.album = album
         hasArtwork = true
+        // Deliberately the playing track, even though a catalog track holds neither of these:
+        // this snapshot only seeds the launch gap, and every strip that reaches the screen
+        // takes its rating and heart from the live read, which does consult the user's own
+        // copy. Resolving that copy here would put a library search inside launch.
         rating = track.userRating
         isFavorited = track.isFavorited
     }

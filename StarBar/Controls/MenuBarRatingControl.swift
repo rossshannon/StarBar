@@ -394,17 +394,19 @@ extension MenuBarRatingControl {
             updateFavoriteHeartView()
             return
         }
-        guard !isStop, let track = iTunesPlayer.shared.currentTrack else { return }
+        guard !isStop, let playing = iTunesPlayer.shared.playing else { return }
 
-        os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.name ?? "unknown")
+        os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playing.track.name ?? "unknown")
 
         // Flip the heart the user can see, not the one Music last answered with. Music applies
         // the write a moment later, so asking it again straight away can still report the old
         // value -- and two presses in a row then set the same thing, which is how the heart
         // got stuck.
         let isFavorited = !ratingControl.isFavorited
-        track.updateFavorited(isFavorited)
-        pendingFavorite = (isFavorited, iTunesPlayer.shared.playing?.persistentID,
+        // The heart goes where the rating goes: the user's own copy of the song, not the
+        // catalog track playing it. Music keeps a separate `favorited` on each.
+        playing.favoriteTrack.updateFavorited(isFavorited)
+        pendingFavorite = (isFavorited, playing.persistentID,
                            Date().addingTimeInterval(MenuBarRatingControl.favoriteWriteWindow))
 
         // Update our local state immediately
@@ -525,7 +527,6 @@ extension MenuBarRatingControl {
         // One record answers what is playing and where its rating lives, so the stars, the
         // shortcuts and the track announcement cannot disagree about it
         let playing = player.playing
-        let track = player.currentTrack
         let ratedTrack = playing?.ratingTrack
 
         // Nowhere to put a rating means the button instead of the stars. A song with no
@@ -538,7 +539,7 @@ extension MenuBarRatingControl {
         if !clickController.isDragging {
             ratingControl.update(rating: userRating ?? 0)
         }
-        ratingControl.updateFavorited(favoriteToShow(musicSays: track?.isFavorited ?? false,
+        ratingControl.updateFavorited(favoriteToShow(musicSays: playing?.favoriteTrack.isFavorited ?? false,
                                                      trackID: playing?.persistentID))
         updateFavoriteHeartView()
         // A catalog track is permanently unrated, so without this the reminder would ring for
@@ -584,6 +585,15 @@ extension MenuBarRatingControl {
             }
 
             playing.didAddToLibrary(added)
+            // The heart moves with the rating: from here on it is read from the new copy,
+            // which starts out unfavourited. A heart set before the song was added was
+            // written to the catalog track, so carry it across or the next read empties it.
+            // Only ever set, never clear -- nothing here should undo a favourite Music has.
+            if self.ratingControl.isFavorited && !added.isFavorited {
+                added.updateFavorited(true)
+                self.pendingFavorite = (true, playing.persistentID,
+                                        Date().addingTimeInterval(MenuBarRatingControl.favoriteWriteWindow))
+            }
             self.updateMode(.rating)
             self.ratingControl.update(rating: added.userRating ?? 0)
             self.updateFavoriteHeartView()

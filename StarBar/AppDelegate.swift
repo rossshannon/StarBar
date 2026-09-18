@@ -180,12 +180,16 @@ extension AppDelegate {
             switch match {
             case .same:
                 var live = TrackAnnouncementController.LiveTrack()
-                // A catalog track carries no rating of its own, so read the user's own copy --
-                // the same one the menu bar's stars read, or the two disagree on screen.
-                // The heart does belong to the playing track, which is where it is written.
-                live.rating = iTunesPlayer.shared.playing?.ratingTrack?.userRating
-                live.isFavorited = track.isFavorited
-                live.canRate = iTunesPlayer.shared.playing?.canRate ?? true
+                // A catalog track carries neither the rating nor the heart of its own: both
+                // belong to the user's own copy, and both have to read the same track the
+                // menu bar reads or the strip and the stars disagree on screen. The heart was
+                // read from the playing track until 2026-09-18, on the belief that it was
+                // written there; Music answered `favorited` false on a catalog track whose
+                // library copy answered true.
+                let playing = iTunesPlayer.shared.playing
+                live.rating = playing?.ratingTrack?.userRating
+                live.isFavorited = playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
+                live.canRate = playing?.canRate ?? true
                 if wantsArtwork {
                     live.artwork = track.firstArtworkImage()
                 }

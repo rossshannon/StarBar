@@ -63,6 +63,25 @@ final class PlayingTrack {
         return ratingTrack != nil
     }
 
+    /// The track the favourite heart is read from and written to.
+    ///
+    /// The user's own copy whenever they have one. Music answers `favorited` separately on
+    /// the two objects: measured on 2026-09-18, a library copy read `true` while the catalog
+    /// track playing that same song read `false`, so a heart set through the playing track
+    /// never came back. A catalog track's database ID is ephemeral in any case -- two reads
+    /// of one playing track gave different numbers -- so nothing the user chooses can live
+    /// on it.
+    ///
+    /// Falls back to the playing track, because a catalog track the user does not have does
+    /// accept the heart where it refuses a rating. Only the write on that path has been
+    /// measured, never the read back, so it is the one assumption left here.
+    ///
+    /// This resolves `ratingTrack`, which costs a library search the first time. Every caller
+    /// today has already resolved it; don't reach for this from a cold click handler.
+    var favoriteTrack: iTunesTrack {
+        return ratingTrack ?? track
+    }
+
     /// The song has just been added to the library, so that copy now carries its rating.
     ///
     /// The playing track stays a catalog track for the rest of the song -- it never becomes
