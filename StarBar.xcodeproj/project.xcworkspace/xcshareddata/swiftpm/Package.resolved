@@ -1,4 +1,5 @@
 {
+  "originHash" : "af84423b6e1109e7922cf4588d538d093519b696eb1166589b37ca3e771fd6c6",
   "pins" : [
     {
       "identity" : "masshortcut",
@@ -10,5 +11,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }

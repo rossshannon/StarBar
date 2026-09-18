@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		FA0000000000000000000003 /* MASShortcut in Frameworks */ = {isa = PBXBuildFile; productRef = FA0000000000000000000002 /* MASShortcut */; };
 		5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C1 /* RatingClickController.swift */; };
 		5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */; };
 		5A7E1A0000000000000000FC /* RatingClickControllerAddTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000FB /* RatingClickControllerAddTests.swift */; };
@@ -19,7 +20,6 @@
 		DB106C4622C53D4B00502D7C /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C4522C53D4B00502D7C /* AppDelegate.swift */; };
 		DB106C4A22C53D4C00502D7C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DB106C4922C53D4C00502D7C /* Assets.xcassets */; };
 		DB106C4D22C53D4C00502D7C /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DB106C4B22C53D4C00502D7C /* Main.storyboard */; };
-		DB106C5922C53D4C00502D7C /* StarBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C5822C53D4C00502D7C /* StarBarTests.swift */; };
 		DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */; };
 		DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6A22C661F900502D7C /* PlayInfo.swift */; };
 		DB106CA422CA3C7300502D7C /* Star.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA322CA3C7300502D7C /* Star.swift */; };
@@ -31,26 +31,22 @@
 		5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */; };
 		DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA722CA45BB00502D7C /* RatingControl.swift */; };
 		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
-		DB11065323047E7F001DA02A /* iTunesPlayerHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */; };
 		DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */; };
 		5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B1 /* PlayingTrack.swift */; };
 		DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */; };
 		DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = DB334388235E102600B45ED0 /* ExceptionCatcher.m */; };
-		DB398D152CB522CA00E722A1 /* SDK in Frameworks */ = {isa = PBXBuildFile; productRef = DB398D142CB522CA00E722A1 /* SDK */; };
 		DB424A352307259800230C7E /* iTunesTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A342307259800230C7E /* iTunesTrack.swift */; };
 		DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3723073CB000230C7E /* PopoverViewController.swift */; };
 		DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3923086C1200230C7E /* MovableImageView.swift */; };
 		5A7E1A00000000000001A4 /* AddToLibrarySpinnerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001A3 /* AddToLibrarySpinnerView.swift */; };
 		DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3B230877F400230C7E /* PlayerViewController.swift */; };
 		DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */; };
-		DB424A41230AF5C200230C7E /* PopoverWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A40230AF5C200230C7E /* PopoverWindow.swift */; };
-		DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A44230D877800230C7E /* PlayerHistoryViewController.swift */; };
 		DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */; };
 		DB89C9F322E2D766003981F5 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */; };
-		DB89C9F522E3176C003981F5 /* iTunesLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */; };
-		DB89C9FE22E31B67003981F5 /* iTunesLibrary.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = DB89C9FD22E31B67003981F5 /* iTunesLibrary.framework */; };
 		DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */; };
+		FA0000000000000000000021 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000020 /* LaunchAtLogin.swift */; };
 		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
+		FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000010 /* PreferencesViewControllerTests.swift */; };
 		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
 		5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */; };
 		5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */; };
@@ -58,12 +54,6 @@
 		DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */; };
 		DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */; };
 		DB9D9AF0235F7974008C53C3 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */; };
-		DB9D9B592363FC6B008C53C3 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B582363FC6B008C53C3 /* AppDelegate.swift */; };
-		DB9D9B5D2363FC6D008C53C3 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DB9D9B5C2363FC6D008C53C3 /* Assets.xcassets */; };
-		DB9D9B602363FC6D008C53C3 /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = DB9D9B5E2363FC6D008C53C3 /* Main.storyboard */; };
-		DB9D9B672363FD0A008C53C3 /* StarBar Helper.app in CopyFiles */ = {isa = PBXBuildFile; fileRef = DB9D9B562363FC6B008C53C3 /* StarBar Helper.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		DB9D9B6B2363FF45008C53C3 /* NotificationName.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */; };
-		DB9D9B6C2363FF45008C53C3 /* NotificationName.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */; };
 		DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */; };
 		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
 		DBD6A938250E0A1C002C1B6C /* NSImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A937250E0A1C002C1B6C /* NSImage.swift */; };
@@ -109,16 +99,6 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		DB9D9B662363FCBB008C53C3 /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = Contents/Library/LoginItems;
-			dstSubfolderSpec = 1;
-			files = (
-				DB9D9B672363FD0A008C53C3 /* StarBar Helper.app in CopyFiles */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -138,7 +118,6 @@
 		DB106C4C22C53D4C00502D7C /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		DB106C4E22C53D4C00502D7C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DB106C5422C53D4C00502D7C /* StarBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "StarBarTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DB106C5822C53D4C00502D7C /* StarBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarBarTests.swift; sourceTree = "<group>"; };
 		DB106C5A22C53D4C00502D7C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		DB106C6322C53DAE00502D7C /* iTunes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunes.swift; sourceTree = "<group>"; };
 		DB106C6722C5433900502D7C /* StarBar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "StarBar.entitlements"; sourceTree = "<group>"; };
@@ -152,28 +131,24 @@
 		5A7E1A0000000000000000FD /* LibraryAdd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryAdd.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibraryBadge.swift; sourceTree = "<group>"; };
 		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
-		DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayerHistory.swift; sourceTree = "<group>"; };
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001B1 /* PlayingTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayingTrack.swift; sourceTree = "<group>"; };
 		DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesApplication.swift; sourceTree = "<group>"; };
 		DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StarBar-Bridging-Header.h"; sourceTree = "<group>"; };
 		DB334388235E102600B45ED0 /* ExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExceptionCatcher.m; sourceTree = "<group>"; };
 		DB33438A235E103200B45ED0 /* ExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ExceptionCatcher.h; sourceTree = "<group>"; };
-		DB398D132CB51F7F00E722A1 /* SDK */ = {isa = PBXFileReference; lastKnownFileType = wrapper; path = SDK; sourceTree = "<group>"; };
 		DB424A342307259800230C7E /* iTunesTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesTrack.swift; sourceTree = "<group>"; };
 		DB424A3723073CB000230C7E /* PopoverViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverViewController.swift; sourceTree = "<group>"; };
 		DB424A3923086C1200230C7E /* MovableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MovableImageView.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001A3 /* AddToLibrarySpinnerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibrarySpinnerView.swift; sourceTree = "<group>"; };
 		DB424A3B230877F400230C7E /* PlayerViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerViewController.swift; sourceTree = "<group>"; };
 		DB424A3D2308936F00230C7E /* AutoScrollTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScrollTextField.swift; sourceTree = "<group>"; };
-		DB424A40230AF5C200230C7E /* PopoverWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverWindow.swift; sourceTree = "<group>"; };
-		DB424A44230D877800230C7E /* PlayerHistoryViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerHistoryViewController.swift; sourceTree = "<group>"; };
 		DB89C9EA22E2B7DF003981F5 /* MenuBarRatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRatingControl.swift; sourceTree = "<group>"; };
 		DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
-		DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesLibraryTests.swift; sourceTree = "<group>"; };
-		DB89C9FD22E31B67003981F5 /* iTunesLibrary.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = iTunesLibrary.framework; path = System/Library/Frameworks/iTunesLibrary.framework; sourceTree = SDKROOT; };
 		DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OSVersionHelper.swift; sourceTree = "<group>"; };
+		FA0000000000000000000020 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
 		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
+		FA0000000000000000000010 /* PreferencesViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlAddToLibraryTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlDragTests.swift; sourceTree = "<group>"; };
@@ -181,14 +156,6 @@
 		DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewController.swift; sourceTree = "<group>"; };
 		DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DispatchQueue.swift; sourceTree = "<group>"; };
-		DB9D9B562363FC6B008C53C3 /* StarBar Helper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "StarBar Helper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		DB9D9B582363FC6B008C53C3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
-		DB9D9B5C2363FC6D008C53C3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		DB9D9B5F2363FC6D008C53C3 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
-		DB9D9B612363FC6D008C53C3 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		DB9D9B622363FC6D008C53C3 /* StarBar_Helper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = StarBar_Helper.entitlements; sourceTree = "<group>"; };
-		DB9D9B682363FD2E008C53C3 /* ServiceManagement.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ServiceManagement.framework; path = System/Library/Frameworks/ServiceManagement.framework; sourceTree = SDKROOT; };
-		DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationName.swift; sourceTree = "<group>"; };
 		DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
 		DBD6A937250E0A1C002C1B6C /* NSImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSImage.swift; sourceTree = "<group>"; };
@@ -221,19 +188,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DB89C9FE22E31B67003981F5 /* iTunesLibrary.framework in Frameworks */,
-				DB398D152CB522CA00E722A1 /* SDK in Frameworks */,
+				FA0000000000000000000003 /* MASShortcut in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		DB106C5122C53D4C00502D7C /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DB9D9B532363FC6B008C53C3 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,8 +212,6 @@
 		7E6699F3E558528B857B7A62 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				DB9D9B682363FD2E008C53C3 /* ServiceManagement.framework */,
-				DB89C9FD22E31B67003981F5 /* iTunesLibrary.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
@@ -262,11 +219,9 @@
 		DB106C3922C53D4B00502D7C = {
 			isa = PBXGroup;
 			children = (
-				DB398D132CB51F7F00E722A1 /* SDK */,
 				DB106C4422C53D4B00502D7C /* StarBar */,
 				DB106C5722C53D4C00502D7C /* StarBarTests */,
 				5A7E1A0000000000000000B4 /* StarBarUITests */,
-				DB9D9B572363FC6B008C53C3 /* StarBar Helper */,
 				DB106C4322C53D4B00502D7C /* Products */,
 				7E6699F3E558528B857B7A62 /* Frameworks */,
 			);
@@ -278,7 +233,6 @@
 				DB106C4222C53D4B00502D7C /* StarBar.app */,
 				DB106C5422C53D4C00502D7C /* StarBarTests.xctest */,
 				5A7E1A0000000000000000B3 /* StarBarUITests.xctest */,
-				DB9D9B562363FC6B008C53C3 /* StarBar Helper.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -304,8 +258,8 @@
 		DB106C5722C53D4C00502D7C /* StarBarTests */ = {
 			isa = PBXGroup;
 			children = (
-				DB106C5822C53D4C00502D7C /* StarBarTests.swift */,
 				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
+				FA0000000000000000000010 /* PreferencesViewControllerTests.swift */,
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
 				5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */,
 				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
@@ -318,7 +272,6 @@
 				5A7E1A0000000000000000FF /* LibraryAddTests.swift */,
 				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
 				5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */,
-				DB89C9F422E3176C003981F5 /* iTunesLibraryTests.swift */,
 				DB106C5A22C53D4C00502D7C /* Info.plist */,
 				5A7E1A0000000000000000EB /* TrackAnnouncementLayoutTests.swift */,
 				5A7E1A0000000000000000ED /* TrackAnnouncementControllerTests.swift */,
@@ -367,7 +320,6 @@
 				DB106C6822C65E8E00502D7C /* iTunesRadioStation.swift */,
 				DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */,
 				5A7E1A00000000000001B1 /* PlayingTrack.swift */,
-				DB11065223047E7F001DA02A /* iTunesPlayerHistory.swift */,
 				DB106C6A22C661F900502D7C /* PlayInfo.swift */,
 			);
 			path = iTunes;
@@ -386,8 +338,8 @@
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
 				5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */,
-				DB424A40230AF5C200230C7E /* PopoverWindow.swift */,
 				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
+				FA0000000000000000000020 /* LaunchAtLogin.swift */,
 				DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */,
 				DB05F0872354CA6B00CE6DF9 /* NSViewControllerPreview.swift */,
 				DB33438A235E103200B45ED0 /* ExceptionCatcher.h */,
@@ -407,7 +359,6 @@
 				DB424A3723073CB000230C7E /* PopoverViewController.swift */,
 				DB424A3B230877F400230C7E /* PlayerViewController.swift */,
 				DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */,
-				DB424A44230D877800230C7E /* PlayerHistoryViewController.swift */,
 			);
 			path = Controllers;
 			sourceTree = "<group>";
@@ -433,19 +384,6 @@
 				5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */,
 			);
 			path = Views;
-			sourceTree = "<group>";
-		};
-		DB9D9B572363FC6B008C53C3 /* StarBar Helper */ = {
-			isa = PBXGroup;
-			children = (
-				DB9D9B582363FC6B008C53C3 /* AppDelegate.swift */,
-				DB9D9B6A2363FF45008C53C3 /* NotificationName.swift */,
-				DB9D9B5C2363FC6D008C53C3 /* Assets.xcassets */,
-				DB9D9B5E2363FC6D008C53C3 /* Main.storyboard */,
-				DB9D9B612363FC6D008C53C3 /* Info.plist */,
-				DB9D9B622363FC6D008C53C3 /* StarBar_Helper.entitlements */,
-			);
-			path = "StarBar Helper";
 			sourceTree = "<group>";
 		};
 		DB9D9B6D2364287E008C53C3 /* Extension */ = {
@@ -478,13 +416,15 @@
 				DB106C3E22C53D4B00502D7C /* Sources */,
 				DB106C3F22C53D4B00502D7C /* Frameworks */,
 				DB106C4022C53D4B00502D7C /* Resources */,
-				DB9D9B662363FCBB008C53C3 /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = "StarBar";
+			packageProductDependencies = (
+				FA0000000000000000000002 /* MASShortcut */,
+			);
 			productName = "StarBar";
 			productReference = DB106C4222C53D4B00502D7C /* StarBar.app */;
 			productType = "com.apple.product-type.application";
@@ -506,23 +446,6 @@
 			productName = "StarBarTests";
 			productReference = DB106C5422C53D4C00502D7C /* StarBarTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
-		};
-		DB9D9B552363FC6B008C53C3 /* StarBar Helper */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = DB9D9B652363FC6D008C53C3 /* Build configuration list for PBXNativeTarget "StarBar Helper" */;
-			buildPhases = (
-				DB9D9B522363FC6B008C53C3 /* Sources */,
-				DB9D9B532363FC6B008C53C3 /* Frameworks */,
-				DB9D9B542363FC6B008C53C3 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = "StarBar Helper";
-			productName = "StarBar Helper";
-			productReference = DB9D9B562363FC6B008C53C3 /* StarBar Helper.app */;
-			productType = "com.apple.product-type.application";
 		};
 		5A7E1A0000000000000000B5 /* StarBarUITests */ = {
 			isa = PBXNativeTarget;
@@ -573,9 +496,6 @@
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = DB106C4122C53D4B00502D7C;
 					};
-					DB9D9B552363FC6B008C53C3 = {
-						CreatedOnToolsVersion = 11.1;
-					};
 				};
 			};
 			buildConfigurationList = DB106C3D22C53D4B00502D7C /* Build configuration list for PBXProject "StarBar" */;
@@ -587,13 +507,15 @@
 				Base,
 			);
 			mainGroup = DB106C3922C53D4B00502D7C;
+			packageReferences = (
+				FA0000000000000000000001 /* XCRemoteSwiftPackageReference "MASShortcut" */,
+			);
 			productRefGroup = DB106C4322C53D4B00502D7C /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				DB106C4122C53D4B00502D7C /* StarBar */,
 				DB106C5322C53D4C00502D7C /* StarBarTests */,
-				DB9D9B552363FC6B008C53C3 /* StarBar Helper */,
 				5A7E1A0000000000000000B5 /* StarBarUITests */,
 			);
 		};
@@ -614,15 +536,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DB9D9B542363FC6B008C53C3 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DB9D9B5D2363FC6D008C53C3 /* Assets.xcassets in Resources */,
-				DB9D9B602363FC6D008C53C3 /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -652,7 +565,7 @@
 				5A7E1A00000000000001A4 /* AddToLibrarySpinnerView.swift in Sources */,
 				DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */,
 				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
-				DB424A45230D877900230C7E /* PlayerHistoryViewController.swift in Sources */,
+				FA0000000000000000000021 /* LaunchAtLogin.swift in Sources */,
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
 				5A7E1A00000000000001B4 /* SmartPunctuation.swift in Sources */,
 				5A7E1A00000000000001A6 /* SVGPath.swift in Sources */,
@@ -670,7 +583,6 @@
 				DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */,
 				DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */,
 				DB05F0652353912500CE6DF9 /* PlayerInfoView.swift in Sources */,
-				DB9D9B6B2363FF45008C53C3 /* NotificationName.swift in Sources */,
 				DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */,
 				DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */,
 				5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */,
@@ -689,9 +601,7 @@
 				5A7E1A0000000000000000E4 /* TrackAnnouncementLayout.swift in Sources */,
 				5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */,
 				DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */,
-				DB424A41230AF5C200230C7E /* PopoverWindow.swift in Sources */,
 				DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */,
-				DB11065323047E7F001DA02A /* iTunesPlayerHistory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -699,9 +609,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DB106C5922C53D4C00502D7C /* StarBarTests.swift in Sources */,
-				DB89C9F522E3176C003981F5 /* iTunesLibraryTests.swift in Sources */,
 				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
+				FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */,
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
 				5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */,
 				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
@@ -718,15 +627,6 @@
 				5A7E1A0000000000000000EE /* TrackAnnouncementControllerTests.swift in Sources */,
 				5A7E1A0000000000000000EC /* TrackAnnouncementLayoutTests.swift in Sources */,
 				5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		DB9D9B522363FC6B008C53C3 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				DB9D9B6C2363FF45008C53C3 /* NotificationName.swift in Sources */,
-				DB9D9B592363FC6B008C53C3 /* AppDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -758,14 +658,6 @@
 			isa = PBXVariantGroup;
 			children = (
 				DB106C4C22C53D4C00502D7C /* Base */,
-			);
-			name = Main.storyboard;
-			sourceTree = "<group>";
-		};
-		DB9D9B5E2363FC6D008C53C3 /* Main.storyboard */ = {
-			isa = PBXVariantGroup;
-			children = (
-				DB9D9B5F2363FC6D008C53C3 /* Base */,
 			);
 			name = Main.storyboard;
 			sourceTree = "<group>";
@@ -828,7 +720,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -887,7 +779,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -913,7 +805,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar;
 				PRODUCT_MODULE_NAME = StarBar;
@@ -942,7 +834,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar;
 				PRODUCT_MODULE_NAME = StarBar;
@@ -967,7 +859,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -989,63 +881,11 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/StarBar.app/Contents/MacOS/StarBar";
-			};
-			name = Release;
-		};
-		DB9D9B632363FC6D008C53C3 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = "StarBar Helper/StarBar_Helper.entitlements";
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				INFOPLIST_FILE = "StarBar Helper/Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar.helper;
-				PRODUCT_MODULE_NAME = StarBar_Helper;
-				PRODUCT_NAME = "StarBar Helper";
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		DB9D9B642363FC6D008C53C3 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = "StarBar Helper/StarBar_Helper.entitlements";
-				CODE_SIGN_IDENTITY = "-";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				DEAD_CODE_STRIPPING = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				INFOPLIST_FILE = "StarBar Helper/Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar.helper;
-				PRODUCT_MODULE_NAME = StarBar_Helper;
-				PRODUCT_NAME = "StarBar Helper";
-				SKIP_INSTALL = YES;
-				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -1062,7 +902,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -1083,7 +923,7 @@
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 12.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
@@ -1121,15 +961,6 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		DB9D9B652363FC6D008C53C3 /* Build configuration list for PBXNativeTarget "StarBar Helper" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				DB9D9B632363FC6D008C53C3 /* Debug */,
-				DB9D9B642363FC6D008C53C3 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		5A7E1A0000000000000000BB /* Build configuration list for PBXNativeTarget "StarBarUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1141,10 +972,22 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		FA0000000000000000000001 /* XCRemoteSwiftPackageReference "MASShortcut" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/shpakovski/MASShortcut.git";
+			requirement = {
+				kind = revision;
+				revision = 6f2603c6b6cc18f64a799e5d2c9d3bbc467c413a;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
-		DB398D142CB522CA00E722A1 /* SDK */ = {
+		FA0000000000000000000002 /* MASShortcut */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = SDK;
+			package = FA0000000000000000000001 /* XCRemoteSwiftPackageReference "MASShortcut" */;
+			productName = MASShortcut;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

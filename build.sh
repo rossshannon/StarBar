@@ -2,12 +2,22 @@
 
 # Build script for StarBar
 #
-#   ./build.sh              Clean Release build into build/
+#   ./build.sh                  Release build into build/ (incremental)
+#   ./build.sh --clean          Clean first
 #   ./build.sh --install    Also replace /Applications/StarBar.app and launch it
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
-#   ./build.sh --test       Run the app and SDK tests that don't need Music
+#   ./build.sh --version=1.2.0  Build with this marketing version (the release workflow does)
+#   ./build.sh --test           Run the tests that don't need Music
 #   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
 #   ./build.sh --ui-test    Run the UI tests, which take over the screen (asks first; --yes skips)
+#
+# Version numbers: the marketing version is --version, else the latest v* tag, else the
+# project's own. The build number (CFBundleVersion) is the commit count, so it rises with
+# every commit and a newer build always compares higher, which is what LaunchServices and
+# any update feed go by. A shallow clone can't count, so it keeps the project's number.
+#
+# Signing: builds are ad hoc unless STARBAR_CODESIGN_IDENTITY (a "Developer ID Application"
+# identity) and STARBAR_TEAM_ID are set, as the release workflow sets them from its secrets.
 
 set -e
 set -o pipefail
@@ -18,18 +28,25 @@ PROJECT_NAME="StarBar"
 APP_NAME="StarBar"
 APP_PATH="build/Build/Products/Release/$APP_NAME.app"
 INSTALL_PATH="/Applications/$APP_NAME.app"
+# Fewest tests a run may execute before it counts as broken (see xcode_test)
+MIN_APP_TESTS=150
+MIN_UI_TESTS=5
 
 INSTALL=false
 WATCH=false
+CLEAN=false
 TEST=false
 TEST_ALL=false
 UI_TEST=false
 ASSUME_YES=false
+VERSION=""
 
 for arg in "$@"; do
     case $arg in
         --install|-i) INSTALL=true ;;
         --watch|-w) WATCH=true ;;
+        --clean) CLEAN=true ;;
+        --version=*) VERSION="${arg#*=}"; [ -n "$VERSION" ] || { echo "Error: --version needs a value, such as --version=1.2.0"; exit 2; } ;;
         --test|-t) TEST=true ;;
         --test-all) TEST=true; TEST_ALL=true ;;
         --ui-test) UI_TEST=true ;;
@@ -37,6 +54,11 @@ for arg in "$@"; do
         *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
+
+if [ -n "$VERSION" ] && ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Error: --version must look like 1.2.0, not $VERSION"
+    exit 2
+fi
 
 if { [ "$TEST" = true ] || [ "$UI_TEST" = true ]; } && { [ "$INSTALL" = true ] || [ "$WATCH" = true ]; }; then
     echo "Error: --test and --ui-test run on their own. Don't combine them with --install or --watch."
@@ -94,9 +116,45 @@ verify_install() {
     echo "Verified: /Applications has the new build, and it is running."
 }
 
+# xcodebuild settings for the version numbers and signing, appended to BUILD_SETTINGS
+BUILD_SETTINGS=()
+collect_build_settings() {
+    local tag
+    # Called before every build, including each watch-mode rebuild
+    BUILD_SETTINGS=()
+    if [ -n "$VERSION" ]; then
+        BUILD_SETTINGS+=("MARKETING_VERSION=$VERSION")
+    elif tag=$(git describe --tags --match 'v[0-9]*' --abbrev=0 2>/dev/null); then
+        BUILD_SETTINGS+=("MARKETING_VERSION=${tag#v}")
+    else
+        echo "Note: no v* tag reachable, so the version stays the project's own"
+    fi
+    if [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" = "false" ]; then
+        BUILD_SETTINGS+=("CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD)")
+    else
+        echo "Note: shallow or missing git history, so the build number stays the project's own"
+    fi
+    if [ -n "$STARBAR_CODESIGN_IDENTITY" ] && [ -n "$STARBAR_TEAM_ID" ]; then
+        BUILD_SETTINGS+=(
+            "CODE_SIGN_STYLE=Manual"
+            "CODE_SIGN_IDENTITY=$STARBAR_CODESIGN_IDENTITY"
+            "DEVELOPMENT_TEAM=$STARBAR_TEAM_ID"
+            # Notarisation needs a secure timestamp on the signature
+            "OTHER_CODE_SIGN_FLAGS=--timestamp"
+        )
+        echo "Signing with $STARBAR_CODESIGN_IDENTITY"
+    fi
+}
+
 build_and_install() {
     echo ""
     echo "=== Building $APP_NAME... ==="
+
+    local actions=(build)
+    if [ "$CLEAN" = true ]; then
+        actions=(clean build)
+    fi
+    collect_build_settings
 
     # Capture build output so a failure shows the full log
     BUILD_LOG=$(mktemp)
@@ -104,7 +162,8 @@ build_and_install() {
         -scheme "$PROJECT_NAME" \
         -configuration Release \
         -derivedDataPath build \
-        clean build > "$BUILD_LOG" 2>&1; then
+        "${BUILD_SETTINGS[@]}" \
+        "${actions[@]}" > "$BUILD_LOG" 2>&1; then
         tail -10 "$BUILD_LOG"
         rm -f "$BUILD_LOG"
     else
@@ -120,7 +179,7 @@ build_and_install() {
     fi
 
     echo ""
-    echo "Build successful!"
+    echo "Build successful: version $(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist"))"
 
     if [ "$INSTALL" = true ]; then
         if [ -d "$INSTALL_PATH" ] && ! command -v trash &> /dev/null; then
@@ -143,27 +202,37 @@ build_and_install() {
     fi
 }
 
-# Run xcodebuild test with the given scheme and selection arguments.
-# Usage: xcode_test <name> <scheme> [-only-testing:... | -skip-testing:...]...
+# Run xcodebuild test with the given scheme, with VAR=value entries for the test host's
+# environment. xcodebuild forwards TEST_RUNNER_<VAR> from its own environment to the host,
+# so they go through env; passed as arguments they would be build settings and never arrive.
+# Usage: xcode_test <name> <scheme> <min_tests> [TEST_RUNNER_VAR=value...]
 # Writes build/test/<name>.log and a result bundle under build/test/results/.
+# Fails when fewer than <min_tests> tests ran: a test bundle that fails to load, or a scheme
+# that no longer includes the tests, would otherwise pass with "Executed 0 tests".
 xcode_test() {
     local name="$1"
     local scheme="$2"
-    shift 2
+    local min_tests="$3"
+    shift 3
     local test_dir="build/test"
     local test_log="$test_dir/$name.log"
     # xcodebuild won't overwrite a result bundle, so each run gets its own
     local result_bundle="$test_dir/results/$name-$(date +%Y%m%d-%H%M%S).xcresult"
 
     mkdir -p "$test_dir/results"
-    if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
+    if env "$@" xcodebuild -project "$PROJECT_NAME.xcodeproj" \
         -scheme "$scheme" \
         -destination "platform=macOS" \
         -derivedDataPath "$test_dir" \
         -resultBundlePath "$result_bundle" \
-        "$@" \
         test > "$test_log" 2>&1; then
         grep -E "Executed [0-9]+ tests|\*\* TEST" "$test_log" | tail -2
+        local executed
+        executed=$(grep -E "Executed [0-9]+ tests" "$test_log" | tail -1 | sed -E 's/.*Executed ([0-9]+) tests.*/\1/')
+        if [ "${executed:-0}" -lt "$min_tests" ]; then
+            echo "Only ${executed:-0} tests ran, but at least $min_tests were expected. Full log: $test_log"
+            return 1
+        fi
     else
         # Failed tests first, then the end of the log, which explains crashes and build errors
         grep -E ": error:|Test Case .* failed" "$test_log" || true
@@ -176,28 +245,20 @@ xcode_test() {
 }
 
 run_tests() {
-    # Test identifiers look like "StarBarTests/ClassName"; a wrong identifier is silently ignored.
     # The UI tests take over the screen, so they have their own scheme and run only with --ui-test.
-    local selection=()
-    # These test classes read from Music, so they fail unless Music is playing a track
-    # with artwork and StarBar may access the media library. CI has no Music.
-    if [ "$TEST_ALL" = false ]; then
-        selection+=(
-            "-skip-testing:StarBarTests/ScriptBridgeTests"
-            "-skip-testing:StarBarTests/iTunesLibraryTests"
-            "-skip-testing:StarBarTests/MusicLibraryLookupTests"
-        )
+    # ScriptBridgeTests reads from Music, so it skips itself unless the test host sees
+    # STARBAR_LIVE_MUSIC_TESTS=1 (xcodebuild forwards TEST_RUNNER_ variables from its
+    # environment). It needs Music playing a track with artwork. CI has no Music.
+    local extra=()
+    if [ "$TEST_ALL" = true ]; then
+        extra+=("TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS=1")
     fi
     local status=0
 
     echo ""
     echo "=== Testing $APP_NAME... ==="
     # The app hosts the unit tests, so a test run launches it
-    xcode_test test "$PROJECT_NAME" "${selection[@]}" || status=1
-
-    echo ""
-    echo "=== Testing SDK... ==="
-    (cd SDK && swift test) || status=1
+    xcode_test test "$PROJECT_NAME" "$MIN_APP_TESTS" "${extra[@]}" || status=1
 
     return $status
 }
@@ -236,7 +297,7 @@ run_ui_tests() {
     fi
 
     local status=0
-    xcode_test ui-test "$PROJECT_NAME UI Tests" || status=1
+    xcode_test ui-test "$PROJECT_NAME UI Tests" "$MIN_UI_TESTS" || status=1
 
     if [ "$was_running" = true ] && [ -d "$INSTALL_PATH" ]; then
         open "$INSTALL_PATH"
@@ -254,7 +315,7 @@ elif [ "$WATCH" = true ]; then
         exit 1
     fi
 
-    echo "Watching: StarBar/, StarBar Helper/, SDK/Sources/"
+    echo "Watching: StarBar/ and StarBar.xcodeproj/project.pbxproj"
     echo "Press Ctrl+C to stop"
 
     build_and_install || true
@@ -267,7 +328,8 @@ elif [ "$WATCH" = true ]; then
         --include="\.storyboard$" \
         --include="\.entitlements$" \
         --include="\.strings$" \
-        -r "StarBar/" "StarBar Helper/" "SDK/Sources/" | while read -r; do
+        --include="project\.pbxproj$" \
+        -r "StarBar/" "StarBar.xcodeproj/project.pbxproj" | while read -r; do
         echo ""
         echo "Change detected, rebuilding..."
         build_and_install || true

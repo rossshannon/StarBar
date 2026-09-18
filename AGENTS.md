@@ -13,18 +13,18 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 | Build (Release, into `build/`) | `./build.sh` |
 | Build, install to /Applications, relaunch | `./build.sh --install` |
 | Rebuild on file changes | `./build.sh --watch --install` (needs `brew install fswatch`) |
-| App tests that don't need Music, plus SDK tests | `./build.sh --test` |
-| All tests, including `ScriptBridgeTests`, `iTunesLibraryTests` and `MusicLibraryLookupTests` | `./build.sh --test-all` |
+| Tests that don't need Music | `./build.sh --test` |
+| All tests, including `ScriptBridgeTests` and `MusicLibraryLookupTests`, which read from Music | `./build.sh --test-all` |
 | UI tests (take over the screen, see below) | `./build.sh --ui-test` |
 | One test | `xcodebuild -project StarBar.xcodeproj -scheme StarBar test -only-testing:StarBarTests/TestClassName/testMethodName` |
-| SDK tests only | `cd SDK && swift test` |
 | Clean | `xcodebuild -project StarBar.xcodeproj clean` |
 | Enable the pre-commit hook | `git config core.hooksPath .githooks` |
 
-- Prefer `build.sh` over raw `xcodebuild`. When `xcode-select` points at the Command Line Tools, the script finds an Xcode app with Spotlight and prints "Using Xcode at …". For raw `xcodebuild`, `swift test` or `sdef` on such a machine, set `DEVELOPER_DIR` to that app's `Contents/Developer`.
+- Prefer `build.sh` over raw `xcodebuild`. When `xcode-select` points at the Command Line Tools, the script finds an Xcode app with Spotlight and prints "Using Xcode at …". For raw `xcodebuild` or `sdef` on such a machine, set `DEVELOPER_DIR` to that app's `Contents/Developer`.
 - `-only-testing` silently ignores a wrong identifier, so check the log shows the test ran.
 - Test logs are in `build/test/test.log` and `build/test/ui-test.log`. Result bundles are in `build/test/results/`.
-- `--test-all` needs Music playing a track with artwork and media library access, so it runs locally only. The skip list for `--test` lives only in `build.sh`.
+- `--test-all` needs Music playing a track with artwork, so it runs locally only. `ScriptBridgeTests` skips itself unless the test host's environment has `STARBAR_LIVE_MUSIC_TESTS=1`; `build.sh` sets it through `TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS`, and a plain `xcodebuild test` or Xcode's Product > Test never reaches Music. Live tests only read from Music; a test that writes needs the user's say-so and disposable data.
+- `build.sh` fails a test run that executed fewer tests than `MIN_APP_TESTS` / `MIN_UI_TESTS`, so a test bundle that fails to load can't pass as "Executed 0 tests". Raise the floor when the suite grows well past it.
 - An install only counts when three things are proven: the new binary is in `/Applications`, the running app is that binary, and the changed code runs. `./build.sh --install` ends with a verification block (commit, binary hash, running PID) that covers the first two; read it rather than the exit code. For the third, check the app's log for the code path you changed. Claude Code has an `install-and-verify` skill for this.
 
 ## Testing gotchas
@@ -35,7 +35,7 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 - App tests are hosted in StarBar, so a test run launches the app. The test target is signed ad hoc like the app; without that, `xcodebuild test` asks for a development team.
 - To exercise Music-driven code without changing playback, post a synthetic `com.apple.iTunes.playerInfo` distributed notification from JXA (`osascript -l JavaScript`; pass `$()`, not `null`, as the object). Useful keys: `Name`, `Artist`, `Album`, `Persistent ID`, `Player State`, `Artwork Count`. Afterwards, re-post the real track so the app's state is correct.
 - To find out what Music thinks about the current track, ask it: `osascript -e 'tell application "Music" to return class of current track'` and so on for `rating`, `rating kind`, `cloud status`, `location`, `database ID`. Wrap each read in its own `try` block, because several of them raise on some track kinds. A write test needs the same care in reverse: a read-back proves nothing if the write silently did nothing, and an inner `try` that swallows the error makes a failure look like a success.
-- `MusicLibraryLookupTests` pins the Scripting Bridge behaviour the library lookup depends on: that a track's `id` and `database ID` differ, that `object(withID:)` will not find a track by the latter, and that `libraryCopy(of:)` hands back a track that can actually be read. It is read-only by design. Its worth was checked by putting the bug back and watching it fail; do the same for anything added there, or it is only decoration.
+- `MusicLibraryLookupTests` gates itself the same way and pins the Scripting Bridge behaviour the library lookup depends on: that a track's `id` and `database ID` differ, that `object(withID:)` will not find a track by the latter, and that `libraryCopy(of:)` hands back a track that can actually be read. It is read-only by design, which is also what lets it run under `--test-all` at all. Its worth was checked by putting the bug back and watching it fail; do the same for anything added there, or it is only decoration.
 - **Music writes change the user's library.** Ratings cannot be undone — there is no history to restore from, and `~/Music/Music/` is blocked by privacy protection, so there is no file to inspect either. Ask before writing, record the original value first, and address a track by `database ID`. Never select one by name: duplicate titles across artists are common, and a name query can rate a song the user has had for years.
 - **Timers on `DisplayLinkClock` must pass a real frame interval** (`1.0 / 60.0`), never `0`. Below macOS 14 there is no display link and it falls back to a `Timer`, and Foundation clamps a non-positive interval to 0.0001 s -- roughly ten thousand main-thread callbacks a second. The project targets macOS 12+, and CI only covers macos-15 and later, so this is invisible to CI.
 - In the Bash tool, `log` is a zsh builtin. Use `/usr/bin/log show --predicate 'process == "StarBar"'`.
@@ -45,15 +45,17 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 ## CI and release
 
 - `.github/workflows/test.yml` runs `./build.sh` and `./build.sh --test` on macos-15, macos-26 and xcode-27 (the macOS 27 preview, non-blocking), and `--ui-test` on macos-26 and xcode-27.
-- Release: push a `v*` tag. `.github/workflows/release.yml` tests, builds with `MARKETING_VERSION` from the tag, and attaches a zip to a GitHub release.
+- Release: push a `v*` tag. `.github/workflows/release.yml` tests, builds through `./build.sh --clean --version=X.Y.Z`, and attaches a zip and its SHA-256 to a GitHub release. It signs with Developer ID and notarises when the repository has the secrets the README lists, and falls back to ad hoc signing without them.
+- Version numbers come from `build.sh`, not the project file: the marketing version is `--version`, else the latest `v*` tag; the build number (`CFBundleVersion`) is the commit count, so it rises with every commit. Never hand-edit `CURRENT_PROJECT_VERSION`; a shallow clone keeps the project's number. There is no Sparkle or other update feed; if one is added, the commit-count build number is what its appcast should compare.
+- Builds are incremental. `./build.sh --clean` cleans first, and the release workflow always does.
 
 ## Architecture
 
-- Targets macOS 12+. Swift 5 language mode. Dependencies come through SPM.
+- Targets macOS 13+ (for `SMAppService`, which registers the app itself as a login item). Swift 5 language mode. The one dependency comes through SPM.
 - `StarBar/`: the app. `Controls/` holds the menu bar rating control and click and reminder controllers, `Controllers/` the view controllers, `Views/` the views, `Helper/` pure logic (`RatingReminder`, `StarSweep`, `Stars`), and `iTunes/` the Scripting Bridge layer (`iTunesPlayer`, `iTunesTrack`, vendored header in `iTunes/Vendor/iTunes.swift`).
-- `StarBar Helper/`: login-item helper that launches the main app.
-- `SDK/`: local Swift package with shared extensions; depends on MASShortcut.
-- Signing is ad hoc ("Sign to Run Locally"), with no development team. Bundle IDs are the main app's ID plus `.helper`, `.tests` and `.uitests`. The main app and helper IDs are also hard-coded in both `AppDelegate.swift` files, so change them together.
+- MASShortcut comes straight into the app target as a Swift package, pinned to a revision because no tag of it has a `Package.swift`. To move the pin, change the revision in the project's package reference and let Xcode rewrite `Package.resolved`.
+- Signing is ad hoc ("Sign to Run Locally"), with no development team. Bundle IDs are the main app's ID plus `.tests` and `.uitests`.
+- Launch at login goes through `LaunchAtLogin` (`SMAppService.mainApp`). The system is the source of truth: the Preferences checkbox reads the service's status when the window appears and when the app becomes active, and nothing about it is stored in UserDefaults. A `.requiresApproval` status means the user switched it off in System Settings, so the checkbox sends them there. `migrateLegacyHelperItem()` runs once at launch: if the old `launchAtLogin` default was on it registers the app, drops the old helper registration and removes the key (never under tests, where the host is a DerivedData build).
 - Shared services are singletons (`iTunesPlayer.shared`, `WindowManager.shared`). App-wide events go through NotificationCenter; views talk to controllers through delegates.
 
 ## Conventions

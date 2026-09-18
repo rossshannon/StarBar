@@ -44,8 +44,6 @@ final class iTunesPlayer {
         return iTunesRadioStation.shared.iTunes?.playerState == .playing
     }
     
-    let history = iTunesPlayerHistory()
-    
     private init() {
         
     }
@@ -62,7 +60,6 @@ extension iTunesPlayer {
         // Nothing is read from Music here; `PlayingTrack` asks only when it is first asked,
         // which keeps this safe to call from `iTunesRadioStation`'s own init.
         _playing = track.map { PlayingTrack(track: $0) }
-        _currentTrack.flatMap { history.insert($0) }
         
         if broadcast {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)

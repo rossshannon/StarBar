@@ -41,7 +41,7 @@ final class AboutViewController: NSViewController {
 
     lazy var contactMeButton: NSButton = {
         let button = NSButton()
-        button.title = "Contact me"
+        button.title = "Report a problem"
         button.bezelStyle = NSButton.BezelStyle.inline
         button.action = #selector(AboutViewController.contactMeButtonPressed(_:))
         return button
@@ -73,11 +73,11 @@ extension AboutViewController {
     }
 
     @objc func contactMeButtonPressed(_ sender: NSButton) {
-        guard let url = URL(string: "https://twitter.com/MainasuK") else { return }
+        guard let url = URL(string: "https://github.com/rossshannon/StarBar/issues") else { return }
         NSWorkspace.shared.open(url)
     }
 
-    @objc func githubButtonPressed(_ sender: Bundle) {
+    @objc func githubButtonPressed(_ sender: NSButton) {
         guard let url = URL(string: "https://github.com/rossshannon/StarBar") else { return }
         NSWorkspace.shared.open(url)
     }

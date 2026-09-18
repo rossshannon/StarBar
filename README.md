@@ -8,13 +8,13 @@ macOS menu bar app for rating music in iTunes/Music.app
 StarBar is based on [MainasuK/Song-Rating](https://github.com/MainasuK/Song-Rating). It adds a favourite heart and fixes clicking on macOS 27.
 
 ## Requirements
-- macOS 12 +
+- macOS 13 or later
 
 ## Build and install
 Needs Xcode. The build script finds Xcode even when `xcode-select` points at the Command Line Tools.
 
 ```bash
-./build.sh              # Release build into build/
+./build.sh              # Release build into build/ (incremental; add --clean to start over)
 ./build.sh --install    # Also replace /Applications/StarBar.app and relaunch it
 ./build.sh --watch -i   # Rebuild and reinstall on source changes (needs fswatch)
 ./build.sh --test       # Run the tests that don't need Music
@@ -22,12 +22,14 @@ Needs Xcode. The build script finds Xcode even when `xcode-select` points at the
 ./build.sh --ui-test    # Click and drag the real menu bar (see below)
 ```
 
+Every build takes its version from the nearest `v*` tag behind it and its build number from the commit count, so a newer build always has a higher number and the About window's build number can be matched to a commit with `git log`.
+
 The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 
 ### Tests and CI
-The app tests are hosted in the app, so a test run launches StarBar. `--test` skips `ScriptBridgeTests` and `iTunesLibraryTests`, which need Music playing a track and access to the media library.
+The app tests are hosted in the app, so a test run launches StarBar. `--test` never touches Music: `ScriptBridgeTests`, which reads the playing track, skips itself unless `--test-all` opts it in.
 
-The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerTests`) and the star geometry (`RatingControlGeometryTests`).
+The unit tests cover clicks and drags with a fake mouse (`RatingClickControllerTests`), the star geometry and half-star round trips (`RatingControlGeometryTests`), the rating reminder and the track announcement strip, all with fakes in place of Music.
 
 `--ui-test` runs `MenuBarRatingUITests` from the separate `StarBar UI Tests` scheme, which clicks and drags the real menu bar item. The app runs with `-UITesting YES`, so it shows the stars as if a song is playing and doesn't talk to Music. The tests take over the mouse and screen for about two minutes, so the script asks before it starts (`--yes` skips the question). The installed StarBar is quit while they run and reopened afterwards. macOS asks for authentication before UI tests can control the Mac. To stop it asking each time, run:
 
@@ -54,7 +56,28 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-The Release workflow runs the tests, builds the app with that version number, and attaches `StarBar-v1.1.0.zip` to a new GitHub release. The app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
+The Release workflow runs the tests, builds the app with that version number (and the commit count as the build number, so each release's build number is higher than the last), and attaches `StarBar-v1.1.0.zip` and its SHA-256 to a new GitHub release.
+
+Without signing secrets the app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
+
+To ship a signed and notarised build instead, add these repository secrets (Settings > Secrets and variables > Actions) and the workflow does the rest:
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | A "Developer ID Application" certificate with its private key, exported from Keychain Access as a `.p12` and base64-encoded (`base64 -i cert.p12 \| pbcopy`) |
+| `MACOS_CERTIFICATE_PASSWORD` | The password given when exporting the `.p12` |
+| `APPLE_TEAM_ID` | The ten-character team ID on the certificate |
+| `APPLE_ID` | The Apple ID that submits to the notary service |
+| `APPLE_APP_SPECIFIC_PASSWORD` | An app-specific password for that Apple ID, made at appleid.apple.com |
+
+The first three sign the build; all five notarise it and staple the ticket, so it opens without a prompt. `build.sh` signs the same way locally when `STARBAR_CODESIGN_IDENTITY` and `STARBAR_TEAM_ID` are set.
+
+Release checklist:
+
+1. Merge to `main` and wait for the Tests workflow to pass.
+2. Tag the release version and push the tag (above).
+3. Watch the Release workflow; its notes say whether the build was notarised.
+4. Download the zip from the release, check `shasum -a 256` against the `.sha256` file, and open the app once.
 
 ## Using the menu bar
 - **Click a star** to set that rating.

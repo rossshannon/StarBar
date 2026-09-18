@@ -4,8 +4,12 @@
 //
 //  Finding a song in the user's library through the Scripting Bridge.
 //
-//  These read from Music, so they only run with `--test-all`. They are read-only: nothing
-//  here writes a rating, a favourite or anything else, because a rating cannot be undone.
+//  These read from Music, so they gate themselves on STARBAR_LIVE_MUSIC_TESTS, which
+//  `./build.sh --test-all` passes through. There is no skip list in build.sh any more, so
+//  without this gate they would run on CI, where there is no Music.
+//
+//  They are read-only: nothing here writes a rating, a favourite or anything else, because a
+//  rating cannot be undone.
 //
 //  Every assertion here is a claim about Music's own API that was got wrong once and cost a
 //  real bug. They are not restatements of the code: each one can fail if Music behaves
@@ -17,6 +21,19 @@ import ScriptingBridge
 @testable import StarBar
 
 final class MusicLibraryLookupTests: XCTestCase {
+
+    override func setUpWithError() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment[ScriptBridgeTests.optInVariable] == "1",
+            "Live Music tests are opt-in: run ./build.sh --test-all with a track playing"
+        )
+        // Opted in but no Music is a failure, not a skip: a skip would let --test-all pass
+        // without ever running these
+        guard iTunesRadioStation.shared.iTunes != nil else {
+            XCTFail("STARBAR_LIVE_MUSIC_TESTS is set but Music is not running")
+            throw ScriptBridgeTests.MusicNotRunning()
+        }
+    }
 
     /// The library playlist, or nil when Music isn't running
     private func libraryPlaylist() throws -> iTunesPlaylist {

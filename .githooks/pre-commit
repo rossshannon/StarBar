@@ -8,7 +8,7 @@
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
 
-if ! git diff --cached --name-only | grep -qE '\.(swift|pbxproj|xcscheme|plist|entitlements|storyboard|xib)$|^build\.sh$|^SDK/'; then
+if ! git diff --cached --name-only | grep -qE '\.(swift|pbxproj|xcscheme|plist|entitlements|storyboard|xib)$|^build\.sh$'; then
     exit 0
 fi
 
