@@ -2,13 +2,13 @@
 //  iTunesRadioStationRatingTests.swift
 //  StarBarTests
 //
-//  The real rating path from iTunesRadioStation to a track, with a fake track in place of
-//  Music. The station is a singleton whose throttle window carries over between calls, so
-//  each test flushes what it holds and does not assume a fresh window.
+//  The real rating path from iTunesRadioStation to a track, with fake tracks in place of
+//  Music. Nothing here writes to Music, and nothing here sends it an Apple Event: the
+//  tracks are fakes, and the player record is set directly, without a broadcast.
 //
-//  These reach Music only as the test host already does: a synthetic playerInfo
-//  notification runs the usual player update, which reads. Nothing here writes to Music;
-//  the tracks rated are fakes.
+//  The station and the player are singletons whose state carries over between tests, so
+//  each test starts by flushing what is held and does not assume a fresh throttle window,
+//  and `tearDown` clears what it set.
 //
 
 import XCTest
@@ -16,10 +16,29 @@ import XCTest
 
 final class iTunesRadioStationRatingTests: XCTestCase {
 
+    private let station = iTunesRadioStation.shared
+
+    override func setUp() {
+        super.setUp()
+        station.flushHeldRatingWrite()
+    }
+
+    override func tearDown() {
+        station.flushHeldRatingWrite()
+        // Leave no fake song behind as "what is playing" for the rest of the run
+        iTunesPlayer.shared.update(nil, broadcast: false)
+        super.tearDown()
+    }
+
+    /// Make `track` the song playing, as the rating shortcuts do before each press: the
+    /// record is replaced, and nothing is broadcast
+    private func play(_ track: FakeTrack) {
+        iTunesPlayer.shared.update(track, broadcast: false)
+    }
+
     func testARatingReachesTheGivenTrackAndAHeldOneIsFlushed() {
         let track = FakeTrack(name: "Fake", rating: 0)
-        let station = iTunesRadioStation.shared
-        station.flushHeldRatingWrite()
+        play(track)
 
         station.setRating(70, on: track)
         station.setRating(90, on: track)
@@ -36,53 +55,53 @@ final class iTunesRadioStationRatingTests: XCTestCase {
     /// Half stars survive the trip: Music stores them as multiples of 10
     func testHalfStarRatingsAreWrittenUnchanged() {
         let track = FakeTrack(name: "Half", rating: 0)
-        iTunesRadioStation.shared.setRating(50, on: track)
-        iTunesRadioStation.shared.flushHeldRatingWrite()
+        play(track)
+        station.setRating(50, on: track)
+        station.flushHeldRatingWrite()
 
         XCTAssertEqual(track.rating, 50)
         XCTAssertEqual(track.userRating, 50, "written ratings read back as user ratings")
     }
 
-    /// The song a rating belongs to comes from Music's notification, so a rating held for
-    /// one song is sent, not dropped, when the next song is rated
+    /// A rating held for one song is sent, not dropped, when the next song is rated. The song
+    /// is told from the player record alone, with **no notification from Music in between**:
+    /// that is what a rating shortcut pressed straight after a track change looks like, and
+    /// an identity taken from the last notification lost the held rating here.
     func testARatingHeldForThePreviousSongIsSentWhenTheNextSongIsRated() {
-        let first = FakeTrack(name: "First", rating: 0)
-        let second = FakeTrack(name: "Second", rating: 0)
-        let station = iTunesRadioStation.shared
-        station.flushHeldRatingWrite()
+        let first = FakeTrack(name: "First", persistentID: "00000000000000A1", rating: 0)
+        let second = FakeTrack(name: "Second", persistentID: "00000000000000B2", rating: 0)
 
-        station.playInfoChanged(playerInfoNotification(name: "First", persistentID: 1))
+        play(first)
         station.setRating(60, on: first)
         station.setRating(80, on: first)
         XCTAssertNotEqual(first.rating, 80, "the second rating is held")
 
-        station.playInfoChanged(playerInfoNotification(name: "Second", persistentID: 2))
+        play(second)
         station.setRating(40, on: second)
         XCTAssertEqual(first.ratingsWritten.last, 80, "the held rating for the first song went out")
+        XCTAssertNotEqual(second.rating, 40, "and the new one is held in its place")
 
         station.flushHeldRatingWrite()
         XCTAssertEqual(second.ratingsWritten.last, 40)
-        XCTAssertEqual(first.ratingsWritten.last, 80, "and the first song got nothing more")
+        XCTAssertEqual(first.ratingsWritten.last, 80, "the first song got nothing more")
     }
 
-    /// Apple Music catalog tracks can arrive with no persistent ID at all; the names then
-    /// tell two songs apart, so the same rule still holds
-    func testSongsWithoutAPersistentIDAreToldApartByName() {
-        let first = FakeTrack(name: "Catalog One", rating: 0)
-        let second = FakeTrack(name: "Catalog Two", rating: 0)
-        let station = iTunesRadioStation.shared
-        station.flushHeldRatingWrite()
+    /// The shortcuts replace the player record on every press. A new record for the same
+    /// song must still count as the same song, or a held-down key would send every repeat.
+    func testANewRecordForTheSameSongStillReplacesTheHeldRating() {
+        let track = FakeTrack(name: "Same", persistentID: "00000000000000C3", rating: 0)
 
-        station.playInfoChanged(playerInfoNotification(name: "Catalog One", persistentID: nil))
-        station.setRating(60, on: first)
-        station.setRating(80, on: first)
-
-        station.playInfoChanged(playerInfoNotification(name: "Catalog Two", persistentID: nil))
-        station.setRating(40, on: second)
-        XCTAssertEqual(first.ratingsWritten.last, 80, "the held rating went to the song it was chosen for")
+        play(track)
+        station.setRating(20, on: track)
+        let writtenBeforeTheBurst = track.ratingsWritten.count
+        for rating in [40, 60, 80] {
+            play(track)     // a fresh record, as each key repeat makes
+            station.setRating(rating, on: track)
+        }
+        XCTAssertEqual(track.ratingsWritten.count, writtenBeforeTheBurst, "the repeats were held, not sent one by one")
 
         station.flushHeldRatingWrite()
-        XCTAssertEqual(second.ratingsWritten.last, 40)
+        XCTAssertEqual(track.ratingsWritten.last, 80)
     }
 
     func testSongIdentityPrefersThePersistentIDAndFallsBackToTheNames() throws {
@@ -98,10 +117,12 @@ final class iTunesRadioStationRatingTests: XCTestCase {
 
     // MARK: - A refused write
 
-    /// Only a refused property write schedules the re-read; a failed read does not
-    func testOnlyARefusedWriteSchedulesARereadOfThePlayer() {
-        let station = iTunesRadioStation.shared
+    /// Only a refused property write schedules the re-read, and two refusals mean one read
+    func testOnlyARefusedWriteSchedulesOneRereadOfThePlayer() {
         let error = NSError(domain: NSOSStatusErrorDomain, code: -54, userInfo: nil)
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
 
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x67657464).aeDesc!, withError: error)   // core/getd
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
@@ -110,11 +131,34 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)   // core/setd
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "a refused write schedules one re-read")
+        XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "a refused write schedules a re-read")
+        XCTAssertEqual(updates, 0, "and it has not run yet")
 
-        // Let it run, so it doesn't fire under a later test
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.2))
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.3))
         XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite)
+        // Each re-read ends in one player update. Two would mean the refusals were not
+        // coalesced. (A real track change in Music during this third of a second would add
+        // one; on CI there is no Music.)
+        XCTAssertEqual(updates, 1, "two refusals, one re-read")
+    }
+
+    /// While a rating is held the re-read waits for it: reading first would repaint the stars
+    /// with a value Music is about to replace, and nothing afterwards would correct them
+    func testTheRereadWaitsWhileARatingIsHeld() {
+        let track = FakeTrack(name: "Held", rating: 0)
+        play(track)
+        station.setRating(60, on: track)
+        station.setRating(80, on: track)    // held
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        let error = NSError(domain: NSOSStatusErrorDomain, code: -54, userInfo: nil)
+        _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.3))
+
+        XCTAssertEqual(updates, 0, "no re-read while the rating is held")
+        XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "it is waiting for the held rating instead")
     }
 
     /// The failed-event handler tells a property write from a read by the event's class and
@@ -137,20 +181,6 @@ final class iTunesRadioStationRatingTests: XCTestCase {
             returnID: AEReturnID(kAutoGenerateReturnID),
             transactionID: AETransactionID(kAnyTransactionID)
         )
-    }
-
-    /// What Music posts on a track change, with the keys the station decodes
-    private func playerInfoNotification(name: String, persistentID: Int?) -> Notification {
-        var userInfo: [String: Any] = [
-            "Name": name,
-            "Artist": "Artist",
-            "Album": "Album",
-            "Player State": "Playing",
-        ]
-        if let persistentID = persistentID {
-            userInfo["Persistent ID"] = persistentID
-        }
-        return Notification(name: Notification.Name("com.apple.iTunes.playerInfo"), object: nil, userInfo: userInfo)
     }
 
 }

@@ -61,8 +61,9 @@ final class iTunesRadioStation {
     /// The longest `setRating(_:)` can hold a rating before saving it to Music.
     ///
     /// A rating usually goes out at once. Only one arriving while a previous write is still
-    /// fresh waits, and never longer than this, so it stays the upper bound anything
-    /// downstream has to allow for.
+    /// fresh waits, and never longer than this plus the hold timer's tolerance (0.2 s, from
+    /// `RunLoopClock`), so that sum is the upper bound anything downstream has to allow for.
+    /// `TrackAnnouncementController.pendingRatingLifetime` allows a full second over it.
     static let ratingSaveDelay: TimeInterval = 2.0
 
     /// How long after Music refuses a write the player is read again, so the stars fall back
@@ -71,7 +72,8 @@ final class iTunesRadioStation {
     static let refusedWriteRereadDelay: TimeInterval = 0.5
     /// The re-read scheduled after a refused write, so several refusals mean one read
     private var refusedWriteReread: DispatchWorkItem?
-    /// True while a re-read after a refused write is waiting to run
+    /// True while a re-read after a refused write is waiting to run. Not private only so the
+    /// tests can see it, like `classAndID(of:)`.
     var hasPendingRereadAfterRefusedWrite: Bool {
         return refusedWriteReread != nil
     }
@@ -263,6 +265,9 @@ extension iTunesRadioStation {
     ///   the bug this branch exists to fix -- and a held write could resolve the *next* song.
     ///   Callers pass `PlayingTrack.ratingTrack`, which is already the user's own copy when
     ///   the playing track cannot hold a rating.
+    ///
+    ///   Main thread only: `RatingWriter` checks, and so does everything else that reads the
+    ///   `PlayingTrack` record.
     func setRating(_ rating: Int, on track: iTunesTrack?) {
         guard let targetTrack = track else {
             os_log("%{public}s[%{public}ld], %{public}s: nowhere to put a rating for this song, dropping it", ((#file as NSString).lastPathComponent), #line, #function)
@@ -272,10 +277,18 @@ extension iTunesRadioStation {
         // Note: latestPlayInfo could not set when App just launch without recieved playInfoChanged notification
         let name = latestPlayInfo?.name ?? targetTrack.name ?? "nil"
 
-        // Which song the rating was chosen for comes from the last notification, which costs
-        // nothing: the rating shortcuts replace the `PlayingTrack` record on every press, so
-        // neither the track object nor a fresh read of its ID would do for a held-down key
-        ratingWriter.rate(RatingWriter.Request(rating: rating, track: targetTrack, songIdentity: latestPlayInfo?.songIdentity, name: name))
+        // Which song the rating was chosen for comes from the same record the caller took the
+        // target from, so the two cannot describe different songs. Music's notification would
+        // be free but lags: the rating shortcuts refresh the record without waiting for it,
+        // and a stale identity would make the next song look like this one. The writer only
+        // asks when a rating is already held or this one is about to be. The read is an Apple
+        // Event the first time on a record and remembered after that. The notification's
+        // identity is the fallback for a record whose ID won't read; mixing the two shapes can
+        // only make two ratings look like different songs, which costs an extra write and
+        // never loses one.
+        ratingWriter.rate(RatingWriter.Request(rating: rating, track: targetTrack, name: name, songIdentity: { [weak self] in
+            iTunesPlayer.shared.playing?.persistentID ?? self?.latestPlayInfo?.songIdentity
+        }))
     }
 
     /// Send a rating still waiting for the throttle window, now. `applicationWillTerminate`
@@ -487,6 +500,9 @@ extension iTunesRadioStation {
     @objc private func musicDidTerminate(_ notification: Notification) {
         guard iTunesRadioStation.isMusic(notification) else { return }
         os_log("%{public}s[%{public}ld], %{public}s: Music quit, clearing the player", ((#file as NSString).lastPathComponent), #line, #function)
+        // A rating still held has nowhere to go, and its timer would send an Apple Event to a
+        // track whose app has quit
+        ratingWriter.discard()
         // The observer runs iTunesPlayer.shared.update(), which finds Music not running
         latestPlayInfo = nil
     }
@@ -538,14 +554,22 @@ extension iTunesRadioStation: SBApplicationDelegate {
     /// `readPlayerAgain`, so the read and the update's observers run under the short Apple
     /// Event timeout: a hung Music is a likely reason for the refusal, and the default
     /// timeout would hold the main thread for about two minutes.
-    private func scheduleRereadAfterRefusedWrite() {
+    ///
+    /// While a rating is still held the read waits for it: the read repaints the stars with
+    /// Music's value, and a held rating is one Music does not have yet, so reading first
+    /// would put the old stars back and nothing afterwards would correct them.
+    private func scheduleRereadAfterRefusedWrite(after delay: TimeInterval = iTunesRadioStation.refusedWriteRereadDelay) {
         refusedWriteReread?.cancel()
         let reread = DispatchWorkItem { [weak self] in
-            self?.refusedWriteReread = nil
-            self?.readPlayerAgain(because: "Music refused a write")
+            guard let self = self else { return }
+            self.refusedWriteReread = nil
+            guard self.ratingWriter.heldRating == nil else {
+                return self.scheduleRereadAfterRefusedWrite(after: iTunesRadioStation.ratingSaveDelay)
+            }
+            self.readPlayerAgain(because: "Music refused a write")
         }
         refusedWriteReread = reread
-        DispatchQueue.main.asyncAfter(deadline: .now() + iTunesRadioStation.refusedWriteRereadDelay, execute: reread)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: reread)
     }
 
     /// The event class and ID (such as `core`/`setd` for a property write) as four-character

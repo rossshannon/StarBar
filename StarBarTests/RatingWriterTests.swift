@@ -15,16 +15,19 @@ final class RatingWriterTests: XCTestCase {
     /// Every write in order, as "song:rating", so a test reads what happened at a glance
     private var written: [String]!
     private var songs: [String: FakeTrack]!
+    /// How many times the writer asked which song a rating was for
+    private var identityReads = 0
 
     override func setUp() {
         super.setUp()
         clock = FakeClock()
         written = []
+        identityReads = 0
         songs = ["1": FakeTrack(name: "song 1"), "2": FakeTrack(name: "song 2"), "?": FakeTrack(name: "unknown")]
         writer = RatingWriter(interval: 2, clock: clock) { [unowned self] request in
             // Perform the write as the station does, so the tracks record it too
             request.track.setRating?(request.rating)
-            self.written.append("\(request.songIdentity ?? "?"):\(request.rating)")
+            self.written.append("\(request.name):\(request.rating)")
         }
     }
 
@@ -35,7 +38,10 @@ final class RatingWriterTests: XCTestCase {
 
     private func rate(_ rating: Int, song: String? = "1") {
         let track = songs[song ?? "?"]!
-        writer.rate(RatingWriter.Request(rating: rating, track: track, songIdentity: song, name: track.name))
+        writer.rate(RatingWriter.Request(rating: rating, track: track, name: song ?? "?", songIdentity: { [unowned self] in
+            self.identityReads += 1
+            return song
+        }))
     }
 
     func testTheFirstRatingGoesAtOnce() {
@@ -44,6 +50,27 @@ final class RatingWriterTests: XCTestCase {
         XCTAssertEqual(written, ["1:60"])
         XCTAssertNil(writer.heldRating)
         XCTAssertTrue(clock.pendingOneShots.isEmpty)
+    }
+
+    /// Asking which song a rating is for can cost an Apple Event, so a rating that goes
+    /// straight out with nothing held must not ask
+    func testALoneRatingNeverAsksWhichSongItIsFor() {
+        rate(60)
+        clock.advance(by: 5)
+        rate(80)
+
+        XCTAssertEqual(written, ["1:60", "1:80"])
+        XCTAssertEqual(identityReads, 0)
+    }
+
+    func testAHeldRatingAsksOncePerRating() {
+        rate(60)
+        clock.advance(by: 0.5)
+        rate(80)    // about to be held: asks once
+        clock.advance(by: 0.5)
+        rate(100)   // compared with the held one, then held itself: still once
+
+        XCTAssertEqual(identityReads, 2)
     }
 
     func testARatingInsideTheWindowWaitsForItToClose() {
@@ -118,7 +145,7 @@ final class RatingWriterTests: XCTestCase {
         XCTAssertEqual(written, ["1:60", "1:100"])
     }
 
-    /// Two ratings without an identity (before Music's first notification) count as the same song
+    /// Two ratings whose song can't be told count as the same song
     func testUnknownIdentitiesCountAsTheSameSong() {
         rate(60, song: nil)
         clock.advance(by: 0.5)
@@ -129,6 +156,18 @@ final class RatingWriterTests: XCTestCase {
         XCTAssertEqual(written, ["?:60"])
         clock.fireOneShot()
         XCTAssertEqual(written, ["?:60", "?:100"])
+    }
+
+    /// A known song after an unknown one is a different song: the held rating is kept
+    func testAKnownSongAfterAnUnknownOneDoesNotReplaceIt() {
+        rate(60, song: nil)
+        clock.advance(by: 0.5)
+        rate(80, song: nil)
+        clock.advance(by: 0.5)
+        rate(40, song: "2")
+
+        XCTAssertEqual(written, ["?:60", "?:80"])
+        XCTAssertEqual(writer.heldRating, 40)
     }
 
     /// Quitting inside the window must not lose the last rating
@@ -148,6 +187,20 @@ final class RatingWriterTests: XCTestCase {
         rate(60)
         writer.flush()
         XCTAssertEqual(written, ["1:60"])
+    }
+
+    /// Music quitting leaves nowhere to send a held rating, and its timer must not fire
+    func testDiscardDropsTheHeldRatingAndItsTimer() {
+        rate(60)
+        clock.advance(by: 0.5)
+        rate(80)
+
+        writer.discard()
+
+        XCTAssertNil(writer.heldRating)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty, "the timer was cancelled")
+        XCTAssertEqual(written, ["1:60"], "nothing more was sent")
+        XCTAssertEqual(songs["1"]?.ratingsWritten, [60])
     }
 
     /// A held write that has gone out starts a fresh window, so the next rating waits too
