@@ -82,6 +82,28 @@ final class PlayingTrack {
         return ratingTrack ?? track
     }
 
+    /// The track the announcement strip's artwork is read from: the user's own copy when they
+    /// have one, the playing track otherwise.
+    ///
+    /// **Preferring the copy is the settled part.** A catalog track can answer the artwork
+    /// read with `artworks = 0` and raise, which is why a song the user owned showed the
+    /// placeholder while its library copy returned the sleeve perfectly well.
+    ///
+    /// **The fallback is a measured risk, not an oversight.** Music can answer a catalog
+    /// track's artwork read with a *different song's* cover: on 2026-09-18, while naming its
+    /// own current track "Strawberry Blonde", it returned the sleeve of the Brian Eno album
+    /// played before it, and went on doing so for minutes. Nothing on an artwork says which
+    /// song it belongs to, so that cannot be detected here.
+    ///
+    /// Refusing to read a catalog track's artwork at all was tried the same day and reverted
+    /// within minutes: two other catalog tracks measured right after returned their own
+    /// covers correctly, so the rule blanked the artwork for every Apple Music song to avoid
+    /// an occasional wrong one. Don't reinstate it without evidence that being wrong is the
+    /// common case rather than the exception.
+    var artworkTrack: iTunesTrack? {
+        return ratingTrack ?? track
+    }
+
     /// The song has just been added to the library, so that copy now carries its rating.
     ///
     /// The playing track stays a catalog track for the rest of the song -- it never becomes
