@@ -417,6 +417,35 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(view.hasSheen, "blur: never")
     }
 
+    func testGlassEdgeIsDrawnOnlyInLightAppearances() throws {
+        let view = TrackAnnouncementContentView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        view.tintAlpha = 0
+        view.sheen = .init(rect: NSRect(x: 10, y: -8, width: 580, height: 104), cornerRadius: 8)
+
+        for appearance in [NSAppearance.Name.aqua, .darkAqua, .accessibilityHighContrastAqua, .accessibilityHighContrastDarkAqua] {
+            view.appearance = try XCTUnwrap(NSAppearance(named: appearance))
+            let bitmap = try XCTUnwrap(NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 600, pixelsHigh: 96,
+                                                       bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                                       isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0))
+            let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = context
+            NSColor.clear.setFill()
+            view.bounds.fill(using: .copy)
+            view.effectiveAppearance.performAsCurrentDrawingAppearance { view.draw(view.bounds) }
+            NSGraphicsContext.restoreGraphicsState()
+
+            // This column is clear of artwork and text: only the top edge can paint it.
+            let edgeAlpha = (0..<96).compactMap { bitmap.colorAt(x: 500, y: $0)?.alphaComponent }.max() ?? 0
+            let isDark = appearance == .darkAqua || appearance == .accessibilityHighContrastDarkAqua
+            if isDark {
+                XCTAssertEqual(edgeAlpha, 0, "No extra white border in \(appearance)")
+            } else {
+                XCTAssertGreaterThan(edgeAlpha, 0.1, "Keep the glint in \(appearance)")
+            }
+        }
+    }
+
     func testTheArtworkIsRoundedOnTheGlassStripOnly() throws {
         try skipWithoutLiquidGlass()
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))

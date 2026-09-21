@@ -16,7 +16,7 @@ import os.log
 /// default), `announcementGlassCornerRadius` (points at scale 1;
 /// `TrackAnnouncementLayout.glassCornerRadius` by default; bigger corners lens more),
 /// `announcementGlassEdgeLine` (bool; true by default: the bright line along the top edge
-/// and corners), `announcementGlassSheen` (bool; false by default: the drawn rim light and
+/// and corners in light mode), `announcementGlassSheen` (bool; false by default: the drawn rim light and
 /// shade that suggest a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default:
 /// the glass view's own opacity, which fades frost and rim together, since the API has no
 /// frost dial). They are read when the glass is built, so switch the strip style away and
@@ -347,6 +347,11 @@ final class TrackAnnouncementContentView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         if tintAlpha > 0 {
             tintColor.withAlphaComponent(tintAlpha).setFill()
@@ -394,7 +399,9 @@ final class TrackAnnouncementContentView: NSView {
             NSGradient(starting: NSColor.black.withAlphaComponent(TrackAnnouncementLayout.glassSheenShadeAlpha), ending: .clear)?
                 .draw(in: shade, angle: 90)
         }
-        if sheen.edgeLine {
+        // In dark mode the native glass already defines its edge; our extra white stroke
+        // reads as a border rather than a glint. Match the view, including high contrast.
+        if sheen.edgeLine && effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua {
             // The specular line along the top edge, following the rounded corners: the
             // shape stroked twice as wide and clipped, so only the inner half shows
             let edgeWidth = TrackAnnouncementLayout.glassSheenEdgeWidth * scale
