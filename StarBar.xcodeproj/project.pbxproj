@@ -48,6 +48,9 @@
 		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
 		FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000010 /* PreferencesViewControllerTests.swift */; };
 		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
+		5A7E1A0000000000000001F4 /* StarRolloutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F3 /* StarRolloutTests.swift */; };
+		5A7E1A0000000000000001FA /* StarCollapseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F9 /* StarCollapseTests.swift */; };
+		5A7E1A0000000000000001FE /* StarRatingTransitionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001FD /* StarRatingTransitionTests.swift */; };
 		5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */; };
 		5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */; };
 		DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216922CB186F007FCF40 /* WindowManager.swift */; };
@@ -62,6 +65,12 @@
 		5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */; };
 		FB0000000000000000000002 /* RatingWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000001 /* RatingWriter.swift */; };
 		5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D3 /* StarSweep.swift */; };
+		5A7E1A0000000000000001F2 /* StarRollout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F1 /* StarRollout.swift */; };
+		5A7E1A0000000000000001F8 /* StarCollapse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F7 /* StarCollapse.swift */; };
+		5A7E1A000000000000000206 /* MenuBarStripLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000205 /* MenuBarStripLayout.swift */; };
+		5A7E1A000000000000000202 /* MenuBarAnimationTiming.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000201 /* MenuBarAnimationTiming.swift */; };
+		5A7E1A0000000000000001FC /* StarRatingTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001FB /* StarRatingTransition.swift */; };
+		5A7E1A0000000000000001F6 /* MenuBarPlaybackState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F5 /* MenuBarPlaybackState.swift */; };
 		5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D5 /* RatingReminderController.swift */; };
 		5A7E1A0000000000000000D8 /* RatingReminderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D7 /* RatingReminderTests.swift */; };
 		5A7E1A00000000000001B6 /* SmartPunctuationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */; };
@@ -154,6 +163,9 @@
 		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
 		FA0000000000000000000010 /* PreferencesViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001F3 /* StarRolloutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRolloutTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001F9 /* StarCollapseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarCollapseTests.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001FD /* StarRatingTransitionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRatingTransitionTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlAddToLibraryTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlDragTests.swift; sourceTree = "<group>"; };
 		DB95216922CB186F007FCF40 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
@@ -168,6 +180,12 @@
 		5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottle.swift; sourceTree = "<group>"; };
 		FB0000000000000000000001 /* RatingWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriter.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D3 /* StarSweep.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarSweep.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001F1 /* StarRollout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRollout.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001F7 /* StarCollapse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarCollapse.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000205 /* MenuBarStripLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStripLayout.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000201 /* MenuBarAnimationTiming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarAnimationTiming.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001FB /* StarRatingTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRatingTransition.swift; sourceTree = "<group>"; };
+		5A7E1A0000000000000001F5 /* MenuBarPlaybackState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPlaybackState.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D5 /* RatingReminderController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D7 /* RatingReminderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderTests.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001B5 /* SmartPunctuationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPunctuationTests.swift; sourceTree = "<group>"; };
@@ -269,6 +287,9 @@
 				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
 				FA0000000000000000000010 /* PreferencesViewControllerTests.swift */,
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
+				5A7E1A0000000000000001F3 /* StarRolloutTests.swift */,
+				5A7E1A0000000000000001F9 /* StarCollapseTests.swift */,
+				5A7E1A0000000000000001FD /* StarRatingTransitionTests.swift */,
 				5A7E1A0000000000000000F9 /* RatingControlAddToLibraryTests.swift */,
 				5A7E1A0000000000000000A3 /* RatingControlDragTests.swift */,
 				5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */,
@@ -347,6 +368,12 @@
 				5A7E1A0000000000000000FD /* LibraryAdd.swift */,
 				5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
+				5A7E1A0000000000000001F1 /* StarRollout.swift */,
+				5A7E1A0000000000000001F7 /* StarCollapse.swift */,
+				5A7E1A000000000000000205 /* MenuBarStripLayout.swift */,
+				5A7E1A000000000000000201 /* MenuBarAnimationTiming.swift */,
+				5A7E1A0000000000000001FB /* StarRatingTransition.swift */,
+				5A7E1A0000000000000001F5 /* MenuBarPlaybackState.swift */,
 				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
 				5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */,
 				FB0000000000000000000001 /* RatingWriter.swift */,
@@ -585,6 +612,12 @@
 				5A7E1A0000000000000000FE /* LibraryAdd.swift in Sources */,
 				5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
+				5A7E1A0000000000000001F2 /* StarRollout.swift in Sources */,
+				5A7E1A0000000000000001F8 /* StarCollapse.swift in Sources */,
+				5A7E1A000000000000000206 /* MenuBarStripLayout.swift in Sources */,
+				5A7E1A000000000000000202 /* MenuBarAnimationTiming.swift in Sources */,
+				5A7E1A0000000000000001FC /* StarRatingTransition.swift in Sources */,
+				5A7E1A0000000000000001F6 /* MenuBarPlaybackState.swift in Sources */,
 				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
 				5A7E1A0000000000000000F4 /* RatingWriteThrottle.swift in Sources */,
 				FB0000000000000000000002 /* RatingWriter.swift in Sources */,
@@ -625,6 +658,9 @@
 				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
 				FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */,
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
+				5A7E1A0000000000000001F4 /* StarRolloutTests.swift in Sources */,
+				5A7E1A0000000000000001FA /* StarCollapseTests.swift in Sources */,
+				5A7E1A0000000000000001FE /* StarRatingTransitionTests.swift in Sources */,
 				5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */,
 				5A7E1A0000000000000000A4 /* RatingControlDragTests.swift in Sources */,
 				5A7E1A0000000000000000C4 /* RatingClickControllerTests.swift in Sources */,

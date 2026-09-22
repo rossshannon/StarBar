@@ -37,18 +37,21 @@ final class PopoverProxy: NSObject, NSPopoverDelegate {
 final class MenuBarRatingControl {
 
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    let ratingControl = RatingControl(rating: 0)
+    let ratingControl = RatingControl(rating: 0, drawsFavorite: false)
     let menuBarIcon: MenuBarIcon
-    /// Coloured heart shown over the empty heart slot in the template stars image
+    /// Both heart appearances share a view anchored independently of the centred strip.
     private let favoriteHeartView: NSImageView = {
         let imageView = PassthroughImageView()
         imageView.imageScaling = .scaleNone
         imageView.isHidden = true
-        // Stay centred with the stars image when the button resizes after statusItem.length changes
-        imageView.autoresizingMask = [.minXMargin, .maxXMargin, .minYMargin, .maxYMargin]
+        // Follow the actual button right edge when AppKit applies a pending resize.
+        imageView.autoresizingMask = MenuBarRatingControl.favoriteHeartAutoresizingMask
         return imageView
     }()
     
+    private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
+    private lazy var outlinedHeartImage = Stars.outlinedFavoriteHeartImage(size: ratingControl.starSize)
+
     /// Shown in the plus's place while the song is being added: the turning circle with a gap
     /// that Apple Music itself shows. Music takes about 3.5 seconds, so the button has to look
     /// busy, and this is the indicator the user has just seen in Music.
@@ -75,7 +78,7 @@ final class MenuBarRatingControl {
             pointer: StatusButtonPointer(button: statusItem.button, ratingControl: ratingControl),
             // With half stars on, the left half of a star (or the gap before it) sets a half star
             behavior: { UserDefaults.standard.allowHalfStar ? .both : .full },
-            isStopped: { [unowned self] in self.isStop },
+            isStopped: { [unowned self] in !self.playbackState.canInteract },
             toggleFavorite: { [unowned self] in self.toggleFavorite() }
         )
         controller.addToLibrary = { [unowned self] in self.addCurrentTrackToLibrary() }
@@ -101,9 +104,26 @@ final class MenuBarRatingControl {
     /// How long a heart the user set wins over Music's reads
     static let favoriteWriteWindow: TimeInterval = 2.0
 
-    /// Steps `statusItem.length` while the strip changes width between the two modes
+    /// Steps the current width or in-place glyph transition
     private var widthTimer: RatingReminderTimer?
+    private var displayedStopped = true
+    private var displayedMode: RatingControl.Mode = .rating
+    private var rolloutProgress: Double?
+    private var collapseProgress: Double?
+    private var ratingTransitionTarget: [Star.Style]?
+    private var displayedContentWidth: CGFloat?
+    private var stripLayout: MenuBarStripLayout {
+        MenuBarStripLayout(starSize: ratingControl.starSize, spacing: ratingControl.spacing)
+    }
     private let widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main })
+    private var displayedSongIdentity: String?
+    private lazy var playbackState = MenuBarPlaybackState { [weak self] in
+        guard let self = self else { return }
+        os_log("Music quit; returning to the stopped icon and resetting the menu bar session")
+        self.displayedSongIdentity = nil
+        self.updateGestureRecognizerBehavior()
+        self.updateMenuBar()
+    }
     /// How long the status item takes to grow or shrink when the mode changes
     static let modeChangeDuration: TimeInterval = 0.22
     /// Bell and star sweep when an unrated track nears its end. Nil in UI-test mode, which
@@ -150,8 +170,6 @@ final class MenuBarRatingControl {
                     self.playState = .unknown
                 }
             }
-
-            updateMenuBar()
         }
     }
     private(set) var playState: PlayInfo.PlayerState = .unknown {
@@ -165,7 +183,7 @@ final class MenuBarRatingControl {
     }
 
     var isStop: Bool {
-        return playState == .unknown
+        return playbackState.isStopped
     }
 
     /// Say why a rating shortcut did nothing. Silence here reads as a broken shortcut.
@@ -182,8 +200,8 @@ final class MenuBarRatingControl {
     }
     
     func updateGestureRecognizerBehavior() {
-        // deliver .leftMouseUp action without delay when player stop
-        clickGestureRecognizer.delaysPrimaryMouseButtonEvents = !isStop
+        // Deliver the menu action immediately when there is no current track to rate.
+        clickGestureRecognizer.delaysPrimaryMouseButtonEvents = playbackState.canInteract
     }
 
     init() {
@@ -195,7 +213,7 @@ final class MenuBarRatingControl {
         }
 
         button.image = ratingControl.starsImage
-        favoriteHeartView.image = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
+        favoriteHeartView.image = outlinedHeartImage
         button.addSubview(favoriteHeartView)
         button.addSubview(addToLibrarySpinner)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -222,6 +240,7 @@ final class MenuBarRatingControl {
         if MenuBarRatingControl.isUITesting {
             // Property observers don't run inside init, so update by hand
             playState = .playing
+            _ = playbackState.update(hasTrack: true, isStopped: false, musicIsRunning: true)
             updateGestureRecognizerBehavior()
             updateMenuBar()
             return
@@ -257,15 +276,16 @@ final class MenuBarRatingControl {
         NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.iTunesRadioRequestTrackRating1(_:)), name: .iTunesRadioRequestTrackRating1, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.iTunesRadioRequestTrackRating0(_:)), name: .iTunesRadioRequestTrackRating0, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.windowDidResize(_:)), name: NSWindow.didResizeNotification, object: nil)
+
+        // Establish the compact launch state before any player or window notification.
+        updateMenuBar(animate: false)
     }
 
 }
 
 extension MenuBarRatingControl {
 
-    /// Status item width for the state it is in: the whole strip while playing, and just the
-    /// icon when stopped. The strip is narrower in `.addToLibrary`, which has two glyphs
-    /// before the heart instead of five.
+    /// Width of the visible content, independent of the fixed active menu-bar allocation.
     private var menuBarWidth: CGFloat {
         let margin: CGFloat = 4 + 4
         return isStop
@@ -273,13 +293,135 @@ extension MenuBarRatingControl {
             : margin + ratingControl.starsImage.size.width
     }
 
-    private func updateMenuBar() {
-        statusItem.length = menuBarWidth
-        statusItem.button?.image = !isStop ? ratingControl.starsImage : menuBarIcon.image
+    private func updateMenuBar(animate: Bool = true, previousStars: Stars? = nil, animateRatingChange: Bool = false) {
+        let wasStopped = displayedStopped
+        let changed = displayedStopped != isStop || displayedMode != ratingControl.mode
+        let rolls = StarRollout.shouldRoll(wasStopped: wasStopped, isStopped: isStop,
+                                          previousMode: displayedMode, mode: ratingControl.mode)
+        let collapses = StarCollapse.shouldCollapse(wasStopped: wasStopped, isStopped: isStop,
+                                                    previousMode: displayedMode, mode: ratingControl.mode)
+        let outgoingStars = previousStars ?? ratingControl.stars
+        // Animate changes of control width even when they belong to a new song.
+        let changesRating = animateRatingChange && StarRatingTransition.shouldAnimate(
+            wasStopped: wasStopped, isStopped: isStop, previousMode: displayedMode,
+            mode: ratingControl.mode, from: outgoingStars, to: ratingControl.stars)
+        let shouldAnimate = animate || rolls || collapses || changesRating
+        displayedStopped = isStop
+        displayedMode = ratingControl.mode
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
+        updateAccessibility()
+
+        // A library save or rating update must not restart the current motion.
+        let canContinueRatingTransition = ratingTransitionTarget == nil
+            || (previousStars != nil && ratingTransitionTarget == ratingControl.stars.stars.map { $0.style })
+        if shouldAnimate, widthTimer != nil, !changed, !changesRating, canContinueRatingTransition {
+            updateFavoriteHeartView()
+            updateAddToLibrarySpinner()
+            return
+        }
+
+        let fromWidth = displayedContentWidth ?? statusItem.length
+        widthTimer?.invalidate()
+        widthTimer = nil
+        rolloutProgress = nil
+        collapseProgress = nil
+        ratingTransitionTarget = nil
+        let toWidth = menuBarWidth
+        // Change the native allocation only when entering/leaving a playback session.
+        // Mode changes animate the contents inside this fixed canvas.
+        statusItem.length = isStop ? toWidth : stripLayout.statusItemWidth
+        guard shouldAnimate, (changed || changesRating), !isStop, fromWidth > 0,
+              (fromWidth != toWidth || changesRating),
+              !MenuBarRatingControl.isUITesting,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            finishWidthAnimation()
+            return
+        }
+
+        let duration = changesRating ? StarRatingTransition.duration
+            : (rolls ? StarRollout.duration : (collapses ? StarCollapse.duration : Self.modeChangeDuration))
+        let start = widthClock.now()
+        if changesRating {
+            ratingTransitionTarget = ratingControl.stars.stars.map { $0.style }
+            displayedContentWidth = toWidth
+            os_log("Starting in-place menu bar rating transition")
+            drawRatingTransition(from: outgoingStars, progress: 0)
+        } else if rolls {
+            rolloutProgress = 0
+            os_log("Starting menu bar star rollout from %{public}s", wasStopped ? "stopped icon" : "add-to-library button")
+            drawRollout(progress: 0, fromWidth: fromWidth, toWidth: toWidth)
+        } else if collapses {
+            os_log("Starting menu bar star collapse to add-to-library button")
+            drawCollapse(stars: outgoingStars, progress: 0, fromWidth: fromWidth, toWidth: toWidth)
+        } else {
+            statusItem.button?.image = stripLayout.image(containing: ratingControl.starsImage)
+        }
+        var drawnFrames = 0
+        var timing = MenuBarAnimationTiming(duration: duration)
+        var firstFrameDelay: TimeInterval?
+        widthTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            guard let self = self else { return }
+            let elapsed = self.widthClock.now().timeIntervalSince(start)
+            if firstFrameDelay == nil { firstFrameDelay = elapsed }
+            let progress = timing.progress(at: self.widthClock.now())
+            if progress >= 1 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                if changesRating || collapses {
+                    os_log("Completed menu bar transition: %{public}d frames, first-frame wait %{public}.3f s", drawnFrames, firstFrameDelay ?? 0)
+                }
+                self.finishWidthAnimation()
+                return
+            }
+            drawnFrames += 1
+            if changesRating {
+                self.drawRatingTransition(from: outgoingStars, progress: progress)
+            } else if rolls {
+                self.drawRollout(progress: progress, fromWidth: fromWidth, toWidth: toWidth)
+            } else if collapses {
+                self.drawCollapse(stars: outgoingStars, progress: progress, fromWidth: fromWidth, toWidth: toWidth)
+            } else {
+                let eased = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
+                self.displayedContentWidth = fromWidth + (toWidth - fromWidth) * eased
+            }
+            self.updateFavoriteHeartView()
+            self.updateAddToLibrarySpinner()
+        }
+    }
+
+    private func drawRatingTransition(from stars: Stars, progress: Double) {
+        statusItem.button?.image = StarRatingTransition.image(from: stars, to: ratingControl.stars, progress: progress)
+        updateFavoriteHeartView()
+    }
+
+    private func drawRollout(progress: Double, fromWidth: CGFloat, toWidth: CGFloat) {
+        rolloutProgress = progress
+        let width = StarRollout.width(from: fromWidth, to: toWidth, progress: progress)
+        displayedContentWidth = width
+        statusItem.button?.image = stripLayout.image(containing: StarRollout.image(
+            stars: ratingControl.stars, width: max(1, width - 8), progress: progress))
+        updateFavoriteHeartView()
+    }
+
+    private func drawCollapse(stars: Stars, progress: Double, fromWidth: CGFloat, toWidth: CGFloat) {
+        collapseProgress = progress
+        let width = StarCollapse.width(from: fromWidth, to: toWidth, progress: progress)
+        displayedContentWidth = width
+        statusItem.button?.image = stripLayout.image(containing: StarCollapse.image(
+            stars: stars, width: max(1, width - 8), progress: progress,
+            isFavorited: ratingControl.isFavorited, isPending: ratingControl.isAddingToLibrary))
+        updateFavoriteHeartView()
+    }
+
+    private func finishWidthAnimation() {
+        widthTimer?.invalidate()
+        widthTimer = nil
+        rolloutProgress = nil
+        collapseProgress = nil
+        ratingTransitionTarget = nil
+        displayedContentWidth = menuBarWidth
+        statusItem.length = isStop ? menuBarWidth : stripLayout.statusItemWidth
+        statusItem.button?.image = !isStop ? stripLayout.image(containing: ratingControl.starsImage) : menuBarIcon.image
         updateFavoriteHeartView()
         updateAddToLibrarySpinner()
-        updateAccessibility()
     }
 
     /// VoiceOver reads the rating, and the UI tests check it
@@ -290,62 +432,23 @@ extension MenuBarRatingControl {
         statusItem.button?.setAccessibilityValue(value)
     }
 
-    /// Switch between the stars and the Apple Music button, sliding the status item to its
-    /// new width.
-    ///
-    /// The width is stepped on each display refresh rather than animated with Core Animation.
-    /// On macOS 27 a Core Animation frame animation on the track announcement's panel ran to
-    /// completion without ever being drawn, and the menu bar is the same kind of window, so
-    /// this follows `TrackAnnouncementPanel.slide` and steps the value itself.
-    private func updateMode(_ mode: RatingControl.Mode) {
-        guard mode != ratingControl.mode else { return }
+    static let favoriteHeartAutoresizingMask: NSView.AutoresizingMask = [.minXMargin, .minYMargin, .maxYMargin]
 
-        let fromWidth = statusItem.length
-        ratingControl.update(mode: mode)
-        statusItem.button?.image = ratingControl.starsImage
-        let toWidth = menuBarWidth
-
-        // Nothing to slide when the item is showing the stopped icon, and the UI tests read the
-        // accessibility value rather than watching the animation
-        guard !isStop, !MenuBarRatingControl.isUITesting, fromWidth != toWidth else {
-            updateMenuBar()
-            return
-        }
-
-        widthTimer?.invalidate()
-        let start = Date()
-        widthTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
-            guard let self = self else { return }
-            let progress = Date().timeIntervalSince(start) / MenuBarRatingControl.modeChangeDuration
-            let eased = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
-            self.statusItem.length = fromWidth + (toWidth - fromWidth) * eased
-            // The heart is positioned against the button's live width, so it has to follow
-            self.updateFavoriteHeartView()
-            self.updateAddToLibrarySpinner()
-
-            guard progress >= 1 else { return }
-            self.widthTimer?.invalidate()
-            self.widthTimer = nil
-            self.updateMenuBar()
-        }
+    static func favoriteHeartFrame(in bounds: NSRect, size: NSSize) -> NSRect {
+        return NSRect(x: bounds.maxX - 4 - size.width,
+                      y: 0.5 * (bounds.height - size.height), width: size.width, height: size.height)
     }
 
-    /// Show the coloured heart over the heart slot when the track is a favorite.
-    /// The button centres `starsImage`, the same assumption the click hit-test makes.
+    /// Show the current heart appearance over the strip’s reserved, empty slot.
+    /// Independent of image width: AppKit may apply the requested status item width later.
     private func updateFavoriteHeartView() {
         guard let button = statusItem.button else { return }
-        favoriteHeartView.isHidden = isStop || !ratingControl.isFavorited
+        favoriteHeartView.alphaValue = rolloutProgress.map { StarRollout.heartOpacity(progress: $0) } ?? 1
+        favoriteHeartView.isHidden = isStop
         guard !favoriteHeartView.isHidden else { return }
 
-        // Same geometry as RatingControl.imagePositionX(in:), so the heart and its click area agree
-        let leftMargin = 0.5 * (button.bounds.width - ratingControl.starsImage.size.width)
-        let size = ratingControl.starSize
-        favoriteHeartView.frame = NSRect(
-            x: leftMargin + ratingControl.favoriteMinX,
-            y: 0.5 * (button.bounds.height - size.height),
-            width: size.width,
-            height: size.height
-        )
+        favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
+        favoriteHeartView.frame = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
     }
     
     /// Spin a progress indicator where the plus is while the song is being added.
@@ -354,7 +457,8 @@ extension MenuBarRatingControl {
     private func updateAddToLibrarySpinner() {
         guard let button = statusItem.button else { return }
 
-        let isWaiting = !isStop && ratingControl.mode == .addToLibrary && ratingControl.isAddingToLibrary
+        let showsBadge = collapseProgress.map { StarCollapse.showsBadge(progress: $0) } ?? true
+        let isWaiting = !isStop && showsBadge && ratingControl.mode == .addToLibrary && ratingControl.isAddingToLibrary
         guard isWaiting else {
             spinnerTimer?.invalidate()
             spinnerTimer = nil
@@ -364,7 +468,8 @@ extension MenuBarRatingControl {
         }
 
         // Same geometry as the heart overlay, so both sit on their slots in the strip
-        let leftMargin = 0.5 * (button.bounds.width - ratingControl.starsImage.size.width)
+        let contentWidth = (displayedContentWidth ?? menuBarWidth) - 8
+        let leftMargin = MenuBarStripLayout.contentOriginX(in: button.bounds, contentWidth: contentWidth)
         let size = ratingControl.addToLibrarySpinnerSize
         addToLibrarySpinner.frame = NSRect(
             x: leftMargin + ratingControl.addToLibrarySpinnerMinX,
@@ -394,7 +499,7 @@ extension MenuBarRatingControl {
             updateFavoriteHeartView()
             return
         }
-        guard !isStop, let playing = iTunesPlayer.shared.playing else { return }
+        guard playbackState.canInteract, let playing = iTunesPlayer.shared.playing else { return }
 
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playing.track.name ?? "unknown")
 
@@ -443,10 +548,10 @@ extension MenuBarRatingControl {
         os_log("%{public}s[%{public}ld], %{public}s: menu bar button receive event %s", ((#file as NSString).lastPathComponent), #line, #function, event.debugDescription)
 
         switch event.type {
-        case .leftMouseUp where isStop:
+        case .leftMouseUp where !playbackState.canInteract:
             let position = NSPoint(x: 0, y: sender.bounds.height + 8)
             menuBarMenu.popUp(positioning: nil, at: position, in: sender)
-        case .rightMouseUp where isStop:
+        case .rightMouseUp where !playbackState.canInteract:
             let position = sender.convert(event.locationInWindow, to: nil)
             menuBarMenu.popUp(positioning: nil, at: position, in: sender)
 
@@ -461,6 +566,7 @@ extension MenuBarRatingControl {
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard sender.state == .ended else { return }
+        if ratingTransitionTarget != nil { finishWidthAnimation() }
         // The strip is mid-resize: the mode and image have already changed but the button has
         // not finished narrowing, so a click maps to the wrong position. Over 0.22 s that is
         // enough to add a song the user did not mean to add.
@@ -480,6 +586,8 @@ extension MenuBarRatingControl {
 
     /// Hand the press to the click controller, and follow the drag if one begins
     private func handlePress() {
+        if ratingTransitionTarget != nil { finishWidthAnimation() }
+        guard widthTimer == nil, playbackState.canInteract else { return }
         reminderController?.stopSweep()
         dragTimer?.invalidate()
         dragTimer = nil
@@ -502,7 +610,7 @@ extension MenuBarRatingControl {
 extension MenuBarRatingControl: RatingControlDelegate {
 
     func ratingControl(_ ratingControl: RatingControl, shouldUpdateRating rating: Int) -> Bool {
-        return !isStop
+        return playbackState.canInteract
     }
 
     func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
@@ -527,12 +635,29 @@ extension MenuBarRatingControl {
         // One record answers what is playing and where its rating lives, so the stars, the
         // shortcuts and the track announcement cannot disagree about it
         let playing = player.playing
-        let ratedTrack = playing?.ratingTrack
+        let wasStopped = isStop
+        let wasWaiting = playbackState.isWaitingForTrack
+        let canShowTrack = playbackState.update(hasTrack: playing != nil,
+                                               isStopped: playState == .unknown,
+                                               musicIsRunning: iTunesRadioStation.shared.iTunes != nil)
+        updateGestureRecognizerBehavior()
+        guard canShowTrack else {
+            if !wasStopped, !wasWaiting, playbackState.isWaitingForTrack {
+                os_log("Menu bar holding its last display until Music supplies a track or quits")
+            }
+            reminderController?.playerDidUpdate(nil)
+            return
+        }
 
-        // Nowhere to put a rating means the button instead of the stars. A song with no
-        // record at all counts as ratable: stars that don't save is the bug we already had,
-        // while wrongly offering to add a song already in the library would duplicate it.
-        updateMode(playing.map { $0.canRate ? .rating : .addToLibrary } ?? .rating)
+        let identity = playing?.persistentID ?? iTunesRadioStation.shared.latestPlayInfo?.songIdentity
+        let isNewSong = identity != displayedSongIdentity
+        displayedSongIdentity = identity
+        let ratedTrack = playing?.ratingTrack
+        let previousStars = ratingControl.stars
+
+        // Apply only a usable track. An empty update above leaves the previous strip intact;
+        // a catalog track without a library copy shows the add button instead of stars.
+        ratingControl.update(mode: playing.map { $0.canRate ? .rating : .addToLibrary } ?? .rating)
 
         let userRating = ratedTrack?.userRating
         // Don't overwrite the stars the user is dragging across
@@ -541,7 +666,13 @@ extension MenuBarRatingControl {
         }
         ratingControl.updateFavorited(favoriteToShow(musicSays: playing?.favoriteTrack.isFavorited ?? false,
                                                      trackID: playing?.persistentID))
-        updateFavoriteHeartView()
+        // Replacement songs change glyphs in place; mode changes also animate the width.
+        // Preserve the old star shapes before the new song replaces the control's contents.
+        updateMenuBar(animate: wasStopped || (!isNewSong && !wasWaiting), previousStars: previousStars,
+                      animateRatingChange: isNewSong || wasWaiting)
+        if !wasStopped, isNewSong || wasWaiting, widthTimer == nil {
+            os_log("Menu bar replaced the displayed song without animation")
+        }
         // A catalog track is permanently unrated, so without this the reminder would ring for
         // every one of them and sweep a star across a control that has no stars
         if UserDefaults.standard.remindToRateUnrated && ratingControl.mode == .rating {
@@ -561,12 +692,16 @@ extension MenuBarRatingControl {
         let pressedForPlayingID = iTunesPlayer.shared.playing?.persistentID
         // Music takes seconds over this, so say so rather than leaving the button untouched
         ratingControl.update(isAddingToLibrary: true)
+        statusItem.button?.image = stripLayout.image(containing: ratingControl.starsImage)
         updateAddToLibrarySpinner()
         statusItem.button?.needsDisplay = true
 
         iTunesRadioStation.shared.addCurrentTrackToLibrary { [weak self] added in
             guard let self = self else { return }
             self.ratingControl.update(isAddingToLibrary: false)
+            if self.widthTimer == nil {
+                self.statusItem.button?.image = self.stripLayout.image(containing: self.ratingControl.starsImage)
+            }
             self.updateAddToLibrarySpinner()
             self.statusItem.button?.needsDisplay = true
 
@@ -594,9 +729,9 @@ extension MenuBarRatingControl {
                 self.pendingFavorite = (true, playing.persistentID,
                                         Date().addingTimeInterval(MenuBarRatingControl.favoriteWriteWindow))
             }
-            self.updateMode(.rating)
+            self.ratingControl.update(mode: .rating)
             self.ratingControl.update(rating: added.userRating ?? 0)
-            self.updateFavoriteHeartView()
+            self.updateMenuBar()
         }
     }
 
@@ -632,7 +767,8 @@ extension MenuBarRatingControl {
 
     @objc func iTunesRadioRequestTrackRatingUp(_ notification: Notification) {
         isPlaying = iTunesPlayer.shared.isPlaying
-        guard !isStop else {
+        defer { updateMenuBar() }
+        guard playbackState.canInteract else {
             return
         }
         // The stars aren't showing for a song that can't be rated, and the keyboard must not
@@ -648,7 +784,8 @@ extension MenuBarRatingControl {
 
     @objc func iTunesRadioRequestTrackRatingDown(_ notification: Notification) {
         isPlaying = iTunesPlayer.shared.isPlaying
-        guard !isStop else {
+        defer { updateMenuBar() }
+        guard playbackState.canInteract else {
             return
         }
 
@@ -686,7 +823,8 @@ extension MenuBarRatingControl {
 
     @objc func setRating(stars: Int) {
       isPlaying = iTunesPlayer.shared.isPlaying
-      guard !isStop else {
+      defer { updateMenuBar() }
+      guard playbackState.canInteract else {
           return
       }
 
@@ -718,5 +856,3 @@ private final class PassthroughImageView: NSImageView {
         return nil
     }
 }
-
-

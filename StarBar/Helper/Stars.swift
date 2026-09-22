@@ -15,12 +15,15 @@ struct Stars {
     /// Adds a favorite heart slot after the stars (menu bar only, not preference labels)
     let showsFavorite: Bool
     let isFavorited: Bool
+    /// False reserves the slot for a separate menu-bar heart view.
+    let drawsFavorite: Bool
 
-    init(stars: [Star], spacing: CGFloat, showsFavorite: Bool = false, isFavorited: Bool = false) {
+    init(stars: [Star], spacing: CGFloat, showsFavorite: Bool = false, isFavorited: Bool = false, drawsFavorite: Bool = true) {
         self.stars = stars
         self.spacing = spacing
         self.showsFavorite = showsFavorite
         self.isFavorited = isFavorited
+        self.drawsFavorite = drawsFavorite
     }
 
     /// Star styles for a Music rating, 0 to 100: full stars, then a half star, then dots
@@ -68,7 +71,7 @@ struct Stars {
         }
         
         // Draw favorite heart
-        if showsFavorite, let firstStar = stars.first {
+        if showsFavorite && drawsFavorite, let firstStar = stars.first {
             let starSize = firstStar.size
             let favoriteOrigin = CGPoint(x: starsWidth + spacing, y: 0.5 * (height - starSize.height))
             
@@ -84,6 +87,16 @@ struct Stars {
     /// Fill colour for a favorited track's heart. It is drawn by `MenuBarRatingControl` as a
     /// separate, non-template image, because the template `starsImage` can only be one colour.
     static let favoriteHeartColor = NSColor(srgbRed: 0xF5 / 255.0, green: 0x00 / 255.0, blue: 0x2E / 255.0, alpha: 1)
+
+    /// The same outline as the strip, rendered separately so parent resizing cannot centre it.
+    static func outlinedFavoriteHeartImage(size: NSSize) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            drawFavoriteHeartOutline(in: rect)
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
 
     /// Filled heart in `favoriteHeartColor`, the same size as one star.
     static func filledFavoriteHeartImage(size: NSSize) -> NSImage {
