@@ -27,6 +27,16 @@ final class RatingControlGeometryTests: XCTestCase {
 
     // MARK: - Layout
 
+    func testMenuBarStartsWithTheStoppedDotBeforeAnyPlayerOrWindowNotification() {
+        let menuBar = MenuBarRatingControl()
+        defer { NSStatusBar.system.removeStatusItem(menuBar.statusItem) }
+
+        XCTAssertTrue(menuBar.isStop)
+        XCTAssertEqual(menuBar.statusItem.length, 32)
+        XCTAssertTrue(menuBar.statusItem.button?.image === menuBar.menuBarIcon.image)
+        XCTAssertEqual(menuBar.statusItem.button?.accessibilityValue() as? String, "Not playing")
+    }
+
     func testImageWidthMatchesDrawnStars() {
         XCTAssertEqual(control.starsImage.size.width, 124)
         for rating in stride(from: 0, through: 100, by: 10) {
@@ -43,6 +53,88 @@ final class RatingControlGeometryTests: XCTestCase {
     func testStarStylesForHalfStarRating() {
         control.update(rating: 70)
         XCTAssertEqual(control.stars.stars.map { $0.style }, [.full, .full, .full, .half, .dot])
+    }
+
+    func testFavoriteHeartStaysAtTheRightWhenTheImageShrinksBeforeTheButton() {
+        let bounds = NSRect(x: 0, y: 0, width: 132, height: 24)
+        let frame = MenuBarRatingControl.favoriteHeartFrame(in: bounds, size: NSSize(width: 16, height: 16))
+        XCTAssertEqual(bounds.maxX - frame.maxX, 4)
+    }
+
+    func testFavoriteHeartStaysAtTheRightWhenAppKitResizesItsParentLater() {
+        let parent = NSView(frame: NSRect(x: 0, y: 0, width: 132, height: 24))
+        let heart = NSImageView(frame: NSRect(x: 112, y: 4, width: 16, height: 16))
+        heart.autoresizingMask = MenuBarRatingControl.favoriteHeartAutoresizingMask
+        parent.addSubview(heart)
+        for image in [Stars.outlinedFavoriteHeartImage(size: heart.frame.size),
+                      Stars.filledFavoriteHeartImage(size: heart.frame.size)] {
+            heart.image = image
+            for width: CGFloat in [120, 100, 80, 68, 132] {
+                parent.setFrameSize(NSSize(width: width, height: 24))
+                XCTAssertEqual(parent.bounds.maxX - heart.frame.maxX, 4, accuracy: 0.001)
+            }
+        }
+    }
+
+    func testMenuBarCanReserveAnEmptyHeartSlotForBothModesAndFavoriteStates() throws {
+        let separateHeart = RatingControl(rating: 70, drawsFavorite: false)
+        for mode: RatingControl.Mode in [.rating, .addToLibrary] {
+            separateHeart.update(mode: mode)
+            for favorite in [false, true] {
+                separateHeart.updateFavorited(favorite)
+                let bitmap = try XCTUnwrap(NSBitmapImageRep(data: XCTUnwrap(separateHeart.starsImage.tiffRepresentation)))
+                let slotWidth = Int(CGFloat(bitmap.pixelsWide) * 16 / separateHeart.starsImage.size.width)
+                for x in (bitmap.pixelsWide - slotWidth)..<bitmap.pixelsWide {
+                    for y in 0..<bitmap.pixelsHigh {
+                        XCTAssertEqual(bitmap.colorAt(x: x, y: y)?.alphaComponent, 0,
+                                       "The outline must not remain in the centred strip: \(mode), favourite \(favorite)")
+                    }
+                }
+                XCTAssertEqual(separateHeart.isFavorited, favorite)
+                XCTAssertEqual(separateHeart.favoriteMinX + 16, separateHeart.starsImage.size.width)
+            }
+        }
+    }
+
+    func testRightAlignedCompactControlsLeaveUnusedSpaceInactive() {
+        let bounds = NSRect(x: 0, y: 0, width: 132, height: 22)
+        control.update(mode: .addToLibrary)
+        let origin = MenuBarStripLayout.contentOriginX(in: bounds, contentWidth: control.starsImage.size.width)
+        XCTAssertEqual(origin, 68)
+        for x in stride(from: CGFloat(0), to: 68, by: 0.5) {
+            XCTAssertFalse(control.isAddToLibraryHit(positionX: x - origin))
+            XCTAssertFalse(control.isFavoriteHit(positionX: x - origin))
+        }
+        XCTAssertTrue(control.isAddToLibraryHit(positionX: 80 - origin))
+        XCTAssertTrue(control.isAddToLibraryHit(positionX: 100 - origin))
+        XCTAssertTrue(control.isFavoriteHit(positionX: 120 - origin))
+
+        control.update(mode: .rating)
+        let ratingOrigin = MenuBarStripLayout.contentOriginX(in: bounds, contentWidth: control.starsImage.size.width)
+        XCTAssertEqual(ratingOrigin, 4)
+        XCTAssertEqual(control.rating(atPositionX: 16 - ratingOrigin, behavior: .full), 20)
+        XCTAssertTrue(control.isFavoriteHit(positionX: 120 - ratingOrigin))
+    }
+
+    func testCompactImageIsRightAlignedAndRedrawsPendingChanges() throws {
+        let compact = RatingControl(rating: 70, drawsFavorite: false)
+        compact.update(mode: .addToLibrary)
+        let layout = MenuBarStripLayout(starSize: compact.starSize, spacing: compact.spacing)
+        let image = layout.image(containing: compact.starsImage)
+        XCTAssertEqual(layout.statusItemWidth, 132)
+        XCTAssertEqual(image.size.width, 124)
+        let before = try XCTUnwrap(image.tiffRepresentation)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: before))
+        let blankWidth = Int(CGFloat(bitmap.pixelsWide) * 64 / 124)
+        for x in 0..<blankWidth {
+            for y in 0..<bitmap.pixelsHigh {
+                XCTAssertEqual(bitmap.colorAt(x: x, y: y)?.alphaComponent, 0)
+            }
+        }
+        compact.update(isAddingToLibrary: true)
+        let pendingImage = layout.image(containing: compact.starsImage)
+        XCTAssertNotEqual(try XCTUnwrap(pendingImage.tiffRepresentation), before,
+                          "Refreshing the canvas must show the pending state without the plus")
     }
 
     // MARK: - Favorite heart

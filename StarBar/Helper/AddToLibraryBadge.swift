@@ -27,12 +27,14 @@ struct AddToLibraryBadge {
     /// which is far too long for the button to look untouched, so the plus is left out and
     /// `MenuBarRatingControl` spins a real progress indicator in its place.
     let isPending: Bool
+    let drawsFavorite: Bool
 
-    init(glyphSize: NSSize, spacing: CGFloat, isFavorited: Bool = false, isPending: Bool = false) {
+    init(glyphSize: NSSize, spacing: CGFloat, isFavorited: Bool = false, isPending: Bool = false, drawsFavorite: Bool = true) {
         self.glyphSize = glyphSize
         self.spacing = spacing
         self.isFavorited = isFavorited
         self.isPending = isPending
+        self.drawsFavorite = drawsFavorite
     }
 
     /// Number of glyphs before the heart: the note and the plus
@@ -75,7 +77,7 @@ struct AddToLibraryBadge {
 
         // The heart keeps the slot it has in the stars strip. A favorited track leaves it
         // empty, because `MenuBarRatingControl` draws the coloured heart over the top.
-        if !isFavorited {
+        if drawsFavorite && !isFavorited {
             let heartRect = NSRect(
                 origin: CGPoint(x: contentWidth + spacing, y: 0),
                 size: glyphSize

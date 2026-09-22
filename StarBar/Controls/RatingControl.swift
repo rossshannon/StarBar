@@ -24,6 +24,8 @@ class RatingControl {
 
     let starSize: NSSize
     let spacing: CGFloat
+    /// Keep the heart slot but let the menu bar draw its heart in an independent view.
+    let drawsFavorite: Bool
     /// 0 ~ 100
     private(set) var rating: Int
     /// Stars and heart, or the Apple Music button and heart
@@ -46,7 +48,7 @@ class RatingControl {
             stars[sweepPosition] = Star(size: starSize, style: .outline)
         }
 
-        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isFavorited: isFavorited)
+        return Stars(stars: stars, spacing: spacing, showsFavorite: true, isFavorited: isFavorited, drawsFavorite: drawsFavorite)
     }
     
     /// Stars rating control constructor
@@ -55,10 +57,11 @@ class RatingControl {
     ///   - rating: 0~100
     ///   - size: size for one star
     ///   - spacing: spacing between two stars
-    init(rating: Int, starSize: NSSize = NSSize(width: 16, height: 16), spacing: CGFloat = 4) {
+    init(rating: Int, starSize: NSSize = NSSize(width: 16, height: 16), spacing: CGFloat = 4, drawsFavorite: Bool = true) {
         self.rating = rating
         self.starSize = starSize
         self.spacing = spacing
+        self.drawsFavorite = drawsFavorite
 
         self.starsImage = RatingControl.makeImage(
             width: RatingControl.imageWidth(mode: .rating, starSize: starSize, spacing: spacing),
@@ -168,7 +171,7 @@ extension RatingControl {
         case .rating:
             return stars.image
         case .addToLibrary:
-            return AddToLibraryBadge(glyphSize: starSize, spacing: spacing, isFavorited: isFavorited, isPending: isAddingToLibrary).image
+            return AddToLibraryBadge(glyphSize: starSize, spacing: spacing, isFavorited: isFavorited, isPending: isAddingToLibrary, drawsFavorite: drawsFavorite).image
         }
     }
     
@@ -180,12 +183,12 @@ extension RatingControl {
     ///
     /// `NSGestureRecognizer.location(in:)` on a status bar button reports the same point for
     /// every click on macOS 27, so we convert `NSEvent.mouseLocation` into button coordinates.
-    /// The button centres the image, so the margin is half of the spare width.
+    /// The menu bar keeps a fixed allocation and right-aligns the current mode's contents.
     func imagePositionX(in button: NSButton) -> CGFloat? {
         guard let window = button.window, starsImage.size.width > 0 else { return nil }
         let pointInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
         let pointInButton = button.convert(pointInWindow, from: nil)
-        let leftMargin = 0.5 * (button.bounds.width - starsImage.size.width)
+        let leftMargin = MenuBarStripLayout.contentOriginX(in: button.bounds, contentWidth: starsImage.size.width)
         return pointInButton.x - leftMargin
     }
 
