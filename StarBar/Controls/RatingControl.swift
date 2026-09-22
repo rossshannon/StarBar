@@ -327,11 +327,13 @@ extension RatingControl {
     /// Set a rating the user chose, if the delegate allows it, and tell the delegate to save it.
     ///
     /// - Parameter rating: 0 ~ 100
-    func commit(rating: Int) {
-        guard delegate?.ratingControl(self, shouldUpdateRating: rating) ?? false else { return }
+    @discardableResult
+    func commit(rating: Int) -> Bool {
+        guard delegate?.ratingControl(self, shouldUpdateRating: rating) ?? false else { return false }
 
         update(rating: rating)
         delegate?.ratingControl(self, userDidUpdateRating: rating)
+        return true
     }
 
     enum Behavior {
