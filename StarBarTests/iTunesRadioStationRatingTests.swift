@@ -3,8 +3,8 @@
 //  StarBarTests
 //
 //  The real rating path from iTunesRadioStation to a track, with fake tracks in place of
-//  Music. Nothing here writes to Music, and nothing here sends it an Apple Event: the
-//  tracks are fakes, and the player record is set directly, without a broadcast.
+//  Music. Rating writes go only to fake tracks. Refresh tests can read Music if it is
+//  running, but also work without it; they never write to the user's library.
 //
 //  The station and the player are singletons whose state carries over between tests, so
 //  each test starts by flushing what is held and does not assume a fresh throttle window,
@@ -12,6 +12,8 @@
 //
 
 import XCTest
+import Cocoa
+import iTunesLibrary
 @testable import StarBar
 
 final class iTunesRadioStationRatingTests: XCTestCase {
@@ -113,6 +115,112 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         XCTAssertEqual(withID.songIdentity, "42")
         XCTAssertEqual(withoutID.songIdentity, "A|B|C")
         XCTAssertNil(unnamed.songIdentity)
+    }
+
+    // MARK: - Library changes and deleted rating targets
+
+    /// Exercise the subscriptions through a private centre, never the system-wide one.
+    /// As with the refused-write tests below, refreshes may read Music but never write it.
+    func testDocumentedLibraryChangeRefreshesTheCachedPlayer() {
+        let center = NotificationCenter()
+        station.observeLibraryChanges(in: center)
+        defer { center.removeObserver(station) }
+        let track = FakeTrack(name: "Deleted", rating: 20)
+        play(track)
+        let original = iTunesPlayer.shared.playing
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        track.isPresent = false
+        center.post(name: .ITLibraryDidChange, object: nil, userInfo: ["media-domains": 1])
+        XCTAssertEqual(updates, 0, "the notification waits for the settling interval")
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+
+        XCTAssertEqual(updates, 1)
+        XCTAssertFalse(iTunesPlayer.shared.playing === original, "cached library answers are replaced")
+        XCTAssertTrue(track.ratingsWritten.isEmpty)
+    }
+
+    func testLibraryNotificationBurstCoalescesAndLaterLegacySignalStillRefreshes() {
+        let center = NotificationCenter()
+        station.observeLibraryChanges(in: center)
+        defer { center.removeObserver(station) }
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        let legacy = Notification.Name("com.apple.iTunes.libraryChanged")
+
+        for _ in 0..<3 {
+            center.post(name: .ITLibraryDidChange, object: nil)
+            center.post(name: legacy, object: nil)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        XCTAssertEqual(updates, 1, "both names share one coalesced refresh")
+
+        center.post(name: legacy, object: nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        XCTAssertEqual(updates, 2, "the later signal reconciles a state that settled late")
+    }
+
+    func testLibraryRefreshWaitsForAHeldRatingThenRuns() {
+        let center = NotificationCenter()
+        station.observeLibraryChanges(in: center)
+        defer { center.removeObserver(station) }
+        let track = FakeTrack(name: "Held during library change", rating: 0)
+        play(track)
+        station.setRating(20, on: track)
+        station.setRating(80, on: track)
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        center.post(name: .ITLibraryDidChange, object: nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        XCTAssertEqual(updates, 0, "Music cannot yet report the held rating")
+
+        station.flushHeldRatingWrite()
+        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.ratingSaveDelay + 0.3))
+        XCTAssertEqual(track.ratingsWritten.last, 80)
+        XCTAssertEqual(updates, 1, "the deferred refresh is not lost")
+    }
+
+    func testCommittingStaleStarsRefreshesInsteadOfRatingTheDeletedTrack() throws {
+        let menu = try XCTUnwrap((NSApp.delegate as? AppDelegate)?.menuBarRatingControl)
+        let track = FakeTrack(name: "Deleted before click", rating: 20)
+        play(track)
+        XCTAssertNotNil(iTunesPlayer.shared.playing?.ratingTrack, "cache the original rating target")
+        menu.ratingControl.update(rating: 20)
+        track.isPresent = false
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        menu.ratingControl.commit(rating: 80)
+
+        XCTAssertEqual(updates, 1, "a rejected click refreshes without waiting for a library signal")
+        XCTAssertEqual(track.rating, 20)
+        XCTAssertTrue(track.ratingsWritten.isEmpty)
+    }
+
+    func testCommittingStaleStarsRefreshesWhenOnlyTheLibraryCopyWasDeleted() throws {
+        let menu = try XCTUnwrap((NSApp.delegate as? AppDelegate)?.menuBarRatingControl)
+        let playing = FakeTrack(name: "Still playing", persistentID: "00000000000000A1")
+        let libraryCopy = FakeTrack(name: "Library copy", persistentID: "00000000000000B2", rating: 20)
+        play(playing)
+        iTunesPlayer.shared.playing?.didAddToLibrary(libraryCopy)
+        menu.ratingControl.update(rating: 20)
+        libraryCopy.isPresent = false
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        menu.ratingControl.commit(rating: 80)
+        station.flushHeldRatingWrite()
+
+        XCTAssertEqual(updates, 1, "the playing object can survive its rating target")
+        XCTAssertTrue(playing.ratingsWritten.isEmpty)
+        XCTAssertTrue(libraryCopy.ratingsWritten.isEmpty)
     }
 
     // MARK: - A refused write

@@ -143,6 +143,76 @@ final class StarCollapseTests: XCTestCase {
         XCTAssertFalse(control.isFavorited, "Separate drawing must not change the favourite state")
     }
 
+    func testDeletingLibraryTrackUsesTheCatalogCollapseDespiteChangingIdentity() throws {
+        try assertDeletionCollapses(changesIdentity: true, hasMissingTrackUpdate: false)
+    }
+
+    func testDeletingLibraryCopyUsesTheSameCollapseAfterAMissingTrackUpdate() throws {
+        try assertDeletionCollapses(changesIdentity: false, hasMissingTrackUpdate: true)
+    }
+
+    private func assertDeletionCollapses(changesIdentity: Bool, hasMissingTrackUpdate: Bool) throws {
+        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                      "Reduce Motion intentionally bypasses the animation")
+        let clock = FakeClock()
+        let menu = MenuBarRatingControl(widthClock: clock)
+        defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
+        let track = FakeTrack(name: "StarBar deletion animation \(UUID().uuidString)", rating: 80)
+        let record = PlayingTrack(track: track)
+        let copy = FakeTrack(name: track.name, persistentID: "00000000000000B2", rating: 80)
+        if !changesIdentity {
+            track.objectClassCode = MusicTrackClass.urlTrack
+            record.didAddToLibrary(copy)
+        }
+        menu.applyTrackDisplay(record, isStopped: false, musicIsRunning: true)
+        clock.fireRepeating()
+        clock.advance(by: StarRollout.duration + 0.01)
+        clock.fireRepeating()
+        XCTAssertEqual(menu.ratingControl.mode, .rating)
+        let outgoingStars = menu.ratingControl.stars
+        let fullWidth = menu.statusItem.length
+
+        if hasMissingTrackUpdate {
+            menu.applyTrackDisplay(nil, isStopped: false, musicIsRunning: true)
+            XCTAssertEqual(menu.ratingControl.mode, .rating, "hold the previous strip while Music settles")
+        }
+        track.isPresent = !changesIdentity
+        copy.isPresent = false
+        let stream = FakeTrack(name: track.name,
+                               persistentID: changesIdentity ? "00000000000000C3" : track.persistentID)
+        stream.objectClassCode = MusicTrackClass.urlTrack
+        menu.applyTrackDisplay(PlayingTrack(track: stream), isStopped: false, musicIsRunning: true)
+
+        XCTAssertEqual(menu.ratingControl.mode, .addToLibrary)
+        let timer = try XCTUnwrap(clock.timers.last)
+        XCTAssertTrue(timer.isValid, "the display update must start the collapse, not snap to the badge")
+        XCTAssertEqual(timer.seconds, 1.0 / 60.0)
+        let layout = MenuBarStripLayout(starSize: menu.ratingControl.starSize, spacing: menu.ratingControl.spacing)
+        let expectedStart = layout.image(containing: StarCollapse.image(
+            stars: outgoingStars, width: fullWidth - 8, progress: 0, isFavorited: false))
+        XCTAssertEqual(menu.statusItem.button?.image?.tiffRepresentation, expectedStart.tiffRepresentation,
+                       "collapse begins with the deleted song's actual stars")
+
+        clock.fireRepeating()
+        clock.advance(by: StarCollapse.duration * 0.5)
+        clock.fireRepeating()
+        XCTAssertTrue(timer.isValid)
+        XCTAssertEqual(menu.statusItem.length, fullWidth, "native allocation must not move the heart")
+
+        // The later legacy save signal must not restart a collapse already in progress.
+        menu.applyTrackDisplay(PlayingTrack(track: stream), isStopped: false, musicIsRunning: true)
+        XCTAssertTrue(clock.timers.last === timer)
+        clock.advance(by: StarCollapse.duration)
+        clock.fireRepeating()
+        XCTAssertFalse(timer.isValid)
+        XCTAssertEqual(menu.statusItem.length, fullWidth)
+        XCTAssertEqual(menu.statusItem.button?.image?.tiffRepresentation,
+                       layout.image(containing: menu.ratingControl.starsImage).tiffRepresentation)
+        XCTAssertTrue(track.ratingsWritten.isEmpty)
+        XCTAssertTrue(copy.ratingsWritten.isEmpty)
+        XCTAssertTrue(stream.ratingsWritten.isEmpty)
+    }
+
     private func bitmap(_ image: NSImage) throws -> NSBitmapImageRep {
         let data = try XCTUnwrap(image.tiffRepresentation)
         return try XCTUnwrap(NSBitmapImageRep(data: data))

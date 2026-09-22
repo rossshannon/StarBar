@@ -115,7 +115,7 @@ final class MenuBarRatingControl {
     private var stripLayout: MenuBarStripLayout {
         MenuBarStripLayout(starSize: ratingControl.starSize, spacing: ratingControl.spacing)
     }
-    private let widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main })
+    private let widthClock: RatingReminderClock
     private var displayedSongIdentity: String?
     private lazy var playbackState = MenuBarPlaybackState { [weak self] in
         guard let self = self else { return }
@@ -204,7 +204,8 @@ final class MenuBarRatingControl {
         clickGestureRecognizer.delaysPrimaryMouseButtonEvents = playbackState.canInteract
     }
 
-    init() {
+    init(widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main })) {
+        self.widthClock = widthClock
         menuBarIcon = MenuBarIcon(size: ratingControl.starSize)
 
         guard let button = statusItem.button else {
@@ -610,6 +611,14 @@ extension MenuBarRatingControl {
 extension MenuBarRatingControl: RatingControlDelegate {
 
     func ratingControl(_ ratingControl: RatingControl, shouldUpdateRating rating: Int) -> Bool {
+        // A deleted track can keep its stars until the library notification arrives. Check
+        // before committing: a refused gesture must not change the stars, announcement or
+        // reminder. UI tests intentionally have no Music target.
+        if !MenuBarRatingControl.isUITesting && ratingTarget?.exists?() != true {
+            os_log("%{public}s[%{public}ld], %{public}s: rating target disappeared; refreshing the player", ((#file as NSString).lastPathComponent), #line, #function)
+            iTunesPlayer.shared.update()
+            return false
+        }
         return playbackState.canInteract
     }
 
@@ -634,12 +643,18 @@ extension MenuBarRatingControl {
         isPlaying = player.isPlaying
         // One record answers what is playing and where its rating lives, so the stars, the
         // shortcuts and the track announcement cannot disagree about it
-        let playing = player.playing
+        applyTrackDisplay(player.playing, isStopped: playState == .unknown,
+                          musicIsRunning: iTunesRadioStation.shared.iTunes != nil)
+    }
+
+    /// Apply a refreshed track through the same transition path whether it came from a
+    /// song change, a library edit, or a rejected click on a deleted rating target.
+    func applyTrackDisplay(_ playing: PlayingTrack?, isStopped: Bool, musicIsRunning: Bool) {
         let wasStopped = isStop
         let wasWaiting = playbackState.isWaitingForTrack
         let canShowTrack = playbackState.update(hasTrack: playing != nil,
-                                               isStopped: playState == .unknown,
-                                               musicIsRunning: iTunesRadioStation.shared.iTunes != nil)
+                                               isStopped: isStopped,
+                                               musicIsRunning: musicIsRunning)
         updateGestureRecognizerBehavior()
         guard canShowTrack else {
             if !wasStopped, !wasWaiting, playbackState.isWaitingForTrack {

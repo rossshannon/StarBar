@@ -34,6 +34,8 @@ final class FakeTrack: NSObject, iTunesTrack {
     /// Every rating written, in order, so a test can see repeats and their order
     private(set) var ratingsWritten: [Int] = []
     private(set) var favoritesWritten: [Bool] = []
+    var isPresent = true
+    var objectClassCode: FourCharCode?
 
     init(name: String = "Song", artist: String = "Artist", album: String = "Album",
          persistentID: String = "0123456789ABCDEF", databaseID: Int = 1, duration: Double = 240,
@@ -63,9 +65,12 @@ final class FakeTrack: NSObject, iTunesTrack {
     }
 
     /// `iTunesTrack.scriptingClassCode` reads `objectClass` by key-value coding, which a real
-    /// Scripting Bridge object answers. The fake answers nil, which the app treats as a class
-    /// that won't read, instead of raising the exception KVC would.
+    /// Scripting Bridge object answers. Tests can supply its class code; by default the
+    /// fake answers nil instead of raising the exception an unknown KVC key would.
     override func value(forUndefinedKey key: String) -> Any? {
+        if key == "objectClass", let code = objectClassCode {
+            return NSAppleEventDescriptor(typeCode: code)
+        }
         return nil
     }
 
@@ -77,7 +82,7 @@ final class FakeTrack: NSObject, iTunesTrack {
     }
 
     func exists() -> Bool {
-        return true
+        return isPresent
     }
 
 }

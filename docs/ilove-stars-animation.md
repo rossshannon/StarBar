@@ -35,7 +35,7 @@ StarBar uses the current song's actual rating, including half stars and unrated 
 | First library song after launch or Music quitting | Stars roll into place over 1.0 seconds |
 | Add-to-library button to a rateable song | The same 1.0-second rollout |
 | Different ratings on successive library songs | Changed glyphs retract or grow in place over 0.2 seconds; full/half stars blend |
-| Library song to an Apple Music-only song | Stars shrink over 0.15 seconds, followed by a late badge fade; total 0.35 seconds |
+| Library song to an Apple Music-only song, including deletion from the library during playback | Stars shrink over 0.15 seconds, followed by a late badge fade; total 0.35 seconds |
 | Music quits | Return to the compact stopped dot and rearm the next entrance |
 
 Music sends a bare `Player State: Stopped` between some songs. Measured gaps were 50–131 ms, so a stopped notification cannot distinguish a song change from the end of a queue. The display session lasts until Music quits: hold the previous strip over missing-track updates and disable stale rating actions. No stop timer or additional Music polling is used.
