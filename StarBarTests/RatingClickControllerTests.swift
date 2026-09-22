@@ -20,9 +20,10 @@ final class RatingClickControllerTests: XCTestCase {
     /// Records the ratings the control asks to save
     private final class SaveRecorder: RatingControlDelegate {
         var savedRatings: [Int] = []
+        var shouldSave: (RatingControl) -> Bool = { _ in true }
 
         func ratingControl(_ ratingControl: RatingControl, shouldUpdateRating rating: Int) -> Bool {
-            return true
+            return shouldSave(ratingControl)
         }
 
         func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
@@ -179,6 +180,50 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(ratingControl.rating, 40)
         XCTAssertFalse(release(at: 52))
         XCTAssertEqual(recorder.savedRatings, [60])
+    }
+
+    func testRejectedDragRestoresOriginalRatingWhenRefreshHasNoTrack() {
+        XCTAssertTrue(press(at: 97))
+        recorder.shouldSave = { control in
+            XCTAssertEqual(control.rating, 40, "a missing-track refresh must retain the original stars")
+            return false
+        }
+
+        XCTAssertFalse(release(at: 97))
+
+        XCTAssertEqual(ratingControl.rating, 40)
+        XCTAssertTrue(recorder.savedRatings.isEmpty)
+        XCTAssertEqual(dragEnds, [false])
+    }
+
+    func testRejectedDragPreservesRatingReturnedBySynchronousRefresh() {
+        XCTAssertTrue(press(at: 97))
+        recorder.shouldSave = { control in
+            control.update(rating: 60)
+            return false
+        }
+
+        XCTAssertFalse(release(at: 97))
+
+        XCTAssertEqual(ratingControl.rating, 60, "do not overwrite a fresh track with the old rating")
+        XCTAssertTrue(recorder.savedRatings.isEmpty)
+        XCTAssertEqual(dragEnds, [false])
+    }
+
+    func testRejectedDragPreservesCatalogModeReturnedBySynchronousRefresh() {
+        XCTAssertTrue(press(at: 97))
+        recorder.shouldSave = { control in
+            control.update(mode: .addToLibrary)
+            control.update(rating: 0)
+            return false
+        }
+
+        XCTAssertFalse(release(at: 97))
+
+        XCTAssertEqual(ratingControl.mode, .addToLibrary)
+        XCTAssertEqual(ratingControl.rating, 0)
+        XCTAssertTrue(recorder.savedRatings.isEmpty)
+        XCTAssertEqual(dragEnds, [false])
     }
 
     func testDragShowsHalfStarsWhenTheyAreOn() {

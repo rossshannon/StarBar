@@ -106,8 +106,11 @@ final class RatingClickController {
             self.drag = nil
             if !isStopped(), let releaseRating = drag.releaseRating(at: rating) {
                 os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, releaseRating)
-                ratingControl.commit(rating: releaseRating)
-                didEndDrag(true)
+                // Discard the preview before validation: the delegate may reject the save
+                // and synchronously refresh the track. Keep whatever that refresh returns.
+                preview(drag.originalRating)
+                let saved = ratingControl.commit(rating: releaseRating)
+                didEndDrag(saved)
             } else {
                 // Nothing saved: put back the rating the stars showed before the drag,
                 // so later changes (such as the rating shortcuts) don't build on the preview
