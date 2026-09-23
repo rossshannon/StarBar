@@ -16,18 +16,26 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     private var mouse = NSPoint.zero
 
     private var readKnobs: (() -> TrackAnnouncementGlassKnobs)!
+    private var readSeeThroughKnobs: (() -> TrackAnnouncementSeeThroughKnobs)!
+    private var seeThroughKnobs = TrackAnnouncementSeeThroughKnobs()
+    /// No key pressed for a long while, unless a test says otherwise
+    private var keys = KeyboardActivity(secondsSinceKeyDown: 600, commandKeysHeld: false)
 
     override func setUp() {
         super.setUp()
-        // The tests are hosted in the app, whose defaults may carry the glass experiment
-        // knobs; read fixed values instead
+        // The tests are hosted in the app, whose defaults may carry the glass and see-through
+        // experiment knobs; read fixed values instead
         readKnobs = TrackAnnouncementGlassKnobs.read
         TrackAnnouncementGlassKnobs.read = { TrackAnnouncementGlassKnobs() }
+        readSeeThroughKnobs = TrackAnnouncementSeeThroughKnobs.read
+        seeThroughKnobs = TrackAnnouncementSeeThroughKnobs()
+        TrackAnnouncementSeeThroughKnobs.read = { [unowned self] in self.seeThroughKnobs }
         mouse = NSScreen.main.map { NSPoint(x: $0.frame.midX, y: $0.frame.midY) } ?? .zero
         panel = TrackAnnouncementPanel(
             slideDuration: 0,
             screens: { NSScreen.screens },
-            mouseLocation: { [unowned self] in self.mouse }
+            mouseLocation: { [unowned self] in self.mouse },
+            keyboard: { [unowned self] in self.keys }
         )
     }
 
@@ -35,6 +43,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         panel.orderOut(nil)
         panel = nil
         TrackAnnouncementGlassKnobs.read = readKnobs
+        TrackAnnouncementSeeThroughKnobs.read = readSeeThroughKnobs
         super.tearDown()
     }
 
@@ -143,7 +152,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     /// part-way down on the way out, and only then ordered out
     func testSlideInAndOutStepWithTheClock() {
         let clock = FakeClock()
-        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
 
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
@@ -179,7 +188,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
     func testShowDuringSlideOutTurnsRoundFromWhereItIs() {
         let clock = FakeClock()
-        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
         clock.advance(by: 0.5)
@@ -200,7 +209,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
     func testHideWhileSlidingInTurnsRound() {
         let clock = FakeClock()
-        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
         clock.advance(by: 0.1)
@@ -218,7 +227,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
     func testChangingTransitionMidTurnRoundSettlesTheOtherProperty() {
         let clock = FakeClock()
-        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
         clock.advance(by: 0.5)
@@ -238,10 +247,14 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     }
 
     func testStaleTickAfterAScreenChangeDoesNothing() {
+        // With nothing to see through there is no watcher, so the one repeating timer is the slide's
+        seeThroughKnobs.peephole = false
+        seeThroughKnobs.typingWindow = false
         let clock = FakeClock()
-        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(clock.timers.filter { $0.repeats }.count, 1)
         let staleTick = try! XCTUnwrap(clock.timers.last { $0.repeats })
 
         NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
@@ -257,7 +270,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
     func testFadeStepsAlphaWithTheClock() {
         let clock = FakeClock()
-        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, clock: clock)
+        let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
 
         animated.show(sample, reduceMotion: true, reduceTransparency: false)
@@ -291,6 +304,337 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(panel.phase, .shown)
     }
 
+    // MARK: - Seeing through
+
+    /// A panel whose see-through watcher runs on a fake clock, with the strip already up
+    private func seeThroughPanel(_ clock: FakeClock) -> TrackAnnouncementPanel {
+        let seeThrough = TrackAnnouncementPanel(
+            slideDuration: 0,
+            screens: { NSScreen.screens },
+            mouseLocation: { [unowned self] in self.mouse },
+            keyboard: { [unowned self] in self.keys },
+            clock: clock
+        )
+        seeThrough.show(sample, reduceMotion: false, reduceTransparency: false)
+        return seeThrough
+    }
+
+    /// The middle of the strip, on screen
+    private func stripCentre(of panel: TrackAnnouncementPanel) -> NSPoint {
+        let strip = panel.stripView.frame.offsetBy(dx: panel.frame.minX, dy: panel.frame.minY)
+        return NSPoint(x: strip.midX, y: strip.midY)
+    }
+
+    /// How far open the typing window is
+    private func windowProgress(_ panel: TrackAnnouncementPanel) -> CGFloat {
+        return panel.stripView.typingWindow?.progress ?? 0
+    }
+
+    private func tick(_ clock: FakeClock, _ seconds: TimeInterval = 1.0 / 60.0) {
+        clock.advance(by: seconds)
+        clock.fireRepeating()
+    }
+
+    func testThePointerOverTheStripCutsAHoleThatFollowsIt() throws {
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+        XCTAssertNil(seeThrough.stripView.peephole, "the pointer starts mid-screen, well clear of the strip")
+
+        mouse = stripCentre(of: seeThrough)
+        tick(clock)
+        let hole = try XCTUnwrap(seeThrough.stripView.peephole)
+        XCTAssertEqual(hole.centre.x, seeThrough.stripView.bounds.midX, accuracy: 0.001)
+        XCTAssertEqual(hole.centre.y, seeThrough.stripView.bounds.midY, accuracy: 0.001)
+        XCTAssertEqual(hole.radius, TrackAnnouncementSeeThrough.peepholeRadius * seeThrough.scale, "scaled with the strip")
+        XCTAssertEqual(hole.feather, TrackAnnouncementSeeThrough.peepholeFeather * seeThrough.scale)
+
+        mouse.x += 200
+        tick(clock)
+        XCTAssertEqual(seeThrough.stripView.peephole?.centre.x ?? 0, seeThrough.stripView.bounds.midX + 200, accuracy: 0.001)
+
+        mouse.y += 1000
+        tick(clock)
+        XCTAssertNil(seeThrough.stripView.peephole, "gone once the pointer leaves")
+    }
+
+    func testTypingOpensTheWindowAndItClosesAfterAPause() {
+        let clock = FakeClock()
+        var keyDownAt = clock.now().addingTimeInterval(-600)
+        func step(_ seconds: TimeInterval) {
+            clock.advance(by: seconds)
+            keys = KeyboardActivity(secondsSinceKeyDown: clock.now().timeIntervalSince(keyDownAt), commandKeysHeld: false)
+            clock.fireRepeating()
+        }
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+
+        keyDownAt = clock.now()
+        step(0.075)
+        XCTAssertEqual(windowProgress(seeThrough), 0.5, accuracy: 0.01, "half open")
+        step(0.1)
+        XCTAssertEqual(windowProgress(seeThrough), 1)
+
+        step(1.2)
+        XCTAssertEqual(windowProgress(seeThrough), 1, "1.375 s after the key: still inside the pause")
+        step(0.2)
+        XCTAssertEqual(windowProgress(seeThrough), 0.5, accuracy: 0.01, "closing")
+        step(0.3)
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+    }
+
+    func testARatingShortcutLeavesTheBackgroundAlone() {
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+
+        keys = KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: true)
+        tick(clock)
+        tick(clock)
+
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+    }
+
+    func testTheStripArrivesOpenIfTheUserIsAlreadyTyping() {
+        keys = KeyboardActivity(secondsSinceKeyDown: 0.2, commandKeysHeld: false)
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+
+        XCTAssertEqual(windowProgress(seeThrough), 1, "no flash of blur over the text box being typed in")
+    }
+
+    func testHidingStopsWatchingAndRestoresTheBackground() throws {
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+        mouse = stripCentre(of: seeThrough)
+        keys = KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: false)
+        tick(clock)
+        XCTAssertNotNil(seeThrough.stripView.peephole)
+        XCTAssertGreaterThan(windowProgress(seeThrough), 0)
+        let watcher = try XCTUnwrap(clock.timers.last { $0.repeats && $0.isValid })
+
+        seeThrough.hide()
+
+        XCTAssertEqual(seeThrough.phase, .hidden)
+        XCTAssertFalse(watcher.isValid)
+        XCTAssertNil(seeThrough.stripView.peephole)
+        XCTAssertEqual(windowProgress(seeThrough), 0, "the next song starts with the whole background")
+        watcher.action()
+        XCTAssertNil(seeThrough.stripView.peephole, "a stale tick does nothing")
+    }
+
+    func testAScreenChangeStopsWatchingAndRestoresTheBackground() throws {
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+        mouse = stripCentre(of: seeThrough)
+        keys = KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: false)
+        tick(clock)
+        XCTAssertNotNil(seeThrough.stripView.peephole)
+        let watcher = try XCTUnwrap(clock.timers.last { $0.repeats && $0.isValid })
+
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
+
+        XCTAssertFalse(watcher.isValid)
+        XCTAssertNil(seeThrough.stripView.peephole)
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+    }
+
+    func testTheShortcutThatBroughtTheStripUpDoesNotClearIt() {
+        // Command-Right Arrow skipped the song 0.3 s ago, and Command came up since
+        keys = KeyboardActivity(secondsSinceKeyDown: 0.3, commandKeysHeld: false, secondsSinceModifierChange: 0.2)
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+        keys.secondsSinceKeyDown += 1.0 / 60.0
+        keys.secondsSinceModifierChange += 1.0 / 60.0
+        tick(clock)
+        XCTAssertEqual(windowProgress(seeThrough), 0, "and reading the same key again changes nothing")
+    }
+
+    func testReduceTransparencyKeepsTheWholeBackground() {
+        let clock = FakeClock()
+        let seeThrough = TrackAnnouncementPanel(slideDuration: 0, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+        defer { seeThrough.orderOut(nil) }
+        keys = KeyboardActivity(secondsSinceKeyDown: 0.1, commandKeysHeld: false)
+
+        seeThrough.show(sample, reduceMotion: false, reduceTransparency: true)
+        mouse = stripCentre(of: seeThrough)
+        tick(clock)
+
+        XCTAssertTrue(clock.timers.filter { $0.repeats && $0.isValid }.isEmpty, "nothing watches")
+        XCTAssertNil(seeThrough.stripView.peephole)
+        XCTAssertNil(seeThrough.stripView.typingWindow)
+    }
+
+    func testTurningReduceTransparencyOnWhileTheStripIsUpClosesEverything() throws {
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+        mouse = stripCentre(of: seeThrough)
+        keys = KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: false)
+        tick(clock)
+        XCTAssertNotNil(seeThrough.stripView.peephole)
+        XCTAssertNotNil(seeThrough.stripView.typingWindow)
+        let watcher = try XCTUnwrap(clock.timers.first { $0.repeats && $0.isValid })
+
+        // The next song arrives with the setting now on
+        seeThrough.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album"), reduceMotion: false, reduceTransparency: true)
+
+        XCTAssertFalse(watcher.isValid)
+        XCTAssertNil(seeThrough.stripView.peephole)
+        XCTAssertNil(seeThrough.stripView.typingWindow)
+    }
+
+    func testTheKnobsTurnEachPartOffAndWithBothOffNothingWatches() {
+        seeThroughKnobs.peephole = false
+        seeThroughKnobs.typingWindow = false
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+
+        XCTAssertTrue(clock.timers.filter { $0.repeats && $0.isValid }.isEmpty, "no ticking at the display's rate for nothing")
+        mouse = stripCentre(of: seeThrough)
+        keys = KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: false)
+        tick(clock)
+
+        XCTAssertNil(seeThrough.stripView.peephole)
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+    }
+
+    func testOnlyTheHoleCanBeOn() {
+        seeThroughKnobs.typingWindow = false
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+
+        mouse = stripCentre(of: seeThrough)
+        keys = KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: false)
+        tick(clock)
+
+        XCTAssertNotNil(seeThrough.stripView.peephole)
+        XCTAssertEqual(windowProgress(seeThrough), 0)
+    }
+
+    /// A timed panel: the watcher and the slide share the fake clock
+    private func timedPanel(_ clock: FakeClock) -> TrackAnnouncementPanel {
+        return TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+    }
+
+    func testASlideOutThatFinishesStopsWatching() throws {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 0.5)
+        XCTAssertEqual(animated.phase, .shown)
+        mouse = stripCentre(of: animated)
+        tick(clock)
+        XCTAssertNotNil(animated.stripView.peephole)
+        let watcher = try XCTUnwrap(clock.timers.first { $0.repeats && $0.isValid })
+
+        animated.hide()
+        tick(clock, 0.5)
+
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertFalse(watcher.isValid)
+        XCTAssertNil(animated.stripView.peephole)
+    }
+
+    func testTurningRoundDuringTheSlideOutKeepsOneWatcher() {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 0.5)
+        XCTAssertEqual(clock.timers.filter { $0.repeats && $0.isValid }.count, 1, "the watcher, the slide done")
+
+        animated.hide()
+        tick(clock, 0.1)
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertEqual(animated.phase, .slidingIn)
+        XCTAssertEqual(clock.timers.filter { $0.repeats && $0.isValid }.count, 2, "the same watcher, and the new slide")
+    }
+
+    func testTheHoleMovesWithTheStripWhileItSlides() throws {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        // The pointer where the middle of the strip will be once it is up
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        let shownCentre = NSPoint(x: animated.frame.minX + animated.stripView.bounds.midX, y: animated.frame.minY + animated.stripView.bounds.midY)
+        mouse = shownCentre
+        let slideTick = try XCTUnwrap(clock.timers.last { $0.repeats && $0.isValid })
+
+        // Only the slide ticks: the hole must follow the strip without the watcher
+        clock.advance(by: 0.2)
+        slideTick.action()
+
+        let stripY = animated.stripView.frame.minY
+        XCTAssertLessThan(stripY, 0, "still sliding")
+        let hole = try XCTUnwrap(animated.stripView.peephole)
+        XCTAssertEqual(hole.centre.y, shownCentre.y - animated.frame.minY - stripY, accuracy: 0.001)
+    }
+
+    func testTheHoleAndTheTypingWindowTakeTheBackgroundButNotTheText() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 1600, height: 96))
+        view.style = .blur
+        let surface = try XCTUnwrap(view.subviews.first as? TrackAnnouncementSurfaceView)
+        let content = try XCTUnwrap(view.subviews.last as? TrackAnnouncementContentView)
+        XCTAssertTrue(surface.backdropView is NSVisualEffectView, "the blur is in the background's container")
+        XCTAssertNil(surface.layer?.mask, "no mask without a hole")
+        XCTAssertNil(surface.typingWindowMask)
+
+        view.peephole = TrackAnnouncementPeephole(centre: CGPoint(x: 300, y: 48), radius: 40, feather: 10)
+        view.setTypingWindow(radius: 360, feather: 144, progress: 1)
+        XCTAssertTrue(surface.layer?.mask is TrackAnnouncementPeepholeMask)
+        XCTAssertTrue(surface.typingWindowMask is TrackAnnouncementTypingMask, "on a view of its own, so the two holes multiply")
+        XCTAssertNil(content.layer?.mask, "the text stays over both")
+
+        view.peephole = nil
+        view.setTypingWindow(radius: 360, feather: 144, progress: 0)
+        XCTAssertNil(surface.layer?.mask)
+        XCTAssertNil(surface.typingWindowMask)
+    }
+
+    func testTheTypingWindowOpensInTheMiddleAndKeepsTheTextsBackground() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))
+        view.setTypingWindow(radius: 360, feather: 144, centreHeight: 90, progress: 0.5)
+
+        let window = try XCTUnwrap(view.typingWindow)
+        XCTAssertEqual(window.hole.centre, CGPoint(x: 1000, y: 194), "across the middle, above the top edge, so the strip gets a concave scoop")
+        XCTAssertEqual(window.hole.radius, 360)
+        XCTAssertEqual(window.progress, 0.5)
+        // "Title", "Artist", "Album" and the stars end well short of the middle, and the kept
+        // background ends a margin after them
+        let text = TrackAnnouncementLayout.frames(in: view.bounds.size).title
+        XCTAssertGreaterThan(window.keepUntilX, text.minX + TrackAnnouncementSeeThrough.keepMargin)
+        XCTAssertLessThan(window.keepUntilX, 400)
+
+        // A long title covers more, and keeps more
+        view.announcement = TrackAnnouncement(identity: "2", title: "Calling My Name (Live New Orleans '89), Extended Version", artist: "Daniel Lanois", album: "Album")
+        XCTAssertGreaterThan(try XCTUnwrap(view.typingWindow).keepUntilX, window.keepUntilX + 100)
+    }
+
+    func testTheMaskCoversTheGlassWhereItHangsBelowTheStrip() throws {
+        try skipWithoutLiquidGlass()
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        view.style = .glass
+        let surface = try XCTUnwrap(view.subviews.first as? TrackAnnouncementSurfaceView)
+
+        view.peephole = TrackAnnouncementPeephole(centre: CGPoint(x: 300, y: 48), radius: 40, feather: 10)
+
+        let mask = try XCTUnwrap(surface.layer?.mask)
+        XCTAssertEqual(mask.frame, view.bounds.union(view.backdropFrame))
+        XCTAssertLessThan(mask.frame.minY, 0)
+    }
+
     // MARK: - Styles
 
     func testClassicStyleHasNoBackdrop() {
@@ -311,7 +655,10 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(blur.blendingMode, .behindWindow)
         XCTAssertEqual(blur.state, .active, "the panel is never active, so the blur must not follow it")
         XCTAssertEqual(blur.frame, view.bounds)
-        XCTAssertTrue(view.subviews.first === blur, "the backdrop sits under the drawn content")
+        let surface = try XCTUnwrap(view.subviews.first as? TrackAnnouncementSurfaceView, "the background under the drawn content")
+        XCTAssertTrue(blur.isDescendant(of: surface))
+        XCTAssertTrue(blur.superview?.subviews.first === blur, "the backdrop sits under the wash")
+        XCTAssertTrue(blur.superview?.subviews.last === surface.wash)
         XCTAssertEqual(view.tintAlpha, TrackAnnouncementLayout.blurTintAlpha)
     }
 
@@ -418,7 +765,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     }
 
     func testGlassEdgeIsDrawnOnlyInLightAppearances() throws {
-        let view = TrackAnnouncementContentView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        let view = TrackAnnouncementWashView(frame: NSRect(x: 0, y: 0, width: 600, height: 96))
         view.tintAlpha = 0
         view.sheen = .init(rect: NSRect(x: 10, y: -8, width: 580, height: 104), cornerRadius: 8)
 
@@ -497,7 +844,22 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         view.style = .classic
 
         XCTAssertNil(view.backdropView)
-        XCTAssertFalse(view.subviews.contains { $0 is NSVisualEffectView })
+        XCTAssertFalse(descendants(of: view).contains { $0 is NSVisualEffectView })
+    }
+
+    private func descendants(of view: NSView) -> [NSView] {
+        return view.subviews + view.subviews.flatMap { descendants(of: $0) }
+    }
+
+    func testTheClassicStripStillDrawsItsTintUnderTheText() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+
+        // The right end of the strip is clear of the short title: only the wash paints it
+        let colour = try XCTUnwrap(rep.colorAt(x: rep.pixelsWide - 4, y: rep.pixelsHigh / 2))
+        XCTAssertEqual(colour.alphaComponent, TrackAnnouncementLayout.backgroundAlpha, accuracy: 0.02, "Growl's 60% black")
+        XCTAssertLessThan(colour.brightnessComponent, 0.05)
     }
 
     func testReduceTransparencyMakesEveryStyleOpaque() {
