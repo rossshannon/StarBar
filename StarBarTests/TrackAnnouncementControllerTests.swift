@@ -229,6 +229,44 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song A"])
     }
 
+    /// Replays what Music sent on 2026-09-23 for a streamed Apple Music song: its events carry
+    /// no persistent ID, so the identity is name|artist|album, and a Stopped naming no track
+    /// arrived 1.2 s into the song and was followed 0.18 s later by the same song playing.
+    /// That was announced twice.
+    func testABareStoppedBlipDuringAStreamedSongDoesNotAnnounceItAgain() {
+        let song = "The River Cried|Cyndi Lauper|True Colors (40th Anniversary Expanded Edition)"
+        update(snapshot(track: song))
+        clock.advance(by: 0.67)
+        update(snapshot(track: song))
+        clock.advance(by: 0.51)
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: 0.18)
+        update(snapshot(track: song))
+
+        XCTAssertEqual(presenter.shown.count, 1, "a stop lasting a fraction of a second is Music's blip, not the user")
+    }
+
+    /// Music sends the same bare Stopped when the user really stops, measured the same day:
+    /// Paused and Stopped with only a Player State key. Replaying the song after that is a
+    /// new play, and announces.
+    func testABareStoppedThatLastsAnnouncesTheSameSongAgain() {
+        update(snapshot(track: "A"))
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: 3)
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song A"])
+    }
+
+    func testABareStoppedBlipBeforeADifferentSongStillAnnouncesIt() {
+        update(snapshot(track: "A"))
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: 0.18)
+        update(snapshot(track: "B"))
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song B"])
+    }
+
     func testMusicNotRunningThenPlayingAnnounces() {
         update(nil)
         update(snapshot(track: "A"))

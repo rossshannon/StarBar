@@ -85,6 +85,11 @@ final class TrackAnnouncementController: NSObject {
     /// How long a rating chosen in StarBar wins over Music's reads: the save delay, plus
     /// time for the Apple Event
     static let pendingRatingLifetime = iTunesRadioStation.ratingSaveDelay + 1.0
+    /// A Stopped that names no track and is followed this soon by the same song is Music's
+    /// blip, not the user stopping. Measured 2026-09-23: a streamed song got a bare Stopped
+    /// 1.2 s in, and was playing again 0.18 s later. A real stop sends the same bare payload,
+    /// so only the time between them tells the two apart.
+    static let stopBlipWindow: TimeInterval = 1.0
 
     /// Reads the player now, or returns nil when Music isn't running
     private let readPlayer: () -> PlayerSnapshot?
@@ -108,6 +113,9 @@ final class TrackAnnouncementController: NSObject {
     /// The last snapshot that identified a track, for menu validation and on-demand showing
     /// without another read of the player
     private var lastSnapshot: PlayerSnapshot?
+    /// The track that was playing when a Stopped naming no track arrived, and when, in case
+    /// the same song comes straight back (`stopBlipWindow`)
+    private var bareStop: (identity: String, at: Date)?
     /// What the strip is showing while the hold timer runs
     private var currentAnnouncement: TrackAnnouncement?
     private var hideTimer: RatingReminderTimer?
@@ -173,11 +181,20 @@ extension TrackAnnouncementController {
             return
         }
         if snapshot.state == .stopped {
+            if snapshot.identity == nil, let last = lastIdentity {
+                bareStop = (last, clock.now())
+            }
             lastIdentity = nil
             lastSnapshot = nil
             return
         }
         guard let identity = snapshot.identity else { return }
+        if let stop = bareStop {
+            bareStop = nil
+            if stop.identity == identity, clock.now().timeIntervalSince(stop.at) < TrackAnnouncementController.stopBlipWindow {
+                lastIdentity = identity
+            }
+        }
         lastSnapshot = snapshot
         let isNewTrack = identity != lastIdentity
         // A track counts as seen once it has played (or was there at launch). One the user
