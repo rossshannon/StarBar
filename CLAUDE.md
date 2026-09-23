@@ -11,5 +11,5 @@ The project guide above applies to every tool. This file adds only what is speci
 ## Working in this repo
 
 - `.claude/` is gitignored except for `.claude/skills/`, so project skills are shared and everything else there is local.
-- Session notes go in `docs/sessions/`, which is gitignored. Anything worth keeping belongs in `AGENTS.md`, in a skill, or in a commit message.
+- Anything worth keeping from a session belongs in `AGENTS.md`, in a skill, or in a commit message.
 - If a problem occurs that a rule could have prevented, suggest the rule. Put it in `AGENTS.md` unless it is about Claude Code itself.
