@@ -120,6 +120,8 @@ final class MenuBarRatingControl {
     private lazy var playbackState = MenuBarPlaybackState { [weak self] in
         guard let self = self else { return }
         os_log("Music quit; returning to the stopped icon and resetting the menu bar session")
+        // The player popover has nothing left to show
+        WindowManager.shared.closeAttachedPopover()
         self.displayedSongIdentity = nil
         self.updateGestureRecognizerBehavior()
         self.updateMenuBar()
@@ -174,16 +176,20 @@ final class MenuBarRatingControl {
     }
     private(set) var playState: PlayInfo.PlayerState = .unknown {
         didSet {
-            // FIXME: close attached popover when menu bar collapse
-            if playState == .unknown {
-                WindowManager.shared.attachedPopover?.close()
-            }
+            // Not a reason to close the popover: Music sends events with no player state
+            // around song changes, streamed songs especially, and the menu bar holds its
+            // display through them. The popover closes when Music quits instead.
             updateGestureRecognizerBehavior()
         }
     }
 
     var isStop: Bool {
         return playbackState.isStopped
+    }
+
+    /// True while the user drags across the stars, when Apple Events would stall the preview
+    var isDragging: Bool {
+        return clickController.isDragging
     }
 
     /// Say why a rating shortcut did nothing. Silence here reads as a broken shortcut.
@@ -286,12 +292,29 @@ final class MenuBarRatingControl {
 
 extension MenuBarRatingControl {
 
-    /// Width of the visible content, independent of the fixed active menu-bar allocation.
+    /// Width of the visible content, which can be narrower than the allocation while a
+    /// collapse is still taking the stars away.
     private var menuBarWidth: CGFloat {
         let margin: CGFloat = 4 + 4
         return isStop
             ? margin + CGFloat(2) * ratingControl.spacing + ratingControl.starSize.width
             : margin + ratingControl.starsImage.size.width
+    }
+
+    /// Native width once nothing is animating: the stars keep the full strip, while the add
+    /// button and the stopped dot give the unused space back to the menu bar.
+    private var settledAllocation: CGFloat {
+        return !isStop && ratingControl.mode == .rating ? stripLayout.statusItemWidth : menuBarWidth
+    }
+
+    /// A collapse is fading the add button in: the item narrowed a while ago, so clicks land
+    private var collapseShowsBadge: Bool {
+        return collapseProgress.map { StarCollapse.showsBadge(progress: $0) } ?? false
+    }
+
+    /// The content right-aligned in the item's current width
+    private func padded(_ content: NSImage) -> NSImage {
+        return stripLayout.image(containing: content, allocation: statusItem.length)
     }
 
     private func updateMenuBar(animate: Bool = true, previousStars: Stars? = nil, animateRatingChange: Bool = false) {
@@ -312,13 +335,18 @@ extension MenuBarRatingControl {
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
         updateAccessibility()
 
-        // A library save or rating update must not restart the current motion.
+        // A library save, a rating update, or the same song coming back after Music briefly
+        // sent no track must not restart the current motion or cut it short.
         let canContinueRatingTransition = ratingTransitionTarget == nil
             || (previousStars != nil && ratingTransitionTarget == ratingControl.stars.stars.map { $0.style })
-        if shouldAnimate, widthTimer != nil, !changed, !changesRating, canContinueRatingTransition {
+        if widthTimer != nil, !changed, !changesRating, canContinueRatingTransition {
             updateFavoriteHeartView()
             updateAddToLibrarySpinner()
             return
+        }
+        if widthTimer != nil {
+            os_log("Menu bar transition superseded: display changed %{public}d, rating change %{public}d, animate %{public}d",
+                   changed, changesRating, shouldAnimate)
         }
 
         let fromWidth = displayedContentWidth ?? statusItem.length
@@ -328,11 +356,13 @@ extension MenuBarRatingControl {
         collapseProgress = nil
         ratingTransitionTarget = nil
         let toWidth = menuBarWidth
-        // Change the native allocation only when entering/leaving a playback session.
-        // Mode changes animate the contents inside this fixed canvas.
-        statusItem.length = isStop ? toWidth : stripLayout.statusItemWidth
+        // A collapse keeps the current width until the stars have gone and narrows the item
+        // only while it is empty; see StarCollapse. Widening moves nothing visibly.
+        if !collapses {
+            statusItem.length = settledAllocation
+        }
         guard shouldAnimate, (changed || changesRating), !isStop, fromWidth > 0,
-              (fromWidth != toWidth || changesRating),
+              (fromWidth != toWidth || changesRating || rolls),
               !MenuBarRatingControl.isUITesting,
               !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             finishWidthAnimation()
@@ -355,16 +385,26 @@ extension MenuBarRatingControl {
             os_log("Starting menu bar star collapse to add-to-library button")
             drawCollapse(stars: outgoingStars, progress: 0, fromWidth: fromWidth, toWidth: toWidth)
         } else {
-            statusItem.button?.image = stripLayout.image(containing: ratingControl.starsImage)
+            statusItem.button?.image = padded(ratingControl.starsImage)
         }
         var drawnFrames = 0
         var timing = MenuBarAnimationTiming(duration: duration)
         var firstFrameDelay: TimeInterval?
+        var narrowedAt: Date?
         widthTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             guard let self = self else { return }
-            let elapsed = self.widthClock.now().timeIntervalSince(start)
-            if firstFrameDelay == nil { firstFrameDelay = elapsed }
-            let progress = timing.progress(at: self.widthClock.now())
+            let now = self.widthClock.now()
+            let elapsed = now.timeIntervalSince(start)
+            if firstFrameDelay == nil {
+                firstFrameDelay = elapsed
+                if collapses { os_log("Menu bar collapse drew its first frame after %{public}.3f s", elapsed) }
+            }
+            var progress = timing.progress(at: now)
+            if collapses {
+                // Time the hidden wait from the narrowing itself, however late that frame was
+                progress = StarCollapse.progress(elapsed: progress * duration,
+                                                 sinceNarrowing: narrowedAt.map { now.timeIntervalSince($0) })
+            }
             if progress >= 1 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
                 if changesRating || collapses {
                     os_log("Completed menu bar transition: %{public}d frames, first-frame wait %{public}.3f s", drawnFrames, firstFrameDelay ?? 0)
@@ -379,6 +419,7 @@ extension MenuBarRatingControl {
                 self.drawRollout(progress: progress, fromWidth: fromWidth, toWidth: toWidth)
             } else if collapses {
                 self.drawCollapse(stars: outgoingStars, progress: progress, fromWidth: fromWidth, toWidth: toWidth)
+                if narrowedAt == nil, StarCollapse.hasShrunk(progress: progress) { narrowedAt = now }
             } else {
                 let eased = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
                 self.displayedContentWidth = fromWidth + (toWidth - fromWidth) * eased
@@ -397,16 +438,21 @@ extension MenuBarRatingControl {
         rolloutProgress = progress
         let width = StarRollout.width(from: fromWidth, to: toWidth, progress: progress)
         displayedContentWidth = width
-        statusItem.button?.image = stripLayout.image(containing: StarRollout.image(
+        statusItem.button?.image = padded(StarRollout.image(
             stars: ratingControl.stars, width: max(1, width - 8), progress: progress))
         updateFavoriteHeartView()
     }
 
     private func drawCollapse(stars: Stars, progress: Double, fromWidth: CGFloat, toWidth: CGFloat) {
         collapseProgress = progress
+        if StarCollapse.hasShrunk(progress: progress), statusItem.length != settledAllocation {
+            // Nothing is showing now, so the menu bar's slide of the narrower item is unseen
+            statusItem.length = settledAllocation
+            os_log("Stars gone; narrowing the menu bar item to %{public}.0f pt", settledAllocation)
+        }
         let width = StarCollapse.width(from: fromWidth, to: toWidth, progress: progress)
         displayedContentWidth = width
-        statusItem.button?.image = stripLayout.image(containing: StarCollapse.image(
+        statusItem.button?.image = padded(StarCollapse.image(
             stars: stars, width: max(1, width - 8), progress: progress,
             isFavorited: ratingControl.isFavorited, isPending: ratingControl.isAddingToLibrary))
         updateFavoriteHeartView()
@@ -419,8 +465,8 @@ extension MenuBarRatingControl {
         collapseProgress = nil
         ratingTransitionTarget = nil
         displayedContentWidth = menuBarWidth
-        statusItem.length = isStop ? menuBarWidth : stripLayout.statusItemWidth
-        statusItem.button?.image = !isStop ? stripLayout.image(containing: ratingControl.starsImage) : menuBarIcon.image
+        statusItem.length = settledAllocation
+        statusItem.button?.image = !isStop ? padded(ratingControl.starsImage) : menuBarIcon.image
         updateFavoriteHeartView()
         updateAddToLibrarySpinner()
     }
@@ -440,11 +486,34 @@ extension MenuBarRatingControl {
                       y: 0.5 * (bounds.height - size.height), width: size.width, height: size.height)
     }
 
+    /// Where the player popover's arrow points, across the button: the gap just left of the
+    /// heart, which is between the heart and the stars or the Apple Music button in both modes.
+    /// The heart is anchored to the button's right edge, so this point stays with it whatever
+    /// width the item has; the middle of the button would not, because while the strip animates
+    /// the allocation can be wider than what is drawn, with blank space on the left. The middle
+    /// of the icon when stopped.
+    static func popoverAnchorX(in bounds: NSRect, starSize: NSSize, spacing: CGFloat, isStopped: Bool) -> CGFloat {
+        guard !isStopped else { return bounds.midX }
+        return favoriteHeartFrame(in: bounds, size: starSize).minX - 0.5 * spacing
+    }
+
+    /// `popoverAnchorX` as a zero-width rect the height of the button, in screen coordinates
+    var popoverAnchorInScreen: NSRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        let x = Self.popoverAnchorX(in: button.bounds, starSize: ratingControl.starSize,
+                                    spacing: ratingControl.spacing, isStopped: isStop)
+        let rect = NSRect(x: x, y: button.bounds.minY, width: 0, height: button.bounds.height)
+        return window.convertToScreen(button.convert(rect, to: nil))
+    }
+
     /// Show the current heart appearance over the strip’s reserved, empty slot.
     /// Independent of image width: AppKit may apply the requested status item width later.
     private func updateFavoriteHeartView() {
         guard let button = statusItem.button else { return }
-        favoriteHeartView.alphaValue = rolloutProgress.map { StarRollout.heartOpacity(progress: $0) } ?? 1
+        // Every layout change comes through here, so an open popover follows the heart
+        WindowManager.shared.updatePopoverAnchor()
+        favoriteHeartView.alphaValue = rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
+            ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
         favoriteHeartView.isHidden = isStop
         guard !favoriteHeartView.isHidden else { return }
 
@@ -567,10 +636,11 @@ extension MenuBarRatingControl {
     @objc private func clickGestureRecognizerHandler(_ sender: NSClickGestureRecognizer) {
         os_log("%{public}s[%{public}ld], %{public}s: %s", ((#file as NSString).lastPathComponent), #line, #function, sender.debugDescription)
         guard sender.state == .ended else { return }
-        if ratingTransitionTarget != nil { finishWidthAnimation() }
+        if ratingTransitionTarget != nil || collapseShowsBadge { finishWidthAnimation() }
         // The strip is mid-resize: the mode and image have already changed but the button has
-        // not finished narrowing, so a click maps to the wrong position. Over 0.22 s that is
-        // enough to add a song the user did not mean to add.
+        // not finished narrowing, so a click maps to the wrong position. That is enough to add
+        // a song the user did not mean to add. Once a collapse shows the add button the width
+        // has long stopped changing, so the click is taken and the collapse finished above.
         guard widthTimer == nil else {
             os_log("%{public}s[%{public}ld], %{public}s: ignoring a click while the strip is still resizing", ((#file as NSString).lastPathComponent), #line, #function)
             return
@@ -587,7 +657,7 @@ extension MenuBarRatingControl {
 
     /// Hand the press to the click controller, and follow the drag if one begins
     private func handlePress() {
-        if ratingTransitionTarget != nil { finishWidthAnimation() }
+        if ratingTransitionTarget != nil || collapseShowsBadge { finishWidthAnimation() }
         guard widthTimer == nil, playbackState.canInteract else { return }
         reminderController?.stopSweep()
         dragTimer?.invalidate()
@@ -707,7 +777,7 @@ extension MenuBarRatingControl {
         let pressedForPlayingID = iTunesPlayer.shared.playing?.persistentID
         // Music takes seconds over this, so say so rather than leaving the button untouched
         ratingControl.update(isAddingToLibrary: true)
-        statusItem.button?.image = stripLayout.image(containing: ratingControl.starsImage)
+        statusItem.button?.image = padded(ratingControl.starsImage)
         updateAddToLibrarySpinner()
         statusItem.button?.needsDisplay = true
 
@@ -715,7 +785,7 @@ extension MenuBarRatingControl {
             guard let self = self else { return }
             self.ratingControl.update(isAddingToLibrary: false)
             if self.widthTimer == nil {
-                self.statusItem.button?.image = self.stripLayout.image(containing: self.ratingControl.starsImage)
+                self.statusItem.button?.image = self.padded(self.ratingControl.starsImage)
             }
             self.updateAddToLibrarySpinner()
             self.statusItem.button?.needsDisplay = true

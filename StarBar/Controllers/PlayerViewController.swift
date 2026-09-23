@@ -12,6 +12,11 @@ import CoreImage
 
 final class PlayerViewController: NSViewController {
 
+    /// The artwork's corners: the same slight rounding as the artwork on the glass track
+    /// announcement, so that square art does not sit square inside the popover's rounded frame.
+    /// The popover's own corners are AppKit's; `NSPopover` has no public way to change them.
+    static let artworkCornerRadius = TrackAnnouncementLayout.glassArtworkCornerRadius
+
     private let playerPanelViewController = PlayerPanelViewController()
 
     // back cover with blur effect
@@ -20,6 +25,8 @@ final class PlayerViewController: NSViewController {
         view.wantsLayer = true
         view.layer = CALayer()
         view.layer?.contentsGravity = CALayerContentsGravity.resizeAspectFill
+        // Rounded like the cover, or its square corners show behind the cover's round ones
+        PlayerViewController.roundArtworkCorners(of: view)
         return view
     }()
 
@@ -27,8 +34,16 @@ final class PlayerViewController: NSViewController {
     private let coverImageView: MovableImageView = {
         let imageView = MovableImageView()
         imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.wantsLayer = true
+        PlayerViewController.roundArtworkCorners(of: imageView)
         return imageView
     }()
+
+    private static func roundArtworkCorners(of view: NSView) {
+        view.layer?.cornerRadius = artworkCornerRadius
+        view.layer?.cornerCurve = .continuous
+        view.layer?.masksToBounds = true
+    }
 
     // Misc.
     private lazy var menuButtonMenu: NSMenu = {

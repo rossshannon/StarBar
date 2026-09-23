@@ -4,18 +4,18 @@ import XCTest
 final class StarCollapseTests: XCTestCase {
     private let stars = Stars.rating(70, starSize: NSSize(width: 16, height: 16), spacing: 4, isFavorited: true)
 
-    func testCollapseAndRolloutKeepTheSameMenuBarCanvas() {
+    func testCollapseKeepsTheFullStripUntilTheStarsAreGoneThenTakesTheBadgeWidth() {
         let layout = MenuBarStripLayout(starSize: NSSize(width: 16, height: 16), spacing: 4)
         for frame in 0...60 {
             let progress = Double(frame) / 60
-            let collapseWidth = StarCollapse.width(from: 132, to: 68, progress: progress)
-            let collapse = StarCollapse.image(stars: stars, width: collapseWidth - 8,
-                                              progress: progress, isFavorited: true)
+            let allocation: CGFloat = StarCollapse.hasShrunk(progress: progress) ? 68 : 132
+            let width = StarCollapse.width(from: 132, to: 68, progress: progress)
+            XCTAssertEqual(width, allocation, "content and allocation change together, once")
+            let collapse = StarCollapse.image(stars: stars, width: width - 8, progress: progress, isFavorited: true)
+            XCTAssertEqual(layout.image(containing: collapse, allocation: allocation).size.width + 8, allocation)
             let rolloutWidth = StarRollout.width(from: 68, to: 132, progress: progress)
             let rollout = StarRollout.image(stars: stars, width: rolloutWidth - 8, progress: progress)
-            for content in [collapse, rollout] {
-                XCTAssertEqual(layout.image(containing: content).size.width + 8, layout.statusItemWidth)
-            }
+            XCTAssertEqual(layout.image(containing: rollout).size.width + 8, layout.statusItemWidth)
         }
     }
 
@@ -32,27 +32,57 @@ final class StarCollapseTests: XCTestCase {
                                                    previousMode: .addToLibrary, mode: .rating))
     }
 
-    func testShrinkOverlapsNarrowingAndBadgeFadesInLate() {
-        XCTAssertEqual(StarCollapse.duration, 0.35)
-        XCTAssertEqual(StarCollapse.duration * StarCollapse.shrinkFraction, 0.15, accuracy: 0.0001)
-        let halfwayThroughShrink = StarCollapse.shrinkFraction / 2
-        XCTAssertEqual(StarCollapse.scale(progress: halfwayThroughShrink), 0.5, accuracy: 0.0001)
-        XCTAssertLessThan(StarCollapse.width(from: 132, to: 68, progress: halfwayThroughShrink), 132)
-        XCTAssertEqual(StarCollapse.scale(progress: StarCollapse.shrinkFraction), 0)
-        XCTAssertEqual(StarCollapse.badgeOpacity(progress: 0.55), 0)
-        XCTAssertEqual(StarCollapse.badgeOpacity(progress: 0.775), 0.5, accuracy: 0.0001)
+    func testStarsGoThenTheItemNarrowsUnseenThenTheBadgeAndHeartComeIn() {
+        XCTAssertEqual(StarCollapse.duration, 0.75, accuracy: 0.0001)
+        XCTAssertEqual(StarCollapse.duration * StarCollapse.shrinkFraction, StarCollapse.fadeOutDuration, accuracy: 0.0001)
+        XCTAssertEqual(StarCollapse.duration * (StarCollapse.badgeStart - StarCollapse.shrinkFraction),
+                       StarCollapse.settleDuration, accuracy: 0.0001)
+        XCTAssertGreaterThanOrEqual(StarCollapse.settleDuration, 0.33, "the measured slide of the narrower item")
+
+        let halfwayOut = StarCollapse.shrinkFraction / 2
+        XCTAssertEqual(StarCollapse.scale(progress: halfwayOut), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(StarCollapse.heartOpacity(progress: halfwayOut), 0.5, accuracy: 0.0001)
+        XCTAssertFalse(StarCollapse.hasShrunk(progress: halfwayOut))
+
+        // Everything is gone before the item narrows, and nothing returns until the slide is over
+        XCTAssertTrue(StarCollapse.hasShrunk(progress: StarCollapse.shrinkFraction))
+        for progress in stride(from: StarCollapse.shrinkFraction, through: StarCollapse.badgeStart, by: 0.01) {
+            XCTAssertEqual(StarCollapse.scale(progress: progress), 0)
+            XCTAssertEqual(StarCollapse.heartOpacity(progress: progress), 0)
+            XCTAssertEqual(StarCollapse.badgeOpacity(progress: progress), 0)
+        }
+
+        let halfwayIn = (StarCollapse.badgeStart + 1) / 2
+        XCTAssertEqual(StarCollapse.badgeOpacity(progress: halfwayIn), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(StarCollapse.heartOpacity(progress: halfwayIn), 0.5, accuracy: 0.0001)
         XCTAssertEqual(StarCollapse.badgeOpacity(progress: 1), 1)
-        XCTAssertLessThan(StarCollapse.width(from: 132, to: 68, progress: 0.55), 100)
+        XCTAssertEqual(StarCollapse.heartOpacity(progress: 1), 1)
     }
 
-    func testSlowFirstFrameDoesNotSkipTheShrink() {
+    func testALateFrameCannotSkipTheHiddenWait() {
+        // Frames at 0 s, 0.1 s and then, after a stall, 0.6 s
+        let late = StarCollapse.progress(elapsed: 0.6, sinceNarrowing: nil)
+        XCTAssertEqual(late, StarCollapse.shrinkFraction, "the stall ends at the narrowing point, not past it")
+        XCTAssertEqual(StarCollapse.badgeOpacity(progress: late), 0)
+        XCTAssertEqual(StarCollapse.heartOpacity(progress: late), 0)
+        // The wait runs from the narrowing, however late it was
+        XCTAssertEqual(StarCollapse.badgeOpacity(progress: StarCollapse.progress(
+            elapsed: 5, sinceNarrowing: StarCollapse.settleDuration * 0.99)), 0)
+        XCTAssertGreaterThan(StarCollapse.badgeOpacity(progress: StarCollapse.progress(
+            elapsed: 5, sinceNarrowing: StarCollapse.settleDuration + StarCollapse.fadeInDuration / 2)), 0)
+        XCTAssertEqual(StarCollapse.progress(elapsed: 5, sinceNarrowing: StarCollapse.duration), 1)
+        XCTAssertEqual(StarCollapse.progress(elapsed: StarCollapse.fadeOutDuration / 2, sinceNarrowing: nil),
+                       StarCollapse.shrinkFraction / 2, accuracy: 0.0001)
+    }
+
+    func testSlowFirstFrameDoesNotSkipTheFadeOut() {
         let clock = FakeClock()
         var timing = MenuBarAnimationTiming(duration: StarCollapse.duration)
         clock.advance(by: 0.3)
         XCTAssertEqual(StarCollapse.scale(progress: timing.progress(at: clock.now())), 1)
-        clock.advance(by: 0.075)
+        clock.advance(by: StarCollapse.fadeOutDuration / 2)
         XCTAssertEqual(StarCollapse.scale(progress: timing.progress(at: clock.now())), 0.5, accuracy: 0.0001)
-        clock.advance(by: 0.275)
+        clock.advance(by: StarCollapse.duration)
         XCTAssertEqual(timing.progress(at: clock.now()), 1, accuracy: 0.0001)
     }
 
@@ -63,16 +93,18 @@ final class StarCollapseTests: XCTestCase {
         XCTAssertEqual(StarCollapse.width(from: 132, to: 68, progress: 2), 68)
         var previousScale: CGFloat = 1
         var previousWidth: CGFloat = 132
+        var widthChanges = 0
         for step in 0...100 {
             let progress = Double(step) / 100
             let scale = StarCollapse.scale(progress: progress)
             let width = StarCollapse.width(from: 132, to: 68, progress: progress)
             XCTAssertLessThanOrEqual(scale, previousScale)
             XCTAssertLessThanOrEqual(width, previousWidth)
-            XCTAssertGreaterThanOrEqual(width, 68)
+            if width != previousWidth { widthChanges += 1 }
             previousScale = scale
             previousWidth = width
         }
+        XCTAssertEqual(widthChanges, 1, "each width change makes the menu bar slide the item")
     }
 
     func testOldHalfStarsSurviveReplacementOfTheControlsRating() {
@@ -87,7 +119,7 @@ final class StarCollapseTests: XCTestCase {
         XCTAssertEqual(control.rating, 0, "Rendering must not restore the old rating to the live control")
     }
 
-    func testPhaseBoundaryHasNeitherStarsNorBadge() throws {
+    func testEmptyWhileNarrowingThenTheBadgeAppears() throws {
         let image = StarCollapse.image(stars: stars, width: 124, progress: StarCollapse.shrinkFraction, isFavorited: true)
         let bitmap = try bitmap(image)
         XCTAssertTrue(image.isTemplate)
@@ -96,28 +128,29 @@ final class StarCollapseTests: XCTestCase {
                 XCTAssertEqual(bitmap.colorAt(x: x, y: y)?.alphaComponent, 0)
             }
         }
-        let badge = try self.bitmap(StarCollapse.image(stars: stars, width: 124, progress: 0.7, isFavorited: true))
+        let badge = try self.bitmap(StarCollapse.image(stars: stars, width: 60, progress: 0.9, isFavorited: true))
         XCTAssertTrue((0..<badge.pixelsWide).contains { x in
             (0..<badge.pixelsHigh).contains { y in (badge.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0 }
         })
     }
 
-    func testOutlinedHeartStaysAtTheRightEdgeThroughBothPhases() throws {
-        var reference: [CGFloat]?
-        for progress in [0.0, 0.1, 0.2, 0.6, 1.0] {
+    func testOutlinedHeartStaysAtTheRightEdgeAndIsHiddenWhileNarrowing() throws {
+        func heartAlpha(_ progress: Double) throws -> [CGFloat] {
             let width = StarCollapse.width(from: 132, to: 68, progress: progress) - 8
             let image = StarCollapse.image(stars: stars, width: width, progress: progress, isFavorited: false)
             let bitmap = try bitmap(image)
             let heartWidth = Int((16 * CGFloat(bitmap.pixelsWide) / width).rounded())
-            let pixels = (0..<bitmap.pixelsHigh).flatMap { y in
+            return (0..<bitmap.pixelsHigh).flatMap { y in
                 ((bitmap.pixelsWide - heartWidth)..<bitmap.pixelsWide).map { x in
                     bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0
                 }
             }
-            XCTAssertTrue(pixels.contains { $0 > 0 })
-            if let reference = reference { XCTAssertEqual(pixels, reference) }
-            reference = pixels
         }
+        let before = try heartAlpha(0)
+        XCTAssertTrue(before.contains { $0 > 0 })
+        XCTAssertEqual(try heartAlpha(1), before, "same heart in the same place at the right edge")
+        let narrowing = (StarCollapse.shrinkFraction + StarCollapse.badgeStart) / 2
+        XCTAssertTrue(try heartAlpha(narrowing).allSatisfy { $0 == 0 })
     }
 
     func testSeparateOutlineLeavesNoDuplicateHeartInTransitionImages() throws {
@@ -194,23 +227,67 @@ final class StarCollapseTests: XCTestCase {
                        "collapse begins with the deleted song's actual stars")
 
         clock.fireRepeating()
-        clock.advance(by: StarCollapse.duration * 0.5)
+        clock.advance(by: StarCollapse.fadeOutDuration * 0.5)
         clock.fireRepeating()
         XCTAssertTrue(timer.isValid)
-        XCTAssertEqual(menu.statusItem.length, fullWidth, "native allocation must not move the heart")
+        XCTAssertEqual(menu.statusItem.length, fullWidth, "the item keeps its width while the stars are visible")
 
         // The later legacy save signal must not restart a collapse already in progress.
         menu.applyTrackDisplay(PlayingTrack(track: stream), isStopped: false, musicIsRunning: true)
         XCTAssertTrue(clock.timers.last === timer)
+
+        // Nor may Music briefly sending no track and then the same song again, as it did in
+        // the first live try: that cut the collapse short and narrowed the item in one step.
+        menu.applyTrackDisplay(nil, isStopped: false, musicIsRunning: true)
+        menu.applyTrackDisplay(PlayingTrack(track: stream), isStopped: false, musicIsRunning: true)
+        XCTAssertTrue(clock.timers.last === timer)
+        XCTAssertTrue(timer.isValid)
+        XCTAssertEqual(menu.statusItem.length, fullWidth)
+
+        // Once the stars are gone the item narrows, once, to the add button's own width. This
+        // frame is late, as when Music reads hold the main thread: on the collapse's own clock
+        // the badge would already be fading in, but the wait is timed from the narrowing.
+        let compactWidth = menu.ratingControl.starsImage.size.width + 8
+        XCTAssertLessThan(compactWidth, fullWidth)
+        clock.advance(by: StarCollapse.fadeOutDuration * 0.5 + StarCollapse.settleDuration
+                      + StarCollapse.fadeInDuration * 0.5)
+        clock.fireRepeating()
+        XCTAssertTrue(timer.isValid)
+        XCTAssertEqual(menu.statusItem.length, compactWidth, "narrowed while nothing is showing")
+        XCTAssertTrue(try isBlank(XCTUnwrap(menu.statusItem.button?.image)), "nothing shows while the item slides")
+        clock.advance(by: StarCollapse.settleDuration * 0.9)
+        clock.fireRepeating()
+        XCTAssertTrue(timer.isValid)
+        XCTAssertTrue(try isBlank(XCTUnwrap(menu.statusItem.button?.image)))
+
         clock.advance(by: StarCollapse.duration)
         clock.fireRepeating()
         XCTAssertFalse(timer.isValid)
-        XCTAssertEqual(menu.statusItem.length, fullWidth)
+        XCTAssertEqual(menu.statusItem.length, compactWidth)
         XCTAssertEqual(menu.statusItem.button?.image?.tiffRepresentation,
-                       layout.image(containing: menu.ratingControl.starsImage).tiffRepresentation)
+                       menu.ratingControl.starsImage.tiffRepresentation,
+                       "the add button fills the narrowed item with no padding")
+
+        // A rated song after the narrowing widens the item in one step and rolls the stars out
+        let rated = FakeTrack(name: "StarBar rated after collapse \(UUID().uuidString)",
+                              persistentID: "00000000000000D4", rating: 60)
+        menu.applyTrackDisplay(PlayingTrack(track: rated), isStopped: false, musicIsRunning: true)
+        XCTAssertEqual(menu.ratingControl.mode, .rating)
+        XCTAssertEqual(menu.statusItem.length, fullWidth)
+        let rollout = try XCTUnwrap(clock.timers.last)
+        XCTAssertFalse(rollout === timer)
+        XCTAssertTrue(rollout.isValid, "stars roll out rather than snapping in")
+        XCTAssertTrue(rated.ratingsWritten.isEmpty)
         XCTAssertTrue(track.ratingsWritten.isEmpty)
         XCTAssertTrue(copy.ratingsWritten.isEmpty)
         XCTAssertTrue(stream.ratingsWritten.isEmpty)
+    }
+
+    private func isBlank(_ image: NSImage) throws -> Bool {
+        let bitmap = try bitmap(image)
+        return !(0..<bitmap.pixelsWide).contains { x in
+            (0..<bitmap.pixelsHigh).contains { y in (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0 }
+        }
     }
 
     private func bitmap(_ image: NSImage) throws -> NSBitmapImageRep {

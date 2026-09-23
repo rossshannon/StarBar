@@ -25,6 +25,10 @@ final class WindowManager: NSObject {
     private(set) var invisibleWindows: [Int: NSWindow] = [:]
     private(set) var attachedPopover: NSPopover?
     private(set) var detachedPopover: NSPopover?
+    /// Where the attached popover's invisible window was last asked to go. Compared with this
+    /// rather than the window's frame, because the system nudges a window off the menu bar and
+    /// the frame never matches the origin asked for.
+    private var popoverAnchorOrigin: NSPoint?
 
     // MARK: - Singleton
     public static let shared = WindowManager()
@@ -38,8 +42,7 @@ final class WindowManager: NSObject {
 
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showOrClosePopover.rawValue, toAction: { [weak self] in
             guard self?.attachedPopover == nil else {
-                self?.attachedPopover?.close()
-                self?.attachedPopover = nil
+                self?.closeAttachedPopover()
                 return
             }
 
@@ -87,8 +90,7 @@ extension WindowManager {
 
         // close undetached popover if displaying
         guard attachedPopover == nil else {
-            attachedPopover?.close()
-            attachedPopover = nil
+            closeAttachedPopover()
             return
         }
 
@@ -98,20 +100,15 @@ extension WindowManager {
         popoverRelativeWindow.backgroundColor = .red
         popoverRelativeWindow.alphaValue = 0
 
-        // find the coordinates of the statusBarItem in screen space
-        let buttonRect = button.convert(button.bounds, to: nil)
-        guard let buttonWindow = button.window else {
+        guard let anchor = menuBarRatingControl?.popoverAnchorInScreen else {
             assertionFailure()
             return
         }
-        let screenRect = buttonWindow.convertToScreen(buttonRect)
-
-        // calculate the bottom center position (10 is the half of the window width)
-        let posX = screenRect.origin.x + (screenRect.width / 2) - 10
-        let posY = screenRect.origin.y
 
         // position and show the window
-        popoverRelativeWindow.setFrameOrigin(NSPoint(x: posX, y: posY))
+        let origin = WindowManager.popoverRelativeWindowOrigin(for: anchor)
+        popoverRelativeWindow.setFrameOrigin(origin)
+        popoverAnchorOrigin = origin
         popoverRelativeWindow.makeKeyAndOrderFront(self)
         popoverRelativeWindow.level = .floating                       // make popover always on top
         popoverRelativeWindow.isReleasedWhenClosed = false            // seealso: WindowManager.popoverDidClose(_:)
@@ -131,6 +128,60 @@ extension WindowManager {
 //        }
 
         attachedPopover = popover
+
+        // The status item's own window moves when other menu bar items come and go, and is
+        // resized when the strip starts or stops
+        stopFollowingStatusItemWindow()
+        if let buttonWindow = button.window {
+            for name in WindowManager.statusItemWindowChanges {
+                NotificationCenter.default.addObserver(self, selector: #selector(WindowManager.statusItemWindowDidChange(_:)), name: name, object: buttonWindow)
+            }
+        }
+    }
+
+    /// Close the popover attached to the menu bar, if there is one. The reference is dropped
+    /// first: the popover counts as shown until its close animation ends, and a menu bar
+    /// update in that time would otherwise move it, towards the stopped icon when Music quits.
+    func closeAttachedPopover() {
+        let popover = attachedPopover
+        attachedPopover = nil
+        popover?.close()
+    }
+
+    /// Bottom-left of the invisible window the popover points at, centred on the anchor
+    /// (10 is half the window's width)
+    static func popoverRelativeWindowOrigin(for anchor: NSRect) -> NSPoint {
+        return NSPoint(x: anchor.midX - 10, y: anchor.minY)
+    }
+
+    /// Keep the attached popover pointing just left of the heart as the menu bar changes
+    /// under it. A detached popover is a window of its own and stays where it was put.
+    func updatePopoverAnchor() {
+        guard let popover = attachedPopover, popover.isShown,
+              let window = invisibleWindows[popover.hashValue],
+              let contentView = window.contentView,
+              let anchor = menuBarRatingControl?.popoverAnchorInScreen else {
+            return
+        }
+        let origin = WindowManager.popoverRelativeWindowOrigin(for: anchor)
+        guard origin != popoverAnchorOrigin else { return }
+        popoverAnchorOrigin = origin
+        window.setFrameOrigin(origin)
+        // Setting it while the popover is shown is what makes the popover reposition
+        popover.positioningRect = contentView.bounds
+        os_log("%{public}s[%{public}ld], %{public}s: moved popover anchor to x %.1f", ((#file as NSString).lastPathComponent), #line, #function, Double(anchor.midX))
+    }
+
+    private static let statusItemWindowChanges = [NSWindow.didMoveNotification, NSWindow.didResizeNotification]
+
+    @objc private func statusItemWindowDidChange(_ notification: Notification) {
+        updatePopoverAnchor()
+    }
+
+    private func stopFollowingStatusItemWindow() {
+        for name in WindowManager.statusItemWindowChanges {
+            NotificationCenter.default.removeObserver(self, name: name, object: nil)
+        }
     }
 
 }
@@ -205,6 +256,9 @@ extension WindowManager: PopoverProxyDelegate {
         if let popover = attachedPopover, !popover.isShown {
             attachedPopover = nil
         }
+        if attachedPopover == nil {
+            stopFollowingStatusItemWindow()
+        }
 
         if let popover = detachedPopover, !popover.isShown {
             detachedPopover = nil
@@ -225,6 +279,7 @@ extension WindowManager: PopoverProxyDelegate {
 
     func popoverDidDetach(_ popover: NSPopover) {
         attachedPopover = nil
+        stopFollowingStatusItemWindow()
         detachedPopover?.close()
 
         popover.behavior = .applicationDefined
