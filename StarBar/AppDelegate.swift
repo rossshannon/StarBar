@@ -96,6 +96,10 @@ extension AppDelegate {
             readPlayer: { AppDelegate.readAnnouncementSnapshot() },
             loadLiveTrack: { identity, wantsArtwork in AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork) },
             readCurrentIdentity: { announced in AppDelegate.readCurrentTrackIdentity(matching: announced) },
+            readPosition: {
+                guard !MenuBarRatingControl.isUITesting else { return nil }
+                return MenuBarRatingControl.withShortTimeout { iTunes in iTunes.playerPosition } ?? nil
+            },
             presenter: panel,
             isEnabled: UserDefaults.standard.announceNewTracks
         )

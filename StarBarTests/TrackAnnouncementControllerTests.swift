@@ -28,6 +28,9 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     /// The identities the controller asked Music to match against
     private var identityReadsFor: [String] = []
     private var identityReads = 0
+    /// Player positions Music will answer with, in order; nil stands for a failed read
+    private var positions: [TimeInterval?] = []
+    private var positionReads = 0
     private var controller: TrackAnnouncementController!
 
     override func setUp() {
@@ -44,6 +47,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         musicsCurrentIdentity = nil
         identityReadsFor = []
         identityReads = 0
+        positions = []
+        positionReads = 0
         controller = makeController(enabled: true)
     }
 
@@ -71,6 +76,10 @@ final class TrackAnnouncementControllerTests: XCTestCase {
                 self.identityReadsFor.append(announced)
                 return self.musicsCurrentIdentity
             },
+            readPosition: { [unowned self] in
+                self.positionReads += 1
+                return self.positions.isEmpty ? nil : self.positions.removeFirst()
+            },
             presenter: presenter,
             clock: clock,
             accessibility: { [unowned self] in (self.reduceMotion, self.reduceTransparency) },
@@ -96,6 +105,18 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     }
 
     private let expectedHold = TrackAnnouncementLayout.holdDuration + TrackAnnouncementLayout.slideDuration
+
+    /// The position watch, if it is running
+    private var positionWatch: FakeClock.FakeTimer? {
+        return clock.timers.last { $0.isValid && $0.repeats }
+    }
+
+    /// Read the position once, as the watch's timer would, with Music answering `position`
+    private func poll(_ position: TimeInterval?) {
+        guard let watch = positionWatch else { return XCTFail("the position watch is not running") }
+        positions = [position]
+        watch.action()
+    }
 
     // MARK: - New track detection
 
@@ -194,6 +215,154 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.hideCount, 1)
         update(snapshot(track: "A"))
         XCTAssertEqual(presenter.shown.count, 1)
+    }
+
+    // MARK: - Restarts
+
+    /// Music sends no notification when a song restarts (measured 2026-09-23: neither
+    /// playerInfo nor MediaRemote said anything for ⏮ at 1:30), so the position is watched
+    func testRestartingTheSongAnnouncesItAgain() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(1.5)
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song A"])
+    }
+
+    func testTheWatchReadsEveryTwoSeconds() {
+        update(snapshot(track: "A"))
+        XCTAssertEqual(positionWatch?.seconds, TrackAnnouncementController.restartCheckInterval)
+        XCTAssertEqual(TrackAnnouncementController.restartCheckInterval, 2)
+    }
+
+    func testPlayingOnDoesNotAnnounce() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(122)
+        poll(124)
+
+        XCTAssertEqual(presenter.shown.count, 1)
+        XCTAssertEqual(identityReads, 0, "only a suspected restart asks Music which song it is")
+    }
+
+    func testARestartIsNotAnnouncedTwice() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(0.5)
+        poll(2.5)
+        poll(4.5)
+
+        XCTAssertEqual(presenter.shown.count, 2)
+    }
+
+    func testSeekingBackPartWayIsNotARestart() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(40)
+
+        XCTAssertEqual(presenter.shown.count, 1)
+    }
+
+    func testRestartingInTheFirstSecondsIsNotNoticed() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(4)
+        poll(0.5)
+
+        XCTAssertEqual(presenter.shown.count, 1, "the song has only just been announced")
+    }
+
+    /// A read can land after Music has moved on to the next song but before its notification
+    /// arrives, and the next song also starts near zero
+    func testANewSongReadBeforeItsNotificationIsNotTakenForARestart() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "B"
+        poll(200)
+        poll(0.4)
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A"])
+        update(snapshot(track: "B"))
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song B"])
+    }
+
+    func testAMissingAnswerFromMusicIsNotARestart() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = nil
+        poll(200)
+        poll(0.4)
+
+        XCTAssertEqual(presenter.shown.count, 1)
+    }
+
+    func testTheFirstReadingAfterASongChangeIsNotComparedWithTheOldSong() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "B"
+        poll(200)
+        update(snapshot(track: "B"))
+        poll(1)
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song B"])
+    }
+
+    func testAFailedReadForgetsThePosition() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(200)
+        poll(nil)
+        poll(1)
+
+        XCTAssertEqual(presenter.shown.count, 1, "no reading to compare with, so no restart")
+    }
+
+    func testNothingIsWatchedWhilePausedStoppedOrOff() {
+        update(snapshot(track: "A", state: .paused))
+        XCTAssertNil(positionWatch, "paused")
+
+        update(snapshot(track: "A"))
+        XCTAssertNotNil(positionWatch)
+        update(snapshot(track: "A", state: .paused))
+        XCTAssertNil(positionWatch, "paused again")
+
+        update(snapshot(track: "A"))
+        update(snapshot(track: nil, state: .stopped))
+        XCTAssertNil(positionWatch, "stopped")
+
+        update(snapshot(track: "A"))
+        update(nil)
+        XCTAssertNil(positionWatch, "Music quit")
+
+        update(snapshot(track: "A"))
+        controller.setEnabled(false)
+        XCTAssertNil(positionWatch, "announcements off")
+        XCTAssertEqual(positionReads, 0)
+    }
+
+    func testTurningAnnouncementsOnWhilePlayingStartsTheWatch() {
+        controller = makeController(enabled: false)
+        update(snapshot(track: "A"))
+        XCTAssertNil(positionWatch)
+
+        controller.setEnabled(true)
+        XCTAssertNotNil(positionWatch)
+    }
+
+    func testTheSongPlayingAtLaunchIsWatched() {
+        update(snapshot(track: "A"), seedOnly: true)
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(1)
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A"])
+    }
+
+    func testTheRestartRuleOnItsOwn() {
+        XCTAssertTrue(TrackAnnouncementController.isRestart(from: 5, to: 2.9))
+        XCTAssertFalse(TrackAnnouncementController.isRestart(from: 4.9, to: 0))
+        XCTAssertFalse(TrackAnnouncementController.isRestart(from: 120, to: 3))
     }
 
     // MARK: - Enablement
