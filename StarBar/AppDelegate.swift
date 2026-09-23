@@ -100,6 +100,7 @@ extension AppDelegate {
                 guard !MenuBarRatingControl.isUITesting else { return nil }
                 return MenuBarRatingControl.withShortTimeout { iTunes in iTunes.playerPosition } ?? nil
             },
+            isBusy: { [weak self] in self?.menuBarRatingControl?.isDragging ?? false },
             presenter: panel,
             isEnabled: UserDefaults.standard.announceNewTracks
         )

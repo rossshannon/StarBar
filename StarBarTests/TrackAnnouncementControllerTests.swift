@@ -111,11 +111,17 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         return clock.timers.last { $0.isValid && $0.repeats }
     }
 
-    /// Read the position once, as the watch's timer would, with Music answering `position`
-    private func poll(_ position: TimeInterval?) {
+    /// Let one check interval pass and read the position, as the watch's timer would, with
+    /// Music answering `position`
+    private func poll(_ position: TimeInterval?, after seconds: TimeInterval = TrackAnnouncementController.restartCheckInterval) {
         guard let watch = positionWatch else { return XCTFail("the position watch is not running") }
+        clock.advance(by: seconds)
         positions = [position]
         watch.action()
+    }
+
+    private func reading(_ position: TimeInterval, at seconds: TimeInterval) -> TrackAnnouncementController.PositionReading {
+        return .init(position: position, at: Date(timeIntervalSinceReferenceDate: seconds))
     }
 
     // MARK: - New track detection
@@ -360,9 +366,127 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     }
 
     func testTheRestartRuleOnItsOwn() {
-        XCTAssertTrue(TrackAnnouncementController.isRestart(from: 5, to: 2.9))
-        XCTAssertFalse(TrackAnnouncementController.isRestart(from: 4.9, to: 0))
-        XCTAssertFalse(TrackAnnouncementController.isRestart(from: 120, to: 3))
+        let isRestart = TrackAnnouncementController.isRestart
+        XCTAssertTrue(isRestart(reading(6, at: 0), reading(2.9, at: 2)))
+        XCTAssertFalse(isRestart(reading(5.9, at: 0), reading(0.5, at: 2)), "too near the start to tell")
+        XCTAssertFalse(isRestart(reading(120, at: 0), reading(3, at: 2)), "no lower than the time between")
+        XCTAssertFalse(isRestart(reading(120, at: 0), reading(122, at: 2)), "playing on")
+        XCTAssertFalse(isRestart(reading(120, at: 0), reading(-1, at: 2)), "a buffering read")
+        XCTAssertTrue(isRestart(reading(120, at: 0), reading(9, at: 10)), "a tick eight seconds late")
+    }
+
+    func testARestartIsCaughtWhenTheTimerFiresLate() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(9, after: 10)
+
+        XCTAssertEqual(presenter.shown.count, 2)
+    }
+
+    /// A timed-out read comes back as 0, not nil, and must not look like the song restarting
+    func testAZeroReadIsNotARestart() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(120)
+        poll(0)
+        poll(2)
+
+        XCTAssertEqual(presenter.shown.count, 1)
+    }
+
+    func testAHungMusicStopsTheWatchUntilItsNextNotification() {
+        update(snapshot(track: "A"))
+        poll(nil)
+        poll(0)
+        poll(nil)
+        XCTAssertNil(positionWatch, "three failed reads in a row")
+
+        update(snapshot(track: "A"))
+        XCTAssertNotNil(positionWatch)
+    }
+
+    func testNothingIsReadDuringAStarDrag() {
+        var dragging = true
+        controller = TrackAnnouncementController(
+            readPlayer: { [unowned self] in self.player },
+            loadLiveTrack: { _, _ in .loaded(.init()) },
+            readCurrentIdentity: { _ in "A" },
+            readPosition: { [unowned self] in
+                self.positionReads += 1
+                return self.positions.isEmpty ? nil : self.positions.removeFirst()
+            },
+            isBusy: { dragging },
+            presenter: presenter,
+            clock: clock,
+            isEnabled: true
+        )
+        update(snapshot(track: "A"))
+        poll(120)
+        XCTAssertEqual(positionReads, 0)
+
+        dragging = false
+        poll(122)
+        XCTAssertEqual(positionReads, 1)
+    }
+
+    func testOneWatchHowEverManyUpdatesArrive() {
+        update(snapshot(track: "A"))
+        update(snapshot(track: "A"))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(clock.timers.filter { $0.isValid && $0.repeats }.count, 1)
+    }
+
+    func testAStreamedSongRestartingIsAnnouncedAgain() {
+        let song = "The River Cried|Cyndi Lauper|True Colors"
+        update(snapshot(track: song))
+        musicsCurrentIdentity = song
+        poll(120)
+        poll(1.5)
+
+        XCTAssertEqual(presenter.shown.count, 2)
+        XCTAssertEqual(identityReadsFor.last, song, "asked in the name-shaped form the song was announced in")
+    }
+
+    /// A song replayed straight after itself (Repeat One) may get a bare Stopped in between,
+    /// which the stop-blip rule treats as the song carrying on. The position still tells.
+    func testASongReplayedAcrossABareStoppedIsStillARestart() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(178)
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: 0.3)
+        update(snapshot(track: "A"))
+        poll(1.5)
+
+        XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song A"])
+    }
+
+    func testASongThatCarriesOnThroughAStopBlipIsNotARestart() {
+        update(snapshot(track: "A"))
+        musicsCurrentIdentity = "A"
+        poll(60)
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: 0.2)
+        update(snapshot(track: "A"))
+        poll(62)
+
+        XCTAssertEqual(presenter.shown.count, 1)
+    }
+
+    func testTheEdgesOfTheStopBlipWindow() {
+        let window = TrackAnnouncementController.stopBlipWindow
+        update(snapshot(track: "A"))
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: window - 0.1)
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.shown.count, 1, "inside the window")
+
+        update(snapshot(track: nil, state: .stopped))
+        clock.advance(by: window)
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.shown.count, 2, "at the window's end the stop counts")
     }
 
     // MARK: - Enablement
@@ -421,7 +545,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     func testABareStoppedThatLastsAnnouncesTheSameSongAgain() {
         update(snapshot(track: "A"))
         update(snapshot(track: nil, state: .stopped))
-        clock.advance(by: 3)
+        clock.advance(by: 10)
         update(snapshot(track: "A"))
 
         XCTAssertEqual(presenter.shown.map { $0.title }, ["Song A", "Song A"])

@@ -87,19 +87,24 @@ final class TrackAnnouncementController: NSObject {
     static let pendingRatingLifetime = iTunesRadioStation.ratingSaveDelay + 1.0
     /// A Stopped that names no track and is followed this soon by the same song is Music's
     /// blip, not the user stopping. Measured 2026-09-23: a streamed song got a bare Stopped
-    /// 1.2 s in, and was playing again 0.18 s later. A real stop sends the same bare payload,
-    /// so only the time between them tells the two apart.
-    static let stopBlipWindow: TimeInterval = 1.0
+    /// 1.2 s in, and was playing again 0.18 s later. A real stop sends the same bare payload.
+    /// The window is timed here, after the menu bar's own Music reads for the same event,
+    /// which can take over half a second, so it is wide; a song that really went back to its
+    /// start inside it is still caught, by the position watch.
+    static let stopBlipWindow: TimeInterval = 3.0
     /// How often the player position is read while a song plays, to notice it restarting.
     /// Music sends nothing when a song goes back to its start: measured 2026-09-23, ⏮ at 1:30
     /// produced no playerInfo notification and no MediaRemote notification either. One
     /// Apple Event, like the rating reminder's own position check.
     static let restartCheckInterval: TimeInterval = 2
-    /// A restart is a reading under `restartedBelow` after one at `restartedFrom` or later.
-    /// The gap between them keeps a read taken just after the song was announced from
-    /// counting, and a seek back part-way through is not a restart.
-    static let restartedFrom: TimeInterval = 5
-    static let restartedBelow: TimeInterval = 3
+    /// Only a reading at least this far in counts as the "before" of a restart, so a read
+    /// taken just after the song was announced never does
+    static let restartedFrom: TimeInterval = 6
+    /// Slack in `isRestart` for the two reads not being taken at the instants the clock says
+    static let restartSlack: TimeInterval = 1
+    /// Failed reads in a row after which the watch stops until Music's next notification,
+    /// so a hung Music doesn't cost a timed-out Apple Event every interval for ever
+    static let maximumFailedPositionReads = 3
 
     /// Reads the player now, or returns nil when Music isn't running
     private let readPlayer: () -> PlayerSnapshot?
@@ -115,6 +120,8 @@ final class TrackAnnouncementController: NSObject {
     private let readCurrentIdentity: (_ matching: String) -> String?
     /// Reads the player position in seconds (one Apple Event), or nil when Music can't say
     private let readPosition: () -> TimeInterval?
+    /// True while the user drags across the menu bar stars; the watch doesn't read then
+    private let isBusy: () -> Bool
     private let presenter: TrackAnnouncementPresenter
     private let clock: RatingReminderClock
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
@@ -127,11 +134,21 @@ final class TrackAnnouncementController: NSObject {
     private var lastSnapshot: PlayerSnapshot?
     /// The track that was playing when a Stopped naming no track arrived, and when, in case
     /// the same song comes straight back (`stopBlipWindow`)
-    private var bareStop: (identity: String, at: Date)?
+    private var bareStop: (identity: String, at: Date, reading: PositionReading?)?
+    /// The reading taken before a stop blip, for the watch to compare its next one with. The
+    /// song either carried on, and the next reading follows on, or went back to its start
+    /// (Repeat One), and the drop is a restart.
+    private var readingBeforeStop: PositionReading?
     /// Reads the position while a song plays, to notice it restarting
     private var restartWatch: RatingReminderTimer?
     /// The last position the watch read for this song, or nil when there is none to compare
-    private var lastPosition: TimeInterval?
+    private var lastReading: PositionReading?
+    private var failedPositionReads = 0
+
+    struct PositionReading {
+        let position: TimeInterval
+        let at: Date
+    }
     /// What the strip is showing while the hold timer runs
     private var currentAnnouncement: TrackAnnouncement?
     private var hideTimer: RatingReminderTimer?
@@ -147,6 +164,7 @@ final class TrackAnnouncementController: NSObject {
         loadLiveTrack: @escaping (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad,
         readCurrentIdentity: @escaping (_ matching: String) -> String?,
         readPosition: @escaping () -> TimeInterval?,
+        isBusy: @escaping () -> Bool = { false },
         presenter: TrackAnnouncementPresenter,
         clock: RatingReminderClock = RunLoopClock(),
         accessibility: @escaping () -> (reduceMotion: Bool, reduceTransparency: Bool) = {
@@ -159,6 +177,7 @@ final class TrackAnnouncementController: NSObject {
         self.loadLiveTrack = loadLiveTrack
         self.readCurrentIdentity = readCurrentIdentity
         self.readPosition = readPosition
+        self.isBusy = isBusy
         self.presenter = presenter
         self.clock = clock
         self.accessibility = accessibility
@@ -168,6 +187,7 @@ final class TrackAnnouncementController: NSObject {
 
     deinit {
         hideTimer?.invalidate()
+        restartWatch?.invalidate()
     }
 
 }
@@ -184,6 +204,7 @@ extension TrackAnnouncementController {
         guard let snapshot = readPlayer() else {
             lastIdentity = nil
             lastSnapshot = nil
+            bareStop = nil
             return
         }
         // A payload that says nothing about the player, or nothing about the track
@@ -201,7 +222,7 @@ extension TrackAnnouncementController {
         }
         if snapshot.state == .stopped {
             if snapshot.identity == nil, let last = lastIdentity {
-                bareStop = (last, clock.now())
+                bareStop = (last, clock.now(), lastReading)
             }
             lastIdentity = nil
             lastSnapshot = nil
@@ -212,13 +233,14 @@ extension TrackAnnouncementController {
             bareStop = nil
             if stop.identity == identity, clock.now().timeIntervalSince(stop.at) < TrackAnnouncementController.stopBlipWindow {
                 lastIdentity = identity
+                readingBeforeStop = stop.reading
             }
         }
         lastSnapshot = snapshot
         let isNewTrack = identity != lastIdentity
         if isNewTrack {
             // The old song's position says nothing about this one, which also starts near zero
-            lastPosition = nil
+            lastReading = nil
         }
         // A track counts as seen once it has played (or was there at launch). One the user
         // skipped to while paused is still new when they press play; a resumed one is not.
@@ -272,8 +294,16 @@ extension TrackAnnouncementController {
 
     // MARK: - Restarts
 
-    static func isRestart(from previous: TimeInterval, to current: TimeInterval) -> Bool {
-        return previous >= restartedFrom && current < restartedBelow
+    /// True when a position reading means the song went back to its start: the first
+    /// reading was well into the song, and the second is lower than the time between them,
+    /// which playing on can never give. Relative to the time, so a late timer tick (App Nap,
+    /// a busy main thread) doesn't make a restart look like playing on. A seek back part-way
+    /// isn't one; a seek back to near the start is, which is what a restart looks like.
+    static func isRestart(from previous: PositionReading, to current: PositionReading) -> Bool {
+        let elapsed = current.at.timeIntervalSince(previous.at)
+        return previous.position >= restartedFrom
+            && current.position >= 0
+            && current.position < elapsed + restartSlack
     }
 
     /// Watch the position while announcements are on and a known song is playing, and at no
@@ -281,33 +311,51 @@ extension TrackAnnouncementController {
     private func updateRestartWatch() {
         let shouldWatch = isEnabled && lastIdentity != nil && lastSnapshot?.state == .playing
         guard shouldWatch else {
-            restartWatch?.invalidate()
-            restartWatch = nil
-            lastPosition = nil
+            stopRestartWatch()
+            readingBeforeStop = nil
             return
         }
         guard restartWatch == nil else { return }
-        lastPosition = nil
+        lastReading = readingBeforeStop
+        readingBeforeStop = nil
+        failedPositionReads = 0
         restartWatch = clock.schedule(after: TrackAnnouncementController.restartCheckInterval, repeats: true) { [weak self] in
             self?.checkForRestart()
         }
     }
 
+    private func stopRestartWatch() {
+        restartWatch?.invalidate()
+        restartWatch = nil
+        lastReading = nil
+    }
+
     private func checkForRestart() {
-        guard let position = readPosition() else {
-            lastPosition = nil
+        guard !isBusy() else { return }
+        // A read that timed out comes back as 0 rather than nil: Scripting Bridge gives a
+        // number property 0 when its Apple Event fails. A real reading two seconds after a
+        // restart is never exactly 0, so 0 is taken as no answer.
+        guard let position = readPosition(), position != 0 else {
+            lastReading = nil
+            failedPositionReads += 1
+            if failedPositionReads >= TrackAnnouncementController.maximumFailedPositionReads {
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}ld position reads failed; watching again at Music's next notification", ((#file as NSString).lastPathComponent), #line, #function, failedPositionReads)
+                stopRestartWatch()
+            }
             return
         }
-        let previous = lastPosition
-        lastPosition = position
-        guard let previous = previous, TrackAnnouncementController.isRestart(from: previous, to: position),
+        failedPositionReads = 0
+        let reading = PositionReading(position: position, at: clock.now())
+        let previous = lastReading
+        lastReading = reading
+        guard let previous = previous, TrackAnnouncementController.isRestart(from: previous, to: reading),
               let snapshot = lastSnapshot, let identity = lastIdentity, snapshot.identity == identity else {
             return
         }
         // The next song also starts near zero, and a read can land after Music has moved on
         // but before its notification arrives. Only the same song back at its start counts.
         guard readCurrentIdentity(identity) == identity else { return }
-        os_log("%{public}s[%{public}ld], %{public}s: song restarted (%.1f s to %.1f s)", ((#file as NSString).lastPathComponent), #line, #function, previous, position)
+        os_log("%{public}s[%{public}ld], %{public}s: song restarted (%.1f s to %.1f s)", ((#file as NSString).lastPathComponent), #line, #function, previous.position, position)
         announce(snapshot, identity: identity)
     }
 
