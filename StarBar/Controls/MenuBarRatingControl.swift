@@ -120,6 +120,8 @@ final class MenuBarRatingControl {
     private lazy var playbackState = MenuBarPlaybackState { [weak self] in
         guard let self = self else { return }
         os_log("Music quit; returning to the stopped icon and resetting the menu bar session")
+        // The player popover has nothing left to show
+        WindowManager.shared.attachedPopover?.close()
         self.displayedSongIdentity = nil
         self.updateGestureRecognizerBehavior()
         self.updateMenuBar()
@@ -174,10 +176,9 @@ final class MenuBarRatingControl {
     }
     private(set) var playState: PlayInfo.PlayerState = .unknown {
         didSet {
-            // FIXME: close attached popover when menu bar collapse
-            if playState == .unknown {
-                WindowManager.shared.attachedPopover?.close()
-            }
+            // Not a reason to close the popover: Music sends events with no player state
+            // around song changes, streamed songs especially, and the menu bar holds its
+            // display through them. The popover closes when Music quits instead.
             updateGestureRecognizerBehavior()
         }
     }
