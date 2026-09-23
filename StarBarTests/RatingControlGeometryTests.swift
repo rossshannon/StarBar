@@ -61,6 +61,25 @@ final class RatingControlGeometryTests: XCTestCase {
         XCTAssertEqual(bounds.maxX - frame.maxX, 4)
     }
 
+    func testPopoverPointsJustLeftOfTheHeartInBothModes() {
+        let bounds = NSRect(x: 0, y: 0, width: 132, height: 24)
+        let starSize = NSSize(width: 16, height: 16)
+        let heart = MenuBarRatingControl.favoriteHeartFrame(in: bounds, size: starSize)
+        let x = MenuBarRatingControl.popoverAnchorX(in: bounds, starSize: starSize, spacing: 4, isStopped: false)
+        // In the gap before the heart, not over it and not in the middle of the allocation
+        XCTAssertEqual(x, heart.minX - 2)
+        XCTAssertNotEqual(x, bounds.midX)
+        // Tied to the right edge, which is where the heart is whatever the strip shows
+        let wider = NSRect(x: 0, y: 0, width: 200, height: 24)
+        XCTAssertEqual(wider.maxX - MenuBarRatingControl.popoverAnchorX(in: wider, starSize: starSize, spacing: 4, isStopped: false),
+                       bounds.maxX - x)
+    }
+
+    func testPopoverPointsAtTheMiddleOfTheIconWhenStopped() {
+        let bounds = NSRect(x: 0, y: 0, width: 24, height: 24)
+        XCTAssertEqual(MenuBarRatingControl.popoverAnchorX(in: bounds, starSize: NSSize(width: 16, height: 16), spacing: 4, isStopped: true), 12)
+    }
+
     func testFavoriteHeartStaysAtTheRightWhenAppKitResizesItsParentLater() {
         let parent = NSView(frame: NSRect(x: 0, y: 0, width: 132, height: 24))
         let heart = NSImageView(frame: NSRect(x: 112, y: 4, width: 16, height: 16))

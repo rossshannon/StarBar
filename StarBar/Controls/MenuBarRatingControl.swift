@@ -481,10 +481,32 @@ extension MenuBarRatingControl {
                       y: 0.5 * (bounds.height - size.height), width: size.width, height: size.height)
     }
 
+    /// Where the player popover's arrow points, across the button: the gap just left of the
+    /// heart, which is between the heart and the stars or the Apple Music button in both modes.
+    /// The heart is anchored to the button's right edge, so this point stays with it whatever
+    /// width the item has; the middle of the button would not, because while the strip animates
+    /// the allocation can be wider than what is drawn, with blank space on the left. The middle
+    /// of the icon when stopped.
+    static func popoverAnchorX(in bounds: NSRect, starSize: NSSize, spacing: CGFloat, isStopped: Bool) -> CGFloat {
+        guard !isStopped else { return bounds.midX }
+        return favoriteHeartFrame(in: bounds, size: starSize).minX - 0.5 * spacing
+    }
+
+    /// `popoverAnchorX` as a zero-width rect the height of the button, in screen coordinates
+    var popoverAnchorInScreen: NSRect? {
+        guard let button = statusItem.button, let window = button.window else { return nil }
+        let x = Self.popoverAnchorX(in: button.bounds, starSize: ratingControl.starSize,
+                                    spacing: ratingControl.spacing, isStopped: isStop)
+        let rect = NSRect(x: x, y: button.bounds.minY, width: 0, height: button.bounds.height)
+        return window.convertToScreen(button.convert(rect, to: nil))
+    }
+
     /// Show the current heart appearance over the strip’s reserved, empty slot.
     /// Independent of image width: AppKit may apply the requested status item width later.
     private func updateFavoriteHeartView() {
         guard let button = statusItem.button else { return }
+        // Every layout change comes through here, so an open popover follows the heart
+        WindowManager.shared.updatePopoverAnchor()
         favoriteHeartView.alphaValue = rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
             ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
         favoriteHeartView.isHidden = isStop
