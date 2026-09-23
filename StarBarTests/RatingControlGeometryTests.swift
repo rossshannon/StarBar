@@ -116,6 +116,21 @@ final class RatingControlGeometryTests: XCTestCase {
         XCTAssertTrue(control.isFavoriteHit(positionX: 120 - ratingOrigin))
     }
 
+    func testAddButtonFillsItsOwnNarrowItem() {
+        // The settled add-button state: the item is only as wide as the badge and heart
+        let bounds = NSRect(x: 0, y: 0, width: 68, height: 22)
+        control.update(mode: .addToLibrary)
+        XCTAssertEqual(control.starsImage.size.width + 8, 68)
+        let origin = MenuBarStripLayout.contentOriginX(in: bounds, contentWidth: control.starsImage.size.width)
+        XCTAssertEqual(origin, 4)
+        XCTAssertTrue(control.isAddToLibraryHit(positionX: 16 - origin))
+        XCTAssertTrue(control.isAddToLibraryHit(positionX: 36 - origin))
+        XCTAssertTrue(control.isFavoriteHit(positionX: 56 - origin))
+        let layout = MenuBarStripLayout(starSize: control.starSize, spacing: control.spacing)
+        XCTAssertTrue(layout.image(containing: control.starsImage, allocation: 68) === control.starsImage,
+                      "no padding when the item fits the content")
+    }
+
     func testCompactImageIsRightAlignedAndRedrawsPendingChanges() throws {
         let compact = RatingControl(rating: 70, drawsFavorite: false)
         compact.update(mode: .addToLibrary)

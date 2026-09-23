@@ -35,19 +35,32 @@ StarBar uses the current song's actual rating, including half stars and unrated 
 | First library song after launch or Music quitting | Stars roll into place over 1.0 seconds |
 | Add-to-library button to a rateable song | The same 1.0-second rollout |
 | Different ratings on successive library songs | Changed glyphs retract or grow in place over 0.2 seconds; full/half stars blend |
-| Library song to an Apple Music-only song, including deletion from the library during playback | Stars shrink over 0.15 seconds, followed by a late badge fade; total 0.35 seconds |
+| Library song to an Apple Music-only song, including deletion from the library during playback | Stars shrink and the heart fades (0.2 s), the item narrows while empty and waits for the menu bar's slide (0.35 s), then the add button and heart fade in (0.2 s); total 0.75 seconds |
 | Music quits | Return to the compact stopped dot and rearm the next entrance |
 
 Music sends a bare `Player State: Stopped` between some songs. Measured gaps were 50–131 ms, so a stopped notification cannot distinguish a song change from the end of a queue. The display session lasts until Music quits: hold the previous strip over missing-track updates and disable stale rating actions. No stop timer or additional Music polling is used.
 
 Manual rating edits take effect immediately. Animation never writes intermediate values to Music. Reduce Motion bypasses transitions. Each animation starts its clock on the first display callback: synchronous Music reads have delayed that callback by 198–261 ms, which previously consumed the entire 0.2-second rating transition before any frames were drawn.
 
-## Fixed heart and menu-bar allocation
+## Heart overlay and the first fixed allocation
 
 Both heart appearances use one independent right-aligned view. Menu-bar images reserve an empty heart slot with `drawsFavorite=false`; other consumers keep their usual embedded outline.
 
 On macOS 27, the visible menu-bar resize moves the heart even when local view and presentation-layer coordinates remain almost unchanged. A standalone native status item reproduced about 60 pixels of leftward movement, including with standard animation controls disabled, intrinsic sizing, and a custom view. Preview images and local inset tests alone did not expose this.
 
-The approved workaround keeps a 132-point allocation for both active modes. `MenuBarStripLayout` right-aligns the changing contents inside it, leaving 64 points unused on the left in the add-button state. The stopped dot keeps its compact allocation. The pointer and pending spinner use the same right-aligned origin; the unused space does not add or favourite a song. Pending-state changes explicitly refresh the padded image.
+The first workaround kept a 132-point allocation for both active modes and right-aligned the add button inside it, leaving 64 points unused on the left. Ross later asked for that space back.
 
-A native screen recording using the production collapse renderer and fixed canvas held the outline heart at the same pixel coordinate in every measured transition frame. Ross then confirmed the installed version looked good. This screen-space check is required for future changes to the layout; the browser preview is useful for glyph timing but cannot validate macOS menu-bar placement.
+## Giving the space back (2026-09-23)
+
+Measured with a standalone probe that draws StarBar's glyphs in its own status item, placed among other apps' items, and recorded across the whole menu bar at 60 frames a second:
+
+- Narrowing a status item draws it at its **old left edge**, then slides it and every item to its left into place over about 0.33 s. A single 132 → 68 point change moved the heart 52 points left and back. The app's window frame is correct within about 16 ms; moving the window to its final place at once made no difference on screen, so the menu bar animates its own copy of the item.
+- Narrowing a little on every display frame kept the heart within a few points at 1.5 s (steady speed) or 2 s (eased), but it jiggled by a pixel as the system fell behind, and the badge's left edge was visibly clipped. Rejected on sight.
+- A separate status item for the heart kept the heart perfectly still, but macOS does not keep two items together (another app's icon landed between them in the first test). Rejected: the stars and heart must be one item.
+- Widening in one step moved the heart at most 3.5 points for about a frame.
+
+The approved collapse therefore hides the change. The stars shrink away and the heart fades over 0.2 s at the full width; the item narrows once while nothing is visible; after 0.35 s, once the slide has finished, the add button and heart fade in over 0.2 s, already where they stay. The add button is never shown at the full width first.
+
+In the first live try, Music sent no track and then the same song again while the collapse was still waiting for its first frame (the first frame waits behind synchronous Music reads; 0.6 s in the next try). That update replaced the display without animation and narrowed the item in one step. A running transition now survives updates that change nothing on display.
+
+Native screen recordings remain the only valid check for menu-bar placement; the browser preview and local view coordinates cannot show the system's slide.
