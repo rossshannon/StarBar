@@ -279,6 +279,25 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertFalse(KeyboardActivity.isShortcut([]))
     }
 
+    func testANonsenseModifierAgeIsNoModifierChange() {
+        // Before the first modifier of a session the system may answer with a negative age
+        for modifierAge in [-1, TimeInterval.nan] {
+            var typing = TrackAnnouncementTyping()
+            typing.observe(KeyboardActivity(secondsSinceKeyDown: 0.1, commandKeysHeld: false, secondsSinceModifierChange: modifierAge), at: start)
+            XCTAssertTrue(typing.isTyping(at: start, pause: 1.5), "\(modifierAge)")
+        }
+    }
+
+    func testAClockSteppedBackDoesNotHideANewKey() {
+        var typing = TrackAnnouncementTyping()
+        typing.observe(KeyboardActivity(secondsSinceKeyDown: 30, commandKeysHeld: false), at: start)
+        // The wall clock jumps back a minute, and a key goes down just now
+        let earlier = start.addingTimeInterval(-60)
+        typing.observe(KeyboardActivity(secondsSinceKeyDown: 0, commandKeysHeld: false), at: earlier)
+
+        XCTAssertTrue(typing.isTyping(at: earlier, pause: 1.5))
+    }
+
     func testANonsenseKeyAgeIsIgnored() {
         for age in [-1, TimeInterval.nan, TimeInterval.infinity] {
             var typing = TrackAnnouncementTyping()

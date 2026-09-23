@@ -180,12 +180,17 @@ struct TrackAnnouncementTyping {
         guard age.isFinite, age >= 0 else { return }
         let keyDownAt = now.addingTimeInterval(-age)
         defer { lastKeyDownAt = keyDownAt }
-        if let last = lastKeyDownAt, keyDownAt.timeIntervalSince(last) <= TrackAnnouncementTyping.sameKeyTolerance {
+        // Either way, so a wall clock stepped back doesn't make every new key look like the old one
+        if let last = lastKeyDownAt, abs(keyDownAt.timeIntervalSince(last)) <= TrackAnnouncementTyping.sameKeyTolerance {
             return
         }
         guard !keyboard.commandKeysHeld else { return }
-        // A modifier went down or up after the key: most likely a shortcut, let go of since
-        guard !(keyboard.secondsSinceModifierChange < age) else { return }
+        // A modifier went down or up after the key: most likely a shortcut, let go of since.
+        // An age that makes no sense (none yet this session, say) is no modifier change.
+        let modifierAge = keyboard.secondsSinceModifierChange
+        if modifierAge.isFinite, modifierAge >= 0, modifierAge < age {
+            return
+        }
         lastTypedAt = keyDownAt
     }
 

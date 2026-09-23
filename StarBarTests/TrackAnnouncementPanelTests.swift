@@ -336,10 +336,14 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     }
 
     func testThePointerOverTheStripCutsAHoleThatFollowsIt() throws {
+        // Far above every screen, not mid-screen: on CI's 1024 by 768 screens the middle is
+        // only about 220 points above the strip, inside the hole's reach. Off every screen,
+        // the panel falls back to the main one.
+        mouse = NSPoint(x: 0, y: 100_000)
         let clock = FakeClock()
         let seeThrough = seeThroughPanel(clock)
         defer { seeThrough.orderOut(nil) }
-        XCTAssertNil(seeThrough.stripView.peephole, "the pointer starts mid-screen, well clear of the strip")
+        XCTAssertNil(seeThrough.stripView.peephole, "the pointer starts well clear of the strip")
 
         mouse = stripCentre(of: seeThrough)
         tick(clock)
