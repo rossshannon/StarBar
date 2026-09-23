@@ -183,7 +183,7 @@ extension RatingControl {
     ///
     /// `NSGestureRecognizer.location(in:)` on a status bar button reports the same point for
     /// every click on macOS 27, so we convert `NSEvent.mouseLocation` into button coordinates.
-    /// The menu bar keeps a fixed allocation and right-aligns the current mode's contents.
+    /// The menu bar right-aligns the current mode's contents in whatever width the item has.
     func imagePositionX(in button: NSButton) -> CGFloat? {
         guard let window = button.window, starsImage.size.width > 0 else { return nil }
         let pointInWindow = window.convertPoint(fromScreen: NSEvent.mouseLocation)
