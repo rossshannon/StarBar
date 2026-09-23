@@ -187,6 +187,11 @@ final class MenuBarRatingControl {
         return playbackState.isStopped
     }
 
+    /// True while the user drags across the stars, when Apple Events would stall the preview
+    var isDragging: Bool {
+        return clickController.isDragging
+    }
+
     /// Say why a rating shortcut did nothing. Silence here reads as a broken shortcut.
     private func logUnratableShortcut() {
         os_log("%{public}s[%{public}ld], %{public}s: this song has nowhere to keep a rating, so the shortcut does nothing", ((#file as NSString).lastPathComponent), #line, #function)
