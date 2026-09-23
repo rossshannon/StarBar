@@ -80,7 +80,11 @@ final class iTunesRadioStation {
     }
 
     /// Coalesces a run of `libraryChanged` notifications into one re-read
-    private var libraryChangedTimer: Timer?
+    private var libraryChangedTimer: RatingReminderTimer?
+    /// Times the library re-read. Not private only so the tests can put a `FakeClock` here
+    /// and fire it by hand, like `hasPendingRereadAfterRefusedWrite`: waiting in real time let
+    /// any other player update in the host app land among the ones a test counts.
+    var libraryChangeClock: RatingReminderClock = RunLoopClock()
 
     /// How long to wait after a library change before re-reading the player.
     ///
@@ -194,19 +198,20 @@ extension iTunesRadioStation {
 
     private func scheduleLibraryReread(after delay: TimeInterval) {
         libraryChangedTimer?.invalidate()
-        // `.common` so a run loop tracking an open menu doesn't hold the read back
-        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+        // `RunLoopClock` runs its timers in `.common`, so a run loop tracking an open menu
+        // doesn't hold the read back
+        libraryChangedTimer = libraryChangeClock.schedule(after: delay, repeats: false) { [weak self] in
             guard let self = self else { return }
             self.libraryChangedTimer = nil
             // Music does not yet have a held rating. Reading it now would undo the user's
-            // choice on screen. Wait for the write window, then reconcile once.
+            // choice on screen. Wait for the write window, then reconcile once. That wait may
+            // run up to 0.2 s late (`RunLoopClock`'s tolerance), which is harmless: this check
+            // runs again when it fires.
             guard self.ratingWriter.heldRating == nil else {
                 return self.scheduleLibraryReread(after: iTunesRadioStation.ratingSaveDelay)
             }
             self.readPlayerAgain(because: "Music's library changed")
         }
-        RunLoop.main.add(timer, forMode: .common)
-        libraryChangedTimer = timer
     }
 
     @objc func playInfoChanged(_ notification: Notification) {

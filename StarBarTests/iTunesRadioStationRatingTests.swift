@@ -12,7 +12,10 @@
 //
 //  Under tests the station subscribes to none of Music's distributed notifications or
 //  workspace events, so changing songs or editing the library during a run cannot add to or
-//  starve the player updates these tests count. Library signals come from a private centre.
+//  starve the player updates these tests count. Library signals come from a private centre,
+//  and the library re-read runs on a `FakeClock`: the library tests never wait on the main
+//  run loop, so nothing else in the host app can post a player update among the ones they
+//  count. The refused-write tests below still wait in real time.
 //
 
 import XCTest
@@ -31,6 +34,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
 
     override func tearDown() {
         station.flushHeldRatingWrite()
+        station.libraryChangeClock = RunLoopClock()
         // Leave no fake song behind as "what is playing" for the rest of the run
         iTunesPlayer.shared.update(nil, broadcast: false)
         super.tearDown()
@@ -129,6 +133,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let center = NotificationCenter()
         station.observeLibraryChanges(in: center)
         defer { center.removeObserver(station) }
+        let clock = useFakeLibraryClock()
         let track = FakeTrack(name: "Deleted", rating: 20)
         play(track)
         let original = iTunesPlayer.shared.playing
@@ -139,7 +144,8 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         track.isPresent = false
         center.post(name: .ITLibraryDidChange, object: nil, userInfo: ["media-domains": 1])
         XCTAssertEqual(updates, 0, "the notification waits for the settling interval")
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        XCTAssertEqual(clock.pendingOneShot?.seconds, iTunesRadioStation.libraryChangedReadDelay)
+        clock.fireAllOneShots()
 
         XCTAssertEqual(updates, 1)
         XCTAssertFalse(iTunesPlayer.shared.playing === original, "cached library answers are replaced")
@@ -150,6 +156,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let center = NotificationCenter()
         station.observeLibraryChanges(in: center)
         defer { center.removeObserver(station) }
+        let clock = useFakeLibraryClock()
         var updates = 0
         let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }
@@ -159,11 +166,14 @@ final class iTunesRadioStationRatingTests: XCTestCase {
             center.post(name: .ITLibraryDidChange, object: nil)
             center.post(name: legacy, object: nil)
         }
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        XCTAssertEqual(updates, 0, "nothing is read while the burst is still arriving")
+        XCTAssertEqual(clock.pendingOneShots.count, 1, "the burst leaves one re-read waiting")
+        // Fire them all: a re-read left over from earlier in the burst would add an update
+        clock.fireAllOneShots()
         XCTAssertEqual(updates, 1, "both names share one coalesced refresh")
 
         center.post(name: legacy, object: nil)
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        clock.fireAllOneShots()
         XCTAssertEqual(updates, 2, "the later signal reconciles a state that settled late")
     }
 
@@ -171,6 +181,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let center = NotificationCenter()
         station.observeLibraryChanges(in: center)
         defer { center.removeObserver(station) }
+        let clock = useFakeLibraryClock()
         let track = FakeTrack(name: "Held during library change", rating: 0)
         play(track)
         station.setRating(20, on: track)
@@ -180,11 +191,12 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         defer { NotificationCenter.default.removeObserver(observer) }
 
         center.post(name: .ITLibraryDidChange, object: nil)
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.libraryChangedReadDelay + 0.3))
+        clock.fireAllOneShots()
         XCTAssertEqual(updates, 0, "Music cannot yet report the held rating")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, iTunesRadioStation.ratingSaveDelay, "the read waits out the write window instead")
 
         station.flushHeldRatingWrite()
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.ratingSaveDelay + 0.3))
+        clock.fireAllOneShots()
         XCTAssertEqual(track.ratingsWritten.last, 80)
         XCTAssertEqual(updates, 1, "the deferred refresh is not lost")
     }
@@ -260,6 +272,9 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let track = FakeTrack(name: "Held", rating: 0)
         play(track)
         station.setRating(60, on: track)
+        // A window still open from an earlier test could release 80 before the re-read looks,
+        // so send 60 now if it was held: 80 is then held for a whole `ratingSaveDelay`
+        station.flushHeldRatingWrite()
         station.setRating(80, on: track)    // held
         var updates = 0
         let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
@@ -284,6 +299,13 @@ final class iTunesRadioStationRatingTests: XCTestCase {
     }
 
     // MARK: - Helpers
+
+    /// Time the station's library re-read by hand. `tearDown` puts the real clock back.
+    private func useFakeLibraryClock() -> FakeClock {
+        let clock = FakeClock()
+        station.libraryChangeClock = clock
+        return clock
+    }
 
     private func appleEvent(eventClass: UInt32, eventID: UInt32) -> NSAppleEventDescriptor {
         return NSAppleEventDescriptor.appleEvent(
