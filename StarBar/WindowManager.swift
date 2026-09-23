@@ -42,8 +42,7 @@ final class WindowManager: NSObject {
 
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showOrClosePopover.rawValue, toAction: { [weak self] in
             guard self?.attachedPopover == nil else {
-                self?.attachedPopover?.close()
-                self?.attachedPopover = nil
+                self?.closeAttachedPopover()
                 return
             }
 
@@ -91,8 +90,7 @@ extension WindowManager {
 
         // close undetached popover if displaying
         guard attachedPopover == nil else {
-            attachedPopover?.close()
-            attachedPopover = nil
+            closeAttachedPopover()
             return
         }
 
@@ -139,6 +137,15 @@ extension WindowManager {
                 NotificationCenter.default.addObserver(self, selector: #selector(WindowManager.statusItemWindowDidChange(_:)), name: name, object: buttonWindow)
             }
         }
+    }
+
+    /// Close the popover attached to the menu bar, if there is one. The reference is dropped
+    /// first: the popover counts as shown until its close animation ends, and a menu bar
+    /// update in that time would otherwise move it, towards the stopped icon when Music quits.
+    func closeAttachedPopover() {
+        let popover = attachedPopover
+        attachedPopover = nil
+        popover?.close()
     }
 
     /// Bottom-left of the invisible window the popover points at, centred on the anchor

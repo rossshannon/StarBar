@@ -121,7 +121,7 @@ final class MenuBarRatingControl {
         guard let self = self else { return }
         os_log("Music quit; returning to the stopped icon and resetting the menu bar session")
         // The player popover has nothing left to show
-        WindowManager.shared.attachedPopover?.close()
+        WindowManager.shared.closeAttachedPopover()
         self.displayedSongIdentity = nil
         self.updateGestureRecognizerBehavior()
         self.updateMenuBar()
