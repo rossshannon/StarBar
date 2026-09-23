@@ -120,6 +120,11 @@ final class TrackAnnouncementView: NSView {
     private var typingWindowProgress: CGFloat = 0
 
     private func applyTypingWindow() {
+        // Closed: nothing to lay out, and no text to measure
+        guard typingWindowSize.radius > 0, typingWindowProgress > 0 else {
+            surface.typingWindow = nil
+            return
+        }
         surface.typingWindow = TrackAnnouncementSeeThrough.typingWindow(
             in: bounds,
             occupied: content.occupiedRect,
@@ -445,7 +450,9 @@ final class TrackAnnouncementContentView: NSView {
         let width: CGFloat
         if announcement.canRate {
             let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
-            width = max(stars.image.size.width, stars.starsWidth + spacing + starSize.width)
+            // The stars, then the heart's slot: the width `Stars.image` would have, without
+            // drawing it
+            width = stars.starsWidth + spacing + starSize.width
         } else {
             let text = (TrackAnnouncement.cannotRateText as NSString).size(withAttributes: [.font: cannotRateFont]).width
             width = starSize.width + spacing * 2 + text.rounded(.up)

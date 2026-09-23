@@ -227,8 +227,10 @@ struct TrackAnnouncementSeeThroughKnobs: Equatable {
     static var current: TrackAnnouncementSeeThroughKnobs {
         let defaults = UserDefaults.standard
         var knobs = TrackAnnouncementSeeThroughKnobs()
+        // Clamped, so a stray value can't ask for a vast mask
+        let longest: CGFloat = 2000
         func length(_ key: String) -> CGFloat? {
-            return defaults.object(forKey: key) == nil ? nil : max(0, CGFloat(defaults.double(forKey: key)))
+            return defaults.object(forKey: key) == nil ? nil : min(longest, max(0, CGFloat(defaults.double(forKey: key))))
         }
         if defaults.object(forKey: "announcementPeephole") != nil {
             knobs.peephole = defaults.bool(forKey: "announcementPeephole")
@@ -241,7 +243,7 @@ struct TrackAnnouncementSeeThroughKnobs: Equatable {
         knobs.typingRadius = length("announcementTypingRadius") ?? knobs.typingRadius
         knobs.typingFeather = length("announcementTypingFeather") ?? knobs.typingFeather
         if defaults.object(forKey: "announcementTypingCentreHeight") != nil {
-            knobs.typingCentreHeight = CGFloat(defaults.double(forKey: "announcementTypingCentreHeight"))
+            knobs.typingCentreHeight = min(longest, max(-longest, CGFloat(defaults.double(forKey: "announcementTypingCentreHeight"))))
         }
         if defaults.object(forKey: "announcementTypingPause") != nil {
             knobs.typingPause = max(0, defaults.double(forKey: "announcementTypingPause"))

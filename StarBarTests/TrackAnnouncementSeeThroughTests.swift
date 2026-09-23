@@ -129,6 +129,16 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertEqual(area, bounds.width * bounds.height, accuracy: 1e-6)
     }
 
+    func testALargeHoleDrawsABoundedImage() throws {
+        let mask = TrackAnnouncementPeepholeMask()
+        mask.place(TrackAnnouncementPeephole(centre: CGPoint(x: 1000, y: 75), radius: 720, feather: 288), in: CGRect(x: 0, y: 0, width: 2000, height: 150), scale: 2)
+
+        let sprite = try XCTUnwrap(mask.sublayers?.first { $0.contents != nil })
+        let image = try XCTUnwrap(sprite.contents.map { $0 as! CGImage })
+        XCTAssertLessThanOrEqual(image.width, 512, "a soft gradient needs no more")
+        XCTAssertEqual(sprite.frame.width, 1440, "still stretched over the whole hole")
+    }
+
     // MARK: - The fade
 
     func testTheBackgroundLeavesQuicklyAndReturnsGently() {
@@ -190,6 +200,10 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertEqual(layers.count, 4)
         XCTAssertTrue(layers[0] is TrackAnnouncementPeepholeMask, "the hole")
         XCTAssertEqual(layers[0].frame, CGRect(origin: .zero, size: bounds.size))
+        // The hole's image, centred on (1000, 75) in the strip: 12 higher in the mask's own
+        // coordinates, which start at the glass's overhang below the strip
+        let sprite = try XCTUnwrap(layers[0].sublayers?.first { $0.contents != nil })
+        XCTAssertEqual(sprite.frame, CGRect(x: 640, y: 87 - 360, width: 720, height: 720))
         XCTAssertEqual(layers[1].frame, CGRect(x: 0, y: 0, width: 441.5, height: 162), "solid over the text, to a whole pixel")
         XCTAssertTrue(layers[2] is CAGradientLayer)
         XCTAssertEqual(layers[2].frame, CGRect(x: 441.5, y: 0, width: 48, height: 162), "then fading out")

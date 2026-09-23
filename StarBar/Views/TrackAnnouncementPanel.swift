@@ -50,6 +50,9 @@ final class TrackAnnouncementPanel: NSPanel {
     private var wasTyping = false
     /// How far open the typing window is, 0 to 1
     private var typingProgress: CGFloat = 0
+    /// The screen the strip was last placed on, so a pointer on another display near it
+    /// opens no hole
+    private var placedScreenFrame: CGRect?
 
     /// - Parameters:
     ///   - slideDuration: 0 applies the final state at once, for tests
@@ -152,6 +155,10 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         // strip takes it away, so neither the hole nor the typing window opens under it
         if reduceTransparency {
             stopSeeThrough()
+        } else if phase != .hidden {
+            // A song arriving while the strip is up, after an appearance under Reduce
+            // Transparency: watch again. From hidden, the watcher starts once the strip is placed.
+            startSeeThrough()
         }
         let isNewAnnouncement = stripView.announcement != announcement
         stripView.announcement = announcement
@@ -290,6 +297,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     private func place(on screen: NSScreen?) {
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
         let visibleFrame = screen?.visibleFrame ?? screenFrame
+        placedScreenFrame = screen?.frame
         scale = TrackAnnouncementLayout.scale(forScreenHeight: screenFrame.height)
         stripView.scale = scale
         // The background runs behind a Dock at the side; the content stays clear of it
@@ -407,12 +415,16 @@ extension TrackAnnouncementPanel {
         // The strip slides inside the panel, so its place on screen moves with it
         let stripOnScreen = stripView.frame.offsetBy(dx: frame.minX, dy: frame.minY)
         let hadHole = stripView.peephole != nil
-        stripView.peephole = TrackAnnouncementSeeThrough.peephole(
-            pointer: mouseLocation(),
-            stripFrame: stripOnScreen,
-            radius: seeThroughKnobs.radius * scale,
-            feather: seeThroughKnobs.feather * scale
-        )
+        let pointer = mouseLocation()
+        let onStripScreen = placedScreenFrame.map { $0.contains(pointer) } ?? true
+        stripView.peephole = onStripScreen
+            ? TrackAnnouncementSeeThrough.peephole(
+                pointer: pointer,
+                stripFrame: stripOnScreen,
+                radius: seeThroughKnobs.radius * scale,
+                feather: seeThroughKnobs.feather * scale
+            )
+            : nil
         if let hole = stripView.peephole, !hadHole {
             os_log("%{public}s[%{public}ld], %{public}s: hole opened at %.0f, %.0f in the strip", ((#file as NSString).lastPathComponent), #line, #function, Double(hole.centre.x), Double(hole.centre.y))
         } else if hadHole && stripView.peephole == nil {

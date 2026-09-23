@@ -626,6 +626,56 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertGreaterThan(try XCTUnwrap(view.typingWindow).keepUntilX, window.keepUntilX + 100)
     }
 
+    /// Where the kept background ends for `announcement` on a wide strip at scale 1
+    private func keepUntilX(_ announcement: TrackAnnouncement) throws -> CGFloat {
+        let view = TrackAnnouncementView(announcement: announcement, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))
+        view.setTypingWindow(radius: 360, feather: 144, centreHeight: 90, progress: 1)
+        return try XCTUnwrap(view.typingWindow).keepUntilX
+    }
+
+    func testEveryLineCountsTowardsTheKeptBackground() throws {
+        let short = try keepUntilX(TrackAnnouncement(identity: "1", title: "T", artist: "A", album: "B"))
+        let longArtist = try keepUntilX(TrackAnnouncement(identity: "1", title: "T", artist: "The Artist Formerly Known As Someone Else Entirely", album: "B"))
+        let longAlbum = try keepUntilX(TrackAnnouncement(identity: "1", title: "T", artist: "A", album: "Calling My Name (Live New Orleans '89), Deluxe Edition"))
+        let cannotRate = try keepUntilX(TrackAnnouncement(identity: "1", title: "T", artist: "A", album: "B", canRate: false))
+
+        XCTAssertGreaterThan(longArtist, short + 100, "the artist line")
+        XCTAssertGreaterThan(longAlbum, short + 100, "the album line")
+        XCTAssertGreaterThan(cannotRate, short + 50, "the add-it-to-rate-it line is wider than the stars")
+        // The stars row alone: five 12 pt stars and a heart with 3 pt spacing, past the text's edge
+        let textX = TrackAnnouncementLayout.frames(in: CGSize(width: 2000, height: 104)).title.minX
+        XCTAssertGreaterThanOrEqual(short, textX + 5 * 12 + 7 * 3 + 12 + TrackAnnouncementSeeThrough.keepMargin - 1, "the stars and heart")
+    }
+
+    func testAPointerOnAnotherDisplayOpensNoHole() throws {
+        let clock = FakeClock()
+        mouse = NSPoint(x: 0, y: 100_000)
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+        let screen = try XCTUnwrap(seeThrough.screen ?? NSScreen.main)
+
+        // Just below the strip's screen: close enough to reach the strip, but on another display
+        mouse = NSPoint(x: stripCentre(of: seeThrough).x, y: screen.frame.minY - 10)
+        tick(clock)
+
+        XCTAssertNil(seeThrough.stripView.peephole)
+    }
+
+    func testASongArrivingWhileUpWatchesAgainOnceReduceTransparencyIsOff() {
+        let clock = FakeClock()
+        let seeThrough = TrackAnnouncementPanel(slideDuration: 0, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+        defer { seeThrough.orderOut(nil) }
+        seeThrough.show(sample, reduceMotion: false, reduceTransparency: true)
+        XCTAssertTrue(clock.timers.filter { $0.repeats && $0.isValid }.isEmpty)
+
+        seeThrough.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album"), reduceMotion: false, reduceTransparency: false)
+        mouse = stripCentre(of: seeThrough)
+        tick(clock)
+
+        XCTAssertEqual(clock.timers.filter { $0.repeats && $0.isValid }.count, 1)
+        XCTAssertNotNil(seeThrough.stripView.peephole)
+    }
+
     func testTheMaskCoversTheGlassWhereItHangsBelowTheStrip() throws {
         try skipWithoutLiquidGlass()
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))

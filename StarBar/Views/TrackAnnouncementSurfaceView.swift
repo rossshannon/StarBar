@@ -247,6 +247,9 @@ final class TrackAnnouncementPeepholeMask: CALayer {
     /// sharp one, and at full resolution a hole of the default size took 2 to 8 MB and several
     /// milliseconds to draw. The layer's frame still lands on whole screen pixels.
     static let imageScale: CGFloat = 0.5
+    /// And never more than this many pixels across, whatever the radius: the typing window at
+    /// scale 2 would otherwise draw a 720 pixel image for a gradient
+    static let maximumImageSide: CGFloat = 512
 
     override init() {
         super.init()
@@ -275,7 +278,8 @@ final class TrackAnnouncementPeepholeMask: CALayer {
 
         frame = bounds
         if drawn.map({ $0.radius != peephole.radius || $0.feather != peephole.feather }) ?? true {
-            let imageScale = TrackAnnouncementPeepholeMask.imageScale
+            let imageScale = min(TrackAnnouncementPeepholeMask.imageScale,
+                                 TrackAnnouncementPeepholeMask.maximumImageSide / max(1, peephole.radius * 2))
             hole.contents = TrackAnnouncementPeepholeMask.holeImage(radius: peephole.radius, feather: peephole.feather, scale: imageScale)
             hole.contentsScale = imageScale
             drawn = (peephole.radius, peephole.feather)
