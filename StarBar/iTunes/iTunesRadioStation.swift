@@ -99,15 +99,24 @@ final class iTunesRadioStation {
     static let addToLibraryTimeout: TimeInterval = 10.0
 
     private init() {
-        // Listen iTunes play state change notification
-        // Note: The notification name on Catalina is same as Mojave
-        DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.playInfoChanged(_:)), name: NSNotification.Name("com.apple.iTunes.playerInfo"), object: nil)
-        DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.sourceSaved(_:)), name: NSNotification.Name("com.apple.iTunes.sourceSaved"), object: nil)  // only set rating in iTunes edit song info panel can trigger that
-        observeLibraryChanges(in: DistributedNotificationCenter.default())
+        // Tests are hosted in the app, so this station is the one under test. Left subscribed,
+        // a song change or library edit in Music during a run adds player updates to the
+        // counts the tests make, or restarts the library timer before it fires. The tests
+        // post to a private centre through `observeLibraryChanges(in:)` instead.
+        if !iTunesRadioStation.isRunningTests {
+            // Listen iTunes play state change notification
+            // Note: The notification name on Catalina is same as Mojave
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.playInfoChanged(_:)), name: NSNotification.Name("com.apple.iTunes.playerInfo"), object: nil)
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.sourceSaved(_:)), name: NSNotification.Name("com.apple.iTunes.sourceSaved"), object: nil)  // only set rating in iTunes edit song info panel can trigger that
+            observeLibraryChanges(in: DistributedNotificationCenter.default())
+        }
 
         // Due to iTunes may already playing before app launch,update player when app start
         iTunesPlayer.shared.update(iTunes?.currentTrackCopy)
-        observeMusicLifecycle()
+        // The same guard as above, split only to keep the lifecycle observers after this read
+        if !iTunesRadioStation.isRunningTests {
+            observeMusicLifecycle()
+        }
 
         // Bind and broadcast keyboard
         // Notify control directly without trigger player update notification
@@ -144,6 +153,9 @@ final class iTunesRadioStation {
             NotificationCenter.default.post(name: .iTunesRadioRequestTrackRating0, object: nil)
         })
     }
+
+    /// Same test as `LaunchAtLogin`'s
+    private static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
 }
 

@@ -10,6 +10,10 @@
 //  each test starts by flushing what is held and does not assume a fresh throttle window,
 //  and `tearDown` clears what it set.
 //
+//  Under tests the station subscribes to none of Music's distributed notifications or
+//  workspace events, so changing songs or editing the library during a run cannot add to or
+//  starve the player updates these tests count. Library signals come from a private centre.
+//
 
 import XCTest
 import Cocoa
@@ -245,8 +249,8 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.3))
         XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite)
         // Each re-read ends in one player update. Two would mean the refusals were not
-        // coalesced. (A real track change in Music during this third of a second would add
-        // one; on CI there is no Music.)
+        // coalesced. (A track change in Music can't add one: under tests the station does
+        // not subscribe to Music's notifications.)
         XCTAssertEqual(updates, 1, "two refusals, one re-read")
     }
 
