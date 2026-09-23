@@ -13,9 +13,9 @@
 //  Under tests the station subscribes to none of Music's distributed notifications or
 //  workspace events, so changing songs or editing the library during a run cannot add to or
 //  starve the player updates these tests count. Library signals come from a private centre,
-//  and the library re-read runs on a `FakeClock`: the library tests never wait on the main
-//  run loop, so nothing else in the host app can post a player update among the ones they
-//  count. The refused-write tests below still wait in real time.
+//  and both re-reads, after a library change and after a refused write, run on a
+//  `FakeClock`: the tests never wait on the main run loop, so nothing else in the host app
+//  can post a player update among the ones they count.
 //
 
 import XCTest
@@ -30,11 +30,14 @@ final class iTunesRadioStationRatingTests: XCTestCase {
     override func setUp() {
         super.setUp()
         station.flushHeldRatingWrite()
+        station.cancelPendingRereads()
     }
 
     override func tearDown() {
         station.flushHeldRatingWrite()
-        station.libraryChangeClock = RunLoopClock()
+        // A re-read left waiting would otherwise run in the next test, or count as pending there
+        station.cancelPendingRereads()
+        station.rereadClock = RunLoopClock()
         // Leave no fake song behind as "what is playing" for the rest of the run
         iTunesPlayer.shared.update(nil, broadcast: false)
         super.tearDown()
@@ -133,7 +136,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let center = NotificationCenter()
         station.observeLibraryChanges(in: center)
         defer { center.removeObserver(station) }
-        let clock = useFakeLibraryClock()
+        let clock = useFakeRereadClock()
         let track = FakeTrack(name: "Deleted", rating: 20)
         play(track)
         let original = iTunesPlayer.shared.playing
@@ -156,7 +159,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let center = NotificationCenter()
         station.observeLibraryChanges(in: center)
         defer { center.removeObserver(station) }
-        let clock = useFakeLibraryClock()
+        let clock = useFakeRereadClock()
         var updates = 0
         let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }
@@ -181,7 +184,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         let center = NotificationCenter()
         station.observeLibraryChanges(in: center)
         defer { center.removeObserver(station) }
-        let clock = useFakeLibraryClock()
+        let clock = useFakeRereadClock()
         let track = FakeTrack(name: "Held during library change", rating: 0)
         play(track)
         station.setRating(20, on: track)
@@ -243,38 +246,38 @@ final class iTunesRadioStationRatingTests: XCTestCase {
 
     /// Only a refused property write schedules the re-read, and two refusals mean one read
     func testOnlyARefusedWriteSchedulesOneRereadOfThePlayer() {
+        let clock = useFakeRereadClock()
         let error = NSError(domain: NSOSStatusErrorDomain, code: -54, userInfo: nil)
         var updates = 0
         let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
         defer { NotificationCenter.default.removeObserver(observer) }
 
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x67657464).aeDesc!, withError: error)   // core/getd
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite, "a failed read changes nothing")
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
 
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)   // core/setd
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "a refused write schedules a re-read")
+        XCTAssertEqual(clock.pendingOneShots.count, 1, "two refusals leave one re-read waiting")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, iTunesRadioStation.refusedWriteRereadDelay)
         XCTAssertEqual(updates, 0, "and it has not run yet")
 
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.3))
+        // Fire them all: a re-read the second refusal failed to replace would add an update
+        clock.fireAllOneShots()
         XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite)
         // Each re-read ends in one player update. Two would mean the refusals were not
-        // coalesced. (A track change in Music can't add one: under tests the station does
-        // not subscribe to Music's notifications.)
+        // coalesced.
         XCTAssertEqual(updates, 1, "two refusals, one re-read")
     }
 
     /// While a rating is held the re-read waits for it: reading first would repaint the stars
     /// with a value Music is about to replace, and nothing afterwards would correct them
     func testTheRereadWaitsWhileARatingIsHeld() {
+        let clock = useFakeRereadClock()
         let track = FakeTrack(name: "Held", rating: 0)
         play(track)
         station.setRating(60, on: track)
-        // A window still open from an earlier test could release 80 before the re-read looks,
-        // so send 60 now if it was held: 80 is then held for a whole `ratingSaveDelay`
-        station.flushHeldRatingWrite()
         station.setRating(80, on: track)    // held
         var updates = 0
         let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
@@ -282,10 +285,17 @@ final class iTunesRadioStationRatingTests: XCTestCase {
 
         let error = NSError(domain: NSOSStatusErrorDomain, code: -54, userInfo: nil)
         _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!, withError: error)
-        RunLoop.main.run(until: Date().addingTimeInterval(iTunesRadioStation.refusedWriteRereadDelay + 0.3))
+        clock.fireAllOneShots()
 
         XCTAssertEqual(updates, 0, "no re-read while the rating is held")
         XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "it is waiting for the held rating instead")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, iTunesRadioStation.ratingSaveDelay, "for the rest of the write window")
+
+        station.flushHeldRatingWrite()
+        clock.fireAllOneShots()
+        XCTAssertEqual(track.ratingsWritten.last, 80)
+        XCTAssertEqual(updates, 1, "the deferred re-read is not lost")
+        XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite)
     }
 
     /// The failed-event handler tells a property write from a read by the event's class and
@@ -300,10 +310,10 @@ final class iTunesRadioStationRatingTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Time the station's library re-read by hand. `tearDown` puts the real clock back.
-    private func useFakeLibraryClock() -> FakeClock {
+    /// Time the station's re-reads by hand. `tearDown` puts the real clock back.
+    private func useFakeRereadClock() -> FakeClock {
         let clock = FakeClock()
-        station.libraryChangeClock = clock
+        station.rereadClock = clock
         return clock
     }
 
