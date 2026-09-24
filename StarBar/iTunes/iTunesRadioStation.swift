@@ -72,7 +72,7 @@ final class iTunesRadioStation {
     /// enough that the wrong stars are not on screen for long.
     static let refusedWriteRereadDelay: TimeInterval = 0.5
     /// The re-read scheduled after a refused write, so several refusals mean one read
-    private var refusedWriteReread: DispatchWorkItem?
+    private var refusedWriteReread: RatingReminderTimer?
     /// True while a re-read after a refused write is waiting to run. Not private only so the
     /// tests can see it, like `classAndID(of:)`.
     var hasPendingRereadAfterRefusedWrite: Bool {
@@ -80,7 +80,23 @@ final class iTunesRadioStation {
     }
 
     /// Coalesces a run of `libraryChanged` notifications into one re-read
-    private var libraryChangedTimer: Timer?
+    private var libraryChangedTimer: RatingReminderTimer?
+
+    /// Times both re-reads of the player: after a library change and after a refused write.
+    /// Not private only so the tests can put a `FakeClock` here and fire it by hand, like
+    /// `hasPendingRereadAfterRefusedWrite`: waiting in real time let any other player update
+    /// in the host app land among the ones a test counts.
+    var rereadClock: RatingReminderClock = RunLoopClock()
+
+    /// Drop both re-reads if either is waiting. Not private only so the tests can call it: the
+    /// station outlives every test, and a re-read left waiting would run in the next one, or
+    /// leave `hasPendingRereadAfterRefusedWrite` true there.
+    func cancelPendingRereads() {
+        libraryChangedTimer?.invalidate()
+        libraryChangedTimer = nil
+        refusedWriteReread?.invalidate()
+        refusedWriteReread = nil
+    }
 
     /// How long to wait after a library change before re-reading the player.
     ///
@@ -194,19 +210,20 @@ extension iTunesRadioStation {
 
     private func scheduleLibraryReread(after delay: TimeInterval) {
         libraryChangedTimer?.invalidate()
-        // `.common` so a run loop tracking an open menu doesn't hold the read back
-        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+        // `RunLoopClock` runs its timers in `.common`, so a run loop tracking an open menu
+        // doesn't hold the read back
+        libraryChangedTimer = rereadClock.schedule(after: delay, repeats: false) { [weak self] in
             guard let self = self else { return }
             self.libraryChangedTimer = nil
             // Music does not yet have a held rating. Reading it now would undo the user's
-            // choice on screen. Wait for the write window, then reconcile once.
+            // choice on screen. Wait for the write window, then reconcile once. That wait may
+            // run up to 0.2 s late (`RunLoopClock`'s tolerance), which is harmless: this check
+            // runs again when it fires.
             guard self.ratingWriter.heldRating == nil else {
                 return self.scheduleLibraryReread(after: iTunesRadioStation.ratingSaveDelay)
             }
             self.readPlayerAgain(because: "Music's library changed")
         }
-        RunLoop.main.add(timer, forMode: .common)
-        libraryChangedTimer = timer
     }
 
     @objc func playInfoChanged(_ notification: Notification) {
@@ -559,8 +576,15 @@ extension iTunesRadioStation: SBApplicationDelegate {
         os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
 
         if eventClass == "core" && eventID == "setd" {
-            // The delegate runs on whichever thread sent the event; the rest is main-thread work
-            DispatchQueue.main.async { [weak self] in self?.scheduleRereadAfterRefusedWrite() }
+            // The delegate runs on whichever thread sent the event; the rest is main-thread
+            // work. Every write is sent from the main thread, so this schedules at once. Keep
+            // it to scheduling: this may run inside the Scripting Bridge call that sent the
+            // write, and reading Music from here would send Apple Events from within it.
+            if Thread.isMainThread {
+                scheduleRereadAfterRefusedWrite()
+            } else {
+                DispatchQueue.main.async { [weak self] in self?.scheduleRereadAfterRefusedWrite() }
+            }
         }
         return nil
     }
@@ -573,9 +597,13 @@ extension iTunesRadioStation: SBApplicationDelegate {
     /// While a rating is still held the read waits for it: the read repaints the stars with
     /// Music's value, and a held rating is one Music does not have yet, so reading first
     /// would put the old stars back and nothing afterwards would correct them.
+    ///
+    /// `RunLoopClock` runs the timer in `.common` mode, so an open menu doesn't hold the read
+    /// back, and may run the 2 s wait up to 0.2 s late, which is harmless because the check
+    /// runs again when it fires.
     private func scheduleRereadAfterRefusedWrite(after delay: TimeInterval = iTunesRadioStation.refusedWriteRereadDelay) {
-        refusedWriteReread?.cancel()
-        let reread = DispatchWorkItem { [weak self] in
+        refusedWriteReread?.invalidate()
+        refusedWriteReread = rereadClock.schedule(after: delay, repeats: false) { [weak self] in
             guard let self = self else { return }
             self.refusedWriteReread = nil
             guard self.ratingWriter.heldRating == nil else {
@@ -583,8 +611,6 @@ extension iTunesRadioStation: SBApplicationDelegate {
             }
             self.readPlayerAgain(because: "Music refused a write")
         }
-        refusedWriteReread = reread
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: reread)
     }
 
     /// The event class and ID (such as `core`/`setd` for a property write) as four-character

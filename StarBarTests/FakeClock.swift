@@ -52,10 +52,23 @@ final class FakeClock: RatingReminderClock {
     }
 
     /// Fire the pending one-shot timer, as the run loop would when it's due
-    func fireOneShot() {
-        guard let timer = pendingOneShot else { return XCTFail("no pending timer") }
+    func fireOneShot(file: StaticString = #filePath, line: UInt = #line) {
+        guard let timer = pendingOneShot else { return XCTFail("no pending timer", file: file, line: line) }
         timer.invalidate()
         timer.action()
+    }
+
+    /// Fire every pending one-shot timer, oldest first, as the run loop would once they were
+    /// all due. Unlike `fireOneShot()`, a timer the code forgot to invalidate fires too, so a
+    /// test counting what the timers do sees it. Timers scheduled while these fire wait for
+    /// the next call.
+    func fireAllOneShots(file: StaticString = #filePath, line: UInt = #line) {
+        let due = pendingOneShots
+        guard !due.isEmpty else { return XCTFail("no pending timer", file: file, line: line) }
+        for timer in due where timer.isValid {
+            timer.invalidate()
+            timer.action()
+        }
     }
 
     func fireRepeating() {
