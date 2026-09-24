@@ -85,6 +85,9 @@
 		5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */; };
 		5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */; };
 		5A7E1A0000000000000000E4 /* TrackAnnouncementLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E3 /* TrackAnnouncementLayout.swift */; };
+		5A7E1A000000000000000301 /* TrackAnnouncementSeeThrough.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000302 /* TrackAnnouncementSeeThrough.swift */; };
+		5A7E1A000000000000000303 /* TrackAnnouncementSurfaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000304 /* TrackAnnouncementSurfaceView.swift */; };
+		5A7E1A000000000000000305 /* TrackAnnouncementSeeThroughTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000306 /* TrackAnnouncementSeeThroughTests.swift */; };
 		5A7E1A0000000000000000E6 /* TrackAnnouncementController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E5 /* TrackAnnouncementController.swift */; };
 		5A7E1A0000000000000000E8 /* TrackAnnouncementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */; };
 		5A7E1A0000000000000000EA /* TrackAnnouncementPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */; };
@@ -200,6 +203,9 @@
 		5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncement.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E3 /* TrackAnnouncementLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementLayout.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000302 /* TrackAnnouncementSeeThrough.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSeeThrough.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000304 /* TrackAnnouncementSurfaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSurfaceView.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000306 /* TrackAnnouncementSeeThroughTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSeeThroughTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E5 /* TrackAnnouncementController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementView.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementPanel.swift; sourceTree = "<group>"; };
@@ -308,6 +314,7 @@
 				5A7E1A0000000000000000EB /* TrackAnnouncementLayoutTests.swift */,
 				5A7E1A0000000000000000ED /* TrackAnnouncementControllerTests.swift */,
 				5A7E1A0000000000000000EF /* TrackAnnouncementPanelTests.swift */,
+				5A7E1A000000000000000306 /* TrackAnnouncementSeeThroughTests.swift */,
 				5A7E1A0000000000000000F1 /* FakeClock.swift */,
 			);
 			path = "StarBarTests";
@@ -386,6 +393,7 @@
 				DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */,
 				5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */,
 				5A7E1A0000000000000000E3 /* TrackAnnouncementLayout.swift */,
+				5A7E1A000000000000000302 /* TrackAnnouncementSeeThrough.swift */,
 			);
 			path = Helper;
 			sourceTree = "<group>";
@@ -421,6 +429,7 @@
 				DB05F0892354FC7700CE6DF9 /* PlayerControlView.swift */,
 				5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */,
 				5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */,
+				5A7E1A000000000000000304 /* TrackAnnouncementSurfaceView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -642,9 +651,11 @@
 				DB424A352307259800230C7E /* iTunesTrack.swift in Sources */,
 				DB106C4622C53D4B00502D7C /* AppDelegate.swift in Sources */,
 				5A7E1A0000000000000000EA /* TrackAnnouncementPanel.swift in Sources */,
+				5A7E1A000000000000000303 /* TrackAnnouncementSurfaceView.swift in Sources */,
 				5A7E1A0000000000000000E8 /* TrackAnnouncementView.swift in Sources */,
 				5A7E1A0000000000000000E6 /* TrackAnnouncementController.swift in Sources */,
 				5A7E1A0000000000000000E4 /* TrackAnnouncementLayout.swift in Sources */,
+				5A7E1A000000000000000301 /* TrackAnnouncementSeeThrough.swift in Sources */,
 				5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */,
 				DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */,
 				DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */,
@@ -676,6 +687,7 @@
 				FB0000000000000000000004 /* RatingWriterTests.swift in Sources */,
 				5A7E1A0000000000000000F2 /* FakeClock.swift in Sources */,
 				5A7E1A0000000000000000F0 /* TrackAnnouncementPanelTests.swift in Sources */,
+				5A7E1A000000000000000305 /* TrackAnnouncementSeeThroughTests.swift in Sources */,
 				5A7E1A0000000000000000EE /* TrackAnnouncementControllerTests.swift in Sources */,
 				5A7E1A0000000000000000EC /* TrackAnnouncementLayoutTests.swift in Sources */,
 				5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */,

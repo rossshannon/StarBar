@@ -62,31 +62,79 @@ struct TrackAnnouncementGlassKnobs: Equatable {
 /// album and rating in white, drawn the way Growl's Music Video view drew them.
 ///
 /// The band's background depends on the style: Growl's flat translucent black, a blur of
-/// whatever is behind the strip under a lighter tint, or Liquid Glass. The backdrop is a
-/// subview under the drawn content, because a view's own drawing always sits beneath its
-/// subviews.
+/// whatever is behind the strip under a lighter tint, or Liquid Glass. The background (the
+/// backdrop and the wash over it) sits in `TrackAnnouncementSurfaceView` under the drawn
+/// content, so that it can be seen through without taking the text with it.
 final class TrackAnnouncementView: NSView {
 
     var announcement: TrackAnnouncement {
         didSet {
             content.announcement = announcement
             setAccessibilityLabel(announcement.accessibilityLabel)
+            // A longer title covers more of the strip, and keeps more of its background
+            applyTypingWindow()
         }
     }
 
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
-        didSet { content.tintAlpha = tintAlpha }
+        didSet { surface.wash.tintAlpha = tintAlpha }
     }
 
     /// How much bigger than Growl's 1280 by 800 design to draw, set from the screen
     var scale: CGFloat = 1 {
         didSet {
             content.scale = scale
+            surface.wash.scale = scale
             applyInsets()
             layoutBackdrop()
+            applyTypingWindow()
         }
+    }
+
+    /// The hole through the background that follows the pointer, in this view's coordinates;
+    /// nil for none. The text, artwork and stars stay drawn over it.
+    var peephole: TrackAnnouncementPeephole? {
+        get { return surface.peephole }
+        set { surface.peephole = newValue }
+    }
+
+    /// Open the window through the middle of the background that shows while the user types,
+    /// `progress` of the way (0 closed, 1 open; the panel steps it). The radius, feather and
+    /// the centre's height above the strip's top edge are already scaled. The artwork and text
+    /// keep their background whatever the window covers: fading the whole background instead
+    /// left the white text over whatever was behind.
+    func setTypingWindow(radius: CGFloat, feather: CGFloat, centreHeight: CGFloat = 0, progress: CGFloat) {
+        typingWindowSize = (radius, feather, centreHeight)
+        typingWindowProgress = progress
+        applyTypingWindow()
+    }
+
+    /// The typing window as laid out, in this view's coordinates; nil while it is closed
+    var typingWindow: TrackAnnouncementTypingWindow? {
+        return surface.typingWindow
+    }
+
+    private var typingWindowSize: (radius: CGFloat, feather: CGFloat, centreHeight: CGFloat) = (0, 0, 0)
+    private var typingWindowProgress: CGFloat = 0
+
+    private func applyTypingWindow() {
+        // Closed: nothing to lay out, and no text to measure
+        guard typingWindowSize.radius > 0, typingWindowProgress > 0 else {
+            surface.typingWindow = nil
+            return
+        }
+        surface.typingWindow = TrackAnnouncementSeeThrough.typingWindow(
+            in: bounds,
+            occupied: content.occupiedRect,
+            radius: typingWindowSize.radius,
+            feather: typingWindowSize.feather,
+            centreHeight: typingWindowSize.centreHeight,
+            margin: TrackAnnouncementSeeThrough.keepMargin * scale,
+            keepFeather: TrackAnnouncementSeeThrough.keepFeather * scale,
+            progress: typingWindowProgress
+        )
     }
 
     /// Space at the left and right the content keeps clear: a Dock at the side that the
@@ -95,12 +143,14 @@ final class TrackAnnouncementView: NSView {
         didSet {
             applyInsets()
             layoutBackdrop()
+            applyTypingWindow()
         }
     }
     var trailingInset: CGFloat = 0 {
         didSet {
             applyInsets()
             layoutBackdrop()
+            applyTypingWindow()
         }
     }
 
@@ -110,27 +160,36 @@ final class TrackAnnouncementView: NSView {
             guard style != oldValue else { return }
             rebuildBackdrop()
             applyInsets()
-            content.tintAlpha = tintAlpha
-            content.tintColor = tintColor
+            // The glass's side insets move the content, and so the part that keeps its background
+            applyTypingWindow()
+            surface.wash.tintAlpha = tintAlpha
+            surface.wash.tintColor = tintColor
         }
     }
 
     /// The blur or glass view under the content, nil for the classic style
-    private(set) var backdropView: NSView?
+    var backdropView: NSView? {
+        return surface.backdropView
+    }
+    private let surface: TrackAnnouncementSurfaceView
     private let content: TrackAnnouncementContentView
 
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
         self.announcement = announcement
-        content = TrackAnnouncementContentView(announcement: announcement, frame: NSRect(origin: .zero, size: frame.size))
+        let bounds = NSRect(origin: .zero, size: frame.size)
+        surface = TrackAnnouncementSurfaceView(frame: bounds)
+        content = TrackAnnouncementContentView(announcement: announcement, frame: bounds)
         super.init(frame: frame)
         wantsLayer = true
         if #available(macOS 14.0, *) {
             // The glass hangs below the strip; the window clips it, this view must not
             clipsToBounds = false
         }
+        surface.autoresizingMask = [.width, .height]
+        surface.wash.tintAlpha = tintAlpha
+        surface.wash.tintColor = tintColor
+        addSubview(surface)
         content.autoresizingMask = [.width, .height]
-        content.tintAlpha = tintAlpha
-        content.tintColor = tintColor
         addSubview(content)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
@@ -140,6 +199,7 @@ final class TrackAnnouncementView: NSView {
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
         layoutBackdrop()
+        applyTypingWindow()
     }
 
     /// The frame the backdrop takes for the current style: the whole strip for a blur, and
@@ -173,9 +233,9 @@ final class TrackAnnouncementView: NSView {
         return TrackAnnouncementGlassKnobs.read().cornerRadius
     }
 
-    /// Whether the content draws the sheen over the glass
+    /// Whether the wash draws the sheen over the glass
     var hasSheen: Bool {
-        return content.sheen != nil
+        return surface.wash.sheen != nil
     }
 
     private func applyInsets() {
@@ -192,12 +252,13 @@ final class TrackAnnouncementView: NSView {
 
     private func layoutBackdrop() {
         let knobs = TrackAnnouncementGlassKnobs.read()
-        content.sheen = (renderedStyle == .glass && (knobs.edgeLine || knobs.sheen))
-            ? TrackAnnouncementContentView.Sheen(rect: backdropFrame, cornerRadius: glassCornerRadius * scale, edgeLine: knobs.edgeLine, shading: knobs.sheen)
+        surface.wash.sheen = (renderedStyle == .glass && (knobs.edgeLine || knobs.sheen))
+            ? TrackAnnouncementWashView.Sheen(rect: backdropFrame, cornerRadius: glassCornerRadius * scale, edgeLine: knobs.edgeLine, shading: knobs.sheen)
             : nil
         guard let backdrop = backdropView else { return }
         backdrop.frame = backdropFrame
         TrackAnnouncementView.applyCornerRadius(to: backdrop, radius: glassCornerRadius * scale)
+        surface.backdropDidLayout()
     }
 
     required init?(coder: NSCoder) {
@@ -221,13 +282,8 @@ final class TrackAnnouncementView: NSView {
     }
 
     private func rebuildBackdrop() {
-        backdropView?.removeFromSuperview()
-        backdropView = nil
         renderedStyle = TrackAnnouncementView.effectiveStyle(for: style)
-        if let backdrop = TrackAnnouncementView.makeBackdrop(for: style) {
-            addSubview(backdrop, positioned: .below, relativeTo: content)
-            backdropView = backdrop
-        }
+        surface.backdropView = TrackAnnouncementView.makeBackdrop(for: style)
         // Always, so the sheen drawn over a glass backdrop goes when the style loses it
         layoutBackdrop()
     }
@@ -286,37 +342,13 @@ final class TrackAnnouncementView: NSView {
 
 }
 
-/// The strip's drawn content: the tint, the artwork or its placeholder, the text and the
-/// rating row. Layout comes from `TrackAnnouncementLayout`.
+/// The strip's drawn content: the artwork or its placeholder, the text and the rating row,
+/// over a clear background. The tint under them is `TrackAnnouncementWashView`'s. Layout
+/// comes from `TrackAnnouncementLayout`.
 final class TrackAnnouncementContentView: NSView {
 
     var announcement: TrackAnnouncement {
         didSet { needsDisplay = true }
-    }
-
-    var tintAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
-        didSet { needsDisplay = true }
-    }
-
-    var tintColor: NSColor = .black {
-        didSet { needsDisplay = true }
-    }
-
-    /// The glass's shape in this view's coordinates, and which parts of the sheen to draw
-    /// over it: the bright line along the top edge, and the soft shading that suggests a dome
-    struct Sheen: Equatable {
-        var rect: NSRect
-        var cornerRadius: CGFloat
-        var edgeLine = true
-        var shading = false
-    }
-
-    /// Set for the glass style when any part of the sheen is on
-    var sheen: Sheen? {
-        didSet {
-            guard sheen != oldValue else { return }
-            needsDisplay = true
-        }
     }
 
     var scale: CGFloat = 1 {
@@ -352,17 +384,8 @@ final class TrackAnnouncementContentView: NSView {
         needsDisplay = true
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        if tintAlpha > 0 {
-            tintColor.withAlphaComponent(tintAlpha).setFill()
-            bounds.fill()
-        }
-        // Under Reduce Transparency's opaque wash the sheen has no glass to sit on
-        if let sheen = sheen, tintAlpha < 1 {
-            drawSheen(sheen)
-        }
-
-        let frames = TrackAnnouncementLayout.frames(
+    private var frames: TrackAnnouncementLayout.Frames {
+        return TrackAnnouncementLayout.frames(
             in: bounds.size,
             scale: scale,
             leadingInset: leadingInset,
@@ -370,9 +393,24 @@ final class TrackAnnouncementContentView: NSView {
             hasArtist: !announcement.artist.isEmpty,
             hasAlbum: !announcement.album.isEmpty
         )
+    }
+
+    private var titleFont: NSFont {
+        return NSFont.boldSystemFont(ofSize: TrackAnnouncementLayout.titleFontSize * scale)
+    }
+
+    private var detailFont: NSFont {
+        return NSFont.messageFont(ofSize: TrackAnnouncementLayout.detailFontSize * scale)
+    }
+
+    private var cannotRateFont: NSFont {
+        return NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize * scale)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let frames = self.frames
         drawArtwork(in: frames.artwork)
-        draw(announcement.title, in: frames.title, font: NSFont.boldSystemFont(ofSize: TrackAnnouncementLayout.titleFontSize * scale))
-        let detailFont = NSFont.messageFont(ofSize: TrackAnnouncementLayout.detailFontSize * scale)
+        draw(announcement.title, in: frames.title, font: titleFont)
         if let artistRect = frames.artist {
             draw(announcement.artist, in: artistRect, font: detailFont)
         }
@@ -382,34 +420,44 @@ final class TrackAnnouncementContentView: NSView {
         drawRating(in: frames.rating)
     }
 
-    /// A rim light fading down from the top edge and a shade rising from the bottom, clipped
-    /// to the glass's rounded shape, so the flat glass reads as a dome
-    private func drawSheen(_ sheen: Sheen) {
-        let shape = NSBezierPath(roundedRect: sheen.rect, xRadius: sheen.cornerRadius, yRadius: sheen.cornerRadius)
-        NSGraphicsContext.saveGraphicsState()
-        shape.addClip()
-        if sheen.shading {
-            let highlightHeight = bounds.height * TrackAnnouncementLayout.glassSheenHighlightFraction
-            let highlight = NSRect(x: sheen.rect.minX, y: bounds.maxY - highlightHeight, width: sheen.rect.width, height: highlightHeight)
-            // Angle -90 draws the starting colour at the top
-            NSGradient(starting: NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenHighlightAlpha), ending: .clear)?
-                .draw(in: highlight, angle: -90)
-            let shadeHeight = bounds.height * TrackAnnouncementLayout.glassSheenShadeFraction
-            let shade = NSRect(x: sheen.rect.minX, y: bounds.minY, width: sheen.rect.width, height: shadeHeight)
-            NSGradient(starting: NSColor.black.withAlphaComponent(TrackAnnouncementLayout.glassSheenShadeAlpha), ending: .clear)?
-                .draw(in: shade, angle: 90)
+    /// The part of the strip the artwork and text actually cover: the artwork, and each line
+    /// as wide as its text rather than its slot, which runs most of the way across the strip.
+    /// The typing window keeps the background under this.
+    var occupiedRect: NSRect {
+        let frames = self.frames
+        var rect = frames.artwork
+        rect = rect.union(used(announcement.title, in: frames.title, font: titleFont))
+        if let artistRect = frames.artist {
+            rect = rect.union(used(announcement.artist, in: artistRect, font: detailFont))
         }
-        // In dark mode the native glass already defines its edge; our extra white stroke
-        // reads as a border rather than a glint. Match the view, including high contrast.
-        if sheen.edgeLine && effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) != .darkAqua {
-            // The specular line along the top edge, following the rounded corners: the
-            // shape stroked twice as wide and clipped, so only the inner half shows
-            let edgeWidth = TrackAnnouncementLayout.glassSheenEdgeWidth * scale
-            NSColor.white.withAlphaComponent(TrackAnnouncementLayout.glassSheenEdgeAlpha).setStroke()
-            shape.lineWidth = edgeWidth * 2
-            shape.stroke()
+        if let albumRect = frames.album {
+            rect = rect.union(used(announcement.album, in: albumRect, font: detailFont.italic))
         }
-        NSGraphicsContext.restoreGraphicsState()
+        return rect.union(usedByRating(in: frames.rating))
+    }
+
+    /// The part of `slot` a line of text covers, measured as it is drawn
+    private func used(_ text: String, in slot: NSRect, font: NSFont) -> NSRect {
+        guard !text.isEmpty else { return .null }
+        let width = (text.typographicPunctuation as NSString).size(withAttributes: [.font: font]).width
+        return NSRect(x: slot.minX, y: slot.minY, width: min(slot.width, width.rounded(.up)), height: slot.height)
+    }
+
+    /// The stars and heart, or the heart and the "add it to rate it" line
+    private func usedByRating(in slot: NSRect) -> NSRect {
+        let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
+        let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+        let width: CGFloat
+        if announcement.canRate {
+            let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
+            // The stars, then the heart's slot: the width `Stars.image` would have, without
+            // drawing it
+            width = stars.starsWidth + spacing + starSize.width
+        } else {
+            let text = (TrackAnnouncement.cannotRateText as NSString).size(withAttributes: [.font: cannotRateFont]).width
+            width = starSize.width + spacing * 2 + text.rounded(.up)
+        }
+        return NSRect(x: slot.minX, y: slot.minY, width: min(slot.width, width), height: slot.height)
     }
 
     private func drawArtwork(in slot: NSRect) {
@@ -495,7 +543,7 @@ final class TrackAnnouncementContentView: NSView {
         NSGraphicsContext.restoreGraphicsState()
 
         let textMinX = heartRect.maxX + spacing * 2
-        let font = NSFont.systemFont(ofSize: TrackAnnouncementLayout.cannotRateFontSize * scale)
+        let font = cannotRateFont
         draw(TrackAnnouncement.cannotRateText,
              in: TrackAnnouncementLayout.textRect(centredOn: heartRect.midY, font: font,
                                                 fromX: textMinX, toX: rect.maxX),

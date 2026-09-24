@@ -309,12 +309,14 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return 0 }
         view.cacheDisplay(in: view.bounds, to: rep)
 
-        // The rating row is the bottom one; count the bright pixels across it
+        // The rating row is the bottom one; count the bright pixels across it. The content
+        // draws over a clear background (the tint is the wash's, under it), so only opaque
+        // pixels are ink.
         var bright = 0
         let bottom = Int(Double(rep.pixelsHigh) * 0.72)
         for x in 0..<rep.pixelsWide {
             for y in bottom..<rep.pixelsHigh {
-                if let colour = rep.colorAt(x: x, y: y), colour.brightnessComponent > 0.85 {
+                if let colour = rep.colorAt(x: x, y: y), colour.alphaComponent > 0.5, colour.brightnessComponent > 0.85 {
                     bright += 1
                 }
             }

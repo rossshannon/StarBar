@@ -6,6 +6,7 @@
 //
 
 import Cocoa
+import os.log
 
 /// The window the announcement strip slides up in. Borderless, click-through, on every
 /// Space including full-screen ones, one level below the Dock, and never key: it must not
@@ -32,6 +33,7 @@ final class TrackAnnouncementPanel: NSPanel {
     private let slideDuration: TimeInterval
     private let screens: () -> [NSScreen]
     private let mouseLocation: () -> NSPoint
+    private let keyboard: () -> KeyboardActivity
     /// Time for the slide, and its ticks: a display link when the system has one, else a timer
     private var clock: RatingReminderClock
     /// Bumped by every animation and by a cancel, so a stale timer tick does nothing
@@ -39,21 +41,38 @@ final class TrackAnnouncementPanel: NSPanel {
     private var slideTimer: RatingReminderTimer?
     private var screenObserver: NSObjectProtocol?
 
+    /// Watches the pointer and the keyboard while the strip is on screen, to see through it
+    private var seeThroughTimer: RatingReminderTimer?
+    private var seeThroughKnobs = TrackAnnouncementSeeThroughKnobs()
+    private var typing = TrackAnnouncementTyping()
+    private var lastSeeThroughTick: Date?
+    /// Whether the last tick found the user typing, to log only the changes
+    private var wasTyping = false
+    /// How far open the typing window is, 0 to 1
+    private var typingProgress: CGFloat = 0
+    /// The screen the strip was last placed on, so a pointer on another display near it
+    /// opens no hole
+    private var placedScreenFrame: CGRect?
+
     /// - Parameters:
     ///   - slideDuration: 0 applies the final state at once, for tests
     ///   - screens: the screens to choose from
-    ///   - mouseLocation: where the pointer is, to pick the screen the user is looking at
+    ///   - mouseLocation: where the pointer is, to pick the screen the user is looking at and
+    ///     to put the see-through hole under it
+    ///   - keyboard: how long ago a key went down, to clear the background while the user types
     ///   - clock: steps the slide; a fake one in tests. By default a display link on the
     ///     panel's screen, so each step lands on a refresh, with a timer before macOS 14.
     init(
         slideDuration: TimeInterval = TrackAnnouncementLayout.slideDuration,
         screens: @escaping () -> [NSScreen] = { NSScreen.screens },
         mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
+        keyboard: @escaping () -> KeyboardActivity = KeyboardActivity.system,
         clock: RatingReminderClock? = nil
     ) {
         self.slideDuration = slideDuration
         self.screens = screens
         self.mouseLocation = mouseLocation
+        self.keyboard = keyboard
         self.clock = clock ?? RunLoopClock()
         let size = CGSize(width: 800, height: TrackAnnouncementLayout.height)
         stripView = TrackAnnouncementView(announcement: .preview, frame: NSRect(origin: .zero, size: size))
@@ -103,6 +122,7 @@ final class TrackAnnouncementPanel: NSPanel {
 
     deinit {
         slideTimer?.invalidate()
+        seeThroughTimer?.invalidate()
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -131,6 +151,15 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
 
     func show(_ announcement: TrackAnnouncement, reduceMotion: Bool, reduceTransparency: Bool) {
         stripView.backgroundAlpha = reduceTransparency ? 1 : TrackAnnouncementLayout.backgroundAlpha
+        // Reduce Transparency asks for a solid background under the text; seeing through the
+        // strip takes it away, so neither the hole nor the typing window opens under it
+        if reduceTransparency {
+            stopSeeThrough()
+        } else if phase != .hidden {
+            // A song arriving while the strip is up, after an appearance under Reduce
+            // Transparency: watch again. From hidden, the watcher starts once the strip is placed.
+            startSeeThrough()
+        }
         let isNewAnnouncement = stripView.announcement != announcement
         stripView.announcement = announcement
         let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
@@ -156,6 +185,8 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
                 stripView.alphaValue = 0
                 stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
             }
+            // Before the first frame is drawn, so a pointer already over the strip has its hole
+            startSeeThrough()
             // Draw the first frame before the window shows, so the slide starts clean
             stripView.needsDisplay = true
             stripView.displayIfNeeded()
@@ -226,6 +257,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             } else {
                 self.orderOut(nil)
                 self.phase = .hidden
+                self.stopSeeThrough()
             }
         }
 
@@ -233,8 +265,11 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             guard let self = self else { return }
             let eased = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
             switch transition {
-            case .slide: self.stripView.setFrameOrigin(CGPoint(x: 0, y: startY + (targetY - startY) * eased))
-            case .fade: self.stripView.alphaValue = startAlpha + (targetAlpha - startAlpha) * eased
+            case .slide:
+                self.stripView.setFrameOrigin(CGPoint(x: 0, y: startY + (targetY - startY) * eased))
+                self.updatePeephole()
+            case .fade:
+                self.stripView.alphaValue = startAlpha + (targetAlpha - startAlpha) * eased
             }
         }
 
@@ -262,6 +297,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     private func place(on screen: NSScreen?) {
         let screenFrame = screen?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
         let visibleFrame = screen?.visibleFrame ?? screenFrame
+        placedScreenFrame = screen?.frame
         scale = TrackAnnouncementLayout.scale(forScreenHeight: screenFrame.height)
         stripView.scale = scale
         // The background runs behind a Dock at the side; the content stays clear of it
@@ -292,6 +328,108 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         slideTimer = nil
         orderOut(nil)
         phase = .hidden
+        stopSeeThrough()
+    }
+
+}
+
+// MARK: - Seeing through
+
+extension TrackAnnouncementPanel {
+
+    /// Start watching the pointer and the keyboard, once per appearance. The knobs are read
+    /// here, so a changed default applies from the next song.
+    ///
+    /// The panel ignores the mouse, so no tracking area or mouse-moved event ever reaches it;
+    /// the pointer is read on each display refresh instead, and only while the strip is up.
+    private func startSeeThrough() {
+        guard seeThroughTimer == nil, stripView.backgroundAlpha < 1 else { return }
+        seeThroughKnobs = TrackAnnouncementSeeThroughKnobs.read()
+        let knobs = seeThroughKnobs
+        os_log("%{public}s[%{public}ld], %{public}s: hole %{public}s (radius %.0f, feather %.0f), typing window %{public}s (radius %.0f, feather %.0f, pause %.1f s), last key %.1f s ago", ((#file as NSString).lastPathComponent), #line, #function, knobs.peephole ? "on" : "off", Double(knobs.radius), Double(knobs.feather), knobs.typingWindow ? "on" : "off", Double(knobs.typingRadius), Double(knobs.typingFeather), knobs.typingPause, keyboard().secondsSinceKeyDown)
+        // Nothing to watch for: don't tick at the display's rate for nothing
+        guard knobs.peephole || knobs.typingWindow else { return }
+        typing = TrackAnnouncementTyping()
+        wasTyping = false
+        typingProgress = 0
+        lastSeeThroughTick = nil
+        // A real frame interval, never 0: before macOS 14 this is a Timer, and Foundation
+        // clamps a non-positive interval to 0.1 ms
+        seeThroughTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            self?.updateSeeThrough()
+        }
+        updateSeeThrough()
+    }
+
+    /// Stop watching, and put the whole background back for the next appearance
+    private func stopSeeThrough() {
+        seeThroughTimer?.invalidate()
+        seeThroughTimer = nil
+        lastSeeThroughTick = nil
+        stripView.peephole = nil
+        typingProgress = 0
+        stripView.setTypingWindow(radius: 0, feather: 0, progress: 0)
+    }
+
+    private func updateSeeThrough() {
+        guard seeThroughTimer != nil else { return }
+        // The keyboard straight after the clock: the pair places the last key in time, and
+        // drawing the first hole in between would age the key by the drawing time
+        let now = clock.now()
+        let keys = seeThroughKnobs.typingWindow ? keyboard() : nil
+        let isFirstTick = lastSeeThroughTick == nil
+        let elapsed = lastSeeThroughTick.map { now.timeIntervalSince($0) } ?? 0
+        lastSeeThroughTick = now
+
+        updatePeephole()
+
+        if let keys = keys {
+            typing.observe(keys, at: now)
+            let isTyping = typing.isTyping(at: now, pause: seeThroughKnobs.typingPause)
+            if isTyping != wasTyping {
+                wasTyping = isTyping
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, isTyping ? "typing: opening the window" : "typing stopped: closing the window")
+            }
+            let target: CGFloat = isTyping ? 1 : 0
+            // The first tick of an appearance jumps straight there: the strip is not up yet
+            let progress = isFirstTick
+                ? target
+                : TrackAnnouncementSeeThrough.typingProgress(typingProgress, toward: target, elapsed: elapsed)
+            if progress != typingProgress || isFirstTick {
+                typingProgress = progress
+                stripView.setTypingWindow(
+                    radius: seeThroughKnobs.typingRadius * scale,
+                    feather: seeThroughKnobs.typingFeather * scale,
+                    centreHeight: seeThroughKnobs.typingCentreHeight * scale,
+                    progress: progress
+                )
+            }
+        }
+    }
+
+    /// Put the hole under the pointer, or take it away. Also called from each step of the
+    /// slide, which runs on its own display link: the strip moves under a still pointer, and
+    /// the hole would otherwise trail it by a frame.
+    fileprivate func updatePeephole() {
+        guard seeThroughTimer != nil, seeThroughKnobs.peephole else { return }
+        // The strip slides inside the panel, so its place on screen moves with it
+        let stripOnScreen = stripView.frame.offsetBy(dx: frame.minX, dy: frame.minY)
+        let hadHole = stripView.peephole != nil
+        let pointer = mouseLocation()
+        let onStripScreen = placedScreenFrame.map { $0.contains(pointer) } ?? true
+        stripView.peephole = onStripScreen
+            ? TrackAnnouncementSeeThrough.peephole(
+                pointer: pointer,
+                stripFrame: stripOnScreen,
+                radius: seeThroughKnobs.radius * scale,
+                feather: seeThroughKnobs.feather * scale
+            )
+            : nil
+        if let hole = stripView.peephole, !hadHole {
+            os_log("%{public}s[%{public}ld], %{public}s: hole opened at %.0f, %.0f in the strip", ((#file as NSString).lastPathComponent), #line, #function, Double(hole.centre.x), Double(hole.centre.y))
+        } else if hadHole && stripView.peephole == nil {
+            os_log("%{public}s[%{public}ld], %{public}s: hole closed", ((#file as NSString).lastPathComponent), #line, #function)
+        }
     }
 
 }
