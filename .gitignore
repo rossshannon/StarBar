@@ -99,7 +99,6 @@ Dependencies/**
 # macOS
 .DS_Store
 
-# Claude Code tools & documentation (project skills are tracked)
+# Claude Code tools (project skills are tracked)
 .claude/*
 !.claude/skills/
-docs/sessions/
