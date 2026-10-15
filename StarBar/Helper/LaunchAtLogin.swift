@@ -28,9 +28,14 @@ enum LaunchAtLogin {
         return SMAppService.mainApp.status == .requiresApproval
     }
 
-    /// Ask the system to open StarBar at login, or to stop. Throws when the system refuses.
+    /// Ask the system to open StarBar at login, or to stop. Throws when the system refuses,
+    /// or when this copy of the app is not an installed one.
     static func setEnabled(_ enabled: Bool) throws {
         if enabled {
+            guard isInstalledLocation(Bundle.main.bundleURL) else {
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: not registering %{public}s at login, it is not in an Applications folder", ((#file as NSString).lastPathComponent), #line, #function, Bundle.main.bundlePath)
+                throw NotInstalledError()
+            }
             try SMAppService.mainApp.register()
         } else {
             try SMAppService.mainApp.unregister()
@@ -55,11 +60,12 @@ enum LaunchAtLogin {
     /// choice was on, this registers the app itself once, drops the old registration, and
     /// forgets the key, so the system is the only record from then on.
     ///
-    /// Not run under tests: the test host is a build in DerivedData, and registering it would
-    /// put that path in the user's login items.
+    /// Only run by an installed copy: the test host and other builds live in DerivedData or
+    /// the build cache, and registering one would put that path in the user's login items.
     static func migrateLegacyHelperItem() {
         let defaults = UserDefaults.standard
-        guard defaults.object(forKey: legacyDefaultsKey) != nil, !isRunningTests else { return }
+        guard defaults.object(forKey: legacyDefaultsKey) != nil, !isRunningTests,
+              isInstalledLocation(Bundle.main.bundleURL) else { return }
         let wanted = defaults.bool(forKey: legacyDefaultsKey)
         defaults.removeObject(forKey: legacyDefaultsKey)
 
@@ -75,6 +81,35 @@ enum LaunchAtLogin {
             os_log("%{public}s[%{public}ld], %{public}s: migrated launch at login from the helper to the app, status now %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, SMAppService.mainApp.status.rawValue)
         } catch {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: could not migrate launch at login: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
+        }
+    }
+
+    /// True for an app in `/Applications` or `~/Applications`.
+    ///
+    /// `SMAppService.mainApp` registers whichever bundle calls it, and the system keeps that
+    /// path even after a newer copy is installed. A build from Xcode or `build.sh` that
+    /// registers itself goes on opening at login once it is out of date: an old test host
+    /// in the build cache did, while a newer release sat in /Applications. So only an
+    /// installed copy may register.
+    ///
+    /// The app is sandboxed, so `homeDirectoryForCurrentUser` is the container; the user's
+    /// real home comes from the password database.
+    static func isInstalledLocation(_ bundleURL: URL, home: URL = realHomeDirectory) -> Bool {
+        let path = bundleURL.standardizedFileURL.path
+        let roots = ["/Applications/", home.standardizedFileURL.appendingPathComponent("Applications").path + "/"]
+        return roots.contains { path.hasPrefix($0) }
+    }
+
+    static var realHomeDirectory: URL {
+        guard let entry = getpwuid(getuid()), let dir = entry.pointee.pw_dir else {
+            return FileManager.default.homeDirectoryForCurrentUser
+        }
+        return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
+    }
+
+    struct NotInstalledError: LocalizedError {
+        var errorDescription: String? {
+            return "Only a copy of StarBar in an Applications folder can open at login."
         }
     }
 
