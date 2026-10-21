@@ -206,13 +206,19 @@ extension SpotifyPlayer {
                 return
             }
             guard let reading = SpotifyPlayer.read(pid: pid, includingSong: false) else { return }
-            // Spotify has moved on: the next song's notification will ask for its own
-            guard reading.trackID == trackID, let url = reading.artworkURL.flatMap(URL.init(string:)) else {
-                os_log(.debug, "%{public}s[%{public}ld], %{public}s: no artwork URL for %{public}s (Spotify has %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, trackID, reading.trackID ?? "nil")
-                return
-            }
             DispatchQueue.main.async {
-                self?.download(url, for: trackID)
+                guard let self = self else { return }
+                // Spotify may have moved on, most often while the permission prompt waited for
+                // an answer. The read is then for the song playing now, so it is kept as long
+                // as that is the song the notifications last named: that song's own
+                // notification came before permission did, so nothing else will fetch it.
+                guard let readID = reading.trackID, readID == trackID || readID == self.latest?.trackID,
+                      let url = reading.artworkURL.flatMap(URL.init(string:)) else {
+                    os_log(.debug, "%{public}s[%{public}ld], %{public}s: no artwork URL for %{public}s (Spotify has %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, trackID, reading.trackID ?? "nil")
+                    return
+                }
+                guard self.artwork(for: readID) == nil else { return }
+                self.download(url, for: readID)
             }
         }
     }

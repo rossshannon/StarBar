@@ -524,7 +524,10 @@ extension MenuBarRatingControl {
         favoriteHeartView.isHidden = isStop
         guard !favoriteHeartView.isHidden else { return }
 
-        if ratingControl.mode == .spotify {
+        // A collapse into Spotify mode keeps Music's heart until it has faded out with the
+        // stars: turning green at once made the outgoing Music song look like a favourite
+        let showsIncomingHeart = collapseProgress.map { StarCollapse.showsBadge(progress: $0) } ?? true
+        if ratingControl.mode == .spotify && showsIncomingHeart {
             favoriteHeartView.image = spotifyHeartImage
         } else {
             favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
