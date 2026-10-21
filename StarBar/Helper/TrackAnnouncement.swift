@@ -38,8 +38,9 @@ enum TrackAnnouncementStyle: String, CaseIterable {
 /// the UI tests and the unit tests can show a strip without Music.
 struct TrackAnnouncement: Equatable {
 
-    /// Music's persistent ID as a 16-character hex string, or `name|artist|album` for a
-    /// stream with no ID. Two announcements with the same identity are the same track.
+    /// Music's persistent ID as a 16-character hex string, `name|artist|album` for a stream
+    /// with no ID, or Spotify's Track ID (a `spotify:` URI). Two announcements with the same
+    /// identity are the same track.
     let identity: String
     let title: String
     let artist: String
@@ -54,8 +55,11 @@ struct TrackAnnouncement: Equatable {
     /// There is no rating to show, so the strip says how to get one instead of drawing five
     /// empty dots that suggest the song is merely unrated.
     let canRate: Bool
+    /// The player the song is playing in. A Spotify song has no rating or heart, so its strip
+    /// names Spotify where the stars would be.
+    let source: PlayerKind
 
-    init(identity: String, title: String, artist: String, album: String, rating: Int = 0, isFavorited: Bool = false, artwork: NSImage? = nil, canRate: Bool = true) {
+    init(identity: String, title: String, artist: String, album: String, rating: Int = 0, isFavorited: Bool = false, artwork: NSImage? = nil, canRate: Bool = true, source: PlayerKind = .music) {
         self.identity = identity
         self.title = title
         self.artist = artist
@@ -64,11 +68,12 @@ struct TrackAnnouncement: Equatable {
         self.isFavorited = isFavorited
         self.artwork = artwork
         self.canRate = canRate
+        self.source = source
     }
 
-    /// The same announcement with a new rating or heart. Nil means "leave as it was";
-    /// unrated is 0 and the heart off is false, so both are still passed as themselves.
-    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil, canRate: Bool? = nil) {
+    /// The same announcement with a new rating, heart or artwork. Nil means "leave as it
+    /// was"; unrated is 0 and the heart off is false, so both are still passed as themselves.
+    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil, canRate: Bool? = nil, artwork: NSImage? = nil) {
         self.init(
             identity: other.identity,
             title: other.title,
@@ -76,13 +81,17 @@ struct TrackAnnouncement: Equatable {
             album: other.album,
             rating: rating ?? other.rating,
             isFavorited: isFavorited ?? other.isFavorited,
-            artwork: other.artwork,
-            canRate: canRate ?? other.canRate
+            artwork: artwork ?? other.artwork,
+            canRate: canRate ?? other.canRate,
+            source: other.source
         )
     }
 
     /// What the strip says in place of the stars when the song cannot be rated
     static let cannotRateText = "Add to Library in Apple Music to rate this song"
+
+    /// What the strip says in place of the stars for a song playing in Spotify
+    static let spotifyText = "Spotify"
 
     /// What the Preferences Preview button shows when Music has no track to show instead
     static var preview: TrackAnnouncement {
@@ -117,6 +126,7 @@ struct TrackAnnouncement: Equatable {
     /// What VoiceOver reads when the strip appears
     var accessibilityLabel: String {
         let playing = artist.isEmpty ? "Now playing: \(title)" : "Now playing: \(title) by \(artist)"
+        guard source == .music else { return playing + ", in Spotify" }
         return playing + ". " + RatingControl.accessibilityDescription(rating: rating, isFavorited: isFavorited)
     }
 
@@ -128,6 +138,7 @@ struct TrackAnnouncement: Equatable {
             && lhs.rating == rhs.rating
             && lhs.isFavorited == rhs.isFavorited
             && lhs.artwork === rhs.artwork
+            && lhs.source == rhs.source
     }
 
 }

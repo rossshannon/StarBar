@@ -9,7 +9,7 @@ struct StarRollout {
 
     static func shouldRoll(wasStopped: Bool, isStopped: Bool,
                            previousMode: RatingControl.Mode, mode: RatingControl.Mode) -> Bool {
-        return !isStopped && mode == .rating && (wasStopped || previousMode == .addToLibrary)
+        return !isStopped && mode == .rating && (wasStopped || previousMode == .addToLibrary || previousMode == .spotify)
     }
 
     struct Pose {

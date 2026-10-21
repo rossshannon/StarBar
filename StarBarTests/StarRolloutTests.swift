@@ -110,16 +110,16 @@ final class StarRolloutTests: XCTestCase {
         var stops = 0
         let playback = MenuBarPlaybackState(didStop: { stops += 1 })
         XCTAssertTrue(playback.isStopped)
-        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, musicIsRunning: true))
+        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, isRunning: true))
 
         // Repeated bare Stopped notifications cannot end the session, regardless of delay.
         for _ in 0..<5 {
-            XCTAssertFalse(playback.update(hasTrack: false, isStopped: true, musicIsRunning: true))
+            XCTAssertFalse(playback.update(hasTrack: false, isStopped: true, isRunning: true))
             XCTAssertFalse(playback.isStopped)
             XCTAssertTrue(playback.isWaitingForTrack)
             XCTAssertFalse(playback.canInteract)
         }
-        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, musicIsRunning: true))
+        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, isRunning: true))
         XCTAssertFalse(playback.isStopped)
         XCTAssertFalse(playback.isWaitingForTrack)
         XCTAssertTrue(playback.canInteract)
@@ -128,7 +128,7 @@ final class StarRolloutTests: XCTestCase {
 
     func testPausedEmptyTrackDoesNotRevealFiveTemporaryDots() {
         let playback = MenuBarPlaybackState(didStop: { XCTFail("No session to end") })
-        XCTAssertFalse(playback.update(hasTrack: false, isStopped: false, musicIsRunning: true))
+        XCTAssertFalse(playback.update(hasTrack: false, isStopped: false, isRunning: true))
         XCTAssertTrue(playback.isStopped)
         XCTAssertFalse(playback.canInteract)
     }
@@ -136,38 +136,38 @@ final class StarRolloutTests: XCTestCase {
     func testPlaybackEndingRetainsDisplayUntilMusicQuits() {
         var stops = 0
         let playback = MenuBarPlaybackState(didStop: { stops += 1 })
-        _ = playback.update(hasTrack: true, isStopped: false, musicIsRunning: true)
-        _ = playback.update(hasTrack: false, isStopped: true, musicIsRunning: true)
+        _ = playback.update(hasTrack: true, isStopped: false, isRunning: true)
+        _ = playback.update(hasTrack: false, isStopped: true, isRunning: true)
         XCTAssertFalse(playback.isStopped)
         XCTAssertFalse(playback.canInteract)
         XCTAssertEqual(stops, 0)
 
-        XCTAssertFalse(playback.update(hasTrack: false, isStopped: true, musicIsRunning: false))
+        XCTAssertFalse(playback.update(hasTrack: false, isStopped: true, isRunning: false))
         XCTAssertTrue(playback.isStopped)
         XCTAssertFalse(playback.isWaitingForTrack)
         XCTAssertFalse(playback.canInteract)
         XCTAssertEqual(stops, 1)
-        _ = playback.update(hasTrack: false, isStopped: true, musicIsRunning: false)
+        _ = playback.update(hasTrack: false, isStopped: true, isRunning: false)
         XCTAssertEqual(stops, 1, "Repeated quit updates must not reset twice")
     }
 
     func testMusicQuitRearmsEntranceForItsNextSession() {
         let playback = MenuBarPlaybackState(didStop: {})
-        _ = playback.update(hasTrack: true, isStopped: false, musicIsRunning: true)
+        _ = playback.update(hasTrack: true, isStopped: false, isRunning: true)
         // Even a retained track object cannot keep the display active after Music quits.
-        XCTAssertFalse(playback.update(hasTrack: true, isStopped: false, musicIsRunning: false))
+        XCTAssertFalse(playback.update(hasTrack: true, isStopped: false, isRunning: false))
         XCTAssertTrue(playback.isStopped)
-        XCTAssertFalse(playback.update(hasTrack: false, isStopped: true, musicIsRunning: true))
+        XCTAssertFalse(playback.update(hasTrack: false, isStopped: true, isRunning: true))
         XCTAssertTrue(playback.isStopped, "Opening Music without a song must keep the dot")
-        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, musicIsRunning: true))
+        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, isRunning: true))
         XCTAssertFalse(playback.isStopped)
         XCTAssertTrue(playback.canInteract)
     }
 
     func testPauseWithATrackKeepsTheCurrentPlaybackSession() {
         let playback = MenuBarPlaybackState(didStop: { XCTFail("Pause must not collapse") })
-        _ = playback.update(hasTrack: true, isStopped: false, musicIsRunning: true)
-        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, musicIsRunning: true))
+        _ = playback.update(hasTrack: true, isStopped: false, isRunning: true)
+        XCTAssertTrue(playback.update(hasTrack: true, isStopped: false, isRunning: true))
         XCTAssertFalse(playback.isStopped)
         XCTAssertTrue(playback.canInteract)
     }
@@ -176,9 +176,9 @@ final class StarRolloutTests: XCTestCase {
         let playback = MenuBarPlaybackState(didStop: { XCTFail("Missing data must not stop the session") })
         let control = RatingControl(rating: 70)
         control.updateFavorited(true)
-        _ = playback.update(hasTrack: true, isStopped: false, musicIsRunning: true)
+        _ = playback.update(hasTrack: true, isStopped: false, isRunning: true)
 
-        if playback.update(hasTrack: false, isStopped: false, musicIsRunning: true) {
+        if playback.update(hasTrack: false, isStopped: false, isRunning: true) {
             control.update(rating: 0)
             control.updateFavorited(false)
         }
@@ -186,7 +186,7 @@ final class StarRolloutTests: XCTestCase {
         XCTAssertTrue(control.isFavorited)
         XCTAssertFalse(playback.canInteract)
 
-        if playback.update(hasTrack: true, isStopped: false, musicIsRunning: true) {
+        if playback.update(hasTrack: true, isStopped: false, isRunning: true) {
             control.update(rating: 30)
             control.updateFavorited(false)
         }
@@ -198,8 +198,8 @@ final class StarRolloutTests: XCTestCase {
 
     func testExplicitStopRetainsDisplayButDisablesActionsEvenWithATrackObject() {
         let playback = MenuBarPlaybackState(didStop: { XCTFail("Only quitting ends the session") })
-        _ = playback.update(hasTrack: true, isStopped: false, musicIsRunning: true)
-        XCTAssertFalse(playback.update(hasTrack: true, isStopped: true, musicIsRunning: true))
+        _ = playback.update(hasTrack: true, isStopped: false, isRunning: true)
+        XCTAssertFalse(playback.update(hasTrack: true, isStopped: true, isRunning: true))
         XCTAssertFalse(playback.canInteract)
         XCTAssertFalse(playback.isStopped)
         XCTAssertTrue(playback.isWaitingForTrack)

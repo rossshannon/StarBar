@@ -23,7 +23,7 @@ struct StarCollapse {
 
     static func shouldCollapse(wasStopped: Bool, isStopped: Bool,
                                previousMode: RatingControl.Mode, mode: RatingControl.Mode) -> Bool {
-        return !wasStopped && !isStopped && previousMode == .rating && mode == .addToLibrary
+        return !wasStopped && !isStopped && previousMode == .rating && (mode == .addToLibrary || mode == .spotify)
     }
 
     static func scale(progress: Double) -> CGFloat {
@@ -70,12 +70,15 @@ struct StarCollapse {
         return hasShrunk(progress: progress) ? to : from
     }
 
+    /// - Parameter drawsBadge: false when the stars give way to Spotify's heart alone, which
+    ///   the menu bar draws in its own view
     static func image(stars: Stars, width: CGFloat, progress: Double,
-                      isFavorited: Bool, isPending: Bool = false) -> NSImage {
+                      isFavorited: Bool, isPending: Bool = false, drawsBadge: Bool = true) -> NSImage {
         let size = stars.stars.first?.size ?? NSSize(width: 16, height: 16)
         let image = NSImage(size: NSSize(width: width, height: size.height + 4), flipped: false) { rect in
             NSColor.black.set()
             if showsBadge(progress: progress) {
+                guard drawsBadge else { return true }
                 // Leave its heart slot empty; draw the heart at the live right edge below.
                 let badge = AddToLibraryBadge(glyphSize: size, spacing: stars.spacing,
                                                isFavorited: true, isPending: isPending).image

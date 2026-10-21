@@ -40,11 +40,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !MenuBarRatingControl.isUITesting {
             LaunchAtLogin.migrateLegacyHelperItem()
             _ = iTunesRadioStation.shared
+            // Before anything that follows the player: the arbiter decides which player the
+            // menu bar and the strip follow, and passes each update on to them
+            NowPlayingArbiter.shared.start()
             setupAppleEvent()
         }
 
         // setup menu bar
-        // Create synchronously: the control only refreshes on .iTunesPlayerDidUpdated, and the
+        // Create synchronously: the control only refreshes on .nowPlayingDidUpdate, and the
         // async update in setupAppleEvent() must find it already observing. A delayed control
         // misses that update and shows the stopped icon until the next track change.
         menuBarRatingControl = MenuBarRatingControl()
@@ -92,16 +95,39 @@ extension AppDelegate {
     /// playing, and connect it to player updates, the setting, the shortcut and the menus.
     private func setupTrackAnnouncement() {
         let panel = TrackAnnouncementPanel()
+        // Each read goes to whichever player the arbiter follows; Music when it follows
+        // neither, which answers nil when Music isn't running either
         let controller = TrackAnnouncementController(
-            readPlayer: { AppDelegate.readAnnouncementSnapshot() },
-            loadLiveTrack: { identity, wantsArtwork in AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork) },
-            readCurrentIdentity: { announced in AppDelegate.readCurrentTrackIdentity(matching: announced) },
+            readPlayer: {
+                switch NowPlayingArbiter.shared.active {
+                case .spotify: return AppDelegate.readSpotifySnapshot()
+                case .music, nil: return AppDelegate.readAnnouncementSnapshot()
+                }
+            },
+            loadLiveTrack: { identity, wantsArtwork in
+                switch NowPlayingArbiter.shared.active {
+                case .spotify: return AppDelegate.loadSpotifyLiveTrack(for: identity)
+                case .music, nil: return AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork)
+                }
+            },
+            readCurrentIdentity: { announced in
+                switch NowPlayingArbiter.shared.active {
+                case .spotify: return SpotifyPlayer.shared.latest?.trackID
+                case .music, nil: return AppDelegate.readCurrentTrackIdentity(matching: announced)
+                }
+            },
             readPosition: {
-                guard !MenuBarRatingControl.isUITesting else { return nil }
+                guard !MenuBarRatingControl.isUITesting, NowPlayingArbiter.shared.active != .spotify else { return nil }
                 return MenuBarRatingControl.withShortTimeout { iTunes in iTunes.playerPosition } ?? nil
             },
             isBusy: { [weak self] in self?.menuBarRatingControl?.isDragging ?? false },
             presenter: panel,
+            isRunning: { kind in
+                switch kind {
+                case .music: return iTunesRadioStation.shared.iTunes != nil
+                case .spotify: return SpotifyPlayer.shared.isRunning
+                }
+            },
             isEnabled: UserDefaults.standard.announceNewTracks
         )
         trackAnnouncementPanel = panel
@@ -111,7 +137,16 @@ extension AppDelegate {
         // Music sends no notification at launch, so record the current track now (one short
         // Apple Event read) rather than announce it on the next rating change
         controller.playerDidUpdate(seedOnly: true)
-        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.playerDidUpdateForAnnouncement(_:)), name: .iTunesPlayerDidUpdated, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.playerDidUpdateForAnnouncement(_:)), name: .nowPlayingDidUpdate, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyArtworkDidLoad(_:)), name: .spotifyArtworkDidLoad, object: nil)
+        // Spotify sends nothing at launch either. Its song is read in the background, and
+        // only with permission already granted; it is recorded as seen when it arrives.
+        if !MenuBarRatingControl.isUITesting {
+            SpotifyPlayer.shared.didSeed = { [weak controller] info in
+                controller?.recordSeen(info.snapshot)
+            }
+            SpotifyPlayer.shared.start()
+        }
 
         announceNewTracksObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.new]) { [weak controller] defaults, _ in
             controller?.setEnabled(defaults.announceNewTracks)
@@ -131,6 +166,32 @@ extension AppDelegate {
             return
         }
         TrackAnnouncementController.shared?.playerDidUpdate()
+    }
+
+    @objc private func spotifyArtworkDidLoad(_ notification: Notification) {
+        guard let identity = notification.userInfo?[SpotifyPlayer.identityKey] as? String,
+              let artwork = SpotifyPlayer.shared.artwork(for: identity) else { return }
+        TrackAnnouncementController.shared?.attachArtwork(artwork, identity: identity)
+    }
+
+    /// What Spotify is doing, from its last notification. No Apple Events. Nil when Spotify
+    /// isn't running or has said nothing yet.
+    static func readSpotifySnapshot() -> TrackAnnouncementController.PlayerSnapshot? {
+        guard SpotifyPlayer.shared.isRunning else { return nil }
+        return SpotifyPlayer.shared.latest?.snapshot
+    }
+
+    /// A Spotify song's artwork, if it has already arrived. No rating or heart: Spotify keeps
+    /// neither where StarBar can read it. No Apple Events and no network; artwork that comes
+    /// later reaches the strip through `attachArtwork`.
+    static func loadSpotifyLiveTrack(for identity: String) -> TrackAnnouncementController.LiveTrackLoad {
+        if let playing = SpotifyPlayer.shared.latest?.trackID, playing != identity {
+            return .trackChanged
+        }
+        var live = TrackAnnouncementController.LiveTrack()
+        live.artwork = SpotifyPlayer.shared.artwork(for: identity)
+        live.canRate = false
+        return .loaded(live)
     }
 
     /// What the player is doing, from Music's last notification. Before the first

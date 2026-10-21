@@ -112,6 +112,23 @@ struct Stars {
         return image
     }
 
+    /// Spotify's green, for the menu bar's heart while a song plays in Spotify
+    static let spotifyHeartColor = NSColor(srgbRed: 0x1E / 255.0, green: 0xD7 / 255.0, blue: 0x60 / 255.0, alpha: 1)
+
+    /// Filled heart in `spotifyHeartColor`, the same size as one star
+    static func spotifyHeartImage(size: NSSize) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            let path = Stars.heartPath(in: rect, lineWidth: 1.0)
+            Stars.spotifyHeartColor.setFill()
+            Stars.spotifyHeartColor.setStroke()
+            path.fill()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
     /// Outline heart for the template image. A favorited track leaves this slot empty, so the
     /// coloured heart drawn on top has no template-coloured edge around it.
     private func drawFavoriteHeart(in rect: NSRect, filled: Bool) {
