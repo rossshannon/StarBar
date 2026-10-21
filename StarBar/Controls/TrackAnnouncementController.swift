@@ -673,6 +673,7 @@ extension TrackAnnouncementController.PlayerSnapshot {
         rating = playInfo.notComputedRating
         // The notification says nothing about the heart; the live read fills it in
         isFavorited = nil
+        source = .music
     }
 
     /// From the Scripting Bridge, for the launch gap before Music's first notification.
@@ -697,6 +698,7 @@ extension TrackAnnouncementController.PlayerSnapshot {
         // copy. Resolving that copy here would put a library search inside launch.
         rating = track.userRating
         isFavorited = track.isFavorited
+        source = .music
     }
 
 }
