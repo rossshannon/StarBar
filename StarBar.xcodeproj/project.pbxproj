@@ -83,6 +83,7 @@
 		FB0000000000000000000006 /* FakeTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000005 /* FakeTrack.swift */; };
 		FB0000000000000000000004 /* RatingWriterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000003 /* RatingWriterTests.swift */; };
 		5A7E1A0000000000000000DA /* Bell Transition.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000D9 /* Bell Transition.mp3 */; };
+		5A7E1A000000000000000A02 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000A01 /* LICENSE */; };
 		5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */; };
 		5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */; };
 		5A7E1A0000000000000000E4 /* TrackAnnouncementLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E3 /* TrackAnnouncementLayout.swift */; };
@@ -202,6 +203,7 @@
 		FB0000000000000000000005 /* FakeTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeTrack.swift; sourceTree = "<group>"; };
 		FB0000000000000000000003 /* RatingWriterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriterTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000D9 /* Bell Transition.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Bell Transition.mp3"; sourceTree = "<group>"; };
+		5A7E1A000000000000000A01 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = SOURCE_ROOT; };
 		5A7E1A0000000000000000DB /* RatingReminderControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingReminderControllerTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E1 /* TrackAnnouncement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncement.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E3 /* TrackAnnouncementLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementLayout.swift; sourceTree = "<group>"; };
@@ -349,6 +351,7 @@
 			children = (
 				DB106C4922C53D4C00502D7C /* Assets.xcassets */,
 				5A7E1A0000000000000000D9 /* Bell Transition.mp3 */,
+				5A7E1A000000000000000A01 /* LICENSE */,
 				DB106C4B22C53D4C00502D7C /* Main.storyboard */,
 			);
 			path = "Supporting Files";
@@ -579,6 +582,7 @@
 			files = (
 				DB106C4A22C53D4C00502D7C /* Assets.xcassets in Resources */,
 				5A7E1A0000000000000000DA /* Bell Transition.mp3 in Resources */,
+				5A7E1A000000000000000A02 /* LICENSE in Resources */,
 				DB106C4D22C53D4C00502D7C /* Main.storyboard in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
