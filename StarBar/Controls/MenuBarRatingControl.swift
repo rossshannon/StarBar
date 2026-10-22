@@ -110,6 +110,8 @@ final class MenuBarRatingControl {
     private var displayedStopped = true
     private var displayedMode: RatingControl.Mode = .rating
     private var rolloutProgress: Double?
+    /// The running rollout started from Spotify's green heart, which fades out first
+    private var rolloutFromSpotify = false
     private var collapseProgress: Double?
     private var ratingTransitionTarget: [Star.Style]?
     private var displayedContentWidth: CGFloat?
@@ -336,6 +338,7 @@ extension MenuBarRatingControl {
             wasStopped: wasStopped, isStopped: isStop, previousMode: displayedMode,
             mode: ratingControl.mode, from: outgoingStars, to: ratingControl.stars)
         let shouldAnimate = animate || rolls || collapses || changesRating
+        let rollsFromSpotify = rolls && !wasStopped && displayedMode == .spotify
         displayedStopped = isStop
         displayedMode = ratingControl.mode
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
@@ -385,6 +388,7 @@ extension MenuBarRatingControl {
             drawRatingTransition(from: outgoingStars, progress: 0)
         } else if rolls {
             rolloutProgress = 0
+            rolloutFromSpotify = rollsFromSpotify
             os_log("Starting menu bar star rollout from %{public}s", wasStopped ? "stopped icon" : "add-to-library button")
             drawRollout(progress: 0, fromWidth: fromWidth, toWidth: toWidth)
         } else if collapses {
@@ -519,7 +523,12 @@ extension MenuBarRatingControl {
         guard let button = statusItem.button else { return }
         // Every layout change comes through here, so an open popover follows the heart
         WindowManager.shared.updatePopoverAnchor()
-        favoriteHeartView.alphaValue = rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
+        // A rollout from Spotify fades the green heart out before Music's comes in
+        let showsOutgoingSpotifyHeart = rolloutFromSpotify
+            && (rolloutProgress.map { !StarRollout.showsHeart(progress: $0) } ?? false)
+        favoriteHeartView.alphaValue = rolloutProgress.map {
+            showsOutgoingSpotifyHeart ? StarRollout.outgoingHeartOpacity(progress: $0) : StarRollout.heartOpacity(progress: $0)
+        }
             ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
         favoriteHeartView.isHidden = isStop
         guard !favoriteHeartView.isHidden else { return }
@@ -527,7 +536,7 @@ extension MenuBarRatingControl {
         // A collapse into Spotify mode keeps Music's heart until it has faded out with the
         // stars: turning green at once made the outgoing Music song look like a favourite
         let showsIncomingHeart = collapseProgress.map { StarCollapse.showsBadge(progress: $0) } ?? true
-        if ratingControl.mode == .spotify && showsIncomingHeart {
+        if (ratingControl.mode == .spotify && showsIncomingHeart) || showsOutgoingSpotifyHeart {
             favoriteHeartView.image = spotifyHeartImage
         } else {
             favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
