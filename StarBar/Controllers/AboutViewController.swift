@@ -160,21 +160,23 @@ extension AboutViewController {
         let scrollView = NSTextView.scrollableTextView()
         scrollView.frame = NSRect(x: 0, y: 0, width: 260, height: 240)
         scrollView.borderType = .bezelBorder
-        if let textView = scrollView.documentView as? NSTextView {
-            textView.isEditable = false
-            textView.font = NSFont.systemFont(ofSize: 11)
-            textView.textContainerInset = NSSize(width: 6, height: 6)
-            textView.string = text
-        }
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        textView.isEditable = false
+        textView.font = NSFont.systemFont(ofSize: 11)
+        textView.textContainerInset = NSSize(width: 6, height: 6)
+        textView.string = text
 
         let alert = NSAlert()
         alert.messageText = "MIT Licence"
         alert.accessoryView = scrollView
         alert.addButton(withTitle: "OK")
-        alert.layout()
-        // The text view lays out scrolled a little way down; start at the first copyright line
-        scrollView.documentView?.scroll(.zero)
         alert.beginSheetModal(for: window)
+        // Showing the sheet lays the text out again and leaves it scrolled partway down,
+        // so scroll to the first copyright line once that has happened
+        DispatchQueue.main.async {
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+            textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+        }
     }
 
 }
