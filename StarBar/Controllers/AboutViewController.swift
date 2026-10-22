@@ -74,17 +74,23 @@ final class AboutViewController: NSViewController {
         return AboutViewController.footnoteLabel(AboutViewController.copyright)
     }()
 
-    // "Uses elements of Song-Rating by Cirno MainasuK", with the project name as a link
-    lazy var creditStackView: NSStackView = {
-        let stackView = NSStackView(views: [
-            AboutViewController.footnoteLabel("Uses elements of"),
-            AboutViewController.linkButton("Song-Rating", target: self, action: #selector(AboutViewController.upstreamButtonPressed(_:))),
-            AboutViewController.footnoteLabel("by Cirno MainasuK"),
-        ])
-        stackView.orientation = .horizontal
-        stackView.alignment = .firstBaseline
-        stackView.spacing = 3
-        return stackView
+    // One attributed line rather than labels around a button, whose padding left wide gaps by the link
+    lazy var creditTextField: NSTextField = {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: AboutViewController.footnoteFont,
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+        let credit = NSMutableAttributedString(string: "Uses elements of ", attributes: attributes)
+        var linkAttributes = attributes
+        linkAttributes[.link] = AboutViewController.upstreamURL
+        credit.append(NSAttributedString(string: "Song-Rating", attributes: linkAttributes))
+        credit.append(NSAttributedString(string: " by Cirno MainasuK", attributes: attributes))
+
+        let textField = NSTextField(labelWithAttributedString: credit)
+        // A link in a label is only clickable when the label is selectable and allows attributed editing
+        textField.isSelectable = true
+        textField.allowsEditingTextAttributes = true
+        return textField
     }()
 
     lazy var licenseButton: NSButton = {
@@ -141,10 +147,6 @@ extension AboutViewController {
         NSWorkspace.shared.open(AboutViewController.repositoryURL)
     }
 
-    @objc func upstreamButtonPressed(_ sender: NSButton) {
-        NSWorkspace.shared.open(AboutViewController.upstreamURL)
-    }
-
     // The bundled LICENSE carries Song-Rating's original MIT notice, which the licence requires every copy to keep
     @objc func licenseButtonPressed(_ sender: NSButton) {
         guard let window = view.window,
@@ -154,8 +156,9 @@ extension AboutViewController {
             return
         }
 
+        // Narrower than the About window, so the sheet doesn't hang over its sides
         let scrollView = NSTextView.scrollableTextView()
-        scrollView.frame = NSRect(x: 0, y: 0, width: 420, height: 260)
+        scrollView.frame = NSRect(x: 0, y: 0, width: 260, height: 240)
         scrollView.borderType = .bezelBorder
         if let textView = scrollView.documentView as? NSTextView {
             textView.isEditable = false
@@ -168,6 +171,9 @@ extension AboutViewController {
         alert.messageText = "MIT Licence"
         alert.accessoryView = scrollView
         alert.addButton(withTitle: "OK")
+        alert.layout()
+        // The text view lays out scrolled a little way down; start at the first copyright line
+        scrollView.documentView?.scroll(.zero)
         alert.beginSheetModal(for: window)
     }
 
@@ -193,7 +199,7 @@ extension AboutViewController {
         buttonStackView.orientation = .horizontal
         buttonStackView.spacing = 8
 
-        let footerStackView = NSStackView(views: [copyrightTextField, creditStackView, licenseButton])
+        let footerStackView = NSStackView(views: [copyrightTextField, creditTextField, licenseButton])
         footerStackView.orientation = .vertical
         footerStackView.alignment = .centerX
         footerStackView.spacing = 2
