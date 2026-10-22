@@ -75,7 +75,7 @@ final class PreferencesViewController: NSViewController {
         return button
     }()
     let announceCheckboxButton: NSButton = {
-        let button = NSButton(checkboxWithTitle: "Show a Music Video strip when a new song starts in Music or Spotify", target: nil, action: nil)
+        let button = NSButton(checkboxWithTitle: "Show a Music Video strip when a new song plays", target: nil, action: nil)
         return button
     }()
     let announcePreviewButton: NSButton = {
