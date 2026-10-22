@@ -778,7 +778,16 @@ extension MenuBarRatingControl {
         // Nothing for the reminder to time, and a heart set in Music no longer applies
         reminderController?.playerDidUpdate(nil)
         pendingFavorite = nil
-        guard canShowTrack else { return }
+        guard canShowTrack else {
+            // Holding the last display is right for Spotify's own heart, but not for Music's
+            // stars: the arbiter only hands over from Music when Music stopped playing or
+            // quit, so its song is no longer the one on show. Measured: Music quitting while
+            // Spotify sat stopped with no track left Music's stars up.
+            if ratingControl.mode != .spotify {
+                applyTrackDisplay(nil, isStopped: true, musicIsRunning: false)
+            }
+            return
+        }
 
         displayedSongIdentity = info?.trackID
         let previousStars = ratingControl.stars
