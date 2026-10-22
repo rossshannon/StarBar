@@ -110,8 +110,8 @@ final class MenuBarRatingControl {
     private var displayedStopped = true
     private var displayedMode: RatingControl.Mode = .rating
     private var rolloutProgress: Double?
-    /// The running rollout started from Spotify's green heart, which fades out first
-    private var rolloutFromSpotify = false
+    /// How far Spotify's green heart has faded, while it fades out ahead of a rollout
+    private var spotifyHeartFadeProgress: Double?
     private var collapseProgress: Double?
     private var ratingTransitionTarget: [Star.Style]?
     private var displayedContentWidth: CGFloat?
@@ -363,11 +363,14 @@ extension MenuBarRatingControl {
         widthTimer = nil
         rolloutProgress = nil
         collapseProgress = nil
+        spotifyHeartFadeProgress = nil
         ratingTransitionTarget = nil
         let toWidth = menuBarWidth
         // A collapse keeps the current width until the stars have gone and narrows the item
-        // only while it is empty; see StarCollapse. Widening moves nothing visibly.
-        if !collapses {
+        // only while it is empty; see StarCollapse. A rollout from Spotify keeps it until the
+        // green heart has faded, because macOS 27 first draws a widened item over the icon to
+        // its right: measured, the heart faded out a whole icon away from where it had been.
+        if !collapses && !rollsFromSpotify {
             statusItem.length = settledAllocation
         }
         guard shouldAnimate, (changed || changesRating), !isStop, fromWidth > 0,
@@ -378,17 +381,21 @@ extension MenuBarRatingControl {
             return
         }
 
+        let heartFade = rollsFromSpotify ? StarRollout.outgoingHeartFadeDuration : 0
         let duration = changesRating ? StarRatingTransition.duration
-            : (rolls ? StarRollout.duration : (collapses ? StarCollapse.duration : Self.modeChangeDuration))
+            : (rolls ? heartFade + StarRollout.duration : (collapses ? StarCollapse.duration : Self.modeChangeDuration))
         let start = widthClock.now()
         if changesRating {
             ratingTransitionTarget = ratingControl.stars.stars.map { $0.style }
             displayedContentWidth = toWidth
             os_log("Starting in-place menu bar rating transition")
             drawRatingTransition(from: outgoingStars, progress: 0)
+        } else if rollsFromSpotify {
+            os_log("Starting menu bar star rollout from Spotify's heart")
+            spotifyHeartFadeProgress = 0
+            updateFavoriteHeartView()
         } else if rolls {
             rolloutProgress = 0
-            rolloutFromSpotify = rollsFromSpotify
             os_log("Starting menu bar star rollout from %{public}s", wasStopped ? "stopped icon" : "add-to-library button")
             drawRollout(progress: 0, fromWidth: fromWidth, toWidth: toWidth)
         } else if collapses {
@@ -426,7 +433,18 @@ extension MenuBarRatingControl {
             if changesRating {
                 self.drawRatingTransition(from: outgoingStars, progress: progress)
             } else if rolls {
-                self.drawRollout(progress: progress, fromWidth: fromWidth, toWidth: toWidth)
+                let elapsed = progress * duration
+                if elapsed < heartFade {
+                    self.spotifyHeartFadeProgress = elapsed / heartFade
+                } else {
+                    if self.spotifyHeartFadeProgress != nil {
+                        // The heart has gone, so the widened item is drawn empty
+                        self.spotifyHeartFadeProgress = nil
+                        self.statusItem.length = self.settledAllocation
+                    }
+                    self.drawRollout(progress: (elapsed - heartFade) / StarRollout.duration,
+                                     fromWidth: fromWidth, toWidth: toWidth)
+                }
             } else if collapses {
                 self.drawCollapse(stars: outgoingStars, progress: progress, fromWidth: fromWidth, toWidth: toWidth)
                 if narrowedAt == nil, StarCollapse.hasShrunk(progress: progress) { narrowedAt = now }
@@ -474,6 +492,7 @@ extension MenuBarRatingControl {
         widthTimer = nil
         rolloutProgress = nil
         collapseProgress = nil
+        spotifyHeartFadeProgress = nil
         ratingTransitionTarget = nil
         displayedContentWidth = menuBarWidth
         statusItem.length = settledAllocation
@@ -523,12 +542,10 @@ extension MenuBarRatingControl {
         guard let button = statusItem.button else { return }
         // Every layout change comes through here, so an open popover follows the heart
         WindowManager.shared.updatePopoverAnchor()
-        // A rollout from Spotify fades the green heart out before Music's comes in
-        let showsOutgoingSpotifyHeart = rolloutFromSpotify
-            && (rolloutProgress.map { !StarRollout.showsHeart(progress: $0) } ?? false)
-        favoriteHeartView.alphaValue = rolloutProgress.map {
-            showsOutgoingSpotifyHeart ? StarRollout.outgoingHeartOpacity(progress: $0) : StarRollout.heartOpacity(progress: $0)
-        }
+        // A rollout from Spotify fades the green heart out, in place, before the stars come in
+        let showsOutgoingSpotifyHeart = spotifyHeartFadeProgress != nil
+        favoriteHeartView.alphaValue = spotifyHeartFadeProgress.map { StarRollout.outgoingHeartOpacity(progress: $0) }
+            ?? rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
             ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
         favoriteHeartView.isHidden = isStop
         guard !favoriteHeartView.isHidden else { return }

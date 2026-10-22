@@ -43,15 +43,12 @@ struct StarRollout {
         return ease((progress - 0.65) / 0.35)
     }
 
-    /// Whether the incoming heart has started to appear
-    static func showsHeart(progress: Double) -> Bool {
-        return heartOpacity(progress: progress) > 0
-    }
+    /// How long a heart already showing (Spotify's) takes to fade out before the rollout
+    static let outgoingHeartFadeDuration: TimeInterval = 0.2
 
-    /// A heart already showing when the rollout starts (Spotify's) fades out with the first
-    /// stars, rather than vanishing in one frame
+    /// That heart's opacity, `progress` running 0 to 1 over `outgoingHeartFadeDuration`
     static func outgoingHeartOpacity(progress: Double) -> CGFloat {
-        return 1 - ease(progress / 0.2)
+        return 1 - ease(progress)
     }
 
     /// A template image lets AppKit retain the menu bar's normal light/dark appearance.

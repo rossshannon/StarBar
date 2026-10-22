@@ -46,6 +46,14 @@ final class StarRolloutTests: XCTestCase {
         }
     }
 
+    func testSpotifyHeartFadesOutCompletelyBeforeTheRolloutStarts() {
+        XCTAssertEqual(StarRollout.outgoingHeartOpacity(progress: 0), 1)
+        XCTAssertEqual(StarRollout.outgoingHeartOpacity(progress: 1), 0)
+        XCTAssertLessThan(StarRollout.outgoingHeartOpacity(progress: 0.6), StarRollout.outgoingHeartOpacity(progress: 0.3))
+        // Music's heart is still hidden when the rollout begins, so the two never show together
+        XCTAssertEqual(StarRollout.heartOpacity(progress: 0), 0)
+    }
+
     func testStarsAppearInOrder() {
         XCTAssertGreaterThan(pose(0, 0.05).opacity, 0)
         XCTAssertEqual(pose(1, 0.05).opacity, 0)
