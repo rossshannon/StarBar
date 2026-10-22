@@ -10,7 +10,13 @@ import Cocoa
 
 final class AboutViewController: NSViewController {
 
-    // lazy var imageView = NSImageView()
+    static let copyright = "© 2025–2026 Ross Shannon"
+    static let repositoryURL = URL(string: "https://github.com/rossshannon/StarBar")!
+    static let issuesURL = URL(string: "https://github.com/rossshannon/StarBar/issues")!
+    static let upstreamURL = URL(string: "https://github.com/MainasuK/Song-Rating")!
+
+    private static let contentWidth: CGFloat = 300
+
     lazy var visualEffectBackgroundView: NSVisualEffectView = {
         let visualEffectView = NSVisualEffectView()
         visualEffectView.blendingMode = .behindWindow
@@ -19,44 +25,104 @@ final class AboutViewController: NSViewController {
         visualEffectView.state = .active
         return visualEffectView
     }()
+
+    lazy var iconImageView: NSImageView = {
+        let imageView = NSImageView(image: NSApp.applicationIconImage)
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.setAccessibilityLabel("StarBar app icon")
+        return imageView
+    }()
+
     lazy var titleTextField: NSTextField = {
         let textField = NSTextField(labelWithString: String.infoValue(for: "CFBundleName") ?? "StarBar")
-        textField.font = NSFont.systemFont(ofSize: 18, weight: .semibold)
-        return textField
-    }()
-    lazy var versionTextFiled: NSTextField = {
-        let version = String.infoValue(for: "CFBundleShortVersionString") ?? "NA"
-        let build = String.infoValue(for: "CFBundleVersion").flatMap { "(\($0))" } ?? "(NA)"
-        let string = [version, build].joined(separator: " ")
-        let textField = NSTextField(labelWithString: string)
-        textField.font = NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .regular)
-        return textField
-    }()
-    lazy var copyrightTextField: NSTextField = {
-        let textField = NSTextField(labelWithString: String.infoValue(for: "NSHumanReadableCopyright") ?? "")
-        textField.font = NSFont.systemFont(ofSize: 9, weight: .light)
-        textField.textColor = NSColor.secondaryLabelColor
+        textField.font = NSFont.systemFont(ofSize: 20, weight: .bold)
         return textField
     }()
 
-    lazy var contactMeButton: NSButton = {
-        let button = NSButton()
-        button.title = "Report a problem"
-        button.bezelStyle = NSButton.BezelStyle.inline
-        button.action = #selector(AboutViewController.contactMeButtonPressed(_:))
-        return button
+    lazy var versionTextField: NSTextField = {
+        let version = String.infoValue(for: "CFBundleShortVersionString") ?? "NA"
+        let build = String.infoValue(for: "CFBundleVersion") ?? "NA"
+        let textField = NSTextField(labelWithString: "Version \(version) (\(build))")
+        textField.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        textField.textColor = .secondaryLabelColor
+        // Selectable, so the version can be copied into a bug report
+        textField.isSelectable = true
+        return textField
+    }()
+
+    lazy var taglineTextField: NSTextField = {
+        let textField = NSTextField(wrappingLabelWithString: "Star ratings and favourites for Music, right from the menu bar.")
+        textField.font = NSFont.systemFont(ofSize: 12)
+        textField.alignment = .center
+        textField.preferredMaxLayoutWidth = AboutViewController.contentWidth
+        return textField
     }()
 
     lazy var githubButton: NSButton = {
-        let button = NSButton()
-        button.title = "GitHub"
-        button.bezelStyle = NSButton.BezelStyle.inline
-        button.action = #selector(AboutViewController.githubButtonPressed(_:))
+        let button = NSButton(title: "GitHub", target: self, action: #selector(AboutViewController.githubButtonPressed(_:)))
+        button.bezelStyle = .rounded
         return button
     }()
 
+    lazy var contactMeButton: NSButton = {
+        let button = NSButton(title: "Report a Problem", target: self, action: #selector(AboutViewController.contactMeButtonPressed(_:)))
+        button.bezelStyle = .rounded
+        return button
+    }()
+
+    lazy var copyrightTextField: NSTextField = {
+        return AboutViewController.footnoteLabel(AboutViewController.copyright)
+    }()
+
+    // One attributed line rather than labels around a button, whose padding left wide gaps by the link
+    lazy var creditTextField: NSTextField = {
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: AboutViewController.footnoteFont,
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ]
+        let credit = NSMutableAttributedString(string: "Uses elements of ", attributes: attributes)
+        var linkAttributes = attributes
+        linkAttributes[.link] = AboutViewController.upstreamURL
+        credit.append(NSAttributedString(string: "Song-Rating", attributes: linkAttributes))
+        credit.append(NSAttributedString(string: " by Cirno MainasuK", attributes: attributes))
+
+        let textField = NSTextField(labelWithAttributedString: credit)
+        // A link in a label is only clickable when the label is selectable and allows attributed editing
+        textField.isSelectable = true
+        textField.allowsEditingTextAttributes = true
+        return textField
+    }()
+
+    lazy var licenseButton: NSButton = {
+        return AboutViewController.linkButton("MIT Licence", target: self, action: #selector(AboutViewController.licenseButtonPressed(_:)))
+    }()
+
     override func loadView() {
-        self.view = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        self.view = NSView()
+    }
+
+}
+
+extension AboutViewController {
+
+    private static let footnoteFont = NSFont.systemFont(ofSize: 10)
+
+    private static func footnoteLabel(_ string: String) -> NSTextField {
+        let textField = NSTextField(labelWithString: string)
+        textField.font = footnoteFont
+        textField.textColor = .secondaryLabelColor
+        return textField
+    }
+
+    private static func linkButton(_ title: String, target: AnyObject, action: Selector) -> NSButton {
+        let button = NSButton(title: title, target: target, action: action)
+        button.isBordered = false
+        button.attributedTitle = NSAttributedString(string: title, attributes: [
+            .font: footnoteFont,
+            .foregroundColor: NSColor.linkColor,
+        ])
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        return button
     }
 
 }
@@ -65,6 +131,7 @@ extension AboutViewController {
 
     func setupWindow() {
         view.window?.styleMask.remove(.resizable)
+        view.window?.styleMask.remove(.miniaturizable)
         view.window?.styleMask.insert(.fullSizeContentView)
         view.window?.titleVisibility = .hidden
         view.window?.titlebarAppearsTransparent = true
@@ -73,13 +140,55 @@ extension AboutViewController {
     }
 
     @objc func contactMeButtonPressed(_ sender: NSButton) {
-        guard let url = URL(string: "https://github.com/rossshannon/StarBar/issues") else { return }
-        NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(AboutViewController.issuesURL)
     }
 
     @objc func githubButtonPressed(_ sender: NSButton) {
-        guard let url = URL(string: "https://github.com/rossshannon/StarBar") else { return }
-        NSWorkspace.shared.open(url)
+        NSWorkspace.shared.open(AboutViewController.repositoryURL)
+    }
+
+    // The bundled LICENSE carries Song-Rating's original MIT notice, which the licence requires every copy to keep
+    @objc func licenseButtonPressed(_ sender: NSButton) {
+        guard let window = view.window,
+              let url = Bundle.main.url(forResource: "LICENSE", withExtension: nil),
+              let text = try? String(contentsOf: url, encoding: .utf8) else {
+            NSWorkspace.shared.open(AboutViewController.repositoryURL.appendingPathComponent("blob/main/LICENSE"))
+            return
+        }
+
+        // Narrower than the About window, so the sheet doesn't hang over its sides.
+        // Built at its final size: NSTextView.scrollableTextView() lays the text out at a default
+        // width first and the sheet then opened halfway down, whatever was scrolled afterwards.
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 260, height: 240))
+        scrollView.borderType = .bezelBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+
+        let contentSize = scrollView.contentSize
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.minSize = NSSize(width: 0, height: contentSize.height)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
+        textView.isEditable = false
+        textView.font = NSFont.systemFont(ofSize: 11)
+        textView.textContainerInset = NSSize(width: 6, height: 6)
+        textView.string = text
+        scrollView.documentView = textView
+
+        let alert = NSAlert()
+        alert.messageText = "MIT Licence"
+        alert.accessoryView = scrollView
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window)
+        // In case showing the sheet lays the text out again, start at the first copyright line
+        DispatchQueue.main.async {
+            scrollView.contentView.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
     }
 
 }
@@ -88,9 +197,9 @@ extension AboutViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        title = "About"
-        
+
+        title = "About StarBar"
+
         visualEffectBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(visualEffectBackgroundView)
         NSLayoutConstraint.activate([
@@ -100,51 +209,43 @@ extension AboutViewController {
             visualEffectBackgroundView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
 
-        let contentView = NSView()
-        contentView.translatesAutoresizingMaskIntoConstraints = false
-        visualEffectBackgroundView.addSubview(contentView)
-        NSLayoutConstraint.activate([
-            contentView.topAnchor.constraint(equalTo: visualEffectBackgroundView.topAnchor, constant: 4 + 22),
-            contentView.leadingAnchor.constraint(equalTo: visualEffectBackgroundView.leadingAnchor, constant: 16),
-            visualEffectBackgroundView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: 16),
-            visualEffectBackgroundView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: 8),
-        ])
+        let buttonStackView = NSStackView(views: [githubButton, contactMeButton])
+        buttonStackView.orientation = .horizontal
+        buttonStackView.spacing = 8
 
-        titleTextField.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(titleTextField)
-        NSLayoutConstraint.activate([
-            titleTextField.topAnchor.constraint(equalTo: contentView.topAnchor),
-            titleTextField.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-        ])
+        let footerStackView = NSStackView(views: [copyrightTextField, creditTextField, licenseButton])
+        footerStackView.orientation = .vertical
+        footerStackView.alignment = .centerX
+        footerStackView.spacing = 2
 
-        versionTextFiled.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(versionTextFiled)
-        NSLayoutConstraint.activate([
-            versionTextFiled.topAnchor.constraint(equalTo: titleTextField.bottomAnchor, constant: 4),
-            versionTextFiled.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-        ])
+        let stackView = NSStackView(views: [iconImageView, titleTextField, versionTextField, taglineTextField, buttonStackView, footerStackView])
+        stackView.orientation = .vertical
+        stackView.alignment = .centerX
+        stackView.spacing = 4
+        stackView.setCustomSpacing(10, after: iconImageView)
+        stackView.setCustomSpacing(12, after: versionTextField)
+        stackView.setCustomSpacing(18, after: taglineTextField)
+        stackView.setCustomSpacing(20, after: buttonStackView)
 
-        copyrightTextField.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(copyrightTextField)
+        // Leaves the title bar's traffic lights clear of the icon
+        let titleBarHeight: CGFloat = 28
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+        visualEffectBackgroundView.addSubview(stackView)
         NSLayoutConstraint.activate([
-            copyrightTextField.trailingAnchor.constraint(equalTo: versionTextFiled.trailingAnchor),
-            copyrightTextField.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            stackView.topAnchor.constraint(equalTo: visualEffectBackgroundView.topAnchor, constant: titleBarHeight),
+            stackView.leadingAnchor.constraint(equalTo: visualEffectBackgroundView.leadingAnchor, constant: 30),
+            visualEffectBackgroundView.trailingAnchor.constraint(equalTo: stackView.trailingAnchor, constant: 30),
+            visualEffectBackgroundView.bottomAnchor.constraint(equalTo: stackView.bottomAnchor, constant: 18),
+            stackView.widthAnchor.constraint(equalToConstant: AboutViewController.contentWidth),
+            iconImageView.widthAnchor.constraint(equalToConstant: 112),
+            iconImageView.heightAnchor.constraint(equalToConstant: 112),
+            githubButton.widthAnchor.constraint(equalTo: contactMeButton.widthAnchor),
         ])
+    }
 
-        githubButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(githubButton)
-        NSLayoutConstraint.activate([
-            copyrightTextField.topAnchor.constraint(equalTo: githubButton.bottomAnchor, constant: 4),
-            githubButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
-        ])
-
-        contactMeButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(contactMeButton)
-        NSLayoutConstraint.activate([
-            copyrightTextField.topAnchor.constraint(equalTo: contactMeButton.bottomAnchor, constant: 4),
-            githubButton.leadingAnchor.constraint(equalTo: contactMeButton.trailingAnchor, constant: 8),
-            contactMeButton.widthAnchor.constraint(equalTo: githubButton.widthAnchor, multiplier: 1.0),
-        ])
+    override func viewWillAppear() {
+        super.viewWillAppear()
+        view.window?.center()
     }
 
     override func viewDidAppear() {
@@ -167,13 +268,13 @@ import SwiftUI
 
 @available(OSX 10.15.0, *)
 struct AboutViewController_Preview: PreviewProvider {
-    
+
     static var previews: some View {
         NSViewControllerPreview {
             return AboutViewController()
         }
     }
-    
+
 }
 
 #endif
