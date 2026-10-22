@@ -16,18 +16,6 @@ final class PreferencesViewController: NSViewController {
         return NSTextField(labelWithString: "sample").font!.pointSize
     }
 
-    lazy var startupTextField: NSTextField = {
-        return NSTextField(labelWithString: "Startup: ")
-    }()
-    lazy var halfStarTextField: NSTextField = {
-        return NSTextField(labelWithString: "Half star: ")
-    }()
-    lazy var reminderTextField: NSTextField = {
-        return NSTextField(labelWithString: "Reminder: ")
-    }()
-    lazy var announceTextField: NSTextField = {
-        return NSTextField(labelWithString: "Announce: ")
-    }()
     lazy var showCurrentTrackTextField: NSTextField = {
         return NSTextField(labelWithString: "Show current track: ")
     }()
@@ -67,7 +55,7 @@ final class PreferencesViewController: NSViewController {
         return button
     }()
     let halfStarCheckboxButton: NSButton = {
-        let button = NSButton(checkboxWithTitle: "Enable", target: nil, action: nil)
+        let button = NSButton(checkboxWithTitle: "Allow half stars", target: nil, action: nil)
         return button
     }()
     let reminderCheckboxButton: NSButton = {
@@ -159,10 +147,11 @@ final class PreferencesViewController: NSViewController {
         let empty = NSGridCell.emptyContentView
 
         let gridView = NSGridView(views: [
-            [startupTextField, launchAtLoginCheckboxButton],
-            [halfStarTextField, halfStarCheckboxButton],
-            [reminderTextField, reminderCheckboxButton],
-            [announceTextField, announceRowView],
+            // The checkboxes say what they do, so their rows need no label
+            [empty, launchAtLoginCheckboxButton],
+            [empty, halfStarCheckboxButton],
+            [empty, reminderCheckboxButton],
+            [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
             [NSBox.separatorLine],
             [ratingDownTextField, ratingDownShortcutView],
