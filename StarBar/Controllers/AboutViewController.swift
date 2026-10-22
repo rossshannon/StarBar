@@ -156,26 +156,38 @@ extension AboutViewController {
             return
         }
 
-        // Narrower than the About window, so the sheet doesn't hang over its sides
-        let scrollView = NSTextView.scrollableTextView()
-        scrollView.frame = NSRect(x: 0, y: 0, width: 260, height: 240)
+        // Narrower than the About window, so the sheet doesn't hang over its sides.
+        // Built at its final size: NSTextView.scrollableTextView() lays the text out at a default
+        // width first and the sheet then opened halfway down, whatever was scrolled afterwards.
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 260, height: 240))
         scrollView.borderType = .bezelBorder
-        guard let textView = scrollView.documentView as? NSTextView else { return }
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+
+        let contentSize = scrollView.contentSize
+        let textView = NSTextView(frame: NSRect(origin: .zero, size: contentSize))
+        textView.minSize = NSSize(width: 0, height: contentSize.height)
+        textView.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.containerSize = NSSize(width: contentSize.width, height: CGFloat.greatestFiniteMagnitude)
+        textView.textContainer?.widthTracksTextView = true
         textView.isEditable = false
         textView.font = NSFont.systemFont(ofSize: 11)
         textView.textContainerInset = NSSize(width: 6, height: 6)
         textView.string = text
+        scrollView.documentView = textView
 
         let alert = NSAlert()
         alert.messageText = "MIT Licence"
         alert.accessoryView = scrollView
         alert.addButton(withTitle: "OK")
         alert.beginSheetModal(for: window)
-        // Showing the sheet lays the text out again and leaves it scrolled partway down,
-        // so scroll to the first copyright line once that has happened
+        // In case showing the sheet lays the text out again, start at the first copyright line
         DispatchQueue.main.async {
-            textView.setSelectedRange(NSRange(location: 0, length: 0))
-            textView.scrollRangeToVisible(NSRange(location: 0, length: 0))
+            scrollView.contentView.scroll(to: .zero)
+            scrollView.reflectScrolledClipView(scrollView.contentView)
         }
     }
 
