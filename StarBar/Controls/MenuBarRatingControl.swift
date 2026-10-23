@@ -399,6 +399,7 @@ extension MenuBarRatingControl {
         } else if rollsFromSpotify {
             os_log("Starting menu bar star rollout from Spotify's heart")
             spotifyHeartFadeProgress = 0
+            drawOutgoingSpotifyIcon(progress: 0)
             updateFavoriteHeartView()
         } else if rolls {
             rolloutProgress = 0
@@ -442,6 +443,7 @@ extension MenuBarRatingControl {
                 let elapsed = progress * duration
                 if elapsed < heartFade {
                     self.spotifyHeartFadeProgress = elapsed / heartFade
+                    self.drawOutgoingSpotifyIcon(progress: elapsed / heartFade)
                 } else {
                     if self.spotifyHeartFadeProgress != nil {
                         // The heart has gone, so the widened item is drawn empty
@@ -468,6 +470,19 @@ extension MenuBarRatingControl {
         updateFavoriteHeartView()
     }
 
+    /// Spotify's icon fading out with its heart, where it was, ahead of a rollout. The mode has
+    /// already moved on, so the strip is drawn afresh rather than read from the control.
+    private func drawOutgoingSpotifyIcon(progress: Double) {
+        let strip = RatingControl.spotifyStrip(starSize: ratingControl.starSize, spacing: ratingControl.spacing)
+        let opacity = StarRollout.outgoingHeartOpacity(progress: progress)
+        let image = NSImage(size: strip.size, flipped: false) { rect in
+            strip.draw(in: rect, from: .zero, operation: .sourceOver, fraction: opacity)
+            return true
+        }
+        image.isTemplate = true
+        statusItem.button?.image = padded(image)
+    }
+
     private func drawRollout(progress: Double, fromWidth: CGFloat, toWidth: CGFloat) {
         rolloutProgress = progress
         let width = StarRollout.width(from: fromWidth, to: toWidth, progress: progress)
@@ -489,7 +504,7 @@ extension MenuBarRatingControl {
         statusItem.button?.image = padded(StarCollapse.image(
             stars: stars, width: max(1, width - 8), progress: progress,
             isFavorited: ratingControl.isFavorited, isPending: ratingControl.isAddingToLibrary,
-            drawsBadge: ratingControl.mode == .addToLibrary))
+            incoming: ratingControl.mode))
         updateFavoriteHeartView()
     }
 
@@ -718,9 +733,12 @@ extension MenuBarRatingControl {
         if ratingTransitionTarget != nil || collapseShowsBadge { finishWidthAnimation() }
         guard widthTimer == nil, playbackState.canInteract else { return }
         guard ratingControl.mode != .spotify else {
-            // Signed in, the heart likes the song, as Music's heart favourites one. Otherwise,
-            // or for a song the Web API can't like (a local file), it brings Spotify forward.
-            if let uri = displayedSongIdentity, SpotifyAccount.shared.canLike(uri) {
+            // The icon brings Spotify forward. Signed in, the heart likes the song, as Music's
+            // heart favourites one. Otherwise, or for a song the Web API can't like (a local
+            // file), the heart brings Spotify forward too.
+            let positionX = statusItem.button.flatMap { ratingControl.imagePositionX(in: $0) }
+            let isOnIcon = positionX.map { ratingControl.isSpotifyIconHit(positionX: $0) } ?? false
+            if !isOnIcon, let uri = displayedSongIdentity, SpotifyAccount.shared.canLike(uri) {
                 SpotifyAccount.shared.toggleLike(uri)
             } else {
                 SpotifyPlayer.shared.activate()

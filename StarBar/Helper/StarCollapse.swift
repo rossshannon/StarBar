@@ -70,18 +70,25 @@ struct StarCollapse {
         return hasShrunk(progress: progress) ? to : from
     }
 
-    /// - Parameter drawsBadge: false when the stars give way to Spotify's heart alone, which
-    ///   the menu bar draws in its own view
+    /// - Parameter incoming: what fades in once the item has narrowed: the Apple Music button,
+    ///   or Spotify's icon. Either way the heart is drawn in the menu bar's own view.
     static func image(stars: Stars, width: CGFloat, progress: Double,
-                      isFavorited: Bool, isPending: Bool = false, drawsBadge: Bool = true) -> NSImage {
+                      isFavorited: Bool, isPending: Bool = false, incoming: RatingControl.Mode = .addToLibrary) -> NSImage {
         let size = stars.stars.first?.size ?? NSSize(width: 16, height: 16)
         let image = NSImage(size: NSSize(width: width, height: size.height + 4), flipped: false) { rect in
             NSColor.black.set()
             if showsBadge(progress: progress) {
-                guard drawsBadge else { return true }
                 // Leave its heart slot empty; draw the heart at the live right edge below.
-                let badge = AddToLibraryBadge(glyphSize: size, spacing: stars.spacing,
-                                               isFavorited: true, isPending: isPending).image
+                let badge: NSImage
+                switch incoming {
+                case .addToLibrary:
+                    badge = AddToLibraryBadge(glyphSize: size, spacing: stars.spacing,
+                                              isFavorited: true, isPending: isPending).image
+                case .spotify:
+                    badge = RatingControl.spotifyStrip(starSize: size, spacing: stars.spacing)
+                case .rating:
+                    return true
+                }
                 badge.draw(in: NSRect(x: 0, y: (rect.height - size.height) * 0.5,
                                       width: badge.size.width, height: size.height),
                            from: .zero, operation: .sourceOver, fraction: badgeOpacity(progress: progress))

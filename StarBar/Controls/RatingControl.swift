@@ -86,10 +86,11 @@ class RatingControl {
         /// catalog, so Music has nowhere to store a rating until it is added to the library.
         /// See `iTunesTrack.isCatalogStream`.
         case addToLibrary
-        /// A green heart on its own: the song is playing in Spotify, which keeps no star
-        /// rating. Once the user has connected their Spotify account (`SpotifyAccount`) the
-        /// heart is filled for a liked song and outlined otherwise, and clicking likes or
-        /// unlikes it. Without that, it is always filled and clicking brings Spotify forward.
+        /// The Spotify icon and a green heart: the song is playing in Spotify, which keeps no
+        /// star rating. The icon brings Spotify forward. Once the user has connected their
+        /// Spotify account (`SpotifyAccount`) the heart is filled for a liked song and outlined
+        /// otherwise, and clicking it likes or unlikes the song. Without that, it is always
+        /// filled and clicking it brings Spotify forward too.
         case spotify
     }
     
@@ -178,9 +179,22 @@ extension RatingControl {
         case .addToLibrary:
             return AddToLibraryBadge(glyphSize: starSize, spacing: spacing, isFavorited: isFavorited, isPending: isAddingToLibrary, drawsFavorite: drawsFavorite).image
         case .spotify:
-            // Nothing before the heart, which the menu bar draws in its own view
-            return NSImage(size: NSSize(width: 1, height: 1))
+            return RatingControl.spotifyStrip(starSize: starSize, spacing: spacing)
         }
+    }
+
+    /// Spotify's icon, with the heart's slot left empty for the menu bar's own heart view.
+    /// Static so a rollout can still fade it out once the mode has moved on.
+    static func spotifyStrip(starSize: NSSize, spacing: CGFloat) -> NSImage {
+        let width = imageWidth(mode: .spotify, starSize: starSize, spacing: spacing)
+        let image = NSImage(size: NSSize(width: width, height: starSize.height), flipped: false) { rect in
+            NSColor.black.setFill()
+            SpotifyGlyph().draw(in: NSRect(x: spacing, y: 0.5 * (rect.height - starSize.height),
+                                           width: starSize.width, height: starSize.height))
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
     
 }
@@ -212,10 +226,16 @@ extension RatingControl {
             // The badge owns its own layout: its two glyphs touch, so the formula differs
             return AddToLibraryBadge(glyphSize: starSize, spacing: spacing).contentWidth
         case .spotify:
-            // One spacing either side of the heart makes the item exactly as wide as the
-            // stopped dot, so going between the two never changes the status item's width
-            return spacing
+            // A spacing, the icon, then its clear space up to the heart. `favoriteMinX` adds a
+            // spacing in every mode, which here is the one before the icon.
+            return starSize.width + spotifyIconClearSpace(starSize: starSize)
         }
+    }
+
+    /// The gap Spotify's guidelines ask for around its icon: half the icon's height. It is
+    /// what separates the icon from the heart.
+    static func spotifyIconClearSpace(starSize: NSSize) -> CGFloat {
+        return 0.5 * starSize.height
     }
 
     /// Left edge of the plus in the Apple Music button, inside `starsImage`. The menu bar
@@ -270,6 +290,14 @@ extension RatingControl {
     func isAddToLibraryHit(positionX: CGFloat) -> Bool {
         guard mode == .addToLibrary else { return false }
         return positionX >= 0 && positionX < favoriteMinX - 0.5 * spacing
+    }
+
+    /// True when a click at `positionX` should bring Spotify forward: anywhere left of the
+    /// heart, the icon and its clear space alike, so there is no dead gap between the two.
+    /// Always false outside `.spotify`.
+    func isSpotifyIconHit(positionX: CGFloat) -> Bool {
+        guard mode == .spotify else { return false }
+        return positionX < favoriteMinX - 0.5 * spacing
     }
 
     /// Star rating (0 ~ 10, one unit per half star) for a click at `positionX` inside `starsImage`.

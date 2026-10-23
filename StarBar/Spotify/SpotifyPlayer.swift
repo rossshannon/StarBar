@@ -89,8 +89,12 @@ final class SpotifyPlayer {
         return artwork.first { $0.identity == identity }?.image
     }
 
-    /// Bring Spotify to the front. Does nothing when Spotify isn't running, so a click on a
-    /// menu bar left showing after Spotify quit doesn't launch it again.
+    /// Bring Spotify to the front, with its window. Does nothing when Spotify isn't running, so
+    /// a click on a menu bar left showing after Spotify quit doesn't launch it again.
+    ///
+    /// Opened through `NSWorkspace` rather than only activated: for an app that is already
+    /// running that sends the same "reopen" a Dock click does, which brings back a window the
+    /// user closed, where activating alone would leave Spotify frontmost with nothing on screen.
     ///
     /// Not `NSWorkspace.open` on the song's `spotify:` URI, which would show the song itself:
     /// measured 2026-10-21, opening a URI drives playback instead, and not consistently. A
@@ -102,7 +106,17 @@ final class SpotifyPlayer {
             os_log("%{public}s[%{public}ld], %{public}s: Spotify isn't running; not opening it", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
-        application.activate(options: [])
+        guard let url = application.bundleURL else {
+            application.activate(options: [])
+            return
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration) { _, error in
+            if let error = error {
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: couldn't bring Spotify forward: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
+            }
+        }
     }
 
 }
