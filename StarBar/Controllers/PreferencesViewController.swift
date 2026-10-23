@@ -140,30 +140,13 @@ final class PreferencesViewController: NSViewController {
         return shortcutView
     }()
 
-    lazy var spotifyClientIDTextField: NSTextField = {
-        return NSTextField(labelWithString: "Spotify client ID: ")
-    }()
-    let spotifyClientIDField: NSTextField = {
-        let field = NSTextField(string: "")
-        field.placeholderString = "From your app on Spotify's dashboard"
-        field.usesSingleLineMode = true
-        field.lineBreakMode = .byTruncatingTail
-        return field
+    lazy var spotifyTextField: NSTextField = {
+        return NSTextField(labelWithString: "Spotify: ")
     }()
     let spotifyConnectButton: NSButton = {
         return NSButton(title: "Connect", target: nil, action: nil)
     }()
-    let spotifyDashboardButton: NSButton = {
-        return NSButton(title: "Open Dashboard", target: nil, action: nil)
-    }()
-    lazy var spotifyButtonsView: NSStackView = {
-        let stack = NSStackView(views: [spotifyConnectButton, spotifyDashboardButton])
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 8
-        return stack
-    }()
-    /// How to set liking up, or how it stands once it is
+    /// What connecting does, or how the sign-in stands
     let spotifyStatusTextField: NSTextField = {
         let field = NSTextField(wrappingLabelWithString: "")
         field.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
@@ -186,8 +169,7 @@ final class PreferencesViewController: NSViewController {
             [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
             [NSBox.separatorLine],
-            [spotifyClientIDTextField, spotifyClientIDField],
-            [empty, spotifyButtonsView],
+            [spotifyTextField, spotifyConnectButton],
             [empty, spotifyStatusTextField],
             [NSBox.separatorLine],
             [ratingDownTextField, ratingDownShortcutView],
@@ -319,31 +301,13 @@ extension PreferencesViewController {
         UserDefaults.standard.announcementStyle = rawValue
     }
 
-    @objc private func spotifyClientIDChanged(_ sender: NSTextField) {
-        saveSpotifyClientID()
-    }
-
-    private func saveSpotifyClientID() {
-        let clientID = spotifyClientIDField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard clientID != UserDefaults.standard.spotifyClientID else { return }
-        UserDefaults.standard.spotifyClientID = clientID
-        SpotifyAccount.shared.clientIDDidChange()
-        refreshSpotify()
-    }
-
     @objc private func spotifyConnectButtonPressed(_ sender: NSButton) {
         let account = SpotifyAccount.shared
         if account.state == .connected {
             account.disconnect()
         } else {
-            // A client ID pasted but not yet committed with Return still counts
-            saveSpotifyClientID()
             account.connect(presentingFrom: view.window)
         }
-    }
-
-    @objc private func spotifyDashboardButtonPressed(_ sender: NSButton) {
-        NSWorkspace.shared.open(SpotifyAuth.dashboardURL)
     }
 
     @objc private func spotifyAccountDidChange(_ notification: Notification) {
@@ -353,24 +317,21 @@ extension PreferencesViewController {
     /// The button and the text under it follow the sign-in
     func refreshSpotify() {
         let account = SpotifyAccount.shared
-        let hasClientID = !spotifyClientIDField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         spotifyConnectButton.title = account.state == .connected ? "Disconnect" : "Connect"
-        spotifyConnectButton.isEnabled = account.state == .connected || (account.state == .disconnected && hasClientID)
-        spotifyStatusTextField.stringValue = PreferencesViewController.spotifyStatus(state: account.state, hasClientID: hasClientID, problem: account.lastProblem)
+        spotifyConnectButton.isEnabled = account.state != .connecting
+        spotifyStatusTextField.stringValue = PreferencesViewController.spotifyStatus(state: account.state, problem: account.lastProblem)
     }
 
     /// What the text under the Connect button says
-    static func spotifyStatus(state: SpotifyAccount.State, hasClientID: Bool, problem: String?) -> String {
+    static func spotifyStatus(state: SpotifyAccount.State, problem: String?) -> String {
         let status: String
         switch state {
         case .connected:
             status = "Connected. Click the green heart in the menu bar to like or unlike the Spotify song playing."
         case .connecting:
             status = "Waiting for Spotify's sign-in…"
-        case .disconnected where hasClientID:
-            status = "Press Connect to sign in to Spotify."
         case .disconnected:
-            status = "To like Spotify songs from the menu bar, create an app on Spotify's developer dashboard (it needs Spotify Premium) with the Web API and the redirect URI \(SpotifyAuth.redirectURI), then paste its client ID here."
+            status = "Connect your Spotify account to like songs with the menu bar's green heart."
         }
         guard let problem = problem else { return status }
         return problem + " " + status
@@ -436,15 +397,8 @@ extension PreferencesViewController {
             self?.announcementStylePopUpButton.selectItem(withTitle: style.title)
         }
 
-        spotifyClientIDField.stringValue = UserDefaults.standard.spotifyClientID
-        spotifyClientIDField.target = self
-        spotifyClientIDField.action = #selector(PreferencesViewController.spotifyClientIDChanged(_:))
-        spotifyClientIDField.delegate = self
-        spotifyClientIDField.widthAnchor.constraint(equalToConstant: 280).isActive = true
         spotifyConnectButton.target = self
         spotifyConnectButton.action = #selector(PreferencesViewController.spotifyConnectButtonPressed(_:))
-        spotifyDashboardButton.target = self
-        spotifyDashboardButton.action = #selector(PreferencesViewController.spotifyDashboardButtonPressed(_:))
         NotificationCenter.default.addObserver(self, selector: #selector(PreferencesViewController.spotifyAccountDidChange(_:)), name: .spotifyAccountDidChange, object: nil)
         refreshSpotify()
     }
@@ -452,19 +406,6 @@ extension PreferencesViewController {
     override func viewDidAppear() {
         setupWindow()
         refreshLaunchAtLogin()
-    }
-
-}
-
-extension PreferencesViewController: NSTextFieldDelegate {
-
-    /// Typing a client ID enables Connect before it is saved
-    func controlTextDidChange(_ obj: Notification) {
-        refreshSpotify()
-    }
-
-    func controlTextDidEndEditing(_ obj: Notification) {
-        saveSpotifyClientID()
     }
 
 }

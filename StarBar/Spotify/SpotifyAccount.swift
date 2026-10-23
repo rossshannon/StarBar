@@ -19,9 +19,9 @@ extension Notification.Name {
 
 /// The user's Spotify sign-in, and what it has found out about their Liked Songs.
 ///
-/// Opt-in: nothing here touches the network until the user pastes a client ID into
-/// Preferences and presses Connect. The sign-in runs in `ASWebAuthenticationSession`, so the
-/// password goes to Spotify's own page and never through StarBar. Once connected:
+/// Opt-in: nothing here touches the network until the user presses Connect in Preferences.
+/// The sign-in runs in `ASWebAuthenticationSession`, so the password goes to Spotify's own
+/// page and never through StarBar. Once connected:
 /// - each new song or episode in Spotify costs one `contains` request, so the menu bar's heart
 ///   can say whether it is liked. Nothing is polled: a song liked in Spotify itself shows when
 ///   it next comes round, or when StarBar's own heart is clicked.
@@ -65,16 +65,11 @@ final class SpotifyAccount: NSObject {
         super.init()
     }
 
+    /// StarBar's own app on Spotify's dashboard, unless the hidden `spotifyClientID` default
+    /// names another. Tokens are kept per ID, so changing it means connecting again.
     var clientID: String {
-        return UserDefaults.standard.spotifyClientID.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    /// The user changed the client ID in Preferences. A sign-in made with another one belongs
-    /// to a different app on Spotify's side, so it is dropped.
-    func clientIDDidChange() {
-        guard let library = library, library.clientID != clientID else { return }
-        os_log("%{public}s[%{public}ld], %{public}s: client ID changed; disconnecting from Spotify", ((#file as NSString).lastPathComponent), #line, #function)
-        disconnect()
+        let override = UserDefaults.standard.spotifyClientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return override.isEmpty ? SpotifyAuth.builtInClientID : override
     }
 
     /// Load the tokens kept from a previous launch, off the main thread like every other
@@ -82,7 +77,6 @@ final class SpotifyAccount: NSObject {
     func start() {
         guard !SpotifyAccount.isRunningTests, !MenuBarRatingControl.isUITesting else { return }
         let clientID = self.clientID
-        guard !clientID.isEmpty else { return }
         tokenQueue.async { [weak self] in
             guard let self = self, let token = self.store.load(clientID: clientID) else { return }
             DispatchQueue.main.async {
@@ -172,12 +166,12 @@ final class SpotifyAccount: NSObject {
             lastProblem = "Spotify ended the sign-in. Connect again to like songs."
             // The library has already dropped its tokens and said so through tokenDidChange
         case .rateLimited:
-            lastProblem = "Spotify is limiting requests from your app for a while."
+            lastProblem = "Spotify is limiting requests from StarBar for a while."
         case .network:
             lastProblem = "Couldn't reach Spotify."
         case .http(let status):
             lastProblem = status == 403
-                ? "Spotify refused (403). Check that your Spotify account is a user of the app in the dashboard."
+                ? "Spotify hasn't let this account in yet. For now StarBar's Spotify app serves only a few people, added one by one."
                 : "Spotify answered with an error (\(status))."
         }
         postAccountChange()
@@ -219,7 +213,7 @@ extension SpotifyAccount: ASWebAuthenticationPresentationContextProviding {
     /// Open Spotify's sign-in page over `window`, and keep the tokens it leads to
     func connect(presentingFrom window: NSWindow?) {
         let clientID = self.clientID
-        guard !clientID.isEmpty, state != .connecting else { return }
+        guard state != .connecting else { return }
         session?.cancel()
         let pkce = SpotifyAuth.PKCE.random()
         let expectedState = SpotifyAuth.randomToken()

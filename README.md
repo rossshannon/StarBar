@@ -50,12 +50,9 @@ If macOS blocks an unnotarised build, open **System Settings → Privacy & Secur
 
 ## Liking Spotify songs
 
-Spotify's scripting can't like a song, so StarBar uses Spotify's Web API, signed in as you. Spotify only lets an app in development serve five people, so rather than share one, you register your own. It takes about two minutes, and Spotify requires the account that registers it to have Premium.
+Spotify's scripting can't like a song, so StarBar uses Spotify's Web API, signed in as you. Press **Connect** next to Spotify in Preferences; Spotify's sign-in page opens, and you agree to let StarBar read and change your Liked Songs.
 
-1. Open [Spotify's developer dashboard](https://developer.spotify.com/dashboard) and sign in. Press **Create app**.
-2. Give it any name and description. Under **Redirect URIs**, add `starbar://spotify-callback` exactly. Under **Which API/SDKs are you planning to use?**, tick **Web API**. Save.
-3. Copy the app's **Client ID**. StarBar doesn't need the client secret.
-4. In StarBar's Preferences, paste it into **Spotify client ID** and press **Connect**. Spotify's sign-in page opens; agree to let the app read and change your library.
+**For now this works for only a handful of people.** Spotify lets an app that it hasn't yet reviewed serve five accounts, each added by hand by the app's owner. If yours isn't one of them, Spotify lets you sign in and then refuses every request, and Preferences says so. If you have a Spotify developer app of your own (its redirect URI must be `starbar://spotify-callback`), you can use it instead: `defaults write com.rossshannon.starbar spotifyClientID <its client ID>`, then quit StarBar, open it again and press Connect.
 
 StarBar asks only for permission to read and change your Liked Songs. It asks Spotify once per new song whether that song is liked, and sends a like or unlike when you click the heart. Those requests go to `api.spotify.com` and `accounts.spotify.com`; nothing else is sent, and none of it happens until you press Connect. The sign-in is kept in a file inside StarBar's own sandbox container, readable only by you. **Disconnect** in Preferences forgets it on this Mac; to revoke it on Spotify's side too, remove the app under **Manage apps** on your Spotify account page.
 

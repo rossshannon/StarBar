@@ -78,3 +78,5 @@ AppleScript can't like a song, so StarBar 1.7 uses Spotify's Web API. Facts from
 To check during the first live test: whether a bodiless `PUT` gets 411 (StarBar sends an empty body to be safe), whether `contains` on an episode works, and whether the ad hoc build asks for the Keychain after each update.
 
 Measured 2026-10-23 on the first live test: sign-in, `contains`, like and unlike all worked. Reinstalling an ad hoc build **did** bring up a Keychain prompt (securityd: "displaying keychain prompt for /Applications/StarBar.app"), so the tokens moved to a file in the app's container.
+
+The client ID is built in, so users only press Connect: asking each user to register a developer app, which also needs Premium, was rejected. The cost is Development Mode's cap of five accounts, added by hand on the dashboard. Moving past it needs Spotify's Extended Quota, which since 2025 is granted only to organisations.

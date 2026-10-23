@@ -15,21 +15,26 @@ import os
 ///
 /// Spotify's Web API is the only way to like a song: its AppleScript can't, and `starred`
 /// raises. The sign-in is the Authorization Code flow with PKCE, which needs no client secret,
-/// so nothing secret ships in the app. Each user registers their own app on Spotify's
-/// developer dashboard and pastes its client ID into Preferences: since Spotify's February
-/// 2026 changes, an app in Development Mode serves at most five users, so one shared ID
-/// would stop working at the sixth.
+/// so nothing secret ships in the app: the client ID below is public by design.
+///
+/// That ID is StarBar's own app on Spotify's developer dashboard, so users only press
+/// Connect. Since Spotify's February 2026 changes, an app in Development Mode serves at most
+/// five users, each added by email under the app's Users and Access by its owner; anyone else
+/// gets a 403 from the Web API after signing in. Someone with their own developer app can
+/// use it instead through the hidden `spotifyClientID` default.
 enum SpotifyAuth {
+
+    /// StarBar's app on Spotify's developer dashboard
+    static let builtInClientID = "c3b29d044a054a399a5f343b4b71e050"
 
     static let authorizeURL = URL(string: "https://accounts.spotify.com/authorize")!
     static let tokenURL = URL(string: "https://accounts.spotify.com/api/token")!
     static let callbackScheme = "starbar"
-    /// What the user registers on their app in Spotify's dashboard. Spotify allows a custom
+    /// What is registered on the app in Spotify's dashboard. Spotify allows a custom
     /// scheme for native apps, though it prefers https where there is a web page to go to.
     static let redirectURI = "starbar://spotify-callback"
     /// Reading whether a song is liked, and liking it. Nothing else.
     static let scopes = ["user-library-read", "user-library-modify"]
-    static let dashboardURL = URL(string: "https://developer.spotify.com/dashboard")!
 
     /// A PKCE code verifier and its S256 challenge (RFC 7636)
     struct PKCE: Equatable {
