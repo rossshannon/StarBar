@@ -14,6 +14,7 @@ enum ApplicationKey: String {
     case remindToRateUnrated
     case announceNewTracks
     case announcementStyle
+    case spotifyClientID
 }
 
 extension UserDefaults {
@@ -74,6 +75,17 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.announcementStyle.rawValue)
+        }
+    }
+
+    /// The client ID of the user's own app on Spotify's developer dashboard, for liking songs.
+    /// Not a secret: the sign-in uses PKCE, and the tokens are in the Keychain.
+    @objc dynamic var spotifyClientID: String {
+        get {
+            return string(forKey: ApplicationKey.spotifyClientID.rawValue) ?? ""
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.spotifyClientID.rawValue)
         }
     }
 

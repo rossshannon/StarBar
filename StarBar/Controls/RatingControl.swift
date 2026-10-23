@@ -87,7 +87,9 @@ class RatingControl {
         /// See `iTunesTrack.isCatalogStream`.
         case addToLibrary
         /// A green heart on its own: the song is playing in Spotify, which keeps no star
-        /// rating, and whose Liked Songs StarBar can't read. Clicking brings Spotify forward.
+        /// rating. Once the user has connected their Spotify account (`SpotifyAccount`) the
+        /// heart is filled for a liked song and outlined otherwise, and clicking likes or
+        /// unlikes it. Without that, it is always filled and clicking brings Spotify forward.
         case spotify
     }
     
@@ -332,7 +334,16 @@ extension RatingControl {
             let text = isAddingToLibrary ? "Adding to your library" : "Not in your library, add to rate"
             return isFavorited ? text + ", favourite" : text
         case .spotify:
-            return "Playing in Spotify"
+            return spotifyAccessibilityDescription(isLiked: nil)
+        }
+    }
+
+    /// Spoken description for a Spotify song, with whether it is liked when that is known
+    static func spotifyAccessibilityDescription(isLiked: Bool?) -> String {
+        switch isLiked {
+        case true?: return "Playing in Spotify, liked"
+        case false?: return "Playing in Spotify, not liked"
+        case nil: return "Playing in Spotify"
         }
     }
 

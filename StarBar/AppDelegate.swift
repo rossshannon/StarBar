@@ -146,6 +146,8 @@ extension AppDelegate {
                 controller?.recordSeen(info.snapshot)
             }
             SpotifyPlayer.shared.start()
+            // After the player, so a restored sign-in can ask about the song already playing
+            SpotifyAccount.shared.start()
         }
 
         announceNewTracksObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.new]) { [weak controller] defaults, _ in
