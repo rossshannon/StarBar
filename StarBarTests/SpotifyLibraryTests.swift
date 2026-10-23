@@ -3,7 +3,7 @@
 //  StarBarTests
 //
 //  The Web API client and the account's liked songs, driven through a fake transport. No
-//  network, no Keychain, no sign-in window.
+//  network, no token file, no sign-in window.
 //
 
 import XCTest

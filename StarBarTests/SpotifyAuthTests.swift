@@ -3,7 +3,7 @@
 //  StarBarTests
 //
 //  The PKCE pair, the sign-in URL, the redirect's checks and the token requests and answers.
-//  No network and no Keychain.
+//  No network; the token file goes to a temporary folder.
 //
 
 import XCTest
@@ -94,6 +94,29 @@ final class SpotifyAuthTests: XCTestCase {
         XCTAssertEqual(SpotifyToken.errorCode(Data(#"{"error":"invalid_grant","error_description":"Refresh token revoked"}"#.utf8)), "invalid_grant")
         XCTAssertNil(SpotifyToken.errorCode(Data("<html>".utf8)))
         XCTAssertNil(SpotifyToken.errorCode(nil))
+    }
+
+    func testTheTokenFileRoundTripsPerClientIDAndOnlyTheUserCanReadIt() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let store = FileSpotifyTokenStore(directory: folder)
+        let token = SpotifyToken(accessToken: "A", refreshToken: "R", expiresAt: Date(timeIntervalSince1970: 2_000_000_000))
+
+        XCTAssertNil(store.load(clientID: "abc123"))
+        store.save(token, clientID: "abc123")
+        XCTAssertEqual(store.load(clientID: "abc123"), token)
+        XCTAssertNil(store.load(clientID: "other"), "a sign-in belongs to the app it was made with")
+
+        let attributes = try FileManager.default.attributesOfItem(atPath: store.url(clientID: "abc123").path)
+        XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+
+        store.delete(clientID: "abc123")
+        XCTAssertNil(store.load(clientID: "abc123"))
+    }
+
+    func testAClientIDCannotEscapeTheFolder() {
+        let store = FileSpotifyTokenStore(directory: URL(fileURLWithPath: "/tmp/spotify"))
+        XCTAssertEqual(store.url(clientID: "../../etc/passwd").path, "/tmp/spotify/sign-in-etcpasswd.json")
     }
 
 }

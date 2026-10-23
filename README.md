@@ -57,7 +57,7 @@ Spotify's scripting can't like a song, so StarBar uses Spotify's Web API, signed
 3. Copy the app's **Client ID**. StarBar doesn't need the client secret.
 4. In StarBar's Preferences, paste it into **Spotify client ID** and press **Connect**. Spotify's sign-in page opens; agree to let the app read and change your library.
 
-StarBar asks only for permission to read and change your Liked Songs. It asks Spotify once per new song whether that song is liked, and sends a like or unlike when you click the heart. Those requests go to `api.spotify.com` and `accounts.spotify.com`; nothing else is sent, and none of it happens until you press Connect. The sign-in is kept in your Keychain. **Disconnect** in Preferences forgets it on this Mac; to revoke it on Spotify's side too, remove the app under **Manage apps** on your Spotify account page.
+StarBar asks only for permission to read and change your Liked Songs. It asks Spotify once per new song whether that song is liked, and sends a like or unlike when you click the heart. Those requests go to `api.spotify.com` and `accounts.spotify.com`; nothing else is sent, and none of it happens until you press Connect. The sign-in is kept in a file inside StarBar's own sandbox container, readable only by you. **Disconnect** in Preferences forgets it on this Mac; to revoke it on Spotify's side too, remove the app under **Manage apps** on your Spotify account page.
 
 A song liked in Spotify itself while StarBar is showing it shows as liked the next time it plays: StarBar doesn't keep asking.
 

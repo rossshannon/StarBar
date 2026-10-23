@@ -56,10 +56,10 @@ final class SpotifyAccount: NSObject {
 
     static let likedCacheSize = 32
 
-    /// Same test as `SpotifyPlayer`'s: a test run must never sign in or read the Keychain
+    /// Same test as `SpotifyPlayer`'s: a test run must never sign in or read the stored tokens
     private static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
-    init(store: SpotifyTokenStore = KeychainSpotifyTokenStore(), transport: @escaping SpotifyLibrary.Transport = SpotifyLibrary.urlSessionTransport) {
+    init(store: SpotifyTokenStore = FileSpotifyTokenStore(), transport: @escaping SpotifyLibrary.Transport = SpotifyLibrary.urlSessionTransport) {
         self.store = store
         self.transport = transport
         super.init()
@@ -77,8 +77,8 @@ final class SpotifyAccount: NSObject {
         disconnect()
     }
 
-    /// Load the tokens kept from a previous launch, off the main thread because the Keychain
-    /// can stop to ask. Never under tests.
+    /// Load the tokens kept from a previous launch, off the main thread like every other
+    /// write to them. Never under tests.
     func start() {
         guard !SpotifyAccount.isRunningTests, !MenuBarRatingControl.isUITesting else { return }
         let clientID = self.clientID
@@ -250,7 +250,7 @@ extension SpotifyAccount: ASWebAuthenticationPresentationContextProviding {
         }
     }
 
-    /// Forget the sign-in, here and in the Keychain. Spotify keeps the app's access until the
+    /// Forget the sign-in, here and in its file. Spotify keeps the app's access until the
     /// user removes it under Apps on their account page, which Preferences says.
     func disconnect() {
         session?.cancel()

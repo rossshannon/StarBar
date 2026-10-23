@@ -167,67 +167,59 @@ struct SpotifyToken: Codable, Equatable {
 
 }
 
-/// Where the tokens are kept between launches. The Keychain in the app; a dictionary in tests.
+/// Where the tokens are kept between launches. A file in the app's container; a dictionary in
+/// tests.
 protocol SpotifyTokenStore: AnyObject {
     func load(clientID: String) -> SpotifyToken?
     func save(_ token: SpotifyToken, clientID: String)
     func delete(clientID: String)
 }
 
-/// The tokens as one generic password item per client ID.
+/// The tokens as a small JSON file in Application Support, which the sandbox puts inside
+/// StarBar's own container, readable by the user alone.
 ///
-/// The refresh token is as good as the user's password for their Liked Songs, so it doesn't
-/// go in the preferences file, which any process of the user's can read. Reads can block on a
-/// Keychain prompt (an ad hoc signed build is a new app to the Keychain after each update), so
-/// call this off the main thread.
-final class KeychainSpotifyTokenStore: SpotifyTokenStore {
+/// Not the Keychain, though that was the first home: measured 2026-10-23, every update of an
+/// ad hoc signed build showed a Keychain prompt, because the Keychain ties an item to the
+/// exact code that made it and each ad hoc build is new code. A prompt after every update
+/// teaches people to click Allow unread. Other sandboxed apps can't reach the container; an
+/// unsandboxed process running as the user could, and the most it could do with the tokens
+/// is like and unlike songs. Revisit this if releases get a Developer ID signature, which the
+/// Keychain recognises across updates.
+final class FileSpotifyTokenStore: SpotifyTokenStore {
 
-    static let service = "com.rossshannon.starbar.spotify"
+    private let directory: URL
+
+    init(directory: URL? = nil) {
+        self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Spotify", isDirectory: true)
+    }
+
+    /// One file per client ID, so a sign-in made with another ID is never picked up. The ID
+    /// is reduced to letters and digits before it becomes a file name.
+    func url(clientID: String) -> URL {
+        let safe = String(clientID.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) && $0.isASCII })
+        return directory.appendingPathComponent("sign-in-\(safe).json")
+    }
 
     func load(clientID: String) -> SpotifyToken? {
-        var query = baseQuery(clientID: clientID)
-        query[kSecReturnData as String] = true
-        query[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else {
-            if status != errSecItemNotFound {
-                os_log(.error, "%{public}s[%{public}ld], %{public}s: Keychain read failed: %{public}d", ((#file as NSString).lastPathComponent), #line, #function, status)
-            }
-            return nil
-        }
+        guard let data = try? Data(contentsOf: url(clientID: clientID)) else { return nil }
         return try? JSONDecoder().decode(SpotifyToken.self, from: data)
     }
 
     func save(_ token: SpotifyToken, clientID: String) {
-        guard let data = try? JSONEncoder().encode(token) else { return }
-        let query = baseQuery(clientID: clientID)
-        let status = SecItemUpdate(query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        guard status == errSecItemNotFound else {
-            if status != errSecSuccess {
-                os_log(.error, "%{public}s[%{public}ld], %{public}s: Keychain update failed: %{public}d", ((#file as NSString).lastPathComponent), #line, #function, status)
-            }
-            return
-        }
-        var item = query
-        item[kSecValueData as String] = data
-        item[kSecAttrLabel as String] = "StarBar Spotify sign-in"
-        let added = SecItemAdd(item as CFDictionary, nil)
-        if added != errSecSuccess {
-            os_log(.error, "%{public}s[%{public}ld], %{public}s: Keychain add failed: %{public}d", ((#file as NSString).lastPathComponent), #line, #function, added)
+        do {
+            let data = try JSONEncoder().encode(token)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            let file = url(clientID: clientID)
+            try data.write(to: file, options: [.atomic])
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        } catch {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: couldn't keep the Spotify sign-in: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
         }
     }
 
     func delete(clientID: String) {
-        SecItemDelete(baseQuery(clientID: clientID) as CFDictionary)
-    }
-
-    private func baseQuery(clientID: String) -> [String: Any] {
-        return [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: KeychainSpotifyTokenStore.service,
-            kSecAttrAccount as String: clientID,
-        ]
+        try? FileManager.default.removeItem(at: url(clientID: clientID))
     }
 
 }

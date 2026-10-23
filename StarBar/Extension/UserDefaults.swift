@@ -79,7 +79,7 @@ extension UserDefaults {
     }
 
     /// The client ID of the user's own app on Spotify's developer dashboard, for liking songs.
-    /// Not a secret: the sign-in uses PKCE, and the tokens are in the Keychain.
+    /// Not a secret: the sign-in uses PKCE, and the tokens are in a file in the app's container.
     @objc dynamic var spotifyClientID: String {
         get {
             return string(forKey: ApplicationKey.spotifyClientID.rawValue) ?? ""
