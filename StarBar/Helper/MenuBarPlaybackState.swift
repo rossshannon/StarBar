@@ -1,5 +1,5 @@
-/// Keeps the last song visible until Music quits. Music sends the same bare Stopped
-/// notification between songs, so it cannot be used to end the displayed session.
+/// Keeps the last song visible until the player being followed quits. Music sends the same
+/// bare Stopped notification between songs, so it cannot be used to end the displayed session.
 final class MenuBarPlaybackState {
     private(set) var isStopped = true
     private(set) var isWaitingForTrack = false
@@ -12,8 +12,11 @@ final class MenuBarPlaybackState {
     }
 
     /// True when the caller can apply the new track's rating and favourite together.
-    func update(hasTrack: Bool, isStopped: Bool, musicIsRunning: Bool) -> Bool {
-        guard musicIsRunning else {
+    ///
+    /// - Parameter isRunning: whether the player the menu bar follows is running: Music, or
+    ///   Spotify while the arbiter follows Spotify
+    func update(hasTrack: Bool, isStopped: Bool, isRunning: Bool) -> Bool {
+        guard isRunning else {
             stop()
             return false
         }

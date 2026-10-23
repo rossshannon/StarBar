@@ -86,6 +86,9 @@ class RatingControl {
         /// catalog, so Music has nowhere to store a rating until it is added to the library.
         /// See `iTunesTrack.isCatalogStream`.
         case addToLibrary
+        /// A green heart on its own: the song is playing in Spotify, which keeps no star
+        /// rating, and whose Liked Songs StarBar can't read. Clicking brings Spotify forward.
+        case spotify
     }
     
 }
@@ -172,6 +175,9 @@ extension RatingControl {
             return stars.image
         case .addToLibrary:
             return AddToLibraryBadge(glyphSize: starSize, spacing: spacing, isFavorited: isFavorited, isPending: isAddingToLibrary, drawsFavorite: drawsFavorite).image
+        case .spotify:
+            // Nothing before the heart, which the menu bar draws in its own view
+            return NSImage(size: NSSize(width: 1, height: 1))
         }
     }
     
@@ -203,6 +209,10 @@ extension RatingControl {
         case .addToLibrary:
             // The badge owns its own layout: its two glyphs touch, so the formula differs
             return AddToLibraryBadge(glyphSize: starSize, spacing: spacing).contentWidth
+        case .spotify:
+            // One spacing either side of the heart makes the item exactly as wide as the
+            // stopped dot, so going between the two never changes the status item's width
+            return spacing
         }
     }
 
@@ -321,6 +331,8 @@ extension RatingControl {
         case .addToLibrary:
             let text = isAddingToLibrary ? "Adding to your library" : "Not in your library, add to rate"
             return isFavorited ? text + ", favourite" : text
+        case .spotify:
+            return "Playing in Spotify"
         }
     }
 

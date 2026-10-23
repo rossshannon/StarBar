@@ -27,7 +27,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>StarBar needs to control Music to read and set star ratings and favourites.</string>
+	<string>StarBar needs to control Music to read and set star ratings and favourites, and to read what is playing in Spotify.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2025–2026 Ross Shannon. Uses elements of Song-Rating, copyright © 2019 Cirno MainasuK. MIT License.</string>
 	<key>NSMainStoryboardFile</key>

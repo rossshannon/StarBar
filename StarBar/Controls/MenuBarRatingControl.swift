@@ -51,6 +51,7 @@ final class MenuBarRatingControl {
     
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
     private lazy var outlinedHeartImage = Stars.outlinedFavoriteHeartImage(size: ratingControl.starSize)
+    private lazy var spotifyHeartImage = Stars.spotifyHeartImage(size: ratingControl.starSize)
 
     /// Shown in the plus's place while the song is being added: the turning circle with a gap
     /// that Apple Music itself shows. Music takes about 3.5 seconds, so the button has to look
@@ -109,6 +110,8 @@ final class MenuBarRatingControl {
     private var displayedStopped = true
     private var displayedMode: RatingControl.Mode = .rating
     private var rolloutProgress: Double?
+    /// How far Spotify's green heart has faded, while it fades out ahead of a rollout
+    private var spotifyHeartFadeProgress: Double?
     private var collapseProgress: Double?
     private var ratingTransitionTarget: [Star.Style]?
     private var displayedContentWidth: CGFloat?
@@ -200,8 +203,10 @@ final class MenuBarRatingControl {
     /// Where a rating the user chooses should go, or nil when this song cannot be rated.
     ///
     /// Read once per gesture: it reaches `PlayingTrack`, which asks Music whether the track
-    /// still exists.
+    /// still exists. Nil while a song plays in Spotify, so the rating shortcuts can't rate the
+    /// song left paused in Music.
     private var ratingTarget: iTunesTrack? {
+        guard ratingControl.mode != .spotify else { return nil }
         return iTunesPlayer.shared.playing?.ratingTrack
     }
     
@@ -247,13 +252,16 @@ final class MenuBarRatingControl {
         if MenuBarRatingControl.isUITesting {
             // Property observers don't run inside init, so update by hand
             playState = .playing
-            _ = playbackState.update(hasTrack: true, isStopped: false, musicIsRunning: true)
+            _ = playbackState.update(hasTrack: true, isStopped: false, isRunning: true)
             updateGestureRecognizerBehavior()
             updateMenuBar()
             return
         }
 
-        NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.iTunesPlayerDidUpdated(_:)), name: .iTunesPlayerDidUpdated, object: nil)
+        // Through the arbiter rather than straight from Music: while Spotify is the player
+        // being followed, Music's own updates (a library re-read, a wake) must not paint its
+        // stars over Spotify's heart
+        NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.nowPlayingDidUpdate(_:)), name: .nowPlayingDidUpdate, object: nil)
 
         let reminderController = RatingReminderController(
             ratingControl: ratingControl,
@@ -330,6 +338,7 @@ extension MenuBarRatingControl {
             wasStopped: wasStopped, isStopped: isStop, previousMode: displayedMode,
             mode: ratingControl.mode, from: outgoingStars, to: ratingControl.stars)
         let shouldAnimate = animate || rolls || collapses || changesRating
+        let rollsFromSpotify = rolls && !wasStopped && displayedMode == .spotify
         displayedStopped = isStop
         displayedMode = ratingControl.mode
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
@@ -354,11 +363,14 @@ extension MenuBarRatingControl {
         widthTimer = nil
         rolloutProgress = nil
         collapseProgress = nil
+        spotifyHeartFadeProgress = nil
         ratingTransitionTarget = nil
         let toWidth = menuBarWidth
         // A collapse keeps the current width until the stars have gone and narrows the item
-        // only while it is empty; see StarCollapse. Widening moves nothing visibly.
-        if !collapses {
+        // only while it is empty; see StarCollapse. A rollout from Spotify keeps it until the
+        // green heart has faded, because macOS 27 first draws a widened item over the icon to
+        // its right: measured, the heart faded out a whole icon away from where it had been.
+        if !collapses && !rollsFromSpotify {
             statusItem.length = settledAllocation
         }
         guard shouldAnimate, (changed || changesRating), !isStop, fromWidth > 0,
@@ -369,14 +381,19 @@ extension MenuBarRatingControl {
             return
         }
 
+        let heartFade = rollsFromSpotify ? StarRollout.outgoingHeartFadeDuration : 0
         let duration = changesRating ? StarRatingTransition.duration
-            : (rolls ? StarRollout.duration : (collapses ? StarCollapse.duration : Self.modeChangeDuration))
+            : (rolls ? heartFade + StarRollout.duration : (collapses ? StarCollapse.duration : Self.modeChangeDuration))
         let start = widthClock.now()
         if changesRating {
             ratingTransitionTarget = ratingControl.stars.stars.map { $0.style }
             displayedContentWidth = toWidth
             os_log("Starting in-place menu bar rating transition")
             drawRatingTransition(from: outgoingStars, progress: 0)
+        } else if rollsFromSpotify {
+            os_log("Starting menu bar star rollout from Spotify's heart")
+            spotifyHeartFadeProgress = 0
+            updateFavoriteHeartView()
         } else if rolls {
             rolloutProgress = 0
             os_log("Starting menu bar star rollout from %{public}s", wasStopped ? "stopped icon" : "add-to-library button")
@@ -416,7 +433,18 @@ extension MenuBarRatingControl {
             if changesRating {
                 self.drawRatingTransition(from: outgoingStars, progress: progress)
             } else if rolls {
-                self.drawRollout(progress: progress, fromWidth: fromWidth, toWidth: toWidth)
+                let elapsed = progress * duration
+                if elapsed < heartFade {
+                    self.spotifyHeartFadeProgress = elapsed / heartFade
+                } else {
+                    if self.spotifyHeartFadeProgress != nil {
+                        // The heart has gone, so the widened item is drawn empty
+                        self.spotifyHeartFadeProgress = nil
+                        self.statusItem.length = self.settledAllocation
+                    }
+                    self.drawRollout(progress: (elapsed - heartFade) / StarRollout.duration,
+                                     fromWidth: fromWidth, toWidth: toWidth)
+                }
             } else if collapses {
                 self.drawCollapse(stars: outgoingStars, progress: progress, fromWidth: fromWidth, toWidth: toWidth)
                 if narrowedAt == nil, StarCollapse.hasShrunk(progress: progress) { narrowedAt = now }
@@ -454,7 +482,8 @@ extension MenuBarRatingControl {
         displayedContentWidth = width
         statusItem.button?.image = padded(StarCollapse.image(
             stars: stars, width: max(1, width - 8), progress: progress,
-            isFavorited: ratingControl.isFavorited, isPending: ratingControl.isAddingToLibrary))
+            isFavorited: ratingControl.isFavorited, isPending: ratingControl.isAddingToLibrary,
+            drawsBadge: ratingControl.mode == .addToLibrary))
         updateFavoriteHeartView()
     }
 
@@ -463,6 +492,7 @@ extension MenuBarRatingControl {
         widthTimer = nil
         rolloutProgress = nil
         collapseProgress = nil
+        spotifyHeartFadeProgress = nil
         ratingTransitionTarget = nil
         displayedContentWidth = menuBarWidth
         statusItem.length = settledAllocation
@@ -512,12 +542,22 @@ extension MenuBarRatingControl {
         guard let button = statusItem.button else { return }
         // Every layout change comes through here, so an open popover follows the heart
         WindowManager.shared.updatePopoverAnchor()
-        favoriteHeartView.alphaValue = rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
+        // A rollout from Spotify fades the green heart out, in place, before the stars come in
+        let showsOutgoingSpotifyHeart = spotifyHeartFadeProgress != nil
+        favoriteHeartView.alphaValue = spotifyHeartFadeProgress.map { StarRollout.outgoingHeartOpacity(progress: $0) }
+            ?? rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
             ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
         favoriteHeartView.isHidden = isStop
         guard !favoriteHeartView.isHidden else { return }
 
-        favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
+        // A collapse into Spotify mode keeps Music's heart until it has faded out with the
+        // stars: turning green at once made the outgoing Music song look like a favourite
+        let showsIncomingHeart = collapseProgress.map { StarCollapse.showsBadge(progress: $0) } ?? true
+        if (ratingControl.mode == .spotify && showsIncomingHeart) || showsOutgoingSpotifyHeart {
+            favoriteHeartView.image = spotifyHeartImage
+        } else {
+            favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
+        }
         favoriteHeartView.frame = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
     }
     
@@ -569,7 +609,7 @@ extension MenuBarRatingControl {
             updateFavoriteHeartView()
             return
         }
-        guard playbackState.canInteract, let playing = iTunesPlayer.shared.playing else { return }
+        guard playbackState.canInteract, ratingControl.mode != .spotify, let playing = iTunesPlayer.shared.playing else { return }
 
         os_log("%{public}s[%{public}ld], %{public}s: Toggling favorite status for track: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playing.track.name ?? "unknown")
 
@@ -621,7 +661,8 @@ extension MenuBarRatingControl {
         case .leftMouseUp where !playbackState.canInteract:
             let position = NSPoint(x: 0, y: sender.bounds.height + 8)
             menuBarMenu.popUp(positioning: nil, at: position, in: sender)
-        case .rightMouseUp where !playbackState.canInteract:
+        case .rightMouseUp where !playbackState.canInteract || ratingControl.mode == .spotify:
+            // The player popover shows Music, which isn't what is playing in Spotify mode
             let position = sender.convert(event.locationInWindow, to: nil)
             menuBarMenu.popUp(positioning: nil, at: position, in: sender)
 
@@ -659,6 +700,10 @@ extension MenuBarRatingControl {
     private func handlePress() {
         if ratingTransitionTarget != nil || collapseShowsBadge { finishWidthAnimation() }
         guard widthTimer == nil, playbackState.canInteract else { return }
+        guard ratingControl.mode != .spotify else {
+            SpotifyPlayer.shared.activate()
+            return
+        }
         reminderController?.stopSweep()
         dragTimer?.invalidate()
         dragTimer = nil
@@ -706,15 +751,67 @@ extension MenuBarRatingControl: RatingControlDelegate {
 
 extension MenuBarRatingControl {
 
-    @objc func iTunesPlayerDidUpdated(_ notification: Notification) {
+    /// Music or Spotify sent an update, and the arbiter has chosen which one to follow
+    @objc func nowPlayingDidUpdate(_ notification: Notification) {
+        guard !MenuBarRatingControl.isUITesting else { return }
+        if NowPlayingArbiter.shared.active == .spotify {
+            applySpotifyDisplay()
+            return
+        }
+        // Following Music, or nothing. A Spotify update changes nothing here, unless Spotify
+        // was on show and has just handed the menu bar back.
+        guard NowPlayingArbiter.source(of: notification) == .music || ratingControl.mode == .spotify else { return }
+        iTunesPlayerDidUpdated(notification)
+    }
+
+    func iTunesPlayerDidUpdated(_ notification: Notification) {
         guard !MenuBarRatingControl.isUITesting else { return }
         let player = iTunesPlayer.shared
+        let isRunning = iTunesRadioStation.shared.iTunes != nil
 
         isPlaying = player.isPlaying
+        if ratingControl.mode == .spotify, player.playing == nil {
+            // Spotify has handed back to a Music with nothing to show. Holding the last
+            // display would leave Spotify's heart up for a song that is no longer playing.
+            applyTrackDisplay(nil, isStopped: true, musicIsRunning: false)
+            return
+        }
         // One record answers what is playing and where its rating lives, so the stars, the
         // shortcuts and the track announcement cannot disagree about it
         applyTrackDisplay(player.playing, isStopped: playState == .unknown,
-                          musicIsRunning: iTunesRadioStation.shared.iTunes != nil)
+                          musicIsRunning: isRunning)
+    }
+
+    /// Spotify is the player being followed: its heart on its own, or the last display held
+    /// while Spotify has no song to show (an ad, or between songs)
+    func applySpotifyDisplay() {
+        let spotify = SpotifyPlayer.shared
+        let info = spotify.latest
+        let wasStopped = isStop
+        let canShowTrack = playbackState.update(hasTrack: info?.isAnnounceable == true,
+                                               isStopped: info?.state == .stopped,
+                                               isRunning: spotify.isRunning)
+        updateGestureRecognizerBehavior()
+        // Nothing for the reminder to time, and a heart set in Music no longer applies
+        reminderController?.playerDidUpdate(nil)
+        pendingFavorite = nil
+        guard canShowTrack else {
+            // Holding the last display is right for Spotify's own heart, but not for Music's
+            // stars: the arbiter only hands over from Music when Music stopped playing or
+            // quit, so its song is no longer the one on show. Measured: Music quitting while
+            // Spotify sat stopped with no track left Music's stars up.
+            if ratingControl.mode != .spotify {
+                applyTrackDisplay(nil, isStopped: true, musicIsRunning: false)
+            }
+            return
+        }
+
+        displayedSongIdentity = info?.trackID
+        let previousStars = ratingControl.stars
+        let previousMode = ratingControl.mode
+        ratingControl.update(mode: .spotify)
+        guard wasStopped || previousMode != .spotify else { return }
+        updateMenuBar(animate: true, previousStars: previousStars)
     }
 
     /// Apply a refreshed track through the same transition path whether it came from a
@@ -724,7 +821,7 @@ extension MenuBarRatingControl {
         let wasWaiting = playbackState.isWaitingForTrack
         let canShowTrack = playbackState.update(hasTrack: playing != nil,
                                                isStopped: isStopped,
-                                               musicIsRunning: musicIsRunning)
+                                               isRunning: musicIsRunning)
         updateGestureRecognizerBehavior()
         guard canShowTrack else {
             if !wasStopped, !wasWaiting, playbackState.isWaitingForTrack {

@@ -448,7 +448,9 @@ final class TrackAnnouncementContentView: NSView {
         let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
         let width: CGFloat
-        if announcement.canRate {
+        if announcement.source == .spotify {
+            width = (TrackAnnouncement.spotifyText as NSString).size(withAttributes: [.font: cannotRateFont]).width.rounded(.up)
+        } else if announcement.canRate {
             let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
             // The stars, then the heart's slot: the width `Stars.image` would have, without
             // drawing it
@@ -498,6 +500,10 @@ final class TrackAnnouncementContentView: NSView {
         let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
 
+        if announcement.source == .spotify {
+            drawSpotify(in: rect, starSize: starSize)
+            return
+        }
         guard announcement.canRate else {
             drawCannotRate(in: rect, starSize: starSize, spacing: spacing)
             return
@@ -547,6 +553,16 @@ final class TrackAnnouncementContentView: NSView {
         draw(TrackAnnouncement.cannotRateText,
              in: TrackAnnouncementLayout.textRect(centredOn: heartRect.midY, font: font,
                                                 fromX: textMinX, toX: rect.maxX),
+             font: font)
+    }
+
+    /// "Spotify" where the stars would be. Spotify keeps no star rating, and StarBar can't
+    /// read its Liked Songs, so there is no heart either.
+    private func drawSpotify(in rect: NSRect, starSize: NSSize) {
+        let font = cannotRateFont
+        draw(TrackAnnouncement.spotifyText,
+             in: TrackAnnouncementLayout.textRect(centredOn: rect.midY, font: font,
+                                                fromX: rect.minX, toX: rect.maxX),
              font: font)
     }
 

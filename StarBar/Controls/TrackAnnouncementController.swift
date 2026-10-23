@@ -34,7 +34,8 @@ final class TrackAnnouncementController: NSObject {
         }
 
         /// Music's persistent ID as a 16-character hex string, `name|artist|album` for a
-        /// stream with no ID, or nil when there is nothing to identify the track by
+        /// stream with no ID, Spotify's Track ID, or nil when there is nothing to identify the
+        /// track by (a Spotify ad, among others)
         let identity: String?
         let state: State
         let title: String
@@ -46,8 +47,10 @@ final class TrackAnnouncementController: NSObject {
         let rating: Int?
         /// Music's favourite flag, when the source carried it
         let isFavorited: Bool?
+        /// The player this came from
+        let source: PlayerKind
 
-        init(identity: String?, state: State, title: String, artist: String, album: String, hasArtwork: Bool, rating: Int? = nil, isFavorited: Bool? = nil) {
+        init(identity: String?, state: State, title: String, artist: String, album: String, hasArtwork: Bool, rating: Int? = nil, isFavorited: Bool? = nil, source: PlayerKind = .music) {
             self.identity = identity
             self.state = state
             self.title = title
@@ -56,6 +59,7 @@ final class TrackAnnouncementController: NSObject {
             self.hasArtwork = hasArtwork
             self.rating = rating
             self.isFavorited = isFavorited
+            self.source = source
         }
     }
 
@@ -127,8 +131,18 @@ final class TrackAnnouncementController: NSObject {
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
 
     private(set) var isEnabled: Bool
-    /// Identity of the last track seen playing (or there at launch), announced or not
-    private var lastIdentity: String?
+    /// Whether a player is still running, so the songs seen in one that quit are forgotten
+    private let isRunning: (PlayerKind) -> Bool
+    /// The player the last update came from
+    private var currentSource: PlayerKind = .music
+    /// The last song seen playing (or there at launch) in each player, announced or not.
+    /// Kept per player, so a song resumed in Music after a Spotify interlude isn't new.
+    private var seen: [PlayerKind: String] = [:]
+    /// Identity of the last track seen playing in the current player
+    private var lastIdentity: String? {
+        get { return seen[currentSource] }
+        set { seen[currentSource] = newValue }
+    }
     /// The last snapshot that identified a track, for menu validation and on-demand showing
     /// without another read of the player
     private var lastSnapshot: PlayerSnapshot?
@@ -171,6 +185,7 @@ final class TrackAnnouncementController: NSObject {
             (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
              NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)
         },
+        isRunning: @escaping (PlayerKind) -> Bool = { _ in true },
         isEnabled: Bool
     ) {
         self.readPlayer = readPlayer
@@ -181,6 +196,7 @@ final class TrackAnnouncementController: NSObject {
         self.presenter = presenter
         self.clock = clock
         self.accessibility = accessibility
+        self.isRunning = isRunning
         self.isEnabled = isEnabled
         super.init()
     }
@@ -201,11 +217,15 @@ extension TrackAnnouncementController {
     ///   announcing it
     func playerDidUpdate(seedOnly: Bool = false) {
         defer { updateRestartWatch() }
+        seen = seen.filter { isRunning($0.key) }
         guard let snapshot = readPlayer() else {
-            lastIdentity = nil
+            seen.removeAll()
             lastSnapshot = nil
             bareStop = nil
             return
+        }
+        if snapshot.source != currentSource {
+            switchSource(to: snapshot.source)
         }
         // A payload that says nothing about the player, or nothing about the track
         // (sourceSaved sends one), must not reset the last track, or the next real
@@ -292,6 +312,34 @@ extension TrackAnnouncementController {
         updateRestartWatch()
     }
 
+    /// Record a song as seen without announcing it: one already playing in a player when
+    /// StarBar found it, which `playerDidUpdate(seedOnly:)` can't do for a player other than
+    /// the one being followed
+    func recordSeen(_ snapshot: PlayerSnapshot) {
+        guard let identity = snapshot.identity, snapshot.state == .playing || snapshot.state == .paused else { return }
+        seen[snapshot.source] = identity
+    }
+
+    /// Artwork that arrived after its strip went up (Spotify's comes over the network).
+    /// Drawn only while the strip still shows that song and has no artwork of its own.
+    func attachArtwork(_ artwork: NSImage, identity: String) {
+        guard let current = currentAnnouncement, hideTimer != nil, current.identity == identity, current.artwork == nil else { return }
+        os_log("%{public}s[%{public}ld], %{public}s: artwork arrived for %{public}s", ((#file as NSString).lastPathComponent), #line, #function, identity)
+        let updated = TrackAnnouncement(copying: current, artwork: artwork)
+        currentAnnouncement = updated
+        presenter.refresh(updated)
+    }
+
+    /// The update came from the other player. What the watch and the stop blip remember
+    /// belongs to the old one's song and position, so start again.
+    private func switchSource(to source: PlayerKind) {
+        os_log("%{public}s[%{public}ld], %{public}s: following %{public}s", ((#file as NSString).lastPathComponent), #line, #function, source.rawValue)
+        currentSource = source
+        bareStop = nil
+        readingBeforeStop = nil
+        stopRestartWatch()
+    }
+
     // MARK: - Restarts
 
     /// True when a position reading means the song went back to its start: the first
@@ -309,7 +357,7 @@ extension TrackAnnouncementController {
     /// Watch the position while announcements are on and a known song is playing, and at no
     /// other time: paused, stopped or with Music gone, nothing is read.
     private func updateRestartWatch() {
-        let shouldWatch = isEnabled && lastIdentity != nil && lastSnapshot?.state == .playing
+        let shouldWatch = isEnabled && currentSource.watchesRestarts && lastIdentity != nil && lastSnapshot?.state == .playing
         guard shouldWatch else {
             stopRestartWatch()
             readingBeforeStop = nil
@@ -460,7 +508,8 @@ extension TrackAnnouncementController {
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
             isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? false,
             artwork: live.artwork,
-            canRate: live.canRate ?? true
+            canRate: live.canRate ?? true,
+            source: snapshot.source
         )
         os_log("%{public}s[%{public}ld], %{public}s: announcing %{public}s", ((#file as NSString).lastPathComponent), #line, #function, announcement.accessibilityLabel)
         present(announcement)
@@ -478,8 +527,9 @@ extension TrackAnnouncementController {
             album: snapshot.album.isEmpty ? current.album : snapshot.album,
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
             isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? current.isFavorited,
-            artwork: current.artwork,
-            canRate: live.canRate ?? current.canRate
+            artwork: current.artwork ?? live.artwork,
+            canRate: live.canRate ?? current.canRate,
+            source: current.source
         )
         guard updated != current else { return }
         currentAnnouncement = updated
@@ -623,6 +673,7 @@ extension TrackAnnouncementController.PlayerSnapshot {
         rating = playInfo.notComputedRating
         // The notification says nothing about the heart; the live read fills it in
         isFavorited = nil
+        source = .music
     }
 
     /// From the Scripting Bridge, for the launch gap before Music's first notification.
@@ -647,6 +698,7 @@ extension TrackAnnouncementController.PlayerSnapshot {
         // copy. Resolving that copy here would put a library search inside launch.
         rating = track.userRating
         isFavorited = track.isFavorited
+        source = .music
     }
 
 }

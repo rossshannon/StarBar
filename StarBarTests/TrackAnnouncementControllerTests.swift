@@ -31,6 +31,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     /// Player positions Music will answer with, in order; nil stands for a failed read
     private var positions: [TimeInterval?] = []
     private var positionReads = 0
+    /// The players the controller is told are running
+    private var running: Set<PlayerKind> = [.music, .spotify]
     private var controller: TrackAnnouncementController!
 
     override func setUp() {
@@ -49,6 +51,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         identityReads = 0
         positions = []
         positionReads = 0
+        running = [.music, .spotify]
         controller = makeController(enabled: true)
     }
 
@@ -83,18 +86,20 @@ final class TrackAnnouncementControllerTests: XCTestCase {
             presenter: presenter,
             clock: clock,
             accessibility: { [unowned self] in (self.reduceMotion, self.reduceTransparency) },
+            isRunning: { [unowned self] kind in self.running.contains(kind) },
             isEnabled: enabled
         )
     }
 
-    private func snapshot(track: String? = "A", state: Snapshot.State = .playing, title: String? = nil, hasArtwork: Bool = true) -> Snapshot {
+    private func snapshot(track: String? = "A", state: Snapshot.State = .playing, title: String? = nil, hasArtwork: Bool = true, source: PlayerKind = .music) -> Snapshot {
         return Snapshot(
             identity: track,
             state: state,
             title: title ?? (track.map { "Song \($0)" } ?? ""),
             artist: "Artist",
             album: "Album",
-            hasArtwork: hasArtwork
+            hasArtwork: hasArtwork,
+            source: source
         )
     }
 
@@ -1117,6 +1122,154 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         }
         let data = try JSONSerialization.data(withJSONObject: keyed)
         return try JSONDecoder().decode(PlayInfo.self, from: data)
+    }
+
+}
+
+// MARK: - Spotify and other players
+
+extension TrackAnnouncementControllerTests {
+
+    private func spotify(_ track: String? = "spotify:track:S", state: Snapshot.State = .playing) -> Snapshot {
+        return snapshot(track: track, state: state, source: .spotify)
+    }
+
+    func testASpotifySongIsAnnouncedAsSpotifys() {
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.count, 1)
+        XCTAssertEqual(presenter.shown.last?.source, .spotify)
+        XCTAssertEqual(presenter.shown.last?.identity, "spotify:track:S")
+    }
+
+    func testASongResumedInMusicAfterASpotifySongIsNotNew() {
+        update(snapshot(track: "A"))
+        update(spotify())
+        XCTAssertEqual(presenter.shown.count, 2, "the Spotify song is new")
+
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.count, 2, "Music's song was seen before Spotify played")
+    }
+
+    func testASpotifySongPlayingAgainAfterMusicIsNotNew() {
+        update(spotify())
+        update(snapshot(track: "A"))
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.map { $0.identity }, ["spotify:track:S", "A"])
+    }
+
+    func testTheSongsOfAPlayerThatQuitAreForgotten() {
+        update(snapshot(track: "A"))
+        update(spotify())
+        running = [.spotify]
+        update(spotify(state: .paused))
+        running = [.music, .spotify]
+
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.last?.identity, "A", "Music quit and came back, so its song is new again")
+        XCTAssertEqual(presenter.shown.count, 3)
+    }
+
+    func testARecordedSongIsNotAnnouncedWhenItsPlayerIsFollowed() {
+        controller.recordSeen(spotify(state: .paused))
+
+        update(spotify())
+
+        XCTAssertTrue(presenter.shown.isEmpty)
+    }
+
+    func testRecordingASongNeedsOneThatIsPlayingOrPaused() {
+        controller.recordSeen(spotify(state: .stopped))
+
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.count, 1)
+    }
+
+    func testASpotifySongStartsNoPositionWatch() {
+        update(spotify())
+
+        XCTAssertNil(positionWatch, "Spotify's position isn't polled")
+        XCTAssertEqual(positionReads, 0)
+    }
+
+    func testMusicWatchesAgainAfterSpotify() {
+        update(spotify())
+        update(snapshot(track: "A"))
+
+        XCTAssertNotNil(positionWatch)
+    }
+
+    func testSwitchingPlayersStopsTheWatch() {
+        update(snapshot(track: "A"))
+        let watch = positionWatch
+        XCTAssertNotNil(watch)
+
+        update(spotify())
+
+        XCTAssertEqual(watch?.isValid, false)
+        XCTAssertNil(positionWatch)
+    }
+
+    func testAnAdWithNoIdentityChangesNothing() {
+        update(spotify())
+        update(spotify(nil))
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.count, 1, "the song after the ad is the same one, so it isn't new")
+    }
+
+    func testLateArtworkIsAddedToTheStrip() {
+        update(spotify())
+        XCTAssertNil(presenter.shown.last?.artwork)
+        let artwork = NSImage(size: NSSize(width: 8, height: 8))
+
+        controller.attachArtwork(artwork, identity: "spotify:track:S")
+
+        XCTAssertTrue(presenter.refreshed.last?.artwork === artwork)
+        XCTAssertEqual(presenter.refreshed.last?.source, .spotify)
+    }
+
+    func testLateArtworkForAnotherSongIsIgnored() {
+        update(spotify())
+
+        controller.attachArtwork(NSImage(size: NSSize(width: 8, height: 8)), identity: "spotify:track:T")
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testLateArtworkAfterTheStripHasGoneIsIgnored() {
+        update(spotify())
+        clock.fireOneShot()
+
+        controller.attachArtwork(NSImage(size: NSSize(width: 8, height: 8)), identity: "spotify:track:S")
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testLateArtworkNeverReplacesArtworkAlreadyShown() {
+        let first = NSImage(size: NSSize(width: 8, height: 8))
+        var loaded = TrackAnnouncementController.LiveTrack()
+        loaded.artwork = first
+        live = .loaded(loaded)
+        update(spotify())
+
+        controller.attachArtwork(NSImage(size: NSSize(width: 8, height: 8)), identity: "spotify:track:S")
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+        XCTAssertTrue(presenter.shown.last?.artwork === first)
+    }
+
+    func testLateArtworkKeepsTheHoldTimer() {
+        update(spotify())
+        let hold = clock.pendingOneShot
+
+        controller.attachArtwork(NSImage(size: NSSize(width: 8, height: 8)), identity: "spotify:track:S")
+
+        XCTAssertTrue(clock.pendingOneShot === hold)
     }
 
 }
