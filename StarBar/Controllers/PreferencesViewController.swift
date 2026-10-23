@@ -187,6 +187,10 @@ final class PreferencesViewController: NSViewController {
         ])
 
         gridView.row(at: 0).rowAlignment = .lastBaseline
+        // A label beside a pop-up or a push button sits on the control's text, not its top
+        for label in [announcementStyleTextField, spotifyTextField] {
+            gridView.cell(for: label)?.row?.rowAlignment = .firstBaseline
+        }
 
         gridView.column(at: 0).xPlacement = .trailing
         gridView.column(at: 1).xPlacement = .leading
