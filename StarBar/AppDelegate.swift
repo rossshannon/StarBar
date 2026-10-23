@@ -139,6 +139,8 @@ extension AppDelegate {
         controller.playerDidUpdate(seedOnly: true)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.playerDidUpdateForAnnouncement(_:)), name: .nowPlayingDidUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyArtworkDidLoad(_:)), name: .spotifyArtworkDidLoad, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyLikeDidChange, object: SpotifyAccount.shared)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyAccountDidChange, object: SpotifyAccount.shared)
         // Spotify sends nothing at launch either. Its song is read in the background, and
         // only with permission already granted; it is recorded as seen when it arrives.
         if !MenuBarRatingControl.isUITesting {
@@ -176,6 +178,18 @@ extension AppDelegate {
         TrackAnnouncementController.shared?.attachArtwork(artwork, identity: identity)
     }
 
+    @objc private func spotifyLikeDidChange(_ notification: Notification) {
+        TrackAnnouncementController.shared?.spotifyLikeDidChange(AppDelegate.spotifyHeart(for:))
+    }
+
+    /// What the strip's Spotify heart shows for a song: nothing without a sign-in; signed in,
+    /// filled when Spotify has said the song is liked and outlined otherwise, as the menu bar
+    static func spotifyHeart(for identity: String) -> (showsHeart: Bool, isLiked: Bool) {
+        let account = SpotifyAccount.shared
+        guard account.isConnected, SpotifyLibrary.canLike(identity) else { return (false, false) }
+        return (true, account.isLiked(identity) ?? false)
+    }
+
     /// What Spotify is doing, from its last notification. No Apple Events. Nil when Spotify
     /// isn't running or has said nothing yet.
     static func readSpotifySnapshot() -> TrackAnnouncementController.PlayerSnapshot? {
@@ -183,9 +197,9 @@ extension AppDelegate {
         return SpotifyPlayer.shared.latest?.snapshot
     }
 
-    /// A Spotify song's artwork, if it has already arrived. No rating or heart: Spotify keeps
-    /// neither where StarBar can read it. No Apple Events and no network; artwork that comes
-    /// later reaches the strip through `attachArtwork`.
+    /// A Spotify song's artwork, if it has already arrived, and its like as far as StarBar
+    /// knows it. No rating: Spotify keeps none. No Apple Events and no network; artwork that
+    /// comes later reaches the strip through `attachArtwork`.
     static func loadSpotifyLiveTrack(for identity: String) -> TrackAnnouncementController.LiveTrackLoad {
         if let playing = SpotifyPlayer.shared.latest?.trackID, playing != identity {
             return .trackChanged
@@ -193,6 +207,11 @@ extension AppDelegate {
         var live = TrackAnnouncementController.LiveTrack()
         live.artwork = SpotifyPlayer.shared.artwork(for: identity)
         live.canRate = false
+        // What StarBar already knows; a like that arrives later redraws through
+        // spotifyLikeDidChange
+        let heart = spotifyHeart(for: identity)
+        live.showsSpotifyHeart = heart.showsHeart
+        live.isFavorited = heart.isLiked
         return .loaded(live)
     }
 

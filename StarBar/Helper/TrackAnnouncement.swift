@@ -55,11 +55,16 @@ struct TrackAnnouncement: Equatable {
     /// There is no rating to show, so the strip says how to get one instead of drawing five
     /// empty dots that suggest the song is merely unrated.
     let canRate: Bool
-    /// The player the song is playing in. A Spotify song has no rating or heart, so its strip
-    /// names Spotify where the stars would be.
+    /// The player the song is playing in. A Spotify song has no rating, so its strip names
+    /// Spotify where the stars would be.
     let source: PlayerKind
+    /// True for a Spotify song while the user's Spotify account is connected: the strip then
+    /// draws Spotify's green heart before "Spotify", filled when `isFavorited` (which holds
+    /// the like) and outlined otherwise, as the menu bar does. Without a sign-in there is
+    /// nothing to say about the like, so there is no heart.
+    let showsSpotifyHeart: Bool
 
-    init(identity: String, title: String, artist: String, album: String, rating: Int = 0, isFavorited: Bool = false, artwork: NSImage? = nil, canRate: Bool = true, source: PlayerKind = .music) {
+    init(identity: String, title: String, artist: String, album: String, rating: Int = 0, isFavorited: Bool = false, artwork: NSImage? = nil, canRate: Bool = true, source: PlayerKind = .music, showsSpotifyHeart: Bool = false) {
         self.identity = identity
         self.title = title
         self.artist = artist
@@ -69,11 +74,12 @@ struct TrackAnnouncement: Equatable {
         self.artwork = artwork
         self.canRate = canRate
         self.source = source
+        self.showsSpotifyHeart = showsSpotifyHeart
     }
 
     /// The same announcement with a new rating, heart or artwork. Nil means "leave as it
     /// was"; unrated is 0 and the heart off is false, so both are still passed as themselves.
-    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil, canRate: Bool? = nil, artwork: NSImage? = nil) {
+    init(copying other: TrackAnnouncement, rating: Int? = nil, isFavorited: Bool? = nil, canRate: Bool? = nil, artwork: NSImage? = nil, showsSpotifyHeart: Bool? = nil) {
         self.init(
             identity: other.identity,
             title: other.title,
@@ -83,7 +89,8 @@ struct TrackAnnouncement: Equatable {
             isFavorited: isFavorited ?? other.isFavorited,
             artwork: artwork ?? other.artwork,
             canRate: canRate ?? other.canRate,
-            source: other.source
+            source: other.source,
+            showsSpotifyHeart: showsSpotifyHeart ?? other.showsSpotifyHeart
         )
     }
 
@@ -126,7 +133,10 @@ struct TrackAnnouncement: Equatable {
     /// What VoiceOver reads when the strip appears
     var accessibilityLabel: String {
         let playing = artist.isEmpty ? "Now playing: \(title)" : "Now playing: \(title) by \(artist)"
-        guard source == .music else { return playing + ", in Spotify" }
+        guard source == .music else {
+            guard showsSpotifyHeart else { return playing + ", in Spotify" }
+            return playing + ", in Spotify, " + (isFavorited ? "liked" : "not liked")
+        }
         return playing + ". " + RatingControl.accessibilityDescription(rating: rating, isFavorited: isFavorited)
     }
 
@@ -137,6 +147,7 @@ struct TrackAnnouncement: Equatable {
             && lhs.album == rhs.album
             && lhs.rating == rhs.rating
             && lhs.isFavorited == rhs.isFavorited
+            && lhs.showsSpotifyHeart == rhs.showsSpotifyHeart
             && lhs.artwork === rhs.artwork
             && lhs.source == rhs.source
     }

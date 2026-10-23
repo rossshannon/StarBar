@@ -1142,6 +1142,54 @@ extension TrackAnnouncementControllerTests {
         XCTAssertEqual(presenter.shown.last?.identity, "spotify:track:S")
     }
 
+    func testASpotifySongShowsItsLikeOnceSignedIn() {
+        live = .loaded(.init(isFavorited: true, canRate: false, showsSpotifyHeart: true))
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.last?.showsSpotifyHeart, true)
+        XCTAssertEqual(presenter.shown.last?.isFavorited, true)
+        XCTAssertEqual(presenter.shown.last?.accessibilityLabel, "Now playing: Song spotify:track:S by Artist, in Spotify, liked")
+    }
+
+    func testASpotifySongWithoutASignInShowsNoHeart() {
+        live = .loaded(.init(canRate: false))
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.last?.showsSpotifyHeart, false)
+        XCTAssertEqual(presenter.shown.last?.accessibilityLabel, "Now playing: Song spotify:track:S by Artist, in Spotify")
+    }
+
+    /// A like read or clicked after the strip went up redraws the heart and leaves the hold
+    func testALikeArrivingWhileTheStripIsUpRefreshesIt() {
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: true))
+        update(spotify())
+        let timer = clock.pendingOneShot
+        var asked: [String] = []
+
+        controller.spotifyLikeDidChange { identity in
+            asked.append(identity)
+            return (true, true)
+        }
+
+        XCTAssertEqual(asked, ["spotify:track:S"])
+        XCTAssertEqual(presenter.shown.count, 1, "not a new strip")
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, true)
+        XCTAssertEqual(presenter.refreshed.last?.showsSpotifyHeart, true)
+        XCTAssertTrue(clock.pendingOneShot === timer, "the hold timer is untouched")
+    }
+
+    func testASpotifyLikeLeavesAMusicStripAlone() {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.spotifyLikeDidChange { _ in
+            XCTFail("a Music song has no Spotify like to ask about")
+            return (true, true)
+        }
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
     func testASongResumedInMusicAfterASpotifySongIsNotNew() {
         update(snapshot(track: "A"))
         update(spotify())
