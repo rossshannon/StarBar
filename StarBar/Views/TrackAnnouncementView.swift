@@ -449,7 +449,8 @@ final class TrackAnnouncementContentView: NSView {
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
         let width: CGFloat
         if announcement.source == .spotify {
-            width = (TrackAnnouncement.spotifyText as NSString).size(withAttributes: [.font: cannotRateFont]).width.rounded(.up)
+            let text = (TrackAnnouncement.spotifyText as NSString).size(withAttributes: [.font: cannotRateFont]).width.rounded(.up)
+            width = announcement.showsSpotifyHeart ? starSize.width + spacing * 2 + text : text
         } else if announcement.canRate {
             let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
             // The stars, then the heart's slot: the width `Stars.image` would have, without
@@ -501,7 +502,7 @@ final class TrackAnnouncementContentView: NSView {
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
 
         if announcement.source == .spotify {
-            drawSpotify(in: rect, starSize: starSize)
+            drawSpotify(in: rect, starSize: starSize, spacing: spacing)
             return
         }
         guard announcement.canRate else {
@@ -556,13 +557,28 @@ final class TrackAnnouncementContentView: NSView {
              font: font)
     }
 
-    /// "Spotify" where the stars would be. Spotify keeps no star rating, and StarBar can't
-    /// read its Liked Songs, so there is no heart either.
-    private func drawSpotify(in rect: NSRect, starSize: NSSize) {
+    /// "Spotify" where the stars would be, since Spotify keeps no star rating. With the
+    /// user's Spotify account connected, the green heart comes first, laid out like the
+    /// heart before `cannotRateText`: filled for a liked song, outlined otherwise, the same
+    /// images as the menu bar's.
+    private func drawSpotify(in rect: NSRect, starSize: NSSize, spacing: CGFloat) {
+        var textMinX = rect.minX
+        if announcement.showsSpotifyHeart {
+            let heartRect = NSRect(x: rect.minX, y: rect.midY - starSize.height / 2,
+                                   width: starSize.width, height: starSize.height)
+            let heart = announcement.isFavorited
+                ? Stars.spotifyHeartImage(size: starSize)
+                : Stars.spotifyOutlinedHeartImage(size: starSize)
+            NSGraphicsContext.saveGraphicsState()
+            textShadow.set()
+            heart.draw(in: heartRect)
+            NSGraphicsContext.restoreGraphicsState()
+            textMinX = heartRect.maxX + spacing * 2
+        }
         let font = cannotRateFont
         draw(TrackAnnouncement.spotifyText,
              in: TrackAnnouncementLayout.textRect(centredOn: rect.midY, font: font,
-                                                fromX: rect.minX, toX: rect.maxX),
+                                                fromX: textMinX, toX: rect.maxX),
              font: font)
     }
 

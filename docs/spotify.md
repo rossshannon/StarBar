@@ -64,3 +64,19 @@ StarBar asks for `com.spotify.playback` (to read `current track` and `player sta
 - An album URI: nothing.
 
 The sdef has no command that only reveals a song, so the menu bar's Spotify heart brings Spotify to the front instead.
+
+## Liking songs: the Web API
+
+AppleScript can't like a song, so StarBar 1.7 uses Spotify's Web API. Facts from Spotify's documentation as of 2026-10-23, not yet measured against the live API:
+
+- Since February 2026 the library endpoints take URIs of any type: `GET https://api.spotify.com/v1/me/library/contains?uris=…` answers an array of booleans, and `PUT` and `DELETE` on `https://api.spotify.com/v1/me/library?uris=…` save and remove. `uris` is a comma-separated query parameter, at most 40. The Track ID in the notification is such a URI already.
+- Scopes: `user-library-read` for `contains`, `user-library-modify` for saving and removing.
+- An app in Development Mode serves at most five users, its owner needs Premium, and the request quota is per app. A 429 carries `Retry-After`; an exhausted quota says `QUOTA_EXCEEDED`.
+- Sign-in: Authorization Code with PKCE, so no client secret. Redirect URIs must be https or a loopback IP, but "redirects using a custom scheme will still be supported", which is what `starbar://spotify-callback` relies on.
+- Access tokens last an hour (`expires_in: 3600`). A refresh may or may not return a new refresh token.
+
+To check during the first live test: whether a bodiless `PUT` gets 411 (StarBar sends an empty body to be safe), whether `contains` on an episode works, and whether the ad hoc build asks for the Keychain after each update.
+
+Measured 2026-10-23 on the first live test: sign-in, `contains`, like and unlike all worked. Reinstalling an ad hoc build **did** bring up a Keychain prompt (securityd: "displaying keychain prompt for /Applications/StarBar.app"), so the tokens moved to a file in the app's container.
+
+The client ID is built in, so users only press Connect: asking each user to register a developer app, which also needs Premium, was rejected. The cost is Development Mode's cap of five accounts, added by hand on the dashboard. Moving past it needs Spotify's Extended Quota, which since 2025 is granted only to organisations.

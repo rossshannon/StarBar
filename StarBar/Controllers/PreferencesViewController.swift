@@ -140,6 +140,21 @@ final class PreferencesViewController: NSViewController {
         return shortcutView
     }()
 
+    lazy var spotifyTextField: NSTextField = {
+        return NSTextField(labelWithString: "Spotify: ")
+    }()
+    let spotifyConnectButton: NSButton = {
+        return NSButton(title: "Connect", target: nil, action: nil)
+    }()
+    /// What connecting does, or how the sign-in stands
+    let spotifyStatusTextField: NSTextField = {
+        let field = NSTextField(wrappingLabelWithString: "")
+        field.font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize)
+        field.textColor = .secondaryLabelColor
+        field.preferredMaxLayoutWidth = 300
+        return field
+    }()
+
     let leadingPaddingView = NSView()
     let trailingPaddingView = NSView()
 
@@ -153,6 +168,9 @@ final class PreferencesViewController: NSViewController {
             [empty, reminderCheckboxButton],
             [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
+            [NSBox.separatorLine],
+            [spotifyTextField, spotifyConnectButton],
+            [empty, spotifyStatusTextField],
             [NSBox.separatorLine],
             [ratingDownTextField, ratingDownShortcutView],
             [ratingUpTextField, ratingUpShortcutView],
@@ -169,6 +187,10 @@ final class PreferencesViewController: NSViewController {
         ])
 
         gridView.row(at: 0).rowAlignment = .lastBaseline
+        // A label beside a pop-up or a push button sits on the control's text, not its top
+        for label in [announcementStyleTextField, spotifyTextField] {
+            gridView.cell(for: label)?.row?.rowAlignment = .firstBaseline
+        }
 
         gridView.column(at: 0).xPlacement = .trailing
         gridView.column(at: 1).xPlacement = .leading
@@ -283,6 +305,42 @@ extension PreferencesViewController {
         UserDefaults.standard.announcementStyle = rawValue
     }
 
+    @objc private func spotifyConnectButtonPressed(_ sender: NSButton) {
+        let account = SpotifyAccount.shared
+        if account.state == .connected {
+            account.disconnect()
+        } else {
+            account.connect(presentingFrom: view.window)
+        }
+    }
+
+    @objc private func spotifyAccountDidChange(_ notification: Notification) {
+        refreshSpotify()
+    }
+
+    /// The button and the text under it follow the sign-in
+    func refreshSpotify() {
+        let account = SpotifyAccount.shared
+        spotifyConnectButton.title = account.state == .connected ? "Disconnect" : "Connect"
+        spotifyConnectButton.isEnabled = account.state != .connecting
+        spotifyStatusTextField.stringValue = PreferencesViewController.spotifyStatus(state: account.state, problem: account.lastProblem)
+    }
+
+    /// What the text under the Connect button says
+    static func spotifyStatus(state: SpotifyAccount.State, problem: String?) -> String {
+        let status: String
+        switch state {
+        case .connected:
+            status = "Connected. Click the green heart in the menu bar to like or unlike the Spotify song playing."
+        case .connecting:
+            status = "Waiting for Spotify's sign-in…"
+        case .disconnected:
+            status = "Connect your Spotify account to like songs with the menu bar's green heart."
+        }
+        guard let problem = problem else { return status }
+        return problem + " " + status
+    }
+
 }
 
 extension PreferencesViewController {
@@ -342,6 +400,11 @@ extension PreferencesViewController {
             let style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
             self?.announcementStylePopUpButton.selectItem(withTitle: style.title)
         }
+
+        spotifyConnectButton.target = self
+        spotifyConnectButton.action = #selector(PreferencesViewController.spotifyConnectButtonPressed(_:))
+        NotificationCenter.default.addObserver(self, selector: #selector(PreferencesViewController.spotifyAccountDidChange(_:)), name: .spotifyAccountDidChange, object: nil)
+        refreshSpotify()
     }
 
     override func viewDidAppear() {

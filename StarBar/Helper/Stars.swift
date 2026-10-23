@@ -129,6 +129,17 @@ struct Stars {
         return image
     }
 
+    /// Outlined heart in `spotifyHeartColor`: a Spotify song StarBar knows isn't liked
+    static func spotifyOutlinedHeartImage(size: NSSize) -> NSImage {
+        let image = NSImage(size: size, flipped: false) { rect in
+            Stars.spotifyHeartColor.setStroke()
+            Stars.heartPath(in: rect, lineWidth: 1.5).stroke()
+            return true
+        }
+        image.isTemplate = false
+        return image
+    }
+
     /// Outline heart for the template image. A favorited track leaves this slot empty, so the
     /// coloured heart drawn on top has no template-coloured edge around it.
     private func drawFavoriteHeart(in rect: NSRect, filled: Bool) {

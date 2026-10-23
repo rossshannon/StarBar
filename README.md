@@ -26,6 +26,7 @@ A library full of unrated songs is hard to make sense of. Rate them as you liste
 - **Keep your favourites close.** A separate heart makes it easy to mark a favourite without confusing it with a star rating.
 - **Catch the songs you meant to rate.** An optional reminder gives unrated songs a gentle nudge before they end.
 - **See what just came on.** An optional track announcement shows the artwork, song details, stars and heart, with Classic, Blur and Liquid Glass styles.
+- **Spotify too.** The announcement follows Spotify as well as Music, and with your Spotify account connected the menu bar's green heart likes and unlikes songs.
 - **Make your library your own.** Rate songs already in your Music library, including Apple Music songs you have added. For a catalog song that is not there yet, StarBar offers to add it so you can rate it.
 
 ## Get started
@@ -39,12 +40,23 @@ If macOS blocks an unnotarised build, open **System Settings → Privacy & Secur
 ## Using the menu bar
 
 - **Click a star** to set that rating.
-- **Half stars**: turn on "Half star" in Preferences. Then click the left half of a star, or the gap just before it, to set a half star. For example, click the left half of the fourth star for 3½ stars.
+- **Half stars**: turn on "Allow half stars" in Preferences. Then click the left half of a star, or the gap just before it, to set a half star. For example, click the left half of the fourth star for 3½ stars.
 - **Drag** across the stars and they fill in as you move. Let go to set the rating, the same as clicking at that spot. With half stars on, dragging across the gap between two stars shows where the half star begins. Let go over the heart to keep the last rating.
 - **Heart**: click the heart after the stars to mark the song as a favourite in Music. A filled heart means the song is a favourite.
 - **Right-click** to open the player popover.
+- **Spotify**: while Spotify is playing, the menu bar shows a green heart instead of stars. Clicking it brings Spotify to the front, or, once you have connected your Spotify account, likes or unlikes the song: the heart is filled for a song in your Liked Songs and outlined for one that isn't, in the menu bar and on the track announcement strip. See [Liking Spotify songs](#liking-spotify-songs).
 - **Rating reminder**: when a song with no rating is nearly over, StarBar plays a bell and a hollow star sweeps across the dots and back. It happens once each time a song plays, 30 seconds before the end or three quarters of the way through, whichever is later. To turn it off, uncheck "Remind me to rate unrated songs" in Preferences.
 - **Track announcement**: a translucent black strip slides up from the bottom of the screen when a new song starts in Music or Spotify, with the artwork on the left and the title, artist, album and the song's current stars and heart in white, then slides away after five seconds. Rate the song or tap the heart while the strip is up and it updates. "Strip style" in Preferences picks the background: Classic (Growl's flat black), Blur (a blur of whatever is behind the strip), or Liquid Glass (Apple's glass, with its lensed rim, on macOS 26 and later; the blur before that). It is a recreation of Growl's "Music Video" display. It is off by default: check "Show a Music Video strip when a new song plays" in Preferences to turn it on, and press Preview there to see it. "Show Current Track" in the popover's menu, or Option-Control-N, shows the strip for the current song whenever you like, even with announcements off.
+
+## Liking Spotify songs
+
+Spotify's scripting can't like a song, so StarBar uses Spotify's Web API, signed in as you. Press **Connect** next to Spotify in Preferences; Spotify's sign-in page opens, and you agree to let StarBar read and change your Liked Songs.
+
+**For now this works for only a handful of people.** Spotify lets an app that it hasn't yet reviewed serve five accounts, each added by hand by the app's owner. If yours isn't one of them, Spotify lets you sign in and then refuses every request, and Preferences says so. If you have a Spotify developer app of your own (its redirect URI must be `starbar://spotify-callback`), you can use it instead: `defaults write com.rossshannon.starbar spotifyClientID <its client ID>`, then quit StarBar, open it again and press Connect.
+
+StarBar asks only for permission to read and change your Liked Songs. It asks Spotify once per new song whether that song is liked, and sends a like or unlike when you click the heart. Those requests go to `api.spotify.com` and `accounts.spotify.com`; nothing else is sent, and none of it happens until you press Connect. The sign-in is kept in a file inside StarBar's own sandbox container, readable only by you. **Disconnect** in Preferences forgets it on this Mac; to revoke it on Spotify's side too, remove the app under **Manage apps** on your Spotify account page.
+
+A song liked in Spotify itself while StarBar is showing it shows as liked the next time it plays: StarBar doesn't keep asking.
 
 ## FAQ
 

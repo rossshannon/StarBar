@@ -52,6 +52,7 @@ final class MenuBarRatingControl {
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
     private lazy var outlinedHeartImage = Stars.outlinedFavoriteHeartImage(size: ratingControl.starSize)
     private lazy var spotifyHeartImage = Stars.spotifyHeartImage(size: ratingControl.starSize)
+    private lazy var spotifyOutlinedHeartImage = Stars.spotifyOutlinedHeartImage(size: ratingControl.starSize)
 
     /// Shown in the plus's place while the song is being added: the turning circle with a gap
     /// that Apple Music itself shows. Music takes about 3.5 seconds, so the button has to look
@@ -112,6 +113,9 @@ final class MenuBarRatingControl {
     private var rolloutProgress: Double?
     /// How far Spotify's green heart has faded, while it fades out ahead of a rollout
     private var spotifyHeartFadeProgress: Double?
+    /// Whether Spotify's heart was last drawn filled, so it keeps that look while it fades
+    /// out after the mode has changed
+    private var spotifyHeartWasFilled = true
     private var collapseProgress: Double?
     private var ratingTransitionTarget: [Star.Style]?
     private var displayedContentWidth: CGFloat?
@@ -262,6 +266,8 @@ final class MenuBarRatingControl {
         // being followed, Music's own updates (a library re-read, a wake) must not paint its
         // stars over Spotify's heart
         NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.nowPlayingDidUpdate(_:)), name: .nowPlayingDidUpdate, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.spotifyLikeDidChange(_:)), name: .spotifyLikeDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(MenuBarRatingControl.spotifyLikeDidChange(_:)), name: .spotifyAccountDidChange, object: nil)
 
         let reminderController = RatingReminderController(
             ratingControl: ratingControl,
@@ -503,9 +509,14 @@ extension MenuBarRatingControl {
 
     /// VoiceOver reads the rating, and the UI tests check it
     private func updateAccessibility() {
-        let value = isStop
-            ? "Not playing"
-            : RatingControl.accessibilityDescription(mode: ratingControl.mode, rating: ratingControl.rating, isFavorited: ratingControl.isFavorited, isAddingToLibrary: ratingControl.isAddingToLibrary)
+        let value: String
+        if isStop {
+            value = "Not playing"
+        } else if ratingControl.mode == .spotify {
+            value = RatingControl.spotifyAccessibilityDescription(isLiked: spotifyIsLiked)
+        } else {
+            value = RatingControl.accessibilityDescription(mode: ratingControl.mode, rating: ratingControl.rating, isFavorited: ratingControl.isFavorited, isAddingToLibrary: ratingControl.isAddingToLibrary)
+        }
         statusItem.button?.setAccessibilityValue(value)
     }
 
@@ -554,7 +565,13 @@ extension MenuBarRatingControl {
         // stars: turning green at once made the outgoing Music song look like a favourite
         let showsIncomingHeart = collapseProgress.map { StarCollapse.showsBadge(progress: $0) } ?? true
         if (ratingControl.mode == .spotify && showsIncomingHeart) || showsOutgoingSpotifyHeart {
-            favoriteHeartView.image = spotifyHeartImage
+            if ratingControl.mode == .spotify {
+                // Without a sign-in the heart only says that Spotify is playing, as it did
+                // before likes, so it stays filled. Signed in, it is filled only for a song
+                // Spotify has said is liked: an outline while the answer is on its way.
+                spotifyHeartWasFilled = !SpotifyAccount.shared.isConnected || spotifyIsLiked == true
+            }
+            favoriteHeartView.image = spotifyHeartWasFilled ? spotifyHeartImage : spotifyOutlinedHeartImage
         } else {
             favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
         }
@@ -701,7 +718,13 @@ extension MenuBarRatingControl {
         if ratingTransitionTarget != nil || collapseShowsBadge { finishWidthAnimation() }
         guard widthTimer == nil, playbackState.canInteract else { return }
         guard ratingControl.mode != .spotify else {
-            SpotifyPlayer.shared.activate()
+            // Signed in, the heart likes the song, as Music's heart favourites one. Otherwise,
+            // or for a song the Web API can't like (a local file), it brings Spotify forward.
+            if let uri = displayedSongIdentity, SpotifyAccount.shared.canLike(uri) {
+                SpotifyAccount.shared.toggleLike(uri)
+            } else {
+                SpotifyPlayer.shared.activate()
+            }
             return
         }
         reminderController?.stopSweep()
@@ -807,11 +830,34 @@ extension MenuBarRatingControl {
         }
 
         displayedSongIdentity = info?.trackID
+        if let uri = info?.trackID {
+            // One request per song, and only once signed in
+            SpotifyAccount.shared.refreshLike(for: uri)
+        }
         let previousStars = ratingControl.stars
         let previousMode = ratingControl.mode
         ratingControl.update(mode: .spotify)
-        guard wasStopped || previousMode != .spotify else { return }
+        guard wasStopped || previousMode != .spotify else {
+            // Same mode, perhaps a new song: its heart may differ
+            updateFavoriteHeartView()
+            updateAccessibility()
+            return
+        }
         updateMenuBar(animate: true, previousStars: previousStars)
+    }
+
+    /// Whether the Spotify song on show is liked: nil when not signed in or not known yet
+    private var spotifyIsLiked: Bool? {
+        guard ratingControl.mode == .spotify, let uri = displayedSongIdentity else { return nil }
+        return SpotifyAccount.shared.isLiked(uri)
+    }
+
+    /// A like was read or changed, or the sign-in came or went
+    @objc func spotifyLikeDidChange(_ notification: Notification) {
+        if let uri = notification.userInfo?[SpotifyPlayer.identityKey] as? String, uri != displayedSongIdentity { return }
+        guard ratingControl.mode == .spotify else { return }
+        updateFavoriteHeartView()
+        updateAccessibility()
     }
 
     /// Apply a refreshed track through the same transition path whether it came from a

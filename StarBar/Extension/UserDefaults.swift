@@ -14,6 +14,7 @@ enum ApplicationKey: String {
     case remindToRateUnrated
     case announceNewTracks
     case announcementStyle
+    case spotifyClientID
 }
 
 extension UserDefaults {
@@ -74,6 +75,17 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.announcementStyle.rawValue)
+        }
+    }
+
+    /// Hidden: the client ID of someone's own app on Spotify's developer dashboard, used for
+    /// liking songs in place of StarBar's built-in one. Empty means the built-in one.
+    @objc dynamic var spotifyClientID: String {
+        get {
+            return string(forKey: ApplicationKey.spotifyClientID.rawValue) ?? ""
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.spotifyClientID.rawValue)
         }
     }
 

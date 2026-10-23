@@ -72,6 +72,9 @@ final class TrackAnnouncementController: NSObject {
         /// False when the song is playing from the Apple Music catalog and isn't in the
         /// library, so there is nowhere for a rating to live
         var canRate: Bool? = nil
+        /// For a Spotify song: whether the user's account is connected, so the strip shows
+        /// the like (carried in `isFavorited`) as a green heart
+        var showsSpotifyHeart: Bool? = nil
     }
 
     /// What the live-track loader found
@@ -433,6 +436,20 @@ extension TrackAnnouncementController {
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
     }
 
+    /// A Spotify like was read or changed, or the sign-in came or went. Redraws the heart of
+    /// a Spotify song on the strip, without touching the hold timer. `read` answers for a
+    /// Track ID: whether to show the heart at all, and whether the song is liked.
+    ///
+    /// No pending hold as for Music's heart: `SpotifyAccount` already shows the user's click
+    /// at once and is the only source of the like, so there is no stale read to hold it over.
+    func spotifyLikeDidChange(_ read: (_ identity: String) -> (showsHeart: Bool, isLiked: Bool)) {
+        guard let current = currentAnnouncement, current.source == .spotify else { return }
+        let answer = read(current.identity)
+        updateStrip(identity: current.identity) {
+            TrackAnnouncement(copying: $0, isFavorited: answer.isLiked, showsSpotifyHeart: answer.showsHeart)
+        }
+    }
+
     /// The track a rating chosen in StarBar belongs to: the one Music is playing.
     ///
     /// While the strip is up, Music is asked which track that is (one Apple Event), so a
@@ -509,7 +526,8 @@ extension TrackAnnouncementController {
             isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? false,
             artwork: live.artwork,
             canRate: live.canRate ?? true,
-            source: snapshot.source
+            source: snapshot.source,
+            showsSpotifyHeart: live.showsSpotifyHeart ?? false
         )
         os_log("%{public}s[%{public}ld], %{public}s: announcing %{public}s", ((#file as NSString).lastPathComponent), #line, #function, announcement.accessibilityLabel)
         present(announcement)
@@ -529,7 +547,8 @@ extension TrackAnnouncementController {
             isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? current.isFavorited,
             artwork: current.artwork ?? live.artwork,
             canRate: live.canRate ?? current.canRate,
-            source: current.source
+            source: current.source,
+            showsSpotifyHeart: live.showsSpotifyHeart ?? current.showsSpotifyHeart
         )
         guard updated != current else { return }
         currentAnnouncement = updated
@@ -544,7 +563,8 @@ extension TrackAnnouncementController {
             copying: current,
             rating: rating(for: current.identity, live: live.rating, payload: nil) ?? current.rating,
             isFavorited: favorite(for: current.identity, live: live.isFavorited, payload: nil) ?? current.isFavorited,
-            canRate: live.canRate ?? current.canRate
+            canRate: live.canRate ?? current.canRate,
+            showsSpotifyHeart: live.showsSpotifyHeart
         )
         guard updated != current else { return }
         currentAnnouncement = updated
