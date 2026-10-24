@@ -82,8 +82,8 @@ final class PlayingTrack {
         return ratingTrack ?? track
     }
 
-    /// The track the announcement strip's artwork is read from: the user's own copy when they
-    /// have one, the playing track otherwise.
+    /// The track the artwork is read from, by the announcement strip and the player popover
+    /// alike: the user's own copy when they have one, the playing track otherwise.
     ///
     /// **Preferring the copy is the settled part.** A catalog track can answer the artwork
     /// read with `artworks = 0` and raise, which is why a song the user owned showed the
