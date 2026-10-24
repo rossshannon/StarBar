@@ -140,7 +140,12 @@ extension PlayerViewController {
 
 extension PlayerViewController {
 
-    func updateCurrentTrack(_ track: iTunesTrack?) {
+    /// Shows `track`, with the sleeve read from `artworkTrack` when one is given.
+    ///
+    /// Pass `PlayingTrack.artworkTrack` there, as the announcement strip does. A catalog
+    /// track can answer the artwork read with nothing even when the user's own copy of the
+    /// song has its sleeve, which left the popover blank for a song the strip showed with art.
+    func updateCurrentTrack(_ track: iTunesTrack?, artworkFrom artworkTrack: iTunesTrack? = nil) {
         defer {
             view.needsLayout = true
             playerPanelViewController.updateCurrentTrack(track)
@@ -153,7 +158,7 @@ extension PlayerViewController {
             return
         }
 
-        if let image = track.firstArtworkImage() {
+        if let image = (artworkTrack ?? track).firstArtworkImage() {
             let transition = CATransition()
             transition.duration = 0.33
             transition.type = .fade

@@ -44,7 +44,7 @@ extension PopoverViewController {
 
     override func viewDidAppear() {
         super.viewDidAppear()
-        playerViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack)
+        showCurrentTrack()
     }
 
 }
@@ -52,7 +52,14 @@ extension PopoverViewController {
 extension PopoverViewController {
 
     @objc private func iTunesPlayerDidUpdated(_ notification: Notification) {
-        playerViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack)
+        showCurrentTrack()
+    }
+
+    /// The artwork comes from the same track the strip reads it from, the user's own copy
+    /// first, so the two can't disagree. See `PlayingTrack.artworkTrack`.
+    private func showCurrentTrack() {
+        let player = iTunesPlayer.shared
+        playerViewController.updateCurrentTrack(player.currentTrack, artworkFrom: player.playing?.artworkTrack)
     }
 
 }
