@@ -1,0 +1,43 @@
+# Cross-app matching: a Spotify song in the user's Music library
+
+Measured 2026-10-28 on macOS 27.2 with Music 1.7.2, against one user's library of 8,092 tracks (8,089 of them songs), read-only. These are the facts the matching in StarBar 1.8 is built on: `SongName`, `SongMatcher`, `MusicLibraryIndex` and `LibraryMatchFinder`. Re-measure before relying on anything here for a different Music version or a very different library.
+
+## What Spotify gives to match on
+
+From `com.spotify.client.PlaybackStateChanged` (see [spotify.md](spotify.md)):
+
+- `Artist` is **one name**, the primary artist. Featured artists appear in `Name` ("Song (feat. Someone)"), never in `Artist`.
+- `Album Artist` is always empty for a song.
+- `Duration` is in milliseconds.
+- `Track ID` tells a song (`spotify:track:`) and a local file (`spotify:local:`) from an episode. Only those two are looked for.
+
+So the library side is the one that gets split into names: a Music credit like "Calvin Harris & Dua Lipa" has to match a Spotify `Artist` of "Calvin Harris".
+
+## Reading the library
+
+- **One property over the whole library is one Apple Event**: `arrayByApplyingSelector:` on the library playlist's tracks returns every track's value in order. 14 to 48 ms per property; the ten the index reads take about 250 ms together. The Swift overlay in Xcode 16.4's SDK has no `arrayByApplying(_:)`, so the index calls the selector through the Objective-C runtime.
+- The lists come back in the same order, so they are paired by position. A track added or removed between two reads would pair one song's name with another's ID, so the persistent IDs are read first and again last, and the read is thrown away if they differ.
+- Rejected: a `whose` query per song (8 to 18 ms, but one per field combination and no fuzzy matching), Music's `search` command (matches word prefixes, ignores accents, but treats `'` and `’` as different, and Music 1.7.2's `only` enumeration has `names`, not `songs`), and the iTunesLibrary framework (an entitlement and a privacy prompt).
+- Music's `whose` ignores case, accents and `'` against `’`. A compound `whose` with `_and` fails from JXA but works from AppleScript.
+
+## What the library looks like
+
+These decided the rules more than any guess did.
+
+| | Count |
+|---|---|
+| Titles shared by different artists | 397 |
+| Songs held in both a studio and a live or remix version | 75 |
+| Songs held two or more times | 442 |
+| ... of which the copies' ratings disagree | 103 |
+| Credits a comma, `&`, "and" or `+` would split into one-word names, as "Earth, Wind & Fire" | 52 |
+
+- Titles shared by different artists are why the artist must match: title alone would rate the wrong song.
+- Studio against live or remix is why those words are kept, so the two count as different songs. That is a choice, not a measurement, and can be revisited.
+- Duplicates with conflicting ratings are why one copy is chosen, by a fixed order (the album Spotify named, then a rated copy, then the nearest length, then the most played), and only that copy is rated (also a choice: rating every copy was the alternative).
+- Those one-word splits are why a comma, `&`, "and" or `+` splits a credit only when one of the resulting names has more than one word. The first version split them all, and "Earth" alone matched. The cost is a duo of one-word names ("Simon & Garfunkel" and any real pair like it) matching only on the whole credit.
+
+## Open
+
+- Recall against real Spotify listening (how many songs the user owns are found) has not been measured yet.
+- No rating has been written through this path to a real library yet.
