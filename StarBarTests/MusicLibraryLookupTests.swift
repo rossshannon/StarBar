@@ -331,4 +331,63 @@ final class MusicLibraryLookupTests: XCTestCase {
         XCTAssertNotEqual(playing.scriptingClassCode, MusicTrackClass.fileTrack)
     }
 
+    // MARK: - The bulk read behind matching another player's songs
+
+    /// `MusicLibraryIndex` reads each property of every track in one Apple Event, then pairs
+    /// the lists up by position. That is only right if every list comes back in the same
+    /// order. Checked against tracks found one at a time by persistent ID, at rows spread
+    /// across the library: a list in another order, or shifted by one, gives a row another
+    /// song's name, and a rating chosen for one song would be written to another.
+    func testTheBulkReadKeepsEachTracksPropertiesTogether() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let started = Date()
+        let songs = try XCTUnwrap(MusicLibraryIndex.readSongs(pid: pid), "the bulk read failed")
+        let read = Date()
+        _ = SongMatcher(library: songs)
+        // For the record: the menu bar waits for both the first time a Spotify song plays
+        print(String(format: "Bulk read of %ld songs: %.0f ms; matcher built in %.0f ms",
+                     songs.count, read.timeIntervalSince(started) * 1000, Date().timeIntervalSince(read) * 1000))
+        try XCTSkipUnless(songs.count > 4, "the library has too few songs to sample")
+
+        let rows = Set([0, songs.count / 4, songs.count / 2, 3 * songs.count / 4, songs.count - 1]).sorted()
+        // Rows that can be told apart, or a shifted list could pair a song with its twin
+        XCTAssertGreaterThan(Set(rows.map { songs[$0].name }).count, 1, "the sampled songs all have one name")
+
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        for row in rows {
+            let song = songs[row]
+            let found = tracks.filtered(using: NSPredicate(format: "persistentID == %@", song.persistentID)) as? [iTunesTrack] ?? []
+            let track = try XCTUnwrap(found.first, "row \(row): no track has persistent ID \(song.persistentID)")
+            XCTAssertEqual(found.count, 1, "row \(row): a persistent ID names one track")
+            XCTAssertEqual(track.name, song.name, "row \(row)")
+            XCTAssertEqual(track.artist, song.artist, "row \(row)")
+            XCTAssertEqual(track.album ?? "", song.album, "row \(row)")
+            XCTAssertEqual(track.albumArtist ?? "", song.albumArtist, "row \(row)")
+            XCTAssertEqual(track.rating ?? 0, song.rating, "row \(row)")
+            XCTAssertEqual(track.ratingKind == .computed, song.isRatingComputed, "row \(row)")
+            XCTAssertEqual(track.playedCount ?? 0, song.playedCount, "row \(row)")
+        }
+    }
+
+    /// The media kind comes back in a shape `MusicLibraryIndex.code(_:)` can read. If it came
+    /// back in another, every track would be dropped as "not a song" and nothing would ever
+    /// match, with nothing in the log to say why. Checked track by track, so it holds for a
+    /// library of anything.
+    func testTheBulkReadKeepsSongsAndOnlySongs() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let indexed = Set(try XCTUnwrap(MusicLibraryIndex.readSongs(pid: pid), "the bulk read failed").map { $0.persistentID })
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        try XCTSkipUnless(tracks.count > 0, "the library is empty")
+
+        var sawASong = false
+        for position in Set([0, tracks.count / 3, 2 * tracks.count / 3, tracks.count - 1]).sorted() {
+            let track = try XCTUnwrap(tracks.object(at: position) as? iTunesTrack, "track \(position) unreadable")
+            let id = try XCTUnwrap(track.persistentID, "track \(position) has no persistent ID")
+            let isSong = track.mediaKind == .music
+            sawASong = sawASong || isSong
+            XCTAssertEqual(indexed.contains(id), isSong, "track \(position) (\(track.name ?? "?"))")
+        }
+        try XCTSkipUnless(sawASong, "none of the sampled tracks is a song")
+    }
+
 }

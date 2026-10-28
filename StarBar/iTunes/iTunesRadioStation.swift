@@ -381,7 +381,8 @@ extension iTunesRadioStation {
             os_log("%{public}s[%{public}ld], %{public}s: no track to add to the library", ((#file as NSString).lastPathComponent), #line, #function)
             return completion(nil)
         }
-        guard let library = librarySource(of: iTunes), let libraryPlaylist = libraryPlaylist(of: library) else {
+        guard let library = iTunesRadioStation.librarySource(of: iTunes),
+              let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: no library source to add to", ((#file as NSString).lastPathComponent), #line, #function)
             return completion(nil)
         }
@@ -444,8 +445,8 @@ extension iTunesRadioStation {
     /// remembers the answer, so everything on screen agrees about which track it means.
     func libraryCopy(of track: iTunesTrack) -> iTunesTrack? {
         guard let iTunes = iTunes,
-              let library = librarySource(of: iTunes),
-              let libraryPlaylist = libraryPlaylist(of: library) else { return nil }
+              let library = iTunesRadioStation.librarySource(of: iTunes),
+              let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else { return nil }
 
         // Keep the track the search returned. Don't look it up again by database ID:
         // `object(withID:)` matches a track's `id`, which is a different number, and answers
@@ -454,12 +455,13 @@ extension iTunesRadioStation {
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) })
     }
 
-    /// The user's own library, as opposed to a shared library, an iPod or the store
-    private func librarySource(of iTunes: iTunesApplication) -> iTunesSource? {
+    /// The user's own library, as opposed to a shared library, an iPod or the store.
+    /// Static so `MusicLibraryIndex` can ask its own connection to Music.
+    static func librarySource(of iTunes: iTunesApplication) -> iTunesSource? {
         return iTunes.sources?().first(where: { ($0 as? iTunesSource)?.kind == .library }) as? iTunesSource
     }
 
-    private func libraryPlaylist(of source: iTunesSource) -> iTunesPlaylist? {
+    static func libraryPlaylist(of source: iTunesSource) -> iTunesPlaylist? {
         return source.libraryPlaylists?().firstObject as? iTunesPlaylist
     }
 
