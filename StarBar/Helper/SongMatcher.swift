@@ -95,8 +95,9 @@ struct SongMatcher {
         let artist = SongName.artist(query.artist)
         guard !title.core.isEmpty, !artist.isEmpty else { return [] }
 
-        // The query's artist is compared whole and never split: "Earth" must not find
-        // "Earth, Wind & Fire"
+        // The query's artist is compared whole and never split, and the library keeps a band
+        // named like a list whole (`SongName.artists(_:)`), so "Earth" can't find "Earth,
+        // Wind & Fire"
         let credited = Set([artist]).union(title.featured)
         let album = SongName.album(query.album)
         return (byTitle[title.core] ?? [])

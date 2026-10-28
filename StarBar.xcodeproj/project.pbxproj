@@ -49,6 +49,7 @@
 		DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */; };
 		5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000001B1 /* PlayingTrack.swift */; };
 		5A7E1A000000000000000B0A /* MusicLibraryIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B09 /* MusicLibraryIndex.swift */; };
+		5A7E1A000000000000000B0E /* LibraryMatchFinder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0D /* LibraryMatchFinder.swift */; };
 		DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */; };
 		DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = DB334388235E102600B45ED0 /* ExceptionCatcher.m */; };
 		DB424A352307259800230C7E /* iTunesTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB424A342307259800230C7E /* iTunesTrack.swift */; };
@@ -98,6 +99,7 @@
 		5A7E1A000000000000000B06 /* SongNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B05 /* SongNameTests.swift */; };
 		5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B07 /* SongMatcherTests.swift */; };
 		5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */; };
+		5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */; };
 		5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */; };
 		FB0000000000000000000008 /* iTunesRadioStationRatingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000007 /* iTunesRadioStationRatingTests.swift */; };
 		FB0000000000000000000006 /* FakeTrack.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB0000000000000000000005 /* FakeTrack.swift */; };
@@ -187,6 +189,7 @@
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000001B1 /* PlayingTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayingTrack.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B09 /* MusicLibraryIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryIndex.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000B0D /* LibraryMatchFinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMatchFinder.swift; sourceTree = "<group>"; };
 		DB2797722306F0EC00DDE3EB /* iTunesApplication.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesApplication.swift; sourceTree = "<group>"; };
 		DB334387235E102500B45ED0 /* StarBar-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "StarBar-Bridging-Header.h"; sourceTree = "<group>"; };
 		DB334388235E102600B45ED0 /* ExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = ExceptionCatcher.m; sourceTree = "<group>"; };
@@ -238,6 +241,7 @@
 		5A7E1A000000000000000B05 /* SongNameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongNameTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B07 /* SongMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcherTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryIndexTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMatchFinderTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottleTests.swift; sourceTree = "<group>"; };
 		FB0000000000000000000007 /* iTunesRadioStationRatingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesRadioStationRatingTests.swift; sourceTree = "<group>"; };
 		FB0000000000000000000005 /* FakeTrack.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeTrack.swift; sourceTree = "<group>"; };
@@ -368,6 +372,7 @@
 				5A7E1A000000000000000B05 /* SongNameTests.swift */,
 				5A7E1A000000000000000B07 /* SongMatcherTests.swift */,
 				5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */,
+				5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */,
 				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
 				FB0000000000000000000007 /* iTunesRadioStationRatingTests.swift */,
 				FB0000000000000000000005 /* FakeTrack.swift */,
@@ -429,6 +434,7 @@
 				DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */,
 				5A7E1A00000000000001B1 /* PlayingTrack.swift */,
 				5A7E1A000000000000000B09 /* MusicLibraryIndex.swift */,
+				5A7E1A000000000000000B0D /* LibraryMatchFinder.swift */,
 				DB106C6A22C661F900502D7C /* PlayInfo.swift */,
 			);
 			path = iTunes;
@@ -691,6 +697,7 @@
 				DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */,
 				5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */,
 				5A7E1A000000000000000B0A /* MusicLibraryIndex.swift in Sources */,
+				5A7E1A000000000000000B0E /* LibraryMatchFinder.swift in Sources */,
 				DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */,
 				DB424A3A23086C1200230C7E /* MovableImageView.swift in Sources */,
 				5A7E1A00000000000001A4 /* AddToLibrarySpinnerView.swift in Sources */,
@@ -777,6 +784,7 @@
 				5A7E1A000000000000000B06 /* SongNameTests.swift in Sources */,
 				5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */,
 				5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */,
+				5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */,
 				5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */,
 				FB0000000000000000000008 /* iTunesRadioStationRatingTests.swift in Sources */,
 				FB0000000000000000000006 /* FakeTrack.swift in Sources */,

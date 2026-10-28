@@ -323,6 +323,25 @@ extension iTunesRadioStation {
         }))
     }
 
+    /// Save a rating chosen for a song playing in another player to the user's own copy of
+    /// it in Music.
+    ///
+    /// Logged every time, with both songs and the rating the copy had, because a rating
+    /// cannot be undone and a wrong match would otherwise be invisible: the log is the only
+    /// way to find out which song took it and what it held before. The copy's identity is its
+    /// persistent ID, so a rating held for it is replaced by another for the same copy and
+    /// sent at once for any other song, whichever player that song is in.
+    ///
+    /// Main thread only, like `setRating(_:on:)`.
+    func setRating(_ rating: Int, on match: LibraryMatch) {
+        let song = match.song
+        let had = match.track.userRating
+        os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
+        ratingWriter.rate(RatingWriter.Request(rating: rating, track: match.track, name: song.name, songIdentity: {
+            song.persistentID
+        }))
+    }
+
     /// Send a rating still waiting for the throttle window, now. `applicationWillTerminate`
     /// calls this so quitting inside the window doesn't lose the last rating.
     func flushHeldRatingWrite() {
@@ -453,6 +472,31 @@ extension iTunesRadioStation {
         // with a dead specifier that reads as empty and rates as nothing.
         return libraryMatches(for: track, in: libraryPlaylist)
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) })
+    }
+
+    /// The library's track for a song `MusicLibraryIndex` found, by persistent ID, or nil
+    /// when it is gone or is no longer that song.
+    ///
+    /// The index can be a library notification behind, so the track's name and artist are
+    /// read and compared with the index's before anything uses it: a rating written to the
+    /// wrong song cannot be undone. Kept as the track the search returned, never looked up
+    /// again by database ID (see `libraryCopy(of:)`).
+    ///
+    /// A few Apple Events, under the short timeout so a hung Music can't hold the menu bar.
+    /// Main thread, like every read through this connection.
+    func libraryTrack(for song: LibrarySong) -> iTunesTrack? {
+        return MenuBarRatingControl.withShortTimeout { iTunes -> iTunesTrack? in
+            guard let library = iTunesRadioStation.librarySource(of: iTunes),
+                  let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else { return nil }
+            let predicate = NSPredicate(format: "persistentID == %@", song.persistentID)
+            let found = libraryPlaylist.tracks?().filtered(using: predicate) as? [iTunesTrack] ?? []
+            guard found.count == 1, let track = found.first,
+                  track.name == song.name, track.artist == song.artist else {
+                os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
+                return nil
+            }
+            return track
+        } ?? nil
     }
 
     /// The user's own library, as opposed to a shared library, an iPod or the store.
