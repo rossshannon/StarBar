@@ -443,11 +443,22 @@ extension TrackAnnouncementController {
     /// No pending hold as for Music's heart: `SpotifyAccount` already shows the user's click
     /// at once and is the only source of the like, so there is no stale read to hold it over.
     func spotifyLikeDidChange(_ read: (_ identity: String) -> (showsHeart: Bool, isLiked: Bool)) {
-        guard let current = currentAnnouncement, current.source == .spotify else { return }
+        // A song the user has in Music shows that copy's heart, not Spotify's like
+        guard let current = currentAnnouncement, current.namesSpotify else { return }
         let answer = read(current.identity)
         updateStrip(identity: current.identity) {
             TrackAnnouncement(copying: $0, isFavorited: answer.isLiked, showsSpotifyHeart: answer.showsHeart)
         }
+    }
+
+    /// The user's own Music copy of the Spotify song on the strip was found, or has gone:
+    /// redraw the bottom row from the live read (the copy's stars and heart, or Spotify's
+    /// name and like) without touching the hold timer. The strip doesn't wait for the
+    /// library to be read, so the copy can turn up a moment after the strip does.
+    func libraryMatchDidChange(identity: String) {
+        guard let current = currentAnnouncement, hideTimer != nil, current.source == .spotify,
+              current.identity == identity else { return }
+        refreshFromMusic(current)
     }
 
     /// The track a rating chosen in StarBar belongs to: the one Music is playing.
@@ -525,7 +536,8 @@ extension TrackAnnouncementController {
             rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
             isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? false,
             artwork: live.artwork,
-            canRate: live.canRate ?? true,
+            // Spotify keeps no rating of its own; only a copy in Music gives one
+            canRate: live.canRate ?? (snapshot.source == .music),
             source: snapshot.source,
             showsSpotifyHeart: live.showsSpotifyHeart ?? false
         )
@@ -555,8 +567,9 @@ extension TrackAnnouncementController {
         presenter.refresh(updated)
     }
 
-    /// Redraw the strip's rating and heart from Music alone, for a notification that says
-    /// nothing dependable about the track it is for
+    /// Redraw the strip's rating and heart from the live read alone, for a notification
+    /// that says nothing dependable about the track it is for, or a Spotify song whose Music
+    /// copy was found or lost
     private func refreshFromMusic(_ current: TrackAnnouncement) {
         guard let live = loadLive(identity: current.identity, wantsArtwork: false) else { return }
         let updated = TrackAnnouncement(

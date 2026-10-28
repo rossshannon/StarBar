@@ -1320,6 +1320,94 @@ extension TrackAnnouncementControllerTests {
         XCTAssertTrue(clock.pendingOneShot === hold)
     }
 
+    // MARK: Spotify songs the user has in Music
+
+    /// The loader found the user's own copy: its stars and heart, as the menu bar shows them
+    private var musicCopy: TrackAnnouncementController.LiveTrackLoad {
+        return .loaded(.init(rating: 80, isFavorited: true, canRate: true, showsSpotifyHeart: false))
+    }
+
+    func testASpotifySongTheUserHasShowsItsMusicRating() throws {
+        live = musicCopy
+        update(spotify())
+
+        let shown = try XCTUnwrap(presenter.shown.last)
+        XCTAssertEqual(shown.source, .spotify)
+        XCTAssertFalse(shown.namesSpotify)
+        XCTAssertEqual(shown.rating, 80)
+        XCTAssertTrue(shown.isFavorited)
+        XCTAssertEqual(shown.accessibilityLabel, "Now playing: Song spotify:track:S by Artist, in Spotify. "
+                       + RatingControl.accessibilityDescription(rating: 80, isFavorited: true))
+    }
+
+    func testASpotifySongIsNamedAsSpotifysWhenTheLoaderSaysNothing() {
+        // Spotify keeps no rating, so stars need a copy in Music to come from
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.last?.namesSpotify, true)
+    }
+
+    func testACopyFoundAfterTheStripWentUpRedrawsIt() {
+        // The strip doesn't wait for the library to be read
+        live = .loaded(.init(canRate: false))
+        update(spotify())
+        let hold = clock.pendingOneShot
+        live = musicCopy
+
+        controller.libraryMatchDidChange(identity: "spotify:track:S")
+
+        XCTAssertEqual(presenter.shown.count, 1, "not a new strip")
+        XCTAssertEqual(presenter.refreshed.last?.namesSpotify, false)
+        XCTAssertEqual(presenter.refreshed.last?.rating, 80)
+        XCTAssertTrue(clock.pendingOneShot === hold, "the hold timer is untouched")
+    }
+
+    func testACopyThatHasGoneGivesSpotifyItsNameBack() {
+        live = musicCopy
+        update(spotify())
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: true))
+
+        controller.libraryMatchDidChange(identity: "spotify:track:S")
+
+        XCTAssertEqual(presenter.refreshed.last?.namesSpotify, true)
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, false, "Spotify's like, not the copy's heart")
+    }
+
+    func testACopyFoundForAnotherSongIsIgnored() {
+        update(spotify())
+        live = musicCopy
+
+        controller.libraryMatchDidChange(identity: "spotify:track:T")
+        update(snapshot(track: "A"))
+        controller.libraryMatchDidChange(identity: "A")
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testASpotifyLikeLeavesTheMusicCopysHeartAlone() {
+        live = musicCopy
+        update(spotify())
+
+        controller.spotifyLikeDidChange { _ in
+            XCTFail("the heart on show is the Music copy's")
+            return (true, false)
+        }
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testARatingChosenForTheCopyShowsAtOnce() {
+        live = musicCopy
+        update(spotify())
+
+        controller.userDidRate(40)
+
+        XCTAssertEqual(presenter.refreshed.last?.rating, 40)
+        // And Music answering with the old rating before the write lands doesn't undo it
+        controller.libraryMatchDidChange(identity: "spotify:track:S")
+        XCTAssertEqual(presenter.refreshed.last?.rating, 40)
+    }
+
 }
 
 // MARK: - Fakes

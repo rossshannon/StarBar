@@ -8,6 +8,12 @@
 import Foundation
 import os
 
+extension Notification.Name {
+    /// `LibraryMatchFinder` has an answer for a song. `userInfo[SpotifyPlayer.identityKey]`
+    /// is the song's Track ID. Posted on the main thread.
+    static let libraryMatchDidChange = Notification.Name("StarBarLibraryMatchDidChange")
+}
+
 /// The user's own Music copy of a song another player is playing: what its stars show, and
 /// where a rating chosen for it goes.
 struct LibraryMatch {
@@ -49,17 +55,20 @@ final class LibraryMatchFinder {
 
     private let index: MusicLibraryIndex
     private let fetchTrack: (LibrarySong) -> iTunesTrack?
+    private let center: NotificationCenter
 
     /// The last answer, and which song it answered for
     private var answer: (identity: String, match: LibraryMatch?)?
-    /// Counts questions, so the answer to one that a newer one overtook is dropped
-    private var questions = 0
+    /// The song last asked about, so answers about one asked before it are dropped
+    private var asking: String?
 
     /// The parameters are for the tests
     init(index: MusicLibraryIndex = .shared,
-         fetchTrack: @escaping (LibrarySong) -> iTunesTrack? = { iTunesRadioStation.shared.libraryTrack(for: $0) }) {
+         fetchTrack: @escaping (LibrarySong) -> iTunesTrack? = { iTunesRadioStation.shared.libraryTrack(for: $0) },
+         center: NotificationCenter = .default) {
         self.index = index
         self.fetchTrack = fetchTrack
+        self.center = center
     }
 
     /// The user's own copy of the Spotify song `info` describes, or nil when they have none,
@@ -67,27 +76,30 @@ final class LibraryMatchFinder {
     ///
     /// `completion` runs on the main thread: before this returns when the answer is already
     /// known, later when the library has to be read first, and never when a question about
-    /// another song overtakes this one, since nobody is showing this one any more.
+    /// another song overtakes this one, since nobody is showing this one any more. Each new
+    /// answer is also posted as `.libraryMatchDidChange`, for the strip.
     func match(for info: SpotifyPlayInfo, completion: @escaping (LibraryMatch?) -> Void) {
         guard let identity = info.trackID, let query = info.songQuery else { return completion(nil) }
         if let answer = answer, answer.identity == identity, !index.needsRead {
             return completion(answer.match)
         }
-        questions += 1
-        let question = questions
+        asking = identity
         index.withMatcher { [weak self] matcher in
-            guard let self = self, question == self.questions else { return }
+            guard let self = self, self.asking == identity else { return }
             let match = self.find(query, identity: identity, in: matcher)
             self.answer = (identity, match)
             completion(match)
+            self.center.post(name: .libraryMatchDidChange, object: self, userInfo: [SpotifyPlayer.identityKey: identity])
         }
     }
 
-    /// The answer already given for this song, asking Music nothing. Nil when there isn't
-    /// one, or when the library has changed since it was given.
+    /// The last answer given for this song, asking Music nothing, or nil when there isn't
+    /// one. Kept after a library change until a new answer replaces it: the copy it names was
+    /// fetched by persistent ID and is still the right one to show unless the change removed
+    /// it, and dropping it in the meantime would flicker the strip from stars to "Spotify"
+    /// and back after every rating.
     func knownMatch(for identity: String?) -> LibraryMatch? {
-        guard let identity = identity, let answer = answer, answer.identity == identity,
-              !index.needsRead else { return nil }
+        guard let identity = identity, let answer = answer, answer.identity == identity else { return nil }
         return answer.match
     }
 

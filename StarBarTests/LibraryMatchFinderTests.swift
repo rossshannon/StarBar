@@ -43,7 +43,7 @@ final class LibraryMatchFinderTests: XCTestCase {
             guard !self.gone.contains(song.persistentID) else { return nil }
             return FakeTrack(name: song.name, artist: song.artist, album: song.album,
                              persistentID: song.persistentID, rating: song.rating)
-        })
+        }, center: center)
     }
 
     private func spotify(_ name: String, by artist: String, on album: String = "",
@@ -133,9 +133,39 @@ final class LibraryMatchFinderTests: XCTestCase {
                                    isRatingComputed: false, playedCount: 0))
         center.post(name: .ITLibraryDidChange, object: nil)
 
-        XCTAssertNil(finder.knownMatch(for: "spotify:track:4uLU6hMCjMI75M1A2tKUQC"), "the old answer may be wrong now")
         XCTAssertEqual(ask(spotify("Dreams", by: "The Cranberries"))?.song.persistentID, "00000000000000C3")
         XCTAssertEqual(reads, 2)
+    }
+
+    func testTheLastAnswerIsKeptUntilANewOneReplacesIt() {
+        // So the strip doesn't drop the stars while the library is read again after a rating
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        center.post(name: .ITLibraryDidChange, object: nil)
+
+        XCTAssertEqual(finder.knownMatch(for: "spotify:track:4uLU6hMCjMI75M1A2tKUQC")?.song, zombie)
+    }
+
+    func testEachNewAnswerIsPostedForTheStrip() {
+        var posted: [String] = []
+        let observer = center.addObserver(forName: .libraryMatchDidChange, object: finder, queue: nil) {
+            posted.append($0.userInfo?[SpotifyPlayer.identityKey] as? String ?? "?")
+        }
+        defer { center.removeObserver(observer) }
+
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+
+        XCTAssertEqual(posted, ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"], "once: the second answer came from memory")
+    }
+
+    func testTwoAsksAboutOneSongBothHearBack() {
+        // The menu bar and anything else asking about the song now playing
+        let both = expectation(description: "both answered")
+        both.expectedFulfillmentCount = 2
+        finder.match(for: spotify("Zombie", by: "The Cranberries")) { _ in both.fulfill() }
+        finder.match(for: spotify("Zombie", by: "The Cranberries")) { _ in both.fulfill() }
+
+        wait(for: [both], timeout: 5)
     }
 
     func testAQuestionOvertakenByAnotherIsNeverAnswered() {

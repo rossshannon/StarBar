@@ -141,6 +141,7 @@ extension AppDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyArtworkDidLoad(_:)), name: .spotifyArtworkDidLoad, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyLikeDidChange, object: SpotifyAccount.shared)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyAccountDidChange, object: SpotifyAccount.shared)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.libraryMatchDidChange(_:)), name: .libraryMatchDidChange, object: LibraryMatchFinder.shared)
         // Spotify sends nothing at launch either. Its song is read in the background, and
         // only with permission already granted; it is recorded as seen when it arrives.
         if !MenuBarRatingControl.isUITesting {
@@ -148,6 +149,8 @@ extension AppDelegate {
                 controller?.recordSeen(info.snapshot)
             }
             SpotifyPlayer.shared.start()
+            // Read lazily, the first time a Spotify song is looked for in the library
+            MusicLibraryIndex.shared.start()
             // After the player, so a restored sign-in can ask about the song already playing
             SpotifyAccount.shared.start()
         }
@@ -182,6 +185,11 @@ extension AppDelegate {
         TrackAnnouncementController.shared?.spotifyLikeDidChange(AppDelegate.spotifyHeart(for:))
     }
 
+    @objc private func libraryMatchDidChange(_ notification: Notification) {
+        guard let identity = notification.userInfo?[SpotifyPlayer.identityKey] as? String else { return }
+        TrackAnnouncementController.shared?.libraryMatchDidChange(identity: identity)
+    }
+
     /// What the strip's Spotify heart shows for a song: nothing without a sign-in; signed in,
     /// filled when Spotify has said the song is liked and outlined otherwise, as the menu bar
     static func spotifyHeart(for identity: String) -> (showsHeart: Bool, isLiked: Bool) {
@@ -198,14 +206,26 @@ extension AppDelegate {
     }
 
     /// A Spotify song's artwork, if it has already arrived, and its like as far as StarBar
-    /// knows it. No rating: Spotify keeps none. No Apple Events and no network; artwork that
-    /// comes later reaches the strip through `attachArtwork`.
+    /// knows it, or, for a song the user has in Music, that copy's rating and heart. No
+    /// network, and no Apple Events for a song they don't have; artwork that comes later
+    /// reaches the strip through `attachArtwork`, and a copy found later through
+    /// `libraryMatchDidChange`.
     static func loadSpotifyLiveTrack(for identity: String) -> TrackAnnouncementController.LiveTrackLoad {
         if let playing = SpotifyPlayer.shared.latest?.trackID, playing != identity {
             return .trackChanged
         }
         var live = TrackAnnouncementController.LiveTrack()
         live.artwork = SpotifyPlayer.shared.artwork(for: identity)
+        if let match = LibraryMatchFinder.shared.knownMatch(for: identity) {
+            // The same copy the menu bar shows and rates, read live as a Music song's is,
+            // since the index's rating is as old as the last library read
+            let read = MenuBarRatingControl.withShortTimeout { _ in (match.track.userRating, match.track.isFavorited) }
+            live.canRate = true
+            live.rating = read?.0
+            live.isFavorited = read?.1
+            live.showsSpotifyHeart = false
+            return .loaded(live)
+        }
         live.canRate = false
         // What StarBar already knows; a like that arrives later redraws through
         // spotifyLikeDidChange
