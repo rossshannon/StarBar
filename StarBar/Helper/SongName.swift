@@ -171,18 +171,23 @@ enum SongName {
     // MARK: - Artists and albums
 
     /// One artist's name, folded, without a leading "The": "The Cranberries" and
-    /// "Cranberries" are the same band.
+    /// "Cranberries" are the same band, and so is "Cranberries, The", the way some libraries
+    /// sort it.
     static func artist(_ raw: String) -> String {
-        let name = squash(fold(raw))
+        var text = fold(raw)
+        if let match = trailingThe.firstMatch(in: text, range: whole(text)) {
+            text = substring(text, match.range(at: 1))
+        }
+        let name = squash(text)
         return name.hasPrefix("the ") ? String(name.dropFirst(4)) : name
     }
 
-    /// Every artist a credit names, and the whole credit too: "Simon & Garfunkel" gives
-    /// "simon", "garfunkel" and "simon and garfunkel", and "Cave, Nick & Warren Ellis" gives
-    /// "warren ellis" among others.
+    /// Every artist a credit names, and the whole credit too: "Calvin Harris & Dua Lipa"
+    /// gives "calvin harris", "dua lipa" and "calvin harris and dua lipa", and "Cave, Nick &
+    /// Warren Ellis" gives "warren ellis" among others. A band named like a list stays one
+    /// name: see `artistNames(in:)`.
     ///
-    /// Only for the library's side. Spotify's artist is one name, compared whole, so that
-    /// "Earth" can't match "Earth, Wind & Fire".
+    /// Only for the library's side. Spotify's artist is one name, compared whole.
     static func artists(_ raw: String) -> Set<String> {
         var names = Set(artistNames(in: raw))
         let credit = artist(raw)
@@ -261,7 +266,11 @@ enum SongName {
     private static let featuredBare = pattern(#"\s+(feat\.?|ft\.?|featuring)\s+(.*)$"#)
     private static let bracketed = pattern(#"\s*[\(\[]([^\(\)\[\]]*)[\)\]]"#)
     private static let dashSuffix = pattern(#"\s+-\s+(.*)$"#)
-    private static let artistSeparator = pattern(#"\s*(?:,|;|/|\s&\s|\sand\s|\sx\s|\sfeat\.?\s|\sft\.?\s|\sfeaturing\s|\swith\s|\svs\.?\s|\s\+\s)\s*"#)
+    private static let trailingThe = pattern(#"^(.+?)\s*,\s*the$"#)
+    /// Always between two artists
+    private static let creditSeparator = pattern(#"\s*(?:;|/|\sx\s|\sfeat\.?\s|\sft\.?\s|\sfeaturing\s|\swith\s|\svs\.?\s)\s*"#)
+    /// Between two artists, or inside a band's name: see `artistNames(in:)`
+    private static let listSeparator = pattern(#"\s*(?:,|\s&\s|\sand\s|\s\+\s)\s*"#)
 
     /// Typographic marks to their typewriter forms, and letters that Unicode does not take
     /// apart into a base letter and an accent
@@ -276,18 +285,35 @@ enum SongName {
 
     // MARK: - Helpers
 
-    /// The artists a credit names, each folded as `artist(_:)`
+    /// The artists a credit names, each folded as `artist(_:)`.
+    ///
+    /// "feat.", "with", "vs.", "x", ";" and "/" always separate artists. A comma, "&", "and"
+    /// or "+" does only when a name it separates is more than one word. A list of single
+    /// words is a band's name -- "Earth, Wind & Fire", "Simon & Garfunkel", "Echo & the
+    /// Bunnymen" -- and splitting it would let a band called Earth match Earth, Wind & Fire's
+    /// "September". The cost is a duo credited by single names, like "Drake & Future", which
+    /// then only matches whole.
     private static func artistNames(in credit: String) -> [String] {
-        let folded = fold(credit)
-        var names: [String] = []
-        var start = folded.startIndex
-        for match in artistSeparator.matches(in: folded, range: whole(folded)) {
-            guard let range = Range(match.range, in: folded) else { continue }
-            names.append(artist(String(folded[start..<range.lowerBound])))
+        return split(fold(credit), on: creditSeparator).flatMap { segment -> [String] in
+            let names = split(segment, on: listSeparator).map { artist($0) }.filter { !$0.isEmpty }
+            guard names.count > 1, names.contains(where: { $0.contains(" ") }) else {
+                return [artist(segment)]
+            }
+            return names
+        }.filter { !$0.isEmpty }
+    }
+
+    /// `text` in pieces, cut at every match of `separator`
+    private static func split(_ text: String, on separator: NSRegularExpression) -> [String] {
+        var parts: [String] = []
+        var start = text.startIndex
+        for match in separator.matches(in: text, range: whole(text)) {
+            guard let range = Range(match.range, in: text) else { continue }
+            parts.append(String(text[start..<range.lowerBound]))
             start = range.upperBound
         }
-        names.append(artist(String(folded[start...])))
-        return names.filter { !$0.isEmpty }
+        parts.append(String(text[start...]))
+        return parts
     }
 
     /// The rules are constants, so one that doesn't compile is a programming error

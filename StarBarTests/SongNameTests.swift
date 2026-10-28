@@ -47,6 +47,12 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.artist("The Cranberries"), SongName.artist("Cranberries"))
     }
 
+    func testATheSortedToTheEndComesOffToo() {
+        // As the measured library has it
+        XCTAssertEqual(SongName.artist("Cure, The"), "cure")
+        XCTAssertEqual(SongName.artists("Cure, The"), ["cure"])
+    }
+
     func testPtReadsAsPart() {
         XCTAssertEqual(core("Pt. 2"), core("Part 2"))
     }
@@ -149,10 +155,22 @@ final class SongNameTests: XCTestCase {
     // MARK: - Artists
 
     func testACreditNamesEachArtistAndItsWhole() {
-        XCTAssertEqual(SongName.artists("Simon & Garfunkel"), ["simon", "garfunkel", "simon and garfunkel"])
+        XCTAssertEqual(SongName.artists("Calvin Harris & Dua Lipa"), ["calvin harris", "dua lipa", "calvin harris and dua lipa"])
         XCTAssertTrue(SongName.artists("Cave, Nick & Warren Ellis").contains("warren ellis"))
         XCTAssertTrue(SongName.artists("Calvin Harris feat. Rihanna").contains("rihanna"))
         XCTAssertTrue(SongName.artists("Aaliyah ft. Timbaland").contains("timbaland"))
+    }
+
+    func testABandNamedLikeAListStaysOneName() {
+        // Split, these would let a band called Earth match Earth, Wind & Fire
+        XCTAssertEqual(SongName.artists("Earth, Wind & Fire"), ["earth wind and fire"])
+        XCTAssertEqual(SongName.artists("Simon & Garfunkel"), ["simon and garfunkel"])
+        XCTAssertEqual(SongName.artists("Florence + The Machine"), ["florence and the machine"])
+        XCTAssertEqual(SongName.artists("Crosby, Stills, Nash & Young"), ["crosby stills nash and young"])
+    }
+
+    func testAFeaturedArtistIsSplitOffEvenAsOneWord() {
+        XCTAssertEqual(SongName.artists("Drake feat. Rihanna"), ["drake", "rihanna", "drake feat rihanna"])
     }
 
     // MARK: - Albums
