@@ -208,12 +208,12 @@ final class MusicLibraryIndex {
                       let tracks = playlist.tracks?() else { return Reading() }
                 var columns = Columns()
                 for key in MusicLibraryIndex.keys {
-                    columns[key] = tracks.arrayByApplying(NSSelectorFromString(key))
+                    columns[key] = MusicLibraryIndex.column(key, of: tracks)
                 }
                 // The IDs once more, last. If they still match the first read, no track was
                 // added, removed or moved between the reads, so row i is one track in every
                 // column. A count check alone would miss one song deleted and another added.
-                columns[MusicLibraryIndex.recheckKey] = tracks.arrayByApplying(NSSelectorFromString("persistentID"))
+                columns[MusicLibraryIndex.recheckKey] = MusicLibraryIndex.column("persistentID", of: tracks)
                 return Reading(columns: columns)
             } as? Reading
             guard failures.failures == 0 else { return nil }
@@ -226,6 +226,19 @@ final class MusicLibraryIndex {
 
     /// The persistent IDs as read again after every other column
     static let recheckKey = "persistentID (again)"
+
+    private static let arrayByApplyingSelector = NSSelectorFromString("arrayByApplyingSelector:")
+
+    /// One property of every track, in one Apple Event: `-[SBElementArray
+    /// arrayByApplyingSelector:]`. Called by its Objective-C name, which is the documented
+    /// one: Xcode 16.4's SDK has no `arrayByApplying(_:)`. Nil when the method isn't there.
+    /// Background queue only.
+    private static func column(_ key: String, of tracks: SBElementArray) -> [Any]? {
+        typealias Apply = @convention(c) (AnyObject, Selector, Selector) -> NSArray?
+        guard tracks.responds(to: arrayByApplyingSelector) else { return nil }
+        let apply = unsafeBitCast(tracks.method(for: arrayByApplyingSelector), to: Apply.self)
+        return apply(tracks, arrayByApplyingSelector, NSSelectorFromString(key)) as? [Any]
+    }
 
     // MARK: - Columns to songs
 
