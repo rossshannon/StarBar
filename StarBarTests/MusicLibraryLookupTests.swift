@@ -361,33 +361,32 @@ final class MusicLibraryLookupTests: XCTestCase {
             XCTAssertEqual(found.count, 1, "row \(row): a persistent ID names one track")
             XCTAssertEqual(track.name, song.name, "row \(row)")
             XCTAssertEqual(track.artist, song.artist, "row \(row)")
-            XCTAssertEqual(track.album ?? "", song.album, "row \(row)")
             XCTAssertEqual(track.albumArtist ?? "", song.albumArtist, "row \(row)")
-            XCTAssertEqual(track.rating ?? 0, song.rating, "row \(row)")
-            XCTAssertEqual(track.ratingKind == .computed, song.isRatingComputed, "row \(row)")
-            XCTAssertEqual(track.playedCount ?? 0, song.playedCount, "row \(row)")
         }
     }
 
-    /// The media kind comes back in a shape `MusicLibraryIndex.code(_:)` can read. If it came
-    /// back in another, every track would be dropped as "not a song" and nothing would ever
-    /// match, with nothing in the log to say why. Checked track by track, so it holds for a
-    /// library of anything.
-    func testTheBulkReadKeepsSongsAndOnlySongs() throws {
-        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
-        let indexed = Set(try XCTUnwrap(MusicLibraryIndex.readSongs(pid: pid), "the bulk read failed").map { $0.persistentID })
+    /// `LibraryMatchFinder` leaves out any copy whose media kind doesn't read as a song. If
+    /// the kind came back in another shape, every copy would be left out and nothing would
+    /// ever match, with only "isn't a song" in the log. Most of a music library is songs, so
+    /// a sample with none read as one means the read is wrong, not the library.
+    func testASongReadsAsASong() throws {
         let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
         try XCTSkipUnless(tracks.count > 0, "the library is empty")
 
-        var sawASong = false
-        for position in Set([0, tracks.count / 3, 2 * tracks.count / 3, tracks.count - 1]).sorted() {
+        let positions = Set(stride(from: 0, to: tracks.count, by: max(1, tracks.count / 20))).sorted()
+        var songs = 0
+        for position in positions {
             let track = try XCTUnwrap(tracks.object(at: position) as? iTunesTrack, "track \(position) unreadable")
-            let id = try XCTUnwrap(track.persistentID, "track \(position) has no persistent ID")
-            let isSong = track.mediaKind == .music
-            sawASong = sawASong || isSong
-            XCTAssertEqual(indexed.contains(id), isSong, "track \(position) (\(track.name ?? "?"))")
+            let song = LibrarySong(persistentID: track.persistentID ?? "", name: track.name ?? "",
+                                   artist: track.artist ?? "", albumArtist: "")
+            if let read = song.reading(track, choosing: true) {
+                songs += 1
+                XCTAssertEqual(read.album, track.album ?? "", "track \(position)")
+                XCTAssertEqual(read.rating, track.rating ?? 0, "track \(position)")
+                XCTAssertEqual(read.playedCount, track.playedCount ?? 0, "track \(position)")
+            }
         }
-        try XCTSkipUnless(sawASong, "none of the sampled tracks is a song")
+        XCTAssertGreaterThan(songs, 0, "none of \(positions.count) tracks sampled read as a song")
     }
 
 }

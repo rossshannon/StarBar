@@ -11,13 +11,20 @@ import ScriptingBridge
 import iTunesLibrary
 import os
 
-/// The user's Music library as plain values, ready for `SongMatcher`.
+/// The names in the user's Music library, ready for `SongMatcher` to find the copies of a
+/// song by.
 ///
-/// Read with one Apple Event per property over the whole library playlist. Measured on
-/// 2026-10-28 with a library of 8,092 tracks: each such read took 14 to 48 ms, and the
-/// properties the matcher needs about 250 ms together. Asking Music about one song at a time
-/// instead (`whose`) would apply Music's idea of equal names, not the matcher's, so a
-/// remaster would never find the original.
+/// Read with one Apple Event per property over the whole library playlist. Asking Music
+/// about one song at a time instead (`whose`) would apply Music's idea of equal names, not
+/// the matcher's, so a remaster would never find the original.
+///
+/// Only what finding a song takes is read here: the persistent ID, name, artist and album
+/// artist. What chooses between copies (album, length, rating, plays) and whether a copy is
+/// a song at all are read by `LibraryMatchFinder` for the few copies a song has. Measured
+/// 2026-10-28 on 8,092 tracks, a bulk read took 14 to 48 ms; on 2026-10-29, on the same
+/// library, the ten properties first read took 0.35 s, 4.4 s and 25 s at three launches.
+/// Music answers Apple Events one at a time, so while one of these is out, every other
+/// read StarBar makes waits behind it. Each read's timing is logged.
 ///
 /// - The reads run on a background queue with a connection of their own, addressed to
 ///   Music's process ID once `NSRunningApplication` says it is running, so a Music that has
@@ -25,9 +32,9 @@ import os
 /// - The index goes stale on either library notification, or when Music is a different
 ///   process from the one it was read from, and is read again the next time it is asked
 ///   for. It is never polled: see "Library changes are event-driven" in AGENTS.md.
-/// - Its ratings are only good for choosing between copies of a song. Anything that shows a
-///   rating or writes one reads the chosen track again by persistent ID, because the index
-///   can be a notification behind, and the legacy notification has come ten seconds late.
+/// - Nothing it holds is shown or written. Anything that shows a rating or writes one reads
+///   the chosen track again by persistent ID, because the index can be a notification
+///   behind, and the legacy notification has come ten seconds late.
 ///
 /// State is read and written on the main thread only. Only `Columns` and `LibrarySong`
 /// values cross from the background queue.
@@ -37,12 +44,11 @@ final class MusicLibraryIndex {
 
     /// The properties read, one Apple Event each. Cocoa keys from Music's dictionary, the
     /// same names as the vendored header's.
-    static let keys = ["persistentID", "name", "artist", "albumArtist", "album", "duration",
-                       "rating", "ratingKind", "playedCount", "mediaKind"]
+    static let keys = ["persistentID", "name", "artist", "albumArtist"]
 
     /// The columns a song can't do without. A short one of these makes the whole read
     /// useless; a short one of the rest is only left out of it (`unpairedColumns(in:)`).
-    static let requiredKeys: Set<String> = ["persistentID", "name", "artist", "mediaKind"]
+    static let requiredKeys: Set<String> = ["persistentID", "name", "artist"]
 
     /// One bulk read: an array per key, in library order. Values are whatever Scripting
     /// Bridge decoded them to; `songs(from:)` sorts that out. **A column can be shorter than
@@ -52,8 +58,8 @@ final class MusicLibraryIndex {
     /// before.
     typealias Columns = [String: [Any]]
 
-    /// How long one Apple Event of the read may take, in ticks of 1/60 s. Each took at most
-    /// 48 ms when measured; this is for a Music that has hung, so the queue is not held.
+    /// How long one Apple Event of the read may take, in ticks of 1/60 s. This is for a Music
+    /// that has hung, so the queue is not held.
     static let readTimeout = 600
 
     private let queue = DispatchQueue(label: "com.rossshannon.starbar.library-index", qos: .userInitiated)
@@ -176,6 +182,8 @@ final class MusicLibraryIndex {
     /// which treats a nil result as an exception
     private struct Reading {
         var columns: Columns?
+        /// Milliseconds each column took, in the order read
+        var timings: [(key: String, ms: Double)] = []
     }
 
     /// Counts the Apple Events Music answered with an error. Scripting Bridge reports a
@@ -219,16 +227,24 @@ final class MusicLibraryIndex {
                 guard let source = iTunesRadioStation.librarySource(of: application),
                       let playlist = iTunesRadioStation.libraryPlaylist(of: source),
                       let tracks = playlist.tracks?() else { return Reading() }
-                var columns = Columns()
+                var reading = Reading(columns: Columns())
+                func read(_ key: String, as name: String) {
+                    let started = DispatchTime.now().uptimeNanoseconds
+                    reading.columns?[name] = MusicLibraryIndex.column(key, of: tracks)
+                    reading.timings.append((name, Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000))
+                }
                 for key in MusicLibraryIndex.keys {
-                    columns[key] = MusicLibraryIndex.column(key, of: tracks)
+                    read(key, as: key)
                 }
                 // The IDs once more, last. If they still match the first read, no track was
                 // added, removed or moved between the reads, so row i is one track in every
                 // column. A count check alone would miss one song deleted and another added.
-                columns[MusicLibraryIndex.recheckKey] = MusicLibraryIndex.column("persistentID", of: tracks)
-                return Reading(columns: columns)
+                read("persistentID", as: MusicLibraryIndex.recheckKey)
+                return reading
             } as? Reading
+            if let timings = reading?.timings, !timings.isEmpty {
+                os_log("%{public}s[%{public}ld], %{public}s: read %{public}s", ((#file as NSString).lastPathComponent), #line, #function, timings.map { String(format: "%@ in %.0f ms", $0.key, $0.ms) }.joined(separator: ", "))
+            }
             guard failures.failures == 0 else { return nil }
             return reading?.columns
         } catch {
@@ -255,8 +271,10 @@ final class MusicLibraryIndex {
 
     // MARK: - Columns to songs
 
-    /// The library's songs, from one bulk read. Only songs: not music videos, podcasts or the
-    /// rest, which no music player's song should match.
+    /// The library's tracks, from one bulk read: names only, with the album, length, rating
+    /// and plays left for `LibraryMatchFinder` to read for the copies it finds. Every kind
+    /// of track, music videos included, since telling them apart is another column; the
+    /// finder checks that a copy is a song before it is shown or rated.
     ///
     /// Nil when the columns a song needs don't line up, which means the library changed
     /// during the read or Music left one of those values out: pairing one track's name with
@@ -275,31 +293,15 @@ final class MusicLibraryIndex {
         let names = column("name")
         let artists = column("artist")
         let albumArtists = column("albumArtist")
-        let albums = column("album")
-        let durations = column("duration")
-        let ratings = column("rating")
-        let ratingKinds = column("ratingKind")
-        let playedCounts = column("playedCount")
-        let mediaKinds = column("mediaKind")
 
         var songs: [LibrarySong] = []
         songs.reserveCapacity(ids.count)
         for row in ids.indices {
-            guard code(mediaKinds[row]) == iTunesEMdK.music.rawValue,
-                  let persistentID = ids[row] as? String, !persistentID.isEmpty,
+            guard let persistentID = ids[row] as? String, !persistentID.isEmpty,
                   let name = names[row] as? String,
                   let artist = artists[row] as? String else { continue }
-            songs.append(LibrarySong(
-                persistentID: persistentID,
-                name: name,
-                artist: artist,
-                albumArtist: albumArtists[row] as? String ?? "",
-                album: albums[row] as? String ?? "",
-                duration: (durations[row] as? NSNumber)?.doubleValue,
-                rating: (ratings[row] as? NSNumber)?.intValue ?? 0,
-                isRatingComputed: code(ratingKinds[row]) == iTunesERtK.computed.rawValue,
-                playedCount: (playedCounts[row] as? NSNumber)?.intValue ?? 0
-            ))
+            songs.append(LibrarySong(persistentID: persistentID, name: name, artist: artist,
+                                     albumArtist: albumArtists[row] as? String ?? ""))
         }
         return songs
     }
@@ -325,24 +327,12 @@ final class MusicLibraryIndex {
     }
 
     /// The columns other than `requiredKeys` that don't have a value for every track, which
-    /// `songs(from:)` leaves out. Only `duration` has been seen short, for songs Music had no
-    /// length for, but any property Music can answer "missing value" for can be.
+    /// `songs(from:)` leaves out. Only `duration` has been seen short (it isn't read any
+    /// more), for songs Music had no length for, but any property Music can answer "missing
+    /// value" for can be.
     static func unpairedColumns(in columns: Columns) -> [String] {
         guard let count = columns["persistentID"]?.count else { return [] }
         return keys.filter { !requiredKeys.contains($0) && columns[$0]?.count != count }
-    }
-
-    /// An enumerated value's four-character code. Scripting Bridge hands one back as a number
-    /// or as a descriptor depending on how it was asked for, so take either, like
-    /// `SpotifyPlayer.state(_:)`.
-    static func code(_ value: Any) -> FourCharCode? {
-        if let number = value as? NSNumber {
-            return number.uint32Value
-        }
-        if let descriptor = value as? NSAppleEventDescriptor {
-            return descriptor.enumCodeValue != 0 ? descriptor.enumCodeValue : descriptor.typeCodeValue
-        }
-        return nil
     }
 
 }

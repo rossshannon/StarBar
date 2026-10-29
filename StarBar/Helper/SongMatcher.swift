@@ -8,7 +8,11 @@
 
 import Foundation
 
-/// One track of the user's Music library, as it was when the library was read
+/// One track of the user's Music library.
+///
+/// `MusicLibraryIndex` reads the persistent ID and the names, which are what finding a song
+/// takes. The rest only chooses between copies, and `LibraryMatchFinder` reads it from Music
+/// for the few copies a song has; until then it holds these defaults.
 struct LibrarySong: Equatable {
     /// Music's persistent ID, the hexadecimal string Scripting Bridge reads. What the track is
     /// fetched by before anything is shown or written.
@@ -16,14 +20,14 @@ struct LibrarySong: Equatable {
     let name: String
     let artist: String
     let albumArtist: String
-    let album: String
+    var album: String = ""
     /// Seconds, or nil when Music had none
-    let duration: Double?
+    var duration: Double? = nil
     /// 0 to 100. Only used to choose between copies: what is shown is read from Music again.
-    let rating: Int
+    var rating: Int = 0
     /// True when Music worked the rating out from the album's rather than the user setting it
-    let isRatingComputed: Bool
-    let playedCount: Int
+    var isRatingComputed: Bool = false
+    var playedCount: Int = 0
 
     /// The user chose this track's rating themselves
     var isRatedByUser: Bool {
@@ -102,7 +106,17 @@ struct SongMatcher {
         let album = SongName.album(query.album)
         return (byTitle[title.core] ?? [])
             .filter { !$0.artists.isDisjoint(with: credited) && $0.versions == title.versions }
-            .sorted { SongMatcher.choose($0, over: $1, album: album, duration: query.duration) }
+            .sorted { SongMatcher.choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
+            .map { $0.song }
+    }
+
+    /// Copies of the song `query` names, the one to show and rate first: the order
+    /// `copies(of:)` gives, for copies whose album, length, rating and plays have since been
+    /// read
+    static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
+        let album = SongName.album(query.album)
+        return copies.map { (song: $0, album: SongName.album($0.album)) }
+            .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
             .map { $0.song }
     }
 
@@ -114,22 +128,23 @@ struct SongMatcher {
     /// Which of two copies comes first: the one on the album the query names, then one the
     /// user rated themselves, then the nearest in length, then the one played most. The
     /// persistent ID settles a tie, so the order never depends on the library's.
-    private static func choose(_ a: Entry, over b: Entry, album: String, duration: Double?) -> Bool {
-        let albumA = closeness(of: a.album, to: album), albumB = closeness(of: b.album, to: album)
-        if albumA != albumB {
-            return albumA < albumB
+    private static func choose(_ a: LibrarySong, _ albumA: String, over b: LibrarySong, _ albumB: String,
+                               album: String, duration: Double?) -> Bool {
+        let closeA = closeness(of: albumA, to: album), closeB = closeness(of: albumB, to: album)
+        if closeA != closeB {
+            return closeA < closeB
         }
-        if a.song.isRatedByUser != b.song.isRatedByUser {
-            return a.song.isRatedByUser
+        if a.isRatedByUser != b.isRatedByUser {
+            return a.isRatedByUser
         }
-        let lengthA = distance(a.song.duration, duration), lengthB = distance(b.song.duration, duration)
+        let lengthA = distance(a.duration, duration), lengthB = distance(b.duration, duration)
         if lengthA != lengthB {
             return lengthA < lengthB
         }
-        if a.song.playedCount != b.song.playedCount {
-            return a.song.playedCount > b.song.playedCount
+        if a.playedCount != b.playedCount {
+            return a.playedCount > b.playedCount
         }
-        return a.song.persistentID < b.song.persistentID
+        return a.persistentID < b.persistentID
     }
 
     /// 0 for the same album, 1 when one name holds all the other's words ("abba gold" and

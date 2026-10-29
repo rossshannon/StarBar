@@ -12,11 +12,6 @@ import XCTest
 
 final class MusicLibraryIndexTests: XCTestCase {
 
-    private let song = iTunesEMdK.music.rawValue
-    private let musicVideo = iTunesEMdK.musicVideo.rawValue
-    private let user = iTunesERtK.user.rawValue
-    private let computed = iTunesERtK.computed.rawValue
-
     /// Columns for `rows`, each a track's values in `MusicLibraryIndex.keys` order, with the
     /// persistent IDs read again unchanged
     private func columns(_ rows: [[Any]]) -> MusicLibraryIndex.Columns {
@@ -28,71 +23,64 @@ final class MusicLibraryIndexTests: XCTestCase {
         return columns
     }
 
-    private func row(_ id: String, _ name: String, by artist: String, albumArtist: Any = "", album: Any = "",
-                     duration: Any = 200.0, rating: Any = 0, kind: Any? = nil, played: Any = 0, media: Any? = nil) -> [Any] {
-        return [id, name, artist, albumArtist, album, duration, rating, kind ?? NSNumber(value: user),
-                played, media ?? NSNumber(value: song)]
+    private func row(_ id: Any, _ name: Any, by artist: Any, albumArtist: Any = "") -> [Any] {
+        return [id, name, artist, albumArtist]
     }
 
     // MARK: - Columns to songs
 
+    func testOnlyNamesAreReadInBulk() {
+        // Ten properties took 25 s at one launch on 2026-10-29. The rest is read for the few
+        // copies a song has, by `LibraryMatchFinder`.
+        XCTAssertEqual(MusicLibraryIndex.keys, ["persistentID", "name", "artist", "albumArtist"])
+    }
+
     func testEachRowBecomesASong() throws {
         let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
-            row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries", album: "No Need to Argue",
-                duration: 306.5, rating: 80, played: 12),
-            row("B2", "Linger", by: "The Cranberries", rating: 60, kind: NSNumber(value: computed))
+            row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries"),
+            row("B2", "Linger", by: "The Cranberries")
         ])))
 
         XCTAssertEqual(songs, [
-            LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "The Cranberries",
-                        album: "No Need to Argue", duration: 306.5, rating: 80, isRatingComputed: false, playedCount: 12),
-            LibrarySong(persistentID: "B2", name: "Linger", artist: "The Cranberries", albumArtist: "", album: "",
-                        duration: 200, rating: 60, isRatingComputed: true, playedCount: 0)
+            LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "The Cranberries"),
+            LibrarySong(persistentID: "B2", name: "Linger", artist: "The Cranberries", albumArtist: "")
         ])
     }
 
-    func testOnlySongsAreKept() throws {
+    func testEveryKindOfTrackIsKept() throws {
+        // Telling a song from a music video would be another column, so the finder checks the
+        // copies it finds instead
         let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
             row("A1", "Zombie", by: "The Cranberries"),
-            row("B2", "Zombie", by: "The Cranberries", media: NSNumber(value: musicVideo))
+            row("B2", "Zombie", by: "The Cranberries")
         ])))
 
-        XCTAssertEqual(songs.map { $0.persistentID }, ["A1"])
-    }
-
-    func testAnEnumeratedValueCanComeAsADescriptor() throws {
-        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
-            row("A1", "Zombie", by: "The Cranberries", kind: NSAppleEventDescriptor(enumCode: computed),
-                media: NSAppleEventDescriptor(enumCode: song))
-        ])))
-
-        XCTAssertEqual(songs.first?.isRatingComputed, true)
+        XCTAssertEqual(songs.map { $0.persistentID }, ["A1", "B2"])
     }
 
     func testAValueMusicCouldNotGiveIsLeftOut() throws {
         // A missing value comes back as NSNull or a null descriptor, never as a string
         let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
-            row("A1", "Zombie", by: "The Cranberries", albumArtist: NSNull(), album: NSNull(),
-                duration: NSNull(), rating: NSNull(), played: NSAppleEventDescriptor.null())
+            row("A1", "Zombie", by: "The Cranberries", albumArtist: NSNull()),
+            row("B2", "Linger", by: "The Cranberries", albumArtist: NSAppleEventDescriptor.null())
         ])))
 
-        XCTAssertEqual(songs.first, LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries",
-                                                albumArtist: "", album: "", duration: nil, rating: 0,
-                                                isRatingComputed: false, playedCount: 0))
+        XCTAssertEqual(songs.map { $0.albumArtist }, ["", ""])
     }
 
     func testATrackWithNoNameOrIDIsSkipped() throws {
-        var rows = [row("A1", "Zombie", by: "The Cranberries"), row("", "Linger", by: "The Cranberries"),
-                    row("C3", "Dreams", by: "The Cranberries")]
-        rows[2][1] = NSNull()
-
-        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns(rows)))
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
+            row("A1", "Zombie", by: "The Cranberries"),
+            row("", "Linger", by: "The Cranberries"),
+            row("C3", NSNull(), by: "The Cranberries"),
+            row("D4", "Dreams", by: NSNull())
+        ])))
 
         XCTAssertEqual(songs.map { $0.persistentID }, ["A1"])
     }
 
     func testAShortColumnASongNeedsThrowsTheReadAway() {
-        for key in ["persistentID", "name", "artist", "mediaKind"] {
+        for key in ["persistentID", "name", "artist"] {
             var columns = self.columns([row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")])
             columns[key]?.removeLast()
             if key == "persistentID" { columns[MusicLibraryIndex.recheckKey]?.removeLast() }
@@ -111,29 +99,28 @@ final class MusicLibraryIndexTests: XCTestCase {
     func testAShortColumnOfTheRestIsLeftOut() throws {
         // Measured 2026-10-29: Scripting Bridge drops a missing value from the array rather
         // than hold its place, so three songs with no length left `duration` three short and
-        // threw away every read of a real library. Paired by row, every length after the gap
+        // threw away every read of a real library. Paired by row, every value after the gap
         // would have been the song before's.
-        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", album: "No Need to Argue", duration: 306.0),
-                                    row("B2", "Linger", by: "The Cranberries", album: "Everybody Else", duration: 274.0),
-                                    row("C3", "Dreams", by: "The Cranberries", album: "Everybody Else", duration: 271.0)])
-        columns["duration"] = [306.0, 271.0]
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries"),
+                                    row("B2", "Linger", by: "The Cranberries"),
+                                    row("C3", "Dreams", by: "The Cranberries", albumArtist: "The Cranberries")])
+        columns["albumArtist"] = ["The Cranberries", "The Cranberries"]
 
         let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns))
 
         XCTAssertEqual(songs.map { $0.persistentID }, ["A1", "B2", "C3"])
-        XCTAssertEqual(songs.map { $0.duration }, [nil, nil, nil], "no length rather than the wrong one")
-        XCTAssertEqual(songs.map { $0.album }, ["No Need to Argue", "Everybody Else", "Everybody Else"], "the rest still read")
-        XCTAssertEqual(MusicLibraryIndex.unpairedColumns(in: columns), ["duration"])
+        XCTAssertEqual(songs.map { $0.albumArtist }, ["", "", ""], "no album artist rather than the wrong one")
+        XCTAssertEqual(MusicLibraryIndex.unpairedColumns(in: columns), ["albumArtist"])
     }
 
     func testAMissingColumnOfTheRestIsLeftOut() throws {
-        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries", rating: 80)])
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries")])
         columns["albumArtist"] = nil
 
         let song = try XCTUnwrap(MusicLibraryIndex.songs(from: columns)?.first)
 
         XCTAssertEqual(song.albumArtist, "")
-        XCTAssertEqual(song.rating, 80)
+        XCTAssertEqual(song.name, "Zombie")
     }
 
     func testIDsThatMovedDuringTheReadThrowItAway() {
@@ -160,7 +147,7 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertEqual(MusicLibraryIndex.misalignment(in: missing), "no column for artist")
 
         var shortOptional = columns(two)
-        shortOptional["rating"]?.removeLast()
+        shortOptional["albumArtist"]?.removeLast()
         XCTAssertNil(MusicLibraryIndex.misalignment(in: shortOptional), "left out, not a reason to throw the read away")
 
         var moved = columns(two)
@@ -177,14 +164,6 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertNil(MusicLibraryIndex.songs(from: columns([])))
     }
 
-    func testCodes() {
-        XCTAssertEqual(MusicLibraryIndex.code(NSNumber(value: song)), song)
-        XCTAssertEqual(MusicLibraryIndex.code(NSAppleEventDescriptor(enumCode: song)), song)
-        XCTAssertEqual(MusicLibraryIndex.code(NSAppleEventDescriptor(typeCode: song)), song)
-        XCTAssertNil(MusicLibraryIndex.code("song"))
-        XCTAssertNil(MusicLibraryIndex.code(NSNull()))
-    }
-
     // MARK: - When Music is read
 
     /// A fake library and Music process, counting reads. `gate`, when set, holds each read
@@ -192,8 +171,7 @@ final class MusicLibraryIndexTests: XCTestCase {
     private final class FakeMusic {
         var pid: pid_t? = 501
         var songs: [LibrarySong]? = [LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries",
-                                                  albumArtist: "", album: "", duration: nil, rating: 80,
-                                                  isRatingComputed: false, playedCount: 0)]
+                                                  albumArtist: "")]
         var gate: DispatchSemaphore?
         private let lock = NSLock()
         private var _reads = 0
@@ -341,8 +319,7 @@ final class MusicLibraryIndexTests: XCTestCase {
         music.songs = nil
         XCTAssertNil(ask())
 
-        music.songs = [LibrarySong(persistentID: "B2", name: "Zombie", artist: "The Cranberries", albumArtist: "",
-                                   album: "", duration: nil, rating: 0, isRatingComputed: false, playedCount: 0)]
+        music.songs = [LibrarySong(persistentID: "B2", name: "Zombie", artist: "The Cranberries", albumArtist: "")]
         XCTAssertEqual(zombie(in: ask())?.persistentID, "B2")
         XCTAssertEqual(music.reads, 2)
     }

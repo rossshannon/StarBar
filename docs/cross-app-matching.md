@@ -15,9 +15,10 @@ So the library side is the one that gets split into names: a Music credit like "
 
 ## Reading the library
 
-- **One property over the whole library is one Apple Event**: `arrayByApplyingSelector:` on the library playlist's tracks returns every track's value in order. 14 to 48 ms per property; the ten the index reads take about 250 ms together. The Swift overlay in Xcode 16.4's SDK has no `arrayByApplying(_:)`, so the index calls the selector through the Objective-C runtime.
+- **One property over the whole library is one Apple Event**: `arrayByApplyingSelector:` on the library playlist's tracks returns every track's value in order. 14 to 48 ms per property on 2026-10-28, ten properties in about 250 ms. The Swift overlay in Xcode 16.4's SDK has no `arrayByApplying(_:)`, so the index calls the selector through the Objective-C runtime.
+- **But the time varies a great deal.** On 2026-10-29 the same read of eleven columns of the same library took about 0.35 s, 4.4 s and 25 s at three launches of StarBar a few minutes apart. Music answers Apple Events one at a time, so while the read is out every other read StarBar makes waits behind it. So the index reads only what finding a song takes (persistent ID, name, artist, album artist), and `LibraryMatchFinder` reads the rest (media kind, album, length, rating, plays) from the few copies a song has. Each column's time is logged; what made the slow reads slow is not known.
 - The lists come back in the same order, so they are paired by position. A track added or removed between two reads would pair one song's name with another's ID, so the persistent IDs are read first and again last, and the read is thrown away if they differ.
-- **A missing value is left out of the list, not kept as a placeholder.** Measured 2026-10-29 on 8,093 tracks: `duration` came back with 8,090 values, because three songs (all file tracks) had no length, while JXA's own bulk read of the same property keeps a placeholder for each. Paired by position, every length after the first gap would have belonged to the song before. So the columns a song needs (persistent ID, name, artist, media kind) must be full length or the read is thrown away, and any other short column is left out of that read. The first build on a real library threw every read away for this reason; the tests' fakes had full columns.
+- **A missing value is left out of the list, not kept as a placeholder.** Measured 2026-10-29 on 8,093 tracks: `duration` came back with 8,090 values, because three songs (all file tracks) had no length, while JXA's own bulk read of the same property keeps a placeholder for each. Paired by position, every length after the first gap would have belonged to the song before. So the columns a song needs (persistent ID, name, artist) must be full length or the read is thrown away, and any other short column is left out of that read. The first build on a real library threw every read away for this reason; the tests' fakes had full columns.
 - Rejected: a `whose` query per song (8 to 18 ms, but one per field combination and no fuzzy matching), Music's `search` command (matches word prefixes, ignores accents, but treats `'` and `’` as different, and Music 1.7.2's `only` enumeration has `names`, not `songs`), and the iTunesLibrary framework (an entitlement and a privacy prompt).
 - Music's `whose` ignores case, accents and `'` against `’`. A compound `whose` with `_and` fails from JXA but works from AppleScript.
 
@@ -40,5 +41,6 @@ These decided the rules more than any guess did.
 
 ## Open
 
-- Recall against real Spotify listening (how many songs the user owns are found) has not been measured yet.
+- Recall against real Spotify listening (how many songs the user owns are found) has not been measured yet. The first live checks, 2026-10-29: "The Maker - Live" by Daniel Lanois found the user's "The Maker (Live)" on the same live album, rated five stars, and not the studio version they also have; four other songs were correctly not found.
+- Whether the names-only read is reliably quick has not been measured yet.
 - No rating has been written through this path to a real library yet.

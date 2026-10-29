@@ -22,6 +22,8 @@ final class FakeTrack: NSObject, iTunesTrack {
     let persistentID: String
     let databaseID: Int
     let duration: Double
+    let mediaKind: iTunesEMdK
+    let playedCount: Int
 
     private var storedRating: Int
     private var storedRatingKind: iTunesERtK
@@ -39,13 +41,16 @@ final class FakeTrack: NSObject, iTunesTrack {
 
     init(name: String = "Song", artist: String = "Artist", album: String = "Album",
          persistentID: String = "0123456789ABCDEF", databaseID: Int = 1, duration: Double = 240,
-         rating: Int = 0, ratingKind: iTunesERtK = .user, favorited: Bool = false) {
+         rating: Int = 0, ratingKind: iTunesERtK = .user, favorited: Bool = false,
+         mediaKind: iTunesEMdK = .music, playedCount: Int = 0) {
         self.name = name
         self.artist = artist
         self.album = album
         self.persistentID = persistentID
         self.databaseID = databaseID
         self.duration = duration
+        self.mediaKind = mediaKind
+        self.playedCount = playedCount
         self.storedRating = rating
         self.storedRatingKind = ratingKind
         self.storedFavorited = favorited
