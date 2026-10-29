@@ -73,11 +73,14 @@ final class MenuBarRatingControl {
         return gestureRecognizer
     }()
     private let panGestureRecognizer = NSPanGestureRecognizer()
-    /// Turns the menu bar's click into a rating, a favorite toggle, or a drag
-    private lazy var clickController: RatingClickController = {
+    /// The mouse the stars read, when a test supplies one
+    private let pointer: RatingPointer?
+    /// Turns the menu bar's click into a rating, a favorite toggle, or a drag. Not private
+    /// only so the tests can click.
+    private(set) lazy var clickController: RatingClickController = {
         let controller = RatingClickController(
             ratingControl: ratingControl,
-            pointer: StatusButtonPointer(button: statusItem.button, ratingControl: ratingControl),
+            pointer: pointer ?? StatusButtonPointer(button: statusItem.button, ratingControl: ratingControl),
             // With half stars on, the left half of a star (or the gap before it) sets a half star
             behavior: { UserDefaults.standard.allowHalfStar ? .both : .full },
             isStopped: { [unowned self] in !self.playbackState.canInteract },
@@ -106,6 +109,17 @@ final class MenuBarRatingControl {
     /// How long a heart the user set wins over Music's reads
     static let favoriteWriteWindow: TimeInterval = 2.0
 
+    /// The rating the user just chose, which song it was for, and when to stop believing it,
+    /// as `pendingFavorite`. A rating can wait in `RatingWriter` for up to
+    /// `iTunesRadioStation.ratingSaveDelay` before Music has it, and a read in that time put
+    /// the old stars back: the library read a rating's own library change starts, answering
+    /// for the user's copy of a Spotify song (the second review, 2026-10-29).
+    private var pendingRating: (value: Int, trackID: String?, expires: Date)?
+
+    /// How long a rating the user chose wins over Music's reads: the save delay, plus time for
+    /// the Apple Event, as the strip allows
+    static let ratingWriteWindow: TimeInterval = iTunesRadioStation.ratingSaveDelay + 1.0
+
     /// The user's own Music copy of the Spotify song on show, whose stars and heart stand in
     /// for Spotify's. Nil whenever Music's own song or Spotify's heart is on show.
     private var libraryMatch: LibraryMatch? {
@@ -123,6 +137,16 @@ final class MenuBarRatingControl {
     /// How long to wait for that answer before showing Spotify's heart anyway. Reading the
     /// library took about 250 ms when measured, and the matcher is built after it.
     static let libraryMatchWait: TimeInterval = 1.0
+    /// The same, before the library has been read at all. The first read builds the matcher
+    /// from nothing, about 420 ms of the 1.1 s the first song took measured on 2026-10-29,
+    /// where the next five took 0.1 to 0.25 s; at 1 s, the first song after a launch showed
+    /// Spotify's heart and then swapped it for stars.
+    static let firstLibraryMatchWait: TimeInterval = 2.0
+
+    /// The wait for the answer about the song on show now
+    static var libraryMatchWaitNow: TimeInterval {
+        return LibraryMatchFinder.shared.hasReadLibrary ? libraryMatchWait : firstLibraryMatchWait
+    }
 
     /// A Spotify song is on show, or about to be: its heart, or its Music copy's stars
     private var showsSpotifySong: Bool {
@@ -254,11 +278,31 @@ final class MenuBarRatingControl {
     /// Save a rating the user chose for the song on show: to Music's own song, or to the
     /// user's copy of the Spotify song, a write the station logs in full
     private func saveRating(_ rating: Int) {
+        let expires = Date().addingTimeInterval(MenuBarRatingControl.ratingWriteWindow)
         if let match = libraryMatch {
+            pendingRating = (rating, match.song.persistentID, expires)
             iTunesRadioStation.shared.setRating(rating, on: match)
         } else {
+            pendingRating = (rating, iTunesPlayer.shared.playing?.persistentID, expires)
             iTunesRadioStation.shared.setRating(rating, on: ratingTarget)
         }
+    }
+
+    /// Whether a rating shortcut has somewhere to put a rating, saying why not in the log.
+    /// The user's copy of a Spotify song is checked as a click on its stars is: a copy deleted
+    /// in Music keeps its stars until Music's notification comes, and the library is read
+    /// again instead. The write would fail safely, since it finds the copy by persistent ID,
+    /// but the stars would say it was saved.
+    private func shortcutCanRate() -> Bool {
+        guard ratingTarget != nil else {
+            logUnratableShortcut()
+            return false
+        }
+        if let match = libraryMatch, copyIsInMusic(match) == false {
+            lookForSpotifySongAgain()
+            return false
+        }
+        return true
     }
     
     func updateGestureRecognizerBehavior() {
@@ -266,8 +310,10 @@ final class MenuBarRatingControl {
         clickGestureRecognizer.delaysPrimaryMouseButtonEvents = playbackState.canInteract
     }
 
-    init(widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main })) {
+    /// `pointer` is for the tests; the menu bar reads the real mouse
+    init(widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main }), pointer: RatingPointer? = nil) {
         self.widthClock = widthClock
+        self.pointer = pointer
         menuBarIcon = MenuBarIcon(size: ratingControl.starSize)
 
         guard let button = statusItem.button else {
@@ -723,7 +769,7 @@ extension MenuBarRatingControl {
     private func toggleFavorite(of match: LibraryMatch) {
         guard playbackState.canInteract else { return }
         // Flipped on screen for a copy that has gone, the heart would say it was saved
-        guard copyIsInMusic(match) else { return lookForSpotifySongAgain() }
+        guard copyIsInMusic(match) != false else { return lookForSpotifySongAgain() }
         let isFavorited = !ratingControl.isFavorited
         os_log("%{public}s[%{public}ld], %{public}s: favourite %{public}d chosen for %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s", ((#file as NSString).lastPathComponent), #line, #function, isFavorited ? 1 : 0, match.identity, match.song.persistentID, match.song.name, match.song.artist)
         match.track.updateFavorited(isFavorited)
@@ -735,12 +781,19 @@ extension MenuBarRatingControl {
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
     }
 
-    /// Whether the user's copy of the Spotify song on show is still in Music. A copy deleted
+    /// Whether the user's copy of the Spotify song on show is still in Music: false when
+    /// Music says it has gone, or has quit, and nil when Music doesn't answer. A copy deleted
     /// there keeps its stars until Music's notification arrives, seconds later. Never asks a
     /// Music that has quit, which the question would open again, and asks under the short
     /// timeout, since this is the main thread.
-    private func copyIsInMusic(_ match: LibraryMatch) -> Bool {
-        return (MenuBarRatingControl.withShortTimeout { _ in match.track.exists?() } ?? nil) == true
+    ///
+    /// No answer is not a copy that has gone: after Music sat idle, the first click was
+    /// refused and the whole library read again (the second review, 2026-10-29). So the
+    /// gesture goes through, and a write to a copy that has gone fails rather than lands
+    /// elsewhere, since `match.track` finds it by persistent ID.
+    private func copyIsInMusic(_ match: LibraryMatch) -> Bool? {
+        guard iTunesRadioStation.shared.iTunes != nil else { return false }
+        return MenuBarRatingControl.withShortTimeoutIfAnswered { _ in match.track.exists?() } ?? nil
     }
 
     /// The copy on show has gone from Music, or Music has quit. Reading Music's player would
@@ -759,6 +812,17 @@ extension MenuBarRatingControl {
         guard let pending = pendingFavorite else { return musicSays }
         guard pending.trackID == trackID, now < pending.expires, musicSays != pending.value else {
             pendingFavorite = nil
+            return musicSays
+        }
+        return pending.value
+    }
+
+    /// The stars to show, on the same terms as the heart: the user's own rating while Music
+    /// has yet to report it, otherwise Music's
+    private func ratingToShow(musicSays: Int, trackID: String?, now: Date = Date()) -> Int {
+        guard let pending = pendingRating else { return musicSays }
+        guard pending.trackID == trackID, now < pending.expires, musicSays != pending.value else {
+            pendingRating = nil
             return musicSays
         }
         return pending.value
@@ -863,7 +927,7 @@ extension MenuBarRatingControl: RatingControlDelegate {
         // before committing: a refused gesture must not change the stars, announcement or
         // reminder. UI tests intentionally have no Music target.
         if !MenuBarRatingControl.isUITesting, let match = libraryMatch {
-            guard copyIsInMusic(match) else {
+            guard copyIsInMusic(match) != false else {
                 lookForSpotifySongAgain()
                 return false
             }
@@ -946,8 +1010,10 @@ extension MenuBarRatingControl {
         }
 
         if identity != displayedSongIdentity {
-            // A heart set for the last song, in Music or on its copy, no longer applies
+            // A heart or rating set for the last song, in Music or on its copy, no longer
+            // applies
             pendingFavorite = nil
+            pendingRating = nil
         }
         displayedSongIdentity = identity
         // One request per song, and only once signed in
@@ -970,7 +1036,7 @@ extension MenuBarRatingControl {
         // may rate that copy in the meantime
         libraryMatch = nil
         awaitingMatch = identity
-        let timer = Timer(timeInterval: MenuBarRatingControl.libraryMatchWait, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: MenuBarRatingControl.libraryMatchWaitNow, repeats: false) { [weak self] _ in
             guard let self = self, self.awaitingMatch == identity else { return }
             os_log("%{public}s[%{public}ld], %{public}s: still looking for %{public}s in the library; showing Spotify's heart meanwhile", ((#file as NSString).lastPathComponent), #line, #function, identity)
             self.cancelMatchWait()
@@ -991,6 +1057,7 @@ extension MenuBarRatingControl {
     private func showSpotifySong(_ match: LibraryMatch?) {
         let previousStars = ratingControl.stars
         let isNewMatch = match?.identity != libraryMatch?.identity
+        let isSameCopy = match != nil && match?.song.persistentID == libraryMatch?.song.persistentID
         libraryMatch = match
         guard let match = match else {
             ratingControl.update(mode: .spotify)
@@ -1007,13 +1074,18 @@ extension MenuBarRatingControl {
         // A new match brings what was read with it. After that the copy is read again each
         // time rather than kept, so a rating changed in Music shows at the next update. That
         // read is on the main thread, so under the short timeout: at the default, a Music
-        // that hangs would hold the menu bar for two minutes.
+        // that hangs would hold the menu bar for two minutes. A read Music didn't answer
+        // says nothing, where taking it would show a rated copy as unrated and a rating
+        // shortcut pressed then would count up from none (the second review, 2026-10-29):
+        // the copy's stars stay as they are, or, for a copy not on show, what was last read
+        // of it in the background comes back.
         let shown = match.shown
-            ?? MenuBarRatingControl.withShortTimeout { _ in LibraryMatch.Shown(reading: match.track) }
-            ?? LibraryMatch.Shown(rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
+            ?? MenuBarRatingControl.withShortTimeoutIfAnswered { _ in LibraryMatch.Shown(reading: match.track) }
+            ?? (isSameCopy ? LibraryMatch.Shown(rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
+                           : LibraryMatch.Shown(song: match.song))
         // Don't overwrite the stars the user is dragging across
         if !clickController.isDragging {
-            ratingControl.update(rating: shown.rating ?? 0)
+            ratingControl.update(rating: ratingToShow(musicSays: shown.rating ?? 0, trackID: match.song.persistentID))
         }
         ratingControl.updateFavorited(favoriteToShow(musicSays: shown.isFavorited,
                                                      trackID: match.song.persistentID))
@@ -1067,7 +1139,7 @@ extension MenuBarRatingControl {
         let userRating = ratedTrack?.userRating
         // Don't overwrite the stars the user is dragging across
         if !clickController.isDragging {
-            ratingControl.update(rating: userRating ?? 0)
+            ratingControl.update(rating: ratingToShow(musicSays: userRating ?? 0, trackID: playing?.persistentID))
         }
         ratingControl.updateFavorited(favoriteToShow(musicSays: playing?.favoriteTrack.isFavorited ?? false,
                                                      trackID: playing?.persistentID))
@@ -1153,6 +1225,16 @@ extension MenuBarRatingControl {
         return read(iTunes)
     }
 
+    /// `withShortTimeout`, or nil when any Apple Event the read sent failed. Scripting Bridge
+    /// answers a failed read with nil, 0 or false rather than an error, which for a rating
+    /// reads as "unrated". Main thread only, where the station counts its failures.
+    static func withShortTimeoutIfAnswered<T>(_ read: (iTunesApplication) -> T) -> T? {
+        let station = iTunesRadioStation.shared
+        let failures = station.failedEvents
+        guard let value = withShortTimeout(read), station.failedEvents == failures else { return nil }
+        return value
+    }
+
     /// Read what the rating reminder needs. Each property read is an Apple Event, so pass in
     /// values already read. Call only while Music is running.
     ///
@@ -1179,7 +1261,7 @@ extension MenuBarRatingControl {
         // The stars aren't showing for a song that can't be rated, and the keyboard must not
         // put a rating where the mouse can't -- Music would refuse it and the user would see
         // a rating that never saved
-        guard ratingTarget != nil else { return logUnratableShortcut() }
+        guard shortcutCanRate() else { return }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating + ratingChange)
         saveRating(ratingControl.rating)
@@ -1194,7 +1276,7 @@ extension MenuBarRatingControl {
             return
         }
 
-        guard ratingTarget != nil else { return logUnratableShortcut() }
+        guard shortcutCanRate() else { return }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating - ratingChange)
         saveRating(ratingControl.rating)
@@ -1233,7 +1315,7 @@ extension MenuBarRatingControl {
           return
       }
 
-      guard ratingTarget != nil else { return logUnratableShortcut() }
+      guard shortcutCanRate() else { return }
       ratingControl.update(rating: stars * 20)
       saveRating(ratingControl.rating)
       reminderController?.userDidRate()

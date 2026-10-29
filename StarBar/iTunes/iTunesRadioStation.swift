@@ -73,6 +73,11 @@ final class iTunesRadioStation {
     static let refusedWriteRereadDelay: TimeInterval = 0.5
     /// The re-read scheduled after a refused write, so several refusals mean one read
     private var refusedWriteReread: RatingReminderTimer?
+    /// How many Apple Events sent from the main thread have failed. A read that fails
+    /// answers nil, 0 or false rather than raising, so comparing this before and after a
+    /// read is how to tell "unrated" from "Music didn't answer"
+    /// (`MenuBarRatingControl.withShortTimeoutIfAnswered`).
+    private(set) var failedEvents = 0
     /// Music's library playlist on this connection, and the Music process it was found in
     /// (`libraryPlaylist()`)
     private var foundLibraryPlaylist: (pid: pid_t, playlist: iTunesPlaylist)?
@@ -641,6 +646,9 @@ extension iTunesRadioStation: SBApplicationDelegate {
     /// and this one follows a write that has already failed.
     func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
         let (eventClass, eventID) = iTunesRadioStation.classAndID(of: event)
+        if Thread.isMainThread {
+            failedEvents += 1
+        }
         os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
 
         if eventClass == "core" && eventID == "setd" {

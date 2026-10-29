@@ -321,6 +321,38 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(recorder.savedRatings, [60])
     }
 
+    // MARK: - In the menu bar
+
+    func testASongChangeInTheMenuBarDropsTheDragAndSavesNothing() {
+        // The click controller's own test above shows what cancelling does; this one shows
+        // the menu bar cancels, which a test of the controller alone can't
+        let menu = MenuBarRatingControl(widthClock: FakeClock(), pointer: pointer)
+        defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
+        let first = FakeTrack(name: "First", persistentID: "00000000000000A1", rating: 40)
+        let second = FakeTrack(name: "Second", persistentID: "00000000000000B2", rating: 80)
+        menu.applyTrackDisplay(PlayingTrack(track: first), isStopped: false, musicIsRunning: true)
+        XCTAssertEqual(menu.ratingControl.rating, 40)
+
+        XCTAssertTrue(press(at: 97, in: menu), "the press began a drag")
+        XCTAssertEqual(menu.ratingControl.rating, 100, "the stars follow the drag")
+        menu.applyTrackDisplay(PlayingTrack(track: second), isStopped: false, musicIsRunning: true)
+
+        XCTAssertFalse(menu.isDragging)
+        XCTAssertEqual(menu.ratingControl.rating, 80, "the new song's stars, not the drag's")
+        pointer.isLeftButtonHeld = false
+        XCTAssertFalse(menu.clickController.tick())
+        XCTAssertEqual(first.ratingsWritten, [])
+        XCTAssertEqual(second.ratingsWritten, [])
+        XCTAssertEqual(menu.ratingControl.rating, 80)
+    }
+
+    /// Press at `x` on the menu bar's own stars
+    private func press(at x: CGFloat, in menu: MenuBarRatingControl) -> Bool {
+        pointer.isLeftButtonHeld = true
+        pointer.imagePositionX = x
+        return menu.clickController.click()
+    }
+
     // MARK: - Accessibility
 
     func testAccessibilityDescriptions() {

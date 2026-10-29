@@ -202,7 +202,7 @@ extension AppDelegate {
             return
         }
         stripAwaitingMatch = identity
-        let timer = Timer(timeInterval: MenuBarRatingControl.libraryMatchWait, repeats: false) { [weak self] _ in
+        let timer = Timer(timeInterval: MenuBarRatingControl.libraryMatchWaitNow, repeats: false) { [weak self] _ in
             guard let self = self, self.stripAwaitingMatch == identity else { return }
             os_log("%{public}s[%{public}ld], %{public}s: still looking for %{public}s in the library; announcing it meanwhile", ((#file as NSString).lastPathComponent), #line, #function, identity)
             self.cancelStripMatchWait()
@@ -259,13 +259,17 @@ extension AppDelegate {
         }
         var live = TrackAnnouncementController.LiveTrack()
         live.artwork = SpotifyPlayer.shared.artwork(for: identity)
-        if let match = LibraryMatchFinder.shared.knownMatch(for: identity) {
+        // Without Music there is no copy to rate, as in the menu bar
+        if iTunesRadioStation.shared.iTunes != nil, let match = LibraryMatchFinder.shared.knownMatch(for: identity) {
             // The same copy the menu bar shows and rates. A new match brings what was read
-            // with it; after that it is read live, as a Music song's is.
-            let read = match.shown ?? MenuBarRatingControl.withShortTimeout { _ in LibraryMatch.Shown(reading: match.track) }
+            // with it; after that it is read live, as a Music song's is, and when Music
+            // doesn't answer, what was last read of it stands rather than "unrated".
+            let read = match.shown
+                ?? MenuBarRatingControl.withShortTimeoutIfAnswered { _ in LibraryMatch.Shown(reading: match.track) }
+                ?? LibraryMatch.Shown(song: match.song)
             live.canRate = true
-            live.rating = read?.rating
-            live.isFavorited = read?.isFavorited
+            live.rating = read.rating
+            live.isFavorited = read.isFavorited
             live.showsSpotifyHeart = false
             return .loaded(live)
         }
