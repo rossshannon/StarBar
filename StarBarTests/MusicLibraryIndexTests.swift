@@ -360,4 +360,14 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertEqual(music.reads, 2)
     }
 
+    func testEachEventOfACopiesReadHasOnlyTheTimeLeft() {
+        // A copy begun just inside the deadline could otherwise run on for eight timeouts
+        let now = Date(timeIntervalSinceReferenceDate: 0)
+
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(10), now: now), MusicLibraryIndex.copiesTimeout)
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(1), now: now), 60)
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(0.001), now: now), 1, "0 is no timeout at all")
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(-5), now: now), 1)
+    }
+
 }

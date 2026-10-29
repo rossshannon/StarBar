@@ -85,18 +85,25 @@ extension LibrarySong {
     /// and again 12 s after that. A library change sends StarBar to read the playing song's
     /// copy again, so the build that read the record read the library every 3 s for as long
     /// as the song played.
-    func reading(_ track: iTunesTrack, choosing: Bool) -> LibrarySong? {
+    ///
+    /// `beforeEachEvent` runs before each property is asked for, for the reader to shorten
+    /// the timeout as its deadline nears.
+    func reading(_ track: iTunesTrack, choosing: Bool, beforeEachEvent: @escaping () -> Void = {}) -> LibrarySong? {
+        func read<T>(_ property: () -> T) -> T {
+            beforeEachEvent()
+            return property()
+        }
         // A read that failed gives an enumeration of no known kind, so the copy is left out
-        guard track.mediaKind == .music else { return nil }
+        guard read({ track.mediaKind }) == .music else { return nil }
         var song = self
-        song.album = track.album ?? ""
-        song.rating = track.rating ?? 0
-        song.isRatingComputed = song.rating > 0 && track.ratingKind == .computed
-        song.isFavorited = track.isFavorited
+        song.album = read { track.album } ?? ""
+        song.rating = read { track.rating } ?? 0
+        song.isRatingComputed = song.rating > 0 && read { track.ratingKind } == .computed
+        song.isFavorited = read { track.isFavorited }
         if choosing {
             // Scripting Bridge gives a number 0 when its Apple Event fails
-            song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
-            song.playedCount = track.playedCount ?? 0
+            song.duration = read { track.duration }.flatMap { $0 > 0 ? $0 : nil }
+            song.playedCount = read { track.playedCount } ?? 0
         }
         return song
     }

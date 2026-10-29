@@ -554,6 +554,19 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(rated.ratingKindReads, 1)
     }
 
+    func testTheReaderHearsBeforeEachEvent() {
+        // To give each event only the time left before the deadline
+        let song = LibrarySong(persistentID: "A1", name: "Song", artist: "Artist", albumArtist: "")
+        var events = 0
+
+        _ = song.reading(FakeTrack(rating: 0), choosing: false, beforeEachEvent: { events += 1 })
+        XCTAssertEqual(events, 4, "media kind, album, rating and heart")
+
+        events = 0
+        _ = song.reading(FakeTrack(rating: 80), choosing: true, beforeEachEvent: { events += 1 })
+        XCTAssertEqual(events, 7, "and the rating's kind, the length and the plays")
+    }
+
     // MARK: - Music that doesn't answer
 
     func testAReadDuringWhichAnEventFailedIsNoAnswer() {

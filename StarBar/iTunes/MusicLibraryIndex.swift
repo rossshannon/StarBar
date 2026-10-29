@@ -71,8 +71,19 @@ final class MusicLibraryIndex {
     /// The longest reading the copies may take in all. Every event has `copiesTimeout`, and a
     /// Music answering each one just inside it would hold the queue for minutes over twelve
     /// copies; an answer that late is no use to the menu bar, so the read is given up as one
-    /// Music didn't answer, and the finder asks again later.
+    /// Music didn't answer, and the finder asks again later. Each event is given only the
+    /// time left (`timeoutLeft(until:now:)`): checked only before each copy, a copy started
+    /// just inside it could run the read on for another eight timeouts, and the last copy
+    /// was never checked at all (the third review, 2026-10-29).
     static let copiesDeadline: TimeInterval = 10
+
+    /// The timeout for the next event of a read of copies that has to finish by `deadline`,
+    /// in ticks: `copiesTimeout`, or the time left when that is less, but at least a tick,
+    /// since Scripting Bridge takes 0 for no timeout at all
+    static func timeoutLeft(until deadline: Date, now: Date = Date()) -> Int {
+        let left = Int((deadline.timeIntervalSince(now) * 60).rounded(.down))
+        return max(1, min(copiesTimeout, left))
+    }
 
     private let queue = DispatchQueue(label: "com.rossshannon.starbar.library-index", qos: .userInitiated)
 
@@ -355,9 +366,15 @@ final class MusicLibraryIndex {
         application.delegate = failures
         // The delegate isn't retained, and the connection outlives this read
         defer { application.delegate = nil }
-        application.timeout = copiesTimeout
         let deadline = Date().addingTimeInterval(copiesDeadline)
         var overran = false
+        // Before every event. After a failure, `FailureCounter` has cut the rest to a tick.
+        func shortenTimeout() {
+            if failures.failures == 0 {
+                application.timeout = MusicLibraryIndex.timeoutLeft(until: deadline)
+            }
+        }
+        shortenTimeout()
         do {
             let reading = try ExceptionCatcher.catchException {
                 guard let playlist = kept?.playlist ?? iTunesRadioStation.libraryPlaylistByID(of: application),
@@ -369,6 +386,7 @@ final class MusicLibraryIndex {
                     }
                     // The read is thrown away after a failure: ask Music nothing more
                     guard failures.failures == 0, !overran else { return nil }
+                    shortenTimeout()
                     // The name and artist are checked by the search itself, which saves an
                     // event for each
                     let predicate = NSPredicate(format: "persistentID == %@ AND name == %@ AND artist == %@",
@@ -380,13 +398,17 @@ final class MusicLibraryIndex {
                         os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
                         return nil
                     }
-                    guard let read = song.reading(track, choosing: choosing) else {
+                    guard let read = song.reading(track, choosing: choosing, beforeEachEvent: shortenTimeout) else {
                         os_log("%{public}s[%{public}ld], %{public}s: library track %{public}s, \u{201C}%{public}s\u{201D} by %{public}s, isn't a song", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist)
                         return nil
                     }
                     return read
                 })
             } as? CopiesReading
+            if !overran, Date() > deadline {
+                overran = true
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: reading %{public}ld library copies took over %{public}.0f s; giving up", ((#file as NSString).lastPathComponent), #line, #function, songs.count, MusicLibraryIndex.copiesDeadline)
+            }
             guard failures.failures == 0, !overran else { return nil }
             if let playlist = reading?.playlist {
                 copiesConnection = (pid: pid, application: application, playlist: playlist)
