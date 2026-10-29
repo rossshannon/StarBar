@@ -476,11 +476,25 @@ final class MusicLibraryLookupTests: XCTestCase {
     /// matched song played. The app subscribes to none of Music's notifications under tests,
     /// so this listens for itself, and first checks that it hears a distributed notification
     /// at all: a deaf listener would pass whatever Music did.
+    ///
+    /// One song of each iCloud status found in a sample across the library, because that read
+    /// set Music off for an Apple Music download and not for a matched file: the first cut of
+    /// this test read only the library's first track, a matched file, and passed with the
+    /// bug put back.
     func testReadingACopyAnnouncesNoLibraryChange() throws {
         let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
-        let (first, _) = try twoDifferentLibraryTracks()
-        let song = LibrarySong(persistentID: try XCTUnwrap(first.persistentID), name: first.name ?? "",
-                               artist: first.artist ?? "", albumArtist: "")
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        try XCTSkipUnless(tracks.count > 0, "the library is empty")
+        var sampled: [iTunesEClS: LibrarySong] = [:]
+        for position in stride(from: 0, to: tracks.count, by: max(1, tracks.count / 80)) {
+            guard let track = (tracks.object(at: position) as? SBObject)?.get() as? iTunesTrack,
+                  track.mediaKind == .music, let status = track.cloudStatus, sampled[status] == nil,
+                  let persistentID = track.persistentID, let name = track.name, let artist = track.artist else { continue }
+            sampled[status] = LibrarySong(persistentID: persistentID, name: name, artist: artist, albumArtist: "")
+        }
+        let songs = Array(sampled.values)
+        try XCTSkipUnless(!songs.isEmpty, "no song in the sample")
+        print("Reading \(songs.count) copies, \(sampled[.subscription] == nil ? "none" : "one") of them an Apple Music song")
 
         let center = DistributedNotificationCenter.default()
         var changes: [Date] = []
@@ -503,11 +517,11 @@ final class MusicLibraryLookupTests: XCTestCase {
 
         changes = []
         let read = Date()
-        _ = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: true), "Music didn't answer")
+        _ = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: songs, choosing: true), "Music didn't answer")
         spin(for: 6)
 
         XCTAssertEqual(changes.map { String(format: "%.1f s", $0.timeIntervalSince(read)) }, [],
-                       "Music announced a library change after a copy was read")
+                       "Music announced a library change after reading \(songs.map { $0.name })")
     }
 
     /// Run the main run loop for `seconds`, or until `done`
