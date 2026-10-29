@@ -122,12 +122,12 @@ final class LibraryMatchFinder {
 
     static let shared = LibraryMatchFinder()
 
-    /// The most copies of one song read from Music. Each is up to eight Apple Events. The
-    /// index holds no albums, ratings or lengths to order them by, so past this many, which
-    /// are read is down to their titles and then their persistent IDs, and the copy that
-    /// would have been chosen can be among those left out. One song held more often than
-    /// this is rare.
-    static let copiesRead = 6
+    /// The most copies of one song read from Music; a song the user has more often than this
+    /// is no match. Each copy is up to eight Apple Events, on the index's queue. The index
+    /// holds no albums, ratings or lengths to choose by, so reading only some would leave the
+    /// choice to their persistent IDs, and the copy on the album Spotify names, or the one the
+    /// user rated, could be among those never read.
+    static let copiesRead = 12
 
     /// How long to wait before asking a Music that didn't answer again. Measured 2026-10-29,
     /// Music's first answer after seven idle minutes took over a second, and the next five
@@ -143,6 +143,10 @@ final class LibraryMatchFinder {
 
     /// The last answer, and which song it answered for
     private var answer: (identity: String, match: LibraryMatch?)?
+    /// Music couldn't check `answer` when last asked, so it is shown but not given again:
+    /// the next question about the song asks Music, or a song added since would stay "not in
+    /// the library" until the next library change
+    private var answerIsUnchecked = false
     /// The song being looked for, and everyone waiting to hear. An answer about any other
     /// song is dropped.
     private var asking: (identity: String, waiting: [(LibraryMatch?) -> Void])?
@@ -174,7 +178,7 @@ final class LibraryMatchFinder {
             asking?.waiting.append(completion)
             return
         }
-        if let answer = answer, answer.identity == identity, !index.needsRead {
+        if let answer = answer, answer.identity == identity, !index.needsRead, !answerIsUnchecked {
             return completion(answer.match)
         }
         retry?.invalidate()
@@ -216,10 +220,11 @@ final class LibraryMatchFinder {
                 os_log("%{public}s[%{public}ld], %{public}s: no library copy of %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, identity, query.name, query.artist, query.album)
                 return self.finish(nil, for: identity)
             }
-            if copies.count > LibraryMatchFinder.copiesRead {
-                os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s; reading the first %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, LibraryMatchFinder.copiesRead)
+            guard copies.count <= LibraryMatchFinder.copiesRead else {
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s, more than the %{public}ld read; the one to choose could be among the rest, so no match", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, LibraryMatchFinder.copiesRead)
+                return self.finish(nil, for: identity)
             }
-            let reading = Array(copies.prefix(LibraryMatchFinder.copiesRead))
+            let reading = copies
             self.index.readCopies(reading, choosing: reading.count > 1) { [weak self] read in
                 guard let self = self, self.asking?.identity == identity else { return }
                 guard let read = read else {
@@ -249,6 +254,9 @@ final class LibraryMatchFinder {
     /// Music didn't answer: ask again a moment later, or give up without remembering
     /// anything, so the next time the song comes up Music is asked again
     private func noAnswer(for query: SongQuery, identity: String, triesLeft: Int) {
+        // Music quit while it was being asked: nothing to wait for, and nothing on show can be
+        // rated now
+        guard index.isMusicRunning else { return finish(nil, for: identity) }
         guard triesLeft > 0 else {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer about %{public}s again; not looking until it is asked about again", ((#file as NSString).lastPathComponent), #line, #function, identity)
             // Whatever was last known for this song stands
@@ -268,6 +276,9 @@ final class LibraryMatchFinder {
         asking = nil
         if remember {
             answer = (identity, match)
+            answerIsUnchecked = false
+        } else if answer?.identity == identity {
+            answerIsUnchecked = true
         }
         waiting.forEach { $0(match) }
         center.post(name: .libraryMatchDidChange, object: self, userInfo: [SpotifyPlayer.identityKey: identity])

@@ -62,6 +62,12 @@ final class MusicLibraryIndex {
     /// that has hung, so the queue is not held.
     static let readTimeout = 600
 
+    /// The same for reading a few copies, whose events each ask for one value of one track.
+    /// Measured 2026-10-29, the slowest took over a second after Music sat idle for seven
+    /// minutes; a Music that takes longer has stopped answering for now, and the finder asks
+    /// again later.
+    static let copiesTimeout = 180
+
     private let queue = DispatchQueue(label: "com.rossshannon.starbar.library-index", qos: .userInitiated)
 
     /// The last good read, as a matcher
@@ -229,10 +235,21 @@ final class MusicLibraryIndex {
     /// Counts the Apple Events Music answered with an error. Scripting Bridge reports a
     /// failure here instead of raising, and hands back an empty list, which would leave one
     /// column shorter than the rest or, all of them failing, look like an empty library.
+    ///
+    /// After the first failure the read is thrown away whatever follows, so the rest of its
+    /// events are given a timeout of one tick: a Music that has stopped answering would
+    /// otherwise hold the queue for the whole timeout once for every event still to send.
     private final class FailureCounter: NSObject, SBApplicationDelegate {
         private(set) var failures = 0
+        private weak var application: SBApplication?
+
+        init(_ application: SBApplication) {
+            self.application = application
+        }
+
         func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
             failures += 1
+            application?.timeout = 1
             os_log(.error, "%{public}s[%{public}ld], %{public}s: reading the library failed: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
             return nil
         }
@@ -259,7 +276,7 @@ final class MusicLibraryIndex {
     /// One bulk read, or nil when any Apple Event in it failed. Background queue only.
     private static func readColumns(pid: pid_t) -> Columns? {
         guard let application = SBApplication(processIdentifier: pid) else { return nil }
-        let failures = FailureCounter()
+        let failures = FailureCounter(application)
         application.delegate = failures
         application.timeout = readTimeout
         do {
@@ -321,16 +338,18 @@ final class MusicLibraryIndex {
         let kept = copiesConnection?.pid == pid ? copiesConnection : nil
         copiesConnection = nil
         guard let application = kept?.application ?? SBApplication(processIdentifier: pid) else { return nil }
-        let failures = FailureCounter()
+        let failures = FailureCounter(application)
         application.delegate = failures
         // The delegate isn't retained, and the connection outlives this read
         defer { application.delegate = nil }
-        application.timeout = readTimeout
+        application.timeout = copiesTimeout
         do {
             let reading = try ExceptionCatcher.catchException {
                 guard let playlist = kept?.playlist ?? iTunesRadioStation.libraryPlaylistByID(of: application),
                       let tracks = playlist.tracks?() else { return CopiesReading() }
                 return CopiesReading(playlist: playlist, copies: songs.map { song -> LibrarySong? in
+                    // The read is thrown away after a failure: ask Music nothing more
+                    guard failures.failures == 0 else { return nil }
                     // The name and artist are checked by the search itself, which saves an
                     // event for each
                     let predicate = NSPredicate(format: "persistentID == %@ AND name == %@ AND artist == %@",

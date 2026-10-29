@@ -37,6 +37,10 @@ final class LibraryMatchFinderTests: XCTestCase {
     private var silentReads = 0
     private var silentFetches = 0
     private var musicIsRunning = true
+    /// Music quits while the copies are being read, which then fails
+    private var quitsWhileReadingCopies = false
+    /// Runs as the copies are read, while the finder waits for them
+    private var whileReadingCopies: (() -> Void)?
     private var clock: FakeClock!
     private var center: NotificationCenter!
     private var finder: LibraryMatchFinder!
@@ -54,6 +58,8 @@ final class LibraryMatchFinderTests: XCTestCase {
         silentReads = 0
         silentFetches = 0
         musicIsRunning = true
+        quitsWhileReadingCopies = false
+        whileReadingCopies = nil
         clock = FakeClock()
         center = NotificationCenter()
         let index = MusicLibraryIndex(readLibrary: { [unowned self] _ in
@@ -96,11 +102,22 @@ final class LibraryMatchFinderTests: XCTestCase {
     private func readCopies(_ songs: [LibrarySong], choosing: Bool) -> [LibrarySong?]? {
         copiesRead += songs.map { $0.persistentID }
         self.choosing.append(choosing)
+        let running = whileReadingCopies
+        whileReadingCopies = nil
+        running?()
+        if quitsWhileReadingCopies {
+            musicIsRunning = false
+            return nil
+        }
         if silentReads > 0 {
             silentReads -= 1
             return nil
         }
-        return songs.map { song in track(song.persistentID).flatMap { song.reading($0, choosing: choosing) } }
+        // Music's search takes the name and artist with the persistent ID
+        return songs.map { song in
+            track(song.persistentID).flatMap { $0.name == song.name && $0.artist == song.artist ? $0 : nil }
+                .flatMap { song.reading($0, choosing: choosing) }
+        }
     }
 
     /// Run the main run loop until `condition` holds, for the answers that come back from
@@ -184,6 +201,17 @@ final class LibraryMatchFinderTests: XCTestCase {
 
         XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries")))
         XCTAssertEqual(fetched, [], "nothing left to fetch")
+    }
+
+    func testACopyRenamedSinceTheIndexWasReadIsNoMatch() {
+        // The index can be a library notification behind, and a renamed track may be another
+        // song by now
+        _ = ask(spotify("Linger", by: "The Cranberries", id: "spotify:track:warm"))
+        library = [LibrarySong(persistentID: zombie.persistentID, name: "Ode to My Family", artist: "The Cranberries",
+                               albumArtist: ""), linger]
+
+        XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries")))
+        XCTAssertEqual(fetched, [linger.persistentID], "nothing fetched for the renamed track")
     }
 
     func testTheSameSongIsAnsweredFromMemory() {
@@ -375,14 +403,31 @@ final class LibraryMatchFinderTests: XCTestCase {
                        zombie.persistentID)
     }
 
-    func testOnlyTheFirstFewCopiesAreRead() {
-        // Each copy is up to eight Apple Events
-        library = (0..<10).map {
+    func testEveryCopyIsReadSoTheRightOneCanBeChosen() throws {
+        // The index can't order copies by album, so the one on the album Spotify names can
+        // come last by persistent ID
+        let others = (0..<LibraryMatchFinder.copiesRead - 1).map {
+            LibrarySong(persistentID: String(format: "%016X", $0), name: "Zombie", artist: "The Cranberries",
+                        albumArtist: "", album: "Compilation \($0)")
+        }
+        let onTheAlbum = LibrarySong(persistentID: "FFFFFFFFFFFFFFFF", name: "Zombie", artist: "The Cranberries",
+                                     albumArtist: "", album: "No Need to Argue")
+        library = others + [onTheAlbum]
+
+        let match = try XCTUnwrap(ask(spotify("Zombie", by: "The Cranberries", on: "No Need to Argue")))
+
+        XCTAssertEqual(match.song.persistentID, onTheAlbum.persistentID)
+        XCTAssertEqual(copiesRead.count, LibraryMatchFinder.copiesRead)
+    }
+
+    func testASongHeldMoreOftenThanIsReadIsNoMatch() {
+        // Reading only some would leave the choice to persistent IDs
+        library = (0...LibraryMatchFinder.copiesRead).map {
             LibrarySong(persistentID: String(format: "%016X", $0), name: "Zombie", artist: "The Cranberries", albumArtist: "")
         }
 
-        XCTAssertNotNil(ask(spotify("Zombie", by: "The Cranberries")))
-        XCTAssertEqual(copiesRead.count, LibraryMatchFinder.copiesRead)
+        XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries")))
+        XCTAssertEqual(copiesRead, [], "nothing read")
     }
 
     // MARK: - Reading a copy
@@ -506,6 +551,34 @@ final class LibraryMatchFinderTests: XCTestCase {
                        "the next time the song comes up, Music is asked again")
     }
 
+    func testAnAnswerMusicCouldNotCheckIsNotGivenAgain() {
+        // Not in the library, then added in Music, then Music too slow twice to say so: the
+        // old "not in the library" can't stand until the next library change
+        let dreams = LibrarySong(persistentID: "00000000000000C3", name: "Dreams", artist: "The Cranberries", albumArtist: "")
+        XCTAssertNil(ask(spotify("Dreams", by: "The Cranberries")))
+        library.append(dreams)
+        center.post(name: .ITLibraryDidChange, object: nil)
+        silentReads = 2
+        var answers: [LibraryMatch?] = []
+        finder.match(for: spotify("Dreams", by: "The Cranberries")) { answers.append($0) }
+        waitUntil { clock.pendingOneShot != nil }
+        clock.fireAllOneShots()
+        waitUntil { answers.count == 1 }
+
+        XCTAssertEqual(ask(spotify("Dreams", by: "The Cranberries"))?.song.persistentID, dreams.persistentID)
+    }
+
+    func testMusicQuittingWhileAskedIsAnsweredAtOnce() {
+        // Nothing to wait for, and asking again would only find no Music
+        quitsWhileReadingCopies = true
+        var answers: [LibraryMatch?] = []
+        finder.match(for: spotify("Zombie", by: "The Cranberries")) { answers.append($0) }
+        waitUntil { answers.count == 1 }
+
+        XCTAssertNil(answers.first ?? nil)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty, "not asked again")
+    }
+
     func testSilenceKeepsWhatWasKnownForTheSong() {
         // A library change, then a Music too slow to say whether the copy is still there:
         // the stars already on show stay
@@ -561,6 +634,27 @@ final class LibraryMatchFinderTests: XCTestCase {
             answered.fulfill()
         }
         wait(for: [answered], timeout: 5)
+
+        XCTAssertEqual(answers, ["Linger"])
+    }
+
+    func testAQuestionOvertakenWhileItsCopiesAreReadIsNeverAnswered() {
+        // The same, with Spotify moving on after the library was read and while the old
+        // song's copies were: their answer must not reach the new song's question
+        _ = ask(spotify("Linger", by: "The Cranberries", id: "spotify:track:warm"))
+        var answers: [String?] = []
+        let answered = expectation(description: "answered")
+        whileReadingCopies = { [unowned self] in
+            self.finder.match(for: self.spotify("Linger", by: "The Cranberries", id: "spotify:track:second")) {
+                answers.append($0?.song.name)
+                answered.fulfill()
+            }
+        }
+        finder.match(for: spotify("Zombie", by: "The Cranberries", id: "spotify:track:first")) {
+            answers.append($0?.song.name)
+        }
+        wait(for: [answered], timeout: 5)
+        waitUntil { copiesRead.count == 3 }
 
         XCTAssertEqual(answers, ["Linger"])
     }
