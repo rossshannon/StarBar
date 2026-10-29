@@ -61,9 +61,9 @@ struct SongQuery: Equatable {
 /// songs in the library measured on 2026-10-28, 103 of them with copies rated differently --
 /// so the same copy is chosen every time the song comes round. Together they can also rule a
 /// copy out: one on an album the query doesn't name, whose length is more than
-/// `lengthTolerance` off, is another song that shares the name, such as an "Intro" (decided
-/// 2026-10-29). Not for an edit, whose length says nothing: "Move On Up" is 2:46 as the single
-/// edit and 8:49 on the album.
+/// `lengthTolerance` off, is another song that shares the name, such as an "Intro" (the
+/// 2026-10-29 review's recommendation). Not for an edit, whose length says nothing: "Move On
+/// Up" is 2:46 as the single edit and 8:49 on the album.
 ///
 /// A wrong match puts the user's rating on a song they didn't mean, in a library Music keeps
 /// no history of. So the rules lean strict: a song that isn't found is shown as it was before

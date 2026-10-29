@@ -55,6 +55,18 @@ Measured 2026-10-29 by running the rules (through the Python mirror in the proje
 - **Length is not a test of the same recording either**: some matches differ greatly in length and are still the same song in another edit ("Sweet Harmony", 4:22 on the single and 15:18 on the album), and within the library 112 same-song pairs differ by more than 30% and 10 s, many of them radio or single edits ("Move On Up" is 2:46 and 8:49).
 - "a-ha" and "Aha" fold to different names ("a ha" against "aha"). None of the likes is affected, since the one a-ha like is an acoustic version the user doesn't have.
 
+## Rules from the first review
+
+Four reviews of the first build, 2026-10-29, ran real titles through the matcher and found these matching another recording. Each is now a rule with a test in `SongNameTests` or `SongMatcherTests`.
+
+- "Stay (with Justin Bieber)" by The Kid LAROI found Bieber's own "Stay". A guest never counts as the artist on their own, on either side.
+- "Strobe - Michael Woods Remix" found "Strobe (Sebastien Leger Remix)", and "Clocks - Live in Sydney" would find "Clocks (Live at Glastonbury 2011)". A named version matches only the same name, or a track whose album's name holds it.
+- "Rock of Ages - Re-Recorded" found the original, "re" and "recorded" both being edition words. A re-recording is now a version.
+- "Yesterday (With Strings)" found the Beatles' "Yesterday", and a bare "feat" cut "A Feat of Strength" to "A". Someone credited with "with" must be credited on the other side, and a bare featured credit needs its dot.
+- "AC/DC" split into "ac" and "dc". A slash now splits only like a comma.
+- "Intro" by The xx on *Coexist* (60 s) found the "Intro" on *xx* (127 s). A copy is now ruled out when it is on an album Spotify doesn't name and its length is more than 10% off, unless either title names an edit, so the single edit of "Move On Up" still finds the album version.
+- With seven or more copies, which six were read came down to persistent IDs. All copies are now read, up to twelve, and a song held more often than that is no match.
+
 ## Open
 
 - Recall against the user's likes is above; recall against what they actually play has not been measured. The first live checks, 2026-10-29: three versions of "The Maker" by Daniel Lanois each got the right answer. The studio version found the user's studio copy on Sling Blade, "The Maker - Live" found their "The Maker (Live)" on the same live album, and "The Maker - Calypso Demo" found nothing, the word "demo" keeping it from the studio copy. Seven songs the user doesn't own were correctly not found.
