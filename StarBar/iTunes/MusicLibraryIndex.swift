@@ -79,7 +79,7 @@ final class MusicLibraryIndex {
     /// Reads the library, on the background queue
     private let readLibrary: (pid_t) -> [LibrarySong]?
     /// Reads a few library songs from Music, on the background queue
-    private let readCopiesOfSong: (pid_t, [LibrarySong], Bool) -> [LibrarySong?]?
+    private let readCopiesOfSong: (pid_t, [LibrarySong]) -> [LibrarySong?]?
     /// Music's process, or nil when it isn't running
     private let musicPID: () -> pid_t?
 
@@ -90,7 +90,7 @@ final class MusicLibraryIndex {
     /// The parameters are for the tests, which count reads and play at Music launching and
     /// quitting without touching the real one
     init(readLibrary: @escaping (pid_t) -> [LibrarySong]? = MusicLibraryIndex.readSongs(pid:),
-         readCopies: @escaping (pid_t, [LibrarySong], Bool) -> [LibrarySong?]? = MusicLibraryIndex.readCopies(pid:of:choosing:),
+         readCopies: @escaping (pid_t, [LibrarySong]) -> [LibrarySong?]? = MusicLibraryIndex.readCopies(pid:of:),
          musicPID: @escaping () -> pid_t? = MusicLibraryIndex.runningMusicPID) {
         self.readLibrary = readLibrary
         self.readCopiesOfSong = readCopies
@@ -177,20 +177,20 @@ final class MusicLibraryIndex {
     }
 
     /// What Music says now about each of `songs`, the copies of one song, with what
-    /// `LibrarySong.reading(_:choosing:)` reads. On the index's queue and connection, so a
-    /// Music slow to answer holds no thread anything else waits on: these are a few Apple
-    /// Events per copy, and Music has taken over a second to answer the first after a spell
-    /// idle.
+    /// `LibrarySong.reading(_:ratingKind:)` reads. On the index's queue and connection, so a
+    /// Music slow to answer holds no thread anything else waits on: these are two or three
+    /// Apple Events per copy, and Music has taken over a second to answer the first after a
+    /// spell idle.
     ///
     /// `completion` runs on the main thread with an entry per song, nil for one that has
     /// gone, has changed or isn't a song; or with nil when Music isn't running or didn't
     /// answer, which says nothing about the songs. Before this returns when there is no Music.
-    func readCopies(_ songs: [LibrarySong], choosing: Bool, completion: @escaping ([LibrarySong?]?) -> Void) {
+    func readCopies(_ songs: [LibrarySong], completion: @escaping ([LibrarySong?]?) -> Void) {
         guard let pid = musicPID() else { return completion(nil) }
         let readCopies = readCopiesOfSong
         queue.async {
             let started = Date()
-            let copies = readCopies(pid, songs, choosing)
+            let copies = readCopies(pid, songs)
             let elapsed = Date().timeIntervalSince(started) * 1000
             DispatchQueue.main.async {
                 os_log("%{public}s[%{public}ld], %{public}s: read %{public}ld library copies in %{public}.0f ms%{public}s", ((#file as NSString).lastPathComponent), #line, #function, songs.count, elapsed, copies == nil ? ", but Music didn't answer" : "")
@@ -288,16 +288,23 @@ final class MusicLibraryIndex {
     }
 
     /// The connection and library playlist the last `readCopies` read through, kept for the
-    /// next one in the same Music process: finding the playlist is four Apple Events of the
-    /// nine one copy took. Dropped after any failure, so a read that failed finds it afresh.
+    /// next one in the same Music process: finding the playlist is four Apple Events, more
+    /// than reading a copy takes. Dropped after any failure, so a read that failed finds it afresh.
     /// Index queue only.
     private static var copiesConnection: (pid: pid_t, application: SBApplication, playlist: iTunesPlaylist)?
 
-    /// `readCopies(_:choosing:completion:)`'s read. Each copy is found by persistent ID (a
-    /// `whose` search, never `object(withID:)`) and must still have the index's name and
-    /// artist. Nil when any Apple Event failed: Scripting Bridge answers a timed-out search
-    /// with an empty list, which would look like a song that has gone. Background queue only.
-    static func readCopies(pid: pid_t, of songs: [LibrarySong], choosing: Bool) -> [LibrarySong?]? {
+    /// `readCopies(_:completion:)`'s read. Each copy is found by persistent ID (a `whose`
+    /// search, never `object(withID:)`) and must still have the index's name and artist. Nil
+    /// when any Apple Event failed: Scripting Bridge answers a timed-out search with an empty
+    /// list, which would look like a song that has gone. Background queue only.
+    ///
+    /// Each copy is one event for the search, which hands back Music's own reference to the
+    /// track, by ID, so nothing after it searches again, and one for all its properties
+    /// (`TrackProperties`), plus one for the rating's kind when it has a rating. Reading the
+    /// properties one by one through the search, as the build before did, sent eight events
+    /// that each searched the library again: on 2026-10-29 one copy took 122 to 200 ms with
+    /// Music idle, and 0.46 to 2.1 s while Music was still slow from a run of live tests.
+    static func readCopies(pid: pid_t, of songs: [LibrarySong]) -> [LibrarySong?]? {
         let kept = copiesConnection?.pid == pid ? copiesConnection : nil
         copiesConnection = nil
         guard let application = kept?.application ?? SBApplication(processIdentifier: pid) else { return nil }
@@ -311,13 +318,17 @@ final class MusicLibraryIndex {
                 guard let playlist = kept?.playlist ?? iTunesRadioStation.libraryPlaylistByID(of: application),
                       let tracks = playlist.tracks?() else { return CopiesReading() }
                 return CopiesReading(playlist: playlist, copies: songs.map { song -> LibrarySong? in
-                    let found = tracks.filtered(using: NSPredicate(format: "persistentID == %@", song.persistentID)) as? [iTunesTrack] ?? []
-                    guard found.count == 1, let track = found.first,
-                          track.name == song.name, track.artist == song.artist else {
+                    let search = tracks.perform(#selector(NSArray.filtered(using:)),
+                                                with: NSPredicate(format: "persistentID == %@", song.persistentID))?
+                        .takeUnretainedValue() as? SBElementArray
+                    let found = search?.get() as? [iTunesTrack] ?? []
+                    let properties = found.count == 1 ? found[0].properties.map(TrackProperties.init) : nil
+                    guard let track = found.first, let properties = properties,
+                          properties.name == song.name, properties.artist == song.artist else {
                         os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
                         return nil
                     }
-                    guard let read = song.reading(track, choosing: choosing) else {
+                    guard let read = song.reading(properties, ratingKind: { track.ratingKind }) else {
                         os_log("%{public}s[%{public}ld], %{public}s: library track %{public}s, \u{201C}%{public}s\u{201D} by %{public}s, isn't a song", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist)
                         return nil
                     }

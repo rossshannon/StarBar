@@ -26,8 +26,6 @@ final class LibraryMatchFinderTests: XCTestCase {
     private var reads = 0
     /// Persistent IDs of the copies read, in order
     private var copiesRead: [String] = []
-    /// Whether each read of copies was told there were copies to choose between
-    private var choosing: [Bool] = []
     /// Persistent IDs of the tracks fetched through the station
     private var fetched: [String] = []
     /// Persistent IDs the fake Music no longer has
@@ -45,7 +43,6 @@ final class LibraryMatchFinderTests: XCTestCase {
         musicVideos = []
         reads = 0
         copiesRead = []
-        choosing = []
         fetched = []
         gone = []
         silentReads = 0
@@ -58,8 +55,8 @@ final class LibraryMatchFinderTests: XCTestCase {
                 self.library.map { LibrarySong(persistentID: $0.persistentID, name: $0.name, artist: $0.artist,
                                                albumArtist: $0.albumArtist) }
             }
-        }, readCopies: { [unowned self] _, songs, choosing in
-            DispatchQueue.main.sync { self.readCopies(songs, choosing: choosing) }
+        }, readCopies: { [unowned self] _, songs in
+            DispatchQueue.main.sync { self.readCopies(songs) }
         }, musicPID: { 501 })
         index.observeLibraryChanges(in: center)
         finder = LibraryMatchFinder(index: index, fetchTrack: { [unowned self] song in
@@ -85,14 +82,13 @@ final class LibraryMatchFinderTests: XCTestCase {
                          playedCount: music.playedCount)
     }
 
-    private func readCopies(_ songs: [LibrarySong], choosing: Bool) -> [LibrarySong?]? {
+    private func readCopies(_ songs: [LibrarySong]) -> [LibrarySong?]? {
         copiesRead += songs.map { $0.persistentID }
-        self.choosing.append(choosing)
         if silentReads > 0 {
             silentReads -= 1
             return nil
         }
-        return songs.map { song in track(song.persistentID).flatMap { song.reading($0, choosing: choosing) } }
+        return songs.map { song in track(song.persistentID).flatMap { song.reading($0) } }
     }
 
     /// Run the main run loop until `condition` holds, for the answers that come back from
@@ -277,12 +273,6 @@ final class LibraryMatchFinderTests: XCTestCase {
                                             albumArtist: "", album: "Stars: The Best of 1992-2002", duration: 306,
                                             rating: 0, isRatingComputed: false, playedCount: 40)
 
-    func testOneCopyReadsOnlyWhatShowsIt() {
-        _ = ask(spotify("Zombie", by: "The Cranberries"))
-
-        XCTAssertEqual(choosing, [false], "no length, rating or plays: there is nothing to choose between")
-    }
-
     func testTheAlbumSpotifyNamesChoosesTheCopy() throws {
         // The index has no albums, so this is only right if the finder read them. The best-of
         // copy sorts after the album copy by persistent ID, so the index's order alone would
@@ -293,7 +283,6 @@ final class LibraryMatchFinderTests: XCTestCase {
 
         XCTAssertEqual(match.song.persistentID, zombieOnStars.persistentID)
         XCTAssertEqual((match.track as? FakeTrack)?.persistentID, zombieOnStars.persistentID, "the track goes with the song")
-        XCTAssertEqual(choosing, [true])
         XCTAssertEqual(fetched, [zombieOnStars.persistentID], "only the chosen copy is fetched")
     }
 
@@ -367,19 +356,15 @@ final class LibraryMatchFinderTests: XCTestCase {
 
     // MARK: - Reading a copy
 
-    func testReadingACopyToChooseBetweenTakesWhatChooses() throws {
+    func testReadingACopyTakesWhatChoosesAndWhatIsShown() throws {
         let track = FakeTrack(name: "Zombie", artist: "The Cranberries", album: "No Need to Argue", duration: 306.5,
-                              rating: 60, ratingKind: .computed, playedCount: 7)
+                              rating: 60, ratingKind: .computed, favorited: true, playedCount: 7)
         let song = LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")
 
-        XCTAssertEqual(song.reading(track, choosing: true),
+        XCTAssertEqual(song.reading(track),
                        LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "",
                                    album: "No Need to Argue", duration: 306.5, rating: 60, isRatingComputed: true,
-                                   playedCount: 7))
-        XCTAssertEqual(song.reading(track, choosing: false),
-                       LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "",
-                                   album: "No Need to Argue", rating: 60, isRatingComputed: true),
-                       "what is shown, but not the length or plays")
+                                   playedCount: 7, isFavorited: true))
     }
 
     func testALengthOfNothingIsNoLength() {
@@ -387,14 +372,53 @@ final class LibraryMatchFinderTests: XCTestCase {
         let track = FakeTrack(duration: 0)
         let song = LibrarySong(persistentID: "A1", name: "Song", artist: "Artist", albumArtist: "")
 
-        XCTAssertNil(song.reading(track, choosing: true)?.duration)
+        XCTAssertNil(song.reading(track)?.duration)
     }
 
     func testATrackThatIsNotASongIsNoCopy() {
         let song = LibrarySong(persistentID: "A1", name: "Song", artist: "Artist", albumArtist: "")
 
-        XCTAssertNil(song.reading(FakeTrack(mediaKind: .musicVideo), choosing: false))
-        XCTAssertNil(song.reading(FakeTrack(mediaKind: .podcast), choosing: true))
+        XCTAssertNil(song.reading(FakeTrack(mediaKind: .musicVideo)))
+        XCTAssertNil(song.reading(FakeTrack(mediaKind: .podcast)))
+    }
+
+    func testTheRatingsKindIsAskedOnlyWhenThereIsARating() {
+        // The properties record leaves the kind out, so asking is one Apple Event more
+        let song = LibrarySong(persistentID: "A1", name: "Song", artist: "Artist", albumArtist: "")
+        let music = NSAppleEventDescriptor(enumCode: iTunesEMdK.music.rawValue)
+        var asked = 0
+
+        XCTAssertEqual(song.reading(TrackProperties(["mediaKind": music, "rating": 0]),
+                                    ratingKind: { asked += 1; return .computed })?.isRatingComputed, false)
+        XCTAssertEqual(asked, 0)
+        XCTAssertEqual(song.reading(TrackProperties(["mediaKind": music, "rating": 80]),
+                                    ratingKind: { asked += 1; return .computed })?.isRatingComputed, true)
+        XCTAssertEqual(asked, 1)
+    }
+
+    func testMusicsPropertiesRecordIsRead() throws {
+        // As Music answered for a library copy of Go Slowly on 2026-10-29
+        let record: [AnyHashable: Any] = [
+            "name": "Go Slowly", "artist": "Radiohead", "album": "In Rainbows (bonus tracks)",
+            "mediaKind": NSAppleEventDescriptor(enumCode: 0x6b4d6453), "rating": NSNumber(value: 60),
+            "favorited": NSNumber(value: true), "duration": NSNumber(value: 228.2359924316406),
+            "playedCount": NSNumber(value: 26), "persistentID": "7A92B7AD44A5B313",
+        ]
+        let properties = TrackProperties(record)
+
+        XCTAssertEqual(properties.name, "Go Slowly")
+        XCTAssertEqual(properties.artist, "Radiohead")
+        XCTAssertEqual(properties.album, "In Rainbows (bonus tracks)")
+        XCTAssertEqual(properties.mediaKind, iTunesEMdK.music.rawValue)
+        XCTAssertEqual(properties.rating, 60)
+        XCTAssertTrue(properties.isFavorited)
+        XCTAssertEqual(try XCTUnwrap(properties.duration), 228.236, accuracy: 0.001)
+        XCTAssertEqual(properties.playedCount, 26)
+    }
+
+    func testAnOlderMusicsHeartIsReadByItsOldName() {
+        XCTAssertTrue(TrackProperties(["loved": NSNumber(value: true)]).isFavorited)
+        XCTAssertFalse(TrackProperties([:]).isFavorited)
     }
 
     // MARK: - Music that doesn't answer

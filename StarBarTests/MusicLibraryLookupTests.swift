@@ -397,7 +397,7 @@ final class MusicLibraryLookupTests: XCTestCase {
         for track in [first, second, first] {
             let song = LibrarySong(persistentID: try XCTUnwrap(track.persistentID), name: track.name ?? "",
                                    artist: track.artist ?? "", albumArtist: "")
-            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: false),
+            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song]),
                                      "Music didn't answer")
             // Nil when the track isn't a song, which still proves the read was answered
             if let copy = read.first ?? nil {
@@ -408,27 +408,41 @@ final class MusicLibraryLookupTests: XCTestCase {
         }
     }
 
-    /// `LibraryMatchFinder` leaves out any copy whose media kind doesn't read as a song. If
-    /// the kind came back in another shape, every copy would be left out and nothing would
-    /// ever match, with only "isn't a song" in the log. Most of a music library is songs, so
-    /// a sample with none read as one means the read is wrong, not the library.
+    /// `LibraryMatchFinder` reads a copy from Music's `properties` record in one Apple Event.
+    /// If a value came back in another shape than `TrackProperties` expects, the copy would
+    /// show the wrong stars or, for the media kind, never be a song at all, with only "isn't
+    /// a song" in the log. So each value is checked against the same property read on its
+    /// own. Most of a music library is songs, so a sample with none read as one means the
+    /// read is wrong, not the library.
     func testASongReadsAsASong() throws {
         let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
         try XCTSkipUnless(tracks.count > 0, "the library is empty")
 
         let positions = Set(stride(from: 0, to: tracks.count, by: max(1, tracks.count / 20))).sorted()
         var songs = 0
+        var rated = 0
         for position in positions {
-            let track = try XCTUnwrap(tracks.object(at: position) as? iTunesTrack, "track \(position) unreadable")
+            // Resolved to Music's reference by ID first: a reference by position makes Music
+            // walk the library for every read, and this test took two minutes that way
+            let track = try XCTUnwrap((tracks.object(at: position) as? SBObject)?.get() as? iTunesTrack,
+                                      "track \(position) unreadable")
             let song = LibrarySong(persistentID: track.persistentID ?? "", name: track.name ?? "",
                                    artist: track.artist ?? "", albumArtist: "")
-            if let read = song.reading(track, choosing: true) {
+            if let read = song.reading(track) {
                 songs += 1
+                XCTAssertEqual(track.mediaKind, .music, "track \(position)")
                 XCTAssertEqual(read.album, track.album ?? "", "track \(position)")
                 XCTAssertEqual(read.rating, track.rating ?? 0, "track \(position)")
+                XCTAssertEqual(read.isRatingComputed, read.rating > 0 && track.ratingKind == .computed, "track \(position)")
+                XCTAssertEqual(read.isFavorited, track.isFavorited, "track \(position)")
                 XCTAssertEqual(read.playedCount, track.playedCount ?? 0, "track \(position)")
+                XCTAssertEqual(read.duration ?? 0, track.duration ?? 0, accuracy: 0.001, "track \(position)")
+                rated += read.rating > 0 ? 1 : 0
+            } else {
+                XCTAssertNotEqual(track.mediaKind, .music, "track \(position) is a song but didn't read as one")
             }
         }
+        print("Sampled \(positions.count) tracks: \(songs) songs, \(rated) of them rated")
         XCTAssertGreaterThan(songs, 0, "none of \(positions.count) tracks sampled read as a song")
     }
 

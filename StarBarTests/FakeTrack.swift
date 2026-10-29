@@ -33,6 +33,19 @@ final class FakeTrack: NSObject, iTunesTrack {
     var ratingKind: iTunesERtK { return storedRatingKind }
     var favorited: Bool { return storedFavorited }
 
+    /// What Music answers for `properties`, in the shapes measured on 2026-10-29: the media
+    /// kind as an enumerated descriptor, numbers and the heart as `NSNumber`, and no rating
+    /// kind. Read only, like the rest: a setter would collide with `setProperties(_:)`.
+    var properties: [AnyHashable: Any] {
+        return [
+            "name": name, "artist": artist, "album": album, "persistentID": persistentID,
+            "databaseID": NSNumber(value: databaseID), "duration": NSNumber(value: duration),
+            "rating": NSNumber(value: storedRating), "favorited": NSNumber(value: storedFavorited),
+            "mediaKind": NSAppleEventDescriptor(enumCode: mediaKind.rawValue),
+            "playedCount": NSNumber(value: playedCount),
+        ]
+    }
+
     /// Every rating written, in order, so a test can see repeats and their order
     private(set) var ratingsWritten: [Int] = []
     private(set) var favoritesWritten: [Bool] = []

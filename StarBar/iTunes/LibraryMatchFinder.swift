@@ -64,27 +64,70 @@ extension SpotifyPlayInfo {
 
 }
 
+/// What Music says about a library track in answer to one Apple Event for its `properties`,
+/// in the shapes measured on 2026-10-29: text as strings, numbers and the heart as
+/// `NSNumber`, the media kind as an enumerated descriptor. The record has no rating kind.
+///
+/// One event in place of one per property: with Music idle, the seven properties a copy needs
+/// took 133 to 172 ms one at a time and 34 to 91 ms as the record, and a Music answering
+/// slowly costs that much more for every event sent.
+struct TrackProperties: Equatable {
+    var name: String?
+    var artist: String?
+    var album: String?
+    /// The media kind's four-character code, as `iTunesEMdK` spells it
+    var mediaKind: UInt32?
+    /// 0 to 100
+    var rating: Int?
+    var isFavorited: Bool
+    /// Seconds
+    var duration: Double?
+    var playedCount: Int?
+
+    init(_ record: [AnyHashable: Any]) {
+        name = record["name"] as? String
+        artist = record["artist"] as? String
+        album = record["album"] as? String
+        switch record["mediaKind"] {
+        case let descriptor as NSAppleEventDescriptor:
+            let code = descriptor.enumCodeValue
+            mediaKind = code != 0 ? code : descriptor.typeCodeValue
+        case let number as NSNumber:
+            mediaKind = number.uint32Value
+        default:
+            mediaKind = nil
+        }
+        rating = (record["rating"] as? NSNumber)?.intValue
+        // Music renamed "loved" to "favorited"; an older one answers the old name
+        isFavorited = ((record["favorited"] as? NSNumber) ?? (record["loved"] as? NSNumber))?.boolValue ?? false
+        duration = (record["duration"] as? NSNumber)?.doubleValue
+        playedCount = (record["playedCount"] as? NSNumber)?.intValue
+    }
+}
+
 extension LibrarySong {
 
     /// This song with what Music says now about its live track, or nil when that track isn't
     /// a song: the index holds every kind of track, and a music video of the song is no place
-    /// for its stars. Each property is an Apple Event, so only the album and what would be
-    /// shown (the rating and heart) are read unless `choosing`, when the length and plays
-    /// that choose between copies are too.
-    func reading(_ track: iTunesTrack, choosing: Bool) -> LibrarySong? {
-        // A read that failed gives an enumeration of no known kind, so the copy is left out
-        guard track.mediaKind == .music else { return nil }
+    /// for its stars. `ratingKind` is asked only when there is a rating for it to describe,
+    /// since the record leaves it out: one Apple Event more.
+    func reading(_ properties: TrackProperties, ratingKind: () -> iTunesERtK?) -> LibrarySong? {
+        guard properties.mediaKind == iTunesEMdK.music.rawValue else { return nil }
         var song = self
-        song.album = track.album ?? ""
-        song.rating = track.rating ?? 0
-        song.isRatingComputed = track.ratingKind == .computed
-        song.isFavorited = track.isFavorited
-        if choosing {
-            // Scripting Bridge gives a number 0 when its Apple Event fails
-            song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
-            song.playedCount = track.playedCount ?? 0
-        }
+        song.album = properties.album ?? ""
+        song.rating = properties.rating ?? 0
+        song.isRatingComputed = song.rating > 0 && ratingKind() == .computed
+        song.isFavorited = properties.isFavorited
+        song.duration = properties.duration.flatMap { $0 > 0 ? $0 : nil }
+        song.playedCount = properties.playedCount ?? 0
         return song
+    }
+
+    /// The same, reading `track`'s properties: one Apple Event, or two for a rated song.
+    /// Nil also when the read failed.
+    func reading(_ track: iTunesTrack) -> LibrarySong? {
+        guard let record = track.properties else { return nil }
+        return reading(TrackProperties(record), ratingKind: { track.ratingKind })
     }
 
 }
@@ -114,7 +157,7 @@ final class LibraryMatchFinder {
 
     static let shared = LibraryMatchFinder()
 
-    /// The most copies of one song read from Music. Each is about eight Apple Events; one
+    /// The most copies of one song read from Music. Each is two or three Apple Events; one
     /// song held more often than this is rare, and the copies past it are never chosen.
     static let copiesRead = 6
 
@@ -195,7 +238,7 @@ final class LibraryMatchFinder {
                 os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s; reading the first %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, LibraryMatchFinder.copiesRead)
             }
             let reading = Array(copies.prefix(LibraryMatchFinder.copiesRead))
-            self.index.readCopies(reading, choosing: copies.count > 1) { [weak self] read in
+            self.index.readCopies(reading) { [weak self] read in
                 guard let self = self, self.asking?.identity == identity else { return }
                 guard let read = read else {
                     return self.noAnswer(for: query, identity: identity, triesLeft: triesLeft)

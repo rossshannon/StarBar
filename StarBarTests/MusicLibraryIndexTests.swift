@@ -320,7 +320,7 @@ final class MusicLibraryIndexTests: XCTestCase {
     func testCopiesAreReadOffTheMainThreadAndAnsweredOnIt() {
         // Music has taken over a second to answer; the menu bar can't wait on that
         var readOnMain: Bool?
-        let index = MusicLibraryIndex(readLibrary: { _ in [] }, readCopies: { _, songs, _ in
+        let index = MusicLibraryIndex(readLibrary: { _ in [] }, readCopies: { _, songs in
             readOnMain = Thread.isMainThread
             return songs.map { song -> LibrarySong? in
                 var read = song
@@ -329,8 +329,7 @@ final class MusicLibraryIndexTests: XCTestCase {
             }
         }, musicPID: { 501 })
         let answered = expectation(description: "answered")
-        index.readCopies([LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")],
-                         choosing: false) { copies in
+        index.readCopies([LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")]) { copies in
             XCTAssertTrue(Thread.isMainThread)
             XCTAssertEqual(copies?.first??.album, "No Need to Argue")
             answered.fulfill()
@@ -344,8 +343,7 @@ final class MusicLibraryIndexTests: XCTestCase {
         music.pid = nil
         var answers: [[LibrarySong?]?] = []
 
-        index.readCopies([LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")],
-                         choosing: false) { answers.append($0) }
+        index.readCopies([LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")]) { answers.append($0) }
 
         XCTAssertEqual(answers.count, 1, "answered at once")
         XCTAssertNil(answers.first ?? nil)
