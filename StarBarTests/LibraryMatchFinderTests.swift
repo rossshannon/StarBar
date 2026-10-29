@@ -464,6 +464,51 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(copiesRead, [live.persistentID])
     }
 
+    // MARK: - What the user chooses
+
+    func testWhatTheUserChoosesForTheCopyIsRemembered() throws {
+        // What is remembered is shown when Music doesn't answer: the strip showed the rating
+        // read with the match where the menu bar showed the one just chosen (the third review)
+        let identity = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+
+        finder.userDidRate(zombie.persistentID, rating: 100)
+        finder.userDidFavorite(zombie.persistentID, isFavorited: false)
+
+        let song = try XCTUnwrap(finder.knownMatch(for: identity)).song
+        XCTAssertEqual(song.rating, 100)
+        XCTAssertFalse(song.isFavorited)
+        XCTAssertEqual(LibraryMatch.Shown(song: song), LibraryMatch.Shown(rating: 100, isFavorited: false))
+    }
+
+    func testAChoiceForAnotherCopyChangesNothing() throws {
+        let identity = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+
+        finder.userDidRate(linger.persistentID, rating: 20)
+
+        XCTAssertEqual(try XCTUnwrap(finder.knownMatch(for: identity)).song.rating, zombie.rating)
+    }
+
+    func testARatingTheUserChoosesIsTheirsNotMusics() throws {
+        library = [LibrarySong(persistentID: "C3", name: "Zombie", artist: "The Cranberries", albumArtist: "",
+                               rating: 60, isRatingComputed: true)]
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        XCTAssertNil(LibraryMatch.Shown(song: try XCTUnwrap(finder.knownMatch(for: "spotify:track:4uLU6hMCjMI75M1A2tKUQC")).song).rating,
+                     "worked out from the album's, so not shown as the user's")
+
+        finder.userDidRate("C3", rating: 80)
+
+        XCTAssertEqual(LibraryMatch.Shown(song: try XCTUnwrap(finder.knownMatch(for: "spotify:track:4uLU6hMCjMI75M1A2tKUQC")).song).rating, 80)
+    }
+
+    func testTheLibraryHasBeenReadOnceAskedAbout() {
+        // The first read builds the matcher from nothing, so the menu bar waits longer for it
+        XCTAssertFalse(finder.hasReadLibrary)
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        XCTAssertTrue(finder.hasReadLibrary)
+    }
+
     // MARK: - Reading a copy
 
     func testReadingACopyToChooseBetweenTakesWhatChooses() throws {
@@ -510,6 +555,18 @@ final class LibraryMatchFinderTests: XCTestCase {
     }
 
     // MARK: - Music that doesn't answer
+
+    func testAReadDuringWhichAnEventFailedIsNoAnswer() {
+        // Scripting Bridge answers a failed read with nil, 0 or false: 0 stars for a rated copy
+        var failures = 0
+
+        XCTAssertEqual(MenuBarRatingControl.ifAnswered(failures: { failures }) { 80 }, 80)
+        XCTAssertNil(MenuBarRatingControl.ifAnswered(failures: { failures }) { () -> Int? in
+            failures += 1
+            return 0
+        })
+        XCTAssertNil(MenuBarRatingControl.ifAnswered(failures: { failures }) { () -> Int? in nil })
+    }
 
     func testMusicThatDidNotAnswerIsAskedAgainNotTakenForNoCopy() throws {
         // Measured 2026-10-29: after seven idle minutes Music took over the short timeout to

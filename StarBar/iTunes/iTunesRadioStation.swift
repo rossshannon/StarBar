@@ -78,6 +78,12 @@ final class iTunesRadioStation {
     /// read is how to tell "unrated" from "Music didn't answer"
     /// (`MenuBarRatingControl.withShortTimeoutIfAnswered`).
     private(set) var failedEvents = 0
+    /// How many writes Music has refused (`core`/`setd`). A rating or heart held on screen
+    /// over Music's reads (`HeldChoice`) stops being believed when this moves, since Music's
+    /// value is then the true one: the corrective read below was otherwise overridden by
+    /// the hold, and nothing read Music again when the hold ran out (the third review,
+    /// 2026-10-29).
+    private(set) var refusedWrites = 0
     /// Music's library playlist on this connection, and the Music process it was found in
     /// (`libraryPlaylist()`)
     private var foundLibraryPlaylist: (pid: pid_t, playlist: iTunesPlaylist)?
@@ -657,12 +663,17 @@ extension iTunesRadioStation: SBApplicationDelegate {
             // it to scheduling: this may run inside the Scripting Bridge call that sent the
             // write, and reading Music from here would send Apple Events from within it.
             if Thread.isMainThread {
-                scheduleRereadAfterRefusedWrite()
+                writeWasRefused()
             } else {
-                DispatchQueue.main.async { [weak self] in self?.scheduleRereadAfterRefusedWrite() }
+                DispatchQueue.main.async { [weak self] in self?.writeWasRefused() }
             }
         }
         return nil
+    }
+
+    private func writeWasRefused() {
+        refusedWrites += 1
+        scheduleRereadAfterRefusedWrite()
     }
 
     /// Read the player again shortly, once, however many writes were refused. It goes through

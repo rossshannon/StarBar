@@ -854,6 +854,30 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 40])
     }
 
+    func testAReadMusicDidntAnswerNeverEndsTheWaitForARating() {
+        // The third review, 2026-10-29: what was last known of a Spotify song's copy is the
+        // rating just chosen, and taking it for Music's answer let the next read, still the
+        // old rating, put the old stars back
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80)
+
+        live = .loaded(.init(lastKnownRating: 80))
+        update(snapshot(track: "A"))
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
+    }
+
+    func testANewStripMusicDidntAnswerForShowsWhatWasLastKnown() {
+        live = .loaded(.init(lastKnownRating: 60, lastKnownFavorite: true))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.first?.rating, 60)
+        XCTAssertEqual(presenter.shown.first?.isFavorited, true)
+    }
+
     func testFavouritingInStarBarShowsOnTheStrip() {
         live = .loaded(.init(rating: 60, isFavorited: false))
         update(snapshot(track: "A"))

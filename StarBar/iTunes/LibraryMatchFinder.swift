@@ -21,8 +21,9 @@ struct LibraryMatch {
     let identity: String
     /// The song as the other player named it
     let query: SongQuery
-    /// The library song, as `MusicLibraryIndex` had it when the match was made
-    let song: LibrarySong
+    /// The library song, as `MusicLibraryIndex` had it when the match was made, with what
+    /// the user has chosen for it since (`LibraryMatchFinder.userDidRate`)
+    var song: LibrarySong
     /// The copy in Music, on the connection ratings are written through: a reference by
     /// persistent ID (`iTunesRadioStation.libraryTrack(for:)`), so a copy deleted since makes
     /// a write to it fail rather than land on another song
@@ -210,6 +211,29 @@ final class LibraryMatchFinder {
     func knownMatch(for identity: String?) -> LibraryMatch? {
         guard let identity = identity, let answer = answer, answer.identity == identity else { return nil }
         return answer.match
+    }
+
+    /// The user has just rated the copy `persistentID`. What is remembered of it is what the
+    /// menu bar and the strip show when Music doesn't answer (`LibraryMatch.Shown(song:)`),
+    /// and the rating read with the match would otherwise stand there: the strip showed 3
+    /// stars where the menu bar showed the 4 just chosen (the third review, 2026-10-29).
+    func userDidRate(_ persistentID: String, rating: Int) {
+        updateAnswer(persistentID) {
+            $0.rating = rating
+            $0.isRatingComputed = false
+        }
+    }
+
+    /// The user has just set or cleared the heart of the copy `persistentID`, as
+    /// `userDidRate`
+    func userDidFavorite(_ persistentID: String, isFavorited: Bool) {
+        updateAnswer(persistentID) { $0.isFavorited = isFavorited }
+    }
+
+    private func updateAnswer(_ persistentID: String, _ change: (inout LibrarySong) -> Void) {
+        guard let answer = answer, var match = answer.match, match.song.persistentID == persistentID else { return }
+        change(&match.song)
+        self.answer = (answer.identity, match)
     }
 
     /// The copy a match named has gone from the library, deleted in Music before the library

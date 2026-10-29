@@ -263,13 +263,18 @@ extension AppDelegate {
         if iTunesRadioStation.shared.iTunes != nil, let match = LibraryMatchFinder.shared.knownMatch(for: identity) {
             // The same copy the menu bar shows and rates. A new match brings what was read
             // with it; after that it is read live, as a Music song's is, and when Music
-            // doesn't answer, what was last read of it stands rather than "unrated".
-            let read = match.shown
-                ?? MenuBarRatingControl.withShortTimeoutIfAnswered { _ in LibraryMatch.Shown(reading: match.track) }
-                ?? LibraryMatch.Shown(song: match.song)
+            // doesn't answer, what the strip shows stands, or for a new strip what was last
+            // read of the copy, rather than "unrated".
             live.canRate = true
-            live.rating = read.rating
-            live.isFavorited = read.isFavorited
+            if let read = match.shown
+                ?? MenuBarRatingControl.withShortTimeoutIfAnswered({ _ in LibraryMatch.Shown(reading: match.track) }) {
+                live.rating = read.rating
+                live.isFavorited = read.isFavorited
+            } else {
+                let last = LibraryMatch.Shown(song: match.song)
+                live.lastKnownRating = last.rating
+                live.lastKnownFavorite = last.isFavorited
+            }
             live.showsSpotifyHeart = false
             return .loaded(live)
         }

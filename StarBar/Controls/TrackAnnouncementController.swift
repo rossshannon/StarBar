@@ -69,6 +69,13 @@ final class TrackAnnouncementController: NSObject {
         /// 0 to 100; nil when it could not be read
         var rating: Int? = nil
         var isFavorited: Bool? = nil
+        /// What was last read of the rating and heart, for a new strip when Music didn't
+        /// answer just now (`rating` and `isFavorited` nil). Never taken for Music's answer:
+        /// one the user has just chosen stays on show until Music gives a real one, where
+        /// taking this for it, which is the user's choice once they rate, ended that wait
+        /// early (the third review, 2026-10-29).
+        var lastKnownRating: Int? = nil
+        var lastKnownFavorite: Bool? = nil
         /// False when the song is playing from the Apple Music catalog and isn't in the
         /// library, so there is nowhere for a rating to live
         var canRate: Bool? = nil
@@ -533,8 +540,9 @@ extension TrackAnnouncementController {
             title: snapshot.title,
             artist: snapshot.artist,
             album: snapshot.album,
-            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? 0,
-            isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? false,
+            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? live.lastKnownRating ?? 0,
+            isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited)
+                ?? live.lastKnownFavorite ?? false,
             artwork: live.artwork,
             // Spotify keeps no rating of its own; only a copy in Music gives one
             canRate: live.canRate ?? (snapshot.source == .music),
