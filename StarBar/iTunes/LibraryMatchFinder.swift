@@ -131,9 +131,11 @@ final class LibraryMatchFinder {
     /// the index's queue. The index holds no albums, ratings or lengths to choose by, so
     /// reading only some would leave the choice to their persistent IDs, and the copy on the
     /// album Spotify names, or the one the user rated, could be among those never read. So
-    /// past this, only the copies whose titles mark the same kinds of recording as Spotify's
-    /// are read ("One (Live)" of 13 copies of "One", for "One - Live"), and when those are
-    /// still too many, the song is no match.
+    /// past this, only the copies whose titles mark every kind of recording Spotify's title and
+    /// album do are read (`SongMatcher.titledAlike`: "One (Live)" of 13 copies of "One", for
+    /// "One - Live" or for "One" on "Live 2003"), and when those are still too many, the song
+    /// is no match. A copy titled plainly on a live album is then never read, though it may
+    /// be the one on the album Spotify names.
     static let copiesRead = 12
 
     /// How long to wait before asking a Music that didn't answer again. Measured 2026-10-29,
@@ -237,7 +239,7 @@ final class LibraryMatchFinder {
             if copies.count <= LibraryMatchFinder.copiesRead {
                 reading = copies
             } else {
-                let marked = copies.filter { SongMatcher.titleMarksTheSame($0, as: query) }
+                let marked = SongMatcher.titledAlike(copies, as: query)
                 guard !marked.isEmpty, marked.count <= LibraryMatchFinder.copiesRead else {
                     os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s, %{public}ld of them titled alike, more than the %{public}ld read; the one to choose could be among the rest, so no match", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, marked.count, LibraryMatchFinder.copiesRead)
                     return self.finish(nil, for: identity)

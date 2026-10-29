@@ -182,11 +182,14 @@ struct SongMatcher {
             .map { $0.song }
     }
 
-    /// Whether a copy's title marks the same kinds of recording as the query's: "One (Live)"
-    /// for "One - Live", but not plain "One", which is only a candidate in case its album says
-    /// it is live
-    static func titleMarksTheSame(_ copy: LibrarySong, as query: SongQuery) -> Bool {
-        return SongName.kinds(of: SongName.title(copy.name).versions) == SongName.kinds(of: SongName.title(query.name).versions)
+    /// The copies whose own titles mark every kind of recording the query is, by its title and
+    /// album together: "Clocks (Live)" for "Clocks - Live", or for plain "Clocks" on "Live
+    /// 2003", but not plain "Clocks", which is only a candidate in case its album says it is
+    /// live. For when there are too many copies to read them all, since only reading a copy
+    /// tells its album.
+    static func titledAlike(_ copies: [LibrarySong], as query: SongQuery) -> [LibrarySong] {
+        let kinds = SongName.versions(of: query.name, on: query.album)
+        return copies.filter { SongName.kinds(of: SongName.title($0.name).versions) == kinds }
     }
 
     /// Copies from `copies(of:)` whose album, length, rating and plays have since been read,

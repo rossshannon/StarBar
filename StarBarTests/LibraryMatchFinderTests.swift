@@ -447,6 +447,23 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(copiesRead, [live.persistentID])
     }
 
+    func testPastTheLimitALiveAlbumsSongFindsTheCopyTitledLive() throws {
+        // Spotify's title says nothing, its album says it is live: compared title to title,
+        // all the studio copies were titled alike, too many to read (the third review)
+        let studio = (0...LibraryMatchFinder.copiesRead).map {
+            LibrarySong(persistentID: String(format: "%016X", $0), name: "Clocks", artist: "Coldplay",
+                        albumArtist: "", album: "Compilation \($0)")
+        }
+        let live = LibrarySong(persistentID: "FFFFFFFFFFFFFFFF", name: "Clocks (Live)", artist: "Coldplay",
+                               albumArtist: "", album: "Live 2003")
+        library = studio + [live]
+
+        let match = try XCTUnwrap(ask(spotify("Clocks", by: "Coldplay", on: "Live 2003")))
+
+        XCTAssertEqual(match.song.persistentID, live.persistentID)
+        XCTAssertEqual(copiesRead, [live.persistentID])
+    }
+
     // MARK: - Reading a copy
 
     func testReadingACopyToChooseBetweenTakesWhatChooses() throws {

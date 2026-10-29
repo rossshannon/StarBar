@@ -101,8 +101,22 @@ final class SongNameTests: XCTestCase {
         XCTAssertTrue(SongName.isGenericTitle(core("Interlude 2")))
         XCTAssertTrue(SongName.isGenericTitle(core("Untitled")))
         XCTAssertTrue(SongName.isGenericTitle(core("Skit (Explicit)")))
+        XCTAssertTrue(SongName.isGenericTitle(core("Intro (Skit)")))
+        XCTAssertTrue(SongName.isGenericTitle(core("Interlude II")))
         XCTAssertFalse(SongName.isGenericTitle(core("Intro to Love")))
         XCTAssertFalse(SongName.isGenericTitle(core("Clocks")))
+    }
+
+    func testAFilmScoresCuesAreGenericTitles() {
+        // James Horner's "Main Title" on "Braveheart" is not the one on "Aliens"
+        for cue in ["Main Title", "Main Titles", "Main Theme", "End Title 2", "End Titles", "End Credits",
+                    "Opening Titles", "Opening Credits", "Closing Credits"] {
+            XCTAssertTrue(SongName.isGenericTitle(core(cue)), cue)
+        }
+        // Songs' names too
+        for name in ["Theme", "Finale", "Opening", "Theme from Shaft", "Main Street", "The End"] {
+            XCTAssertFalse(SongName.isGenericTitle(core(name)), name)
+        }
     }
 
     func testFeaturedArtistsComeOffTheTitle() {
@@ -181,6 +195,26 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(versions("Song - Live at Wembley - 2011 Remaster"), ["live:wembley"], "a remaster's year names nothing")
     }
 
+    func testOrdinalsNameAVersion() {
+        // Two shows, or two nights, at one place are two recordings
+        XCTAssertEqual(versions("Song - Live at the Royal Albert Hall, 1st Night"), ["live:royal albert hall 1st night"])
+        XCTAssertEqual(versions("Folsom Prison Blues - Live at Folsom State Prison, Folsom, CA (1st Show) - January 1968"),
+                       ["live:folsom state prison folsom ca 1st show january 1968"])
+        XCTAssertEqual(versions("Song - Live at Wembley - 25th Anniversary Edition"), ["live:wembley"], "an anniversary names nothing")
+    }
+
+    func testAYearBesideARemasterCanBeThePerformances() {
+        XCTAssertEqual(versions("Clocks - Live at Glastonbury 2011 Remastered 2020"), ["live:glastonbury 2011"])
+        XCTAssertEqual(versions("Song - Live at Wembley - 2003 Digital Remaster"), ["live:wembley"])
+        XCTAssertEqual(versions("Song - Live at Wembley / Digitally Remastered 2009"), ["live:wembley"])
+    }
+
+    func testARecordsSizeNamesNoVersion() {
+        XCTAssertEqual(versions("Song - 12\" Remix"), ["remix"])
+        XCTAssertEqual(versions("Song (12 Inch Remix)"), ["remix"])
+        XCTAssertEqual(versions("Song (7-inch Remix)"), ["remix"])
+    }
+
     func testRecordedLiveIsLive() {
         XCTAssertEqual(versions("Song - Recorded Live at Wembley"), ["live:wembley"])
     }
@@ -204,6 +238,26 @@ final class SongNameTests: XCTestCase {
                        "named differently, even on one release")
         XCTAssertFalse(SongName.isSameRecording("Song (Take 1)", on: "", as: "Song (Take 2)", on: ""))
         XCTAssertTrue(SongName.isSameRecording("Song - Recorded Live at Wembley", on: "", as: "Song (Live at Wembley)", on: ""))
+    }
+
+    func testAnotherShowIsAnotherRecordingEvenOnOneRelease() {
+        // Found rating the other show's copy in the third review, 2026-10-29
+        XCTAssertFalse(SongName.isSameRecording(
+            "Folsom Prison Blues - Live at Folsom State Prison, Folsom, CA (1st Show) - January 1968", on: "At Folsom Prison (Legacy Edition)",
+            as: "Folsom Prison Blues - Live at Folsom State Prison, Folsom, CA (2nd Show) - January 1968", on: "At Folsom Prison (Legacy Edition)"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live at the Royal Albert Hall, 1st Night", on: "Live at the Royal Albert Hall",
+                                                as: "Song (Live at the Royal Albert Hall, 2nd Night)", on: "Live at the Royal Albert Hall"))
+        XCTAssertFalse(SongName.isSameRecording("Clocks - Live at Glastonbury 2011 Remastered 2020", on: "Live Anthology",
+                                                as: "Clocks (Live at Glastonbury 2016 Remastered 2020)", on: "Live Anthology"))
+        XCTAssertTrue(SongName.isSameRecording("Song - Live at the Royal Albert Hall, 2nd Night", on: "Live at the Royal Albert Hall",
+                                               as: "Song (Live at the Royal Albert Hall, 2nd Night)", on: "Live at the Royal Albert Hall"))
+    }
+
+    func testOnOneReleaseANameCanSayLessThanTheOther() {
+        XCTAssertTrue(SongName.isSameRecording("Hotel California - Live On MTV, 1994", on: "Hell Freezes Over (Remaster 2018)",
+                                               as: "Hotel California (Live on MTV)", on: "Hell Freezes Over"))
+        XCTAssertFalse(SongName.isSameRecording("Hotel California - Live On MTV, 1994", on: "Hell Freezes Over",
+                                                as: "Hotel California (Live on MTV)", on: "Eagles Live"))
     }
 
     func testTwoPlainPerformancesAreOneOnlyOnOneRelease() {
@@ -232,6 +286,27 @@ final class SongNameTests: XCTestCase {
         XCTAssertFalse(SongName.isSameRelease("", ""))
     }
 
+    func testAnEditionTheRulesDontKnowIsTheSameRelease() {
+        for edition in ["Coexist (Limited Edition)", "Coexist (Tour Edition)", "Coexist (Japan Edition)",
+                        "Coexist (Bonus Tracks)", "Coexist - Limited Edition", "Coexist [Bonus Track Version]"] {
+            XCTAssertTrue(SongName.isSameRelease(edition, "Coexist"), edition)
+        }
+    }
+
+    func testAPlainVersionInAnAlbumsNameIsTheSameRelease() {
+        // One app's name for the album has it, the other's not
+        XCTAssertTrue(SongName.isSameRelease("I Might Be Wrong: Live Recordings", "I Might Be Wrong"))
+        XCTAssertTrue(SongName.isSameRelease("Parklive (Live)", "Parklive"))
+    }
+
+    func testAVersionAnAlbumNamesIsAnotherRelease() {
+        // The third review found the first two counted as one, 2026-10-29
+        XCTAssertFalse(SongName.isSameRelease("Tour Anthology (Live in Sydney 2003)", "Tour Anthology (Live in Buenos Aires 2017)"))
+        XCTAssertFalse(SongName.isSameRelease("Album (Live at Glastonbury)", "Album (Deluxe Edition)"))
+        XCTAssertFalse(SongName.isSameRelease("Fearless (Taylor's Version)", "Fearless"))
+        XCTAssertFalse(SongName.isSameRelease("TRON: Legacy", "TRON"), "a subtitle that is no version")
+    }
+
     func testANamedVersionCanBeNamedByTheOtherTracksAlbum() {
         XCTAssertTrue(SongName.isSameRecording("Clocks - Live in Sydney", on: "", as: "Clocks", on: "Live in Sydney"))
         XCTAssertTrue(SongName.isSameRecording("Clocks - Live in Sydney", on: "", as: "Clocks (Live)", on: "Live in Sydney"))
@@ -239,6 +314,14 @@ final class SongNameTests: XCTestCase {
                        "a plain (Live) is not the Sydney performance")
         XCTAssertTrue(SongName.isSameRecording("Idioteque - Live", on: "I Might Be Wrong: Live Recordings",
                                                as: "Idioteque", on: "I Might Be Wrong: Live Recordings"))
+        XCTAssertTrue(SongName.isSameRecording("Idioteque - Live", on: "I Might Be Wrong",
+                                               as: "Idioteque", on: "I Might Be Wrong: Live Recordings"))
+    }
+
+    func testTwoLiveReleasesOfOneTourAreTwoRecordings() {
+        XCTAssertFalse(SongName.isSameRecording("Clocks", on: "Tour Anthology (Live in Sydney 2003)",
+                                                as: "Clocks", on: "Tour Anthology (Live in Buenos Aires 2017)"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live", on: "Album (Deluxe Edition)", as: "Song", on: "Album (Live at Glastonbury)"))
     }
 
     func testKindsOfRecordingHaveToAgree() {
@@ -282,13 +365,22 @@ final class SongNameTests: XCTestCase {
         XCTAssertTrue(tyler.contains("tyler the creator"))
         XCTAssertTrue(tyler.contains("kali uchis"))
         let metro = SongName.artists("Metro Boomin, The Weeknd & 21 Savage")
-        XCTAssertTrue(metro.isSuperset(of: ["metro boomin", "weeknd", "21 savage"]), "\(metro)")
+        XCTAssertTrue(metro.isSuperset(of: ["metro boomin", "21 savage"]), "\(metro)")
+        XCTAssertFalse(metro.contains("weeknd"), "one word after the lead: see testABackingBandIsNotAnArtistOfItsOwn")
     }
 
-    func testAGuestIsStillOneOfTheCredits() {
+    func testABackingBandIsNotAnArtistOfItsOwn() {
+        // "Tears of Rage" by The Band is another recording from Bob Dylan & The Band's
+        XCTAssertEqual(SongName.artists("Bob Dylan & The Band"), ["bob dylan", "bob dylan and the band"])
+        XCTAssertFalse(SongName.artists("Huey Lewis & The News").contains("news"))
+        XCTAssertFalse(SongName.artists("Elvis Costello & The Attractions").contains("attractions"))
+        XCTAssertTrue(SongName.artists("Rihanna, Kanye West & Paul McCartney").isSuperset(of: ["kanye west", "paul mccartney"]))
+    }
+
+    func testAGuestIsNamedByTheCredit() {
         // For a "(with ...)" on the other side to be checked against
-        XCTAssertTrue(SongName.credits("Calvin Harris feat. Rihanna").contains("rihanna"))
-        XCTAssertTrue(SongName.credits("Calvin Harris feat. Rihanna").contains("calvin harris"))
+        XCTAssertEqual(SongName.guests("Calvin Harris feat. Rihanna"), ["rihanna"])
+        XCTAssertEqual(SongName.guests("Calvin Harris"), [])
     }
 
     func testAGuestIsNotOneOfTheCreditsOwnArtists() {
