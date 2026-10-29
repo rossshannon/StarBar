@@ -394,17 +394,18 @@ final class MusicLibraryLookupTests: XCTestCase {
     func testReadingCopiesTwiceAnswersBothTimes() throws {
         let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
         let (first, second) = try twoDifferentLibraryTracks()
+        try XCTSkipUnless(first.mediaKind == .music && second.mediaKind == .music,
+                          "a track that isn't a song reads as no copy, which proves nothing about the connection")
         for track in [first, second, first] {
             let song = LibrarySong(persistentID: try XCTUnwrap(track.persistentID), name: track.name ?? "",
                                    artist: track.artist ?? "", albumArtist: "")
             let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: false),
                                      "Music didn't answer")
-            // Nil when the track isn't a song, which still proves the read was answered
-            if let copy = read.first ?? nil {
-                XCTAssertEqual(copy.persistentID, song.persistentID)
-                XCTAssertEqual(copy.album, track.album ?? "")
-                XCTAssertEqual(copy.isFavorited, track.isFavorited)
-            }
+            // What was read from Music, not the persistent ID passed in, which comes back as it went
+            let copy = try XCTUnwrap(read.first ?? nil, "a song read as no copy")
+            XCTAssertEqual(copy.album, track.album ?? "")
+            XCTAssertEqual(copy.duration, track.duration.flatMap { $0 > 0 ? $0 : nil })
+            XCTAssertEqual(copy.isFavorited, track.isFavorited)
         }
     }
 
@@ -480,7 +481,8 @@ final class MusicLibraryLookupTests: XCTestCase {
     /// One song of each iCloud status found in a sample across the library, because that read
     /// set Music off for an Apple Music download and not for a matched file: the first cut of
     /// this test read only the library's first track, a matched file, and passed with the
-    /// bug put back.
+    /// bug put back. The whole library's read too, which runs after every library change. It
+    /// listens for 16 s, because Music's second announcement came 14.7 s after the read.
     func testReadingACopyAnnouncesNoLibraryChange() throws {
         let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
         let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
@@ -518,10 +520,11 @@ final class MusicLibraryLookupTests: XCTestCase {
         changes = []
         let read = Date()
         _ = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: songs, choosing: true), "Music didn't answer")
-        spin(for: 6)
+        _ = try XCTUnwrap(MusicLibraryIndex.readSongs(pid: pid), "Music didn't answer the library read")
+        spin(for: 16)
 
         XCTAssertEqual(changes.map { String(format: "%.1f s", $0.timeIntervalSince(read)) }, [],
-                       "Music announced a library change after reading \(songs.map { $0.name })")
+                       "Music announced a library change after reading \(songs.map { $0.name }) and the library")
     }
 
     /// Run the main run loop for `seconds`, or until `done`
