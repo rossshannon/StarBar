@@ -73,6 +73,8 @@ final class iTunesRadioStation {
     static let refusedWriteRereadDelay: TimeInterval = 0.5
     /// The re-read scheduled after a refused write, so several refusals mean one read
     private var refusedWriteReread: RatingReminderTimer?
+    /// Apple Events through this connection that Music failed or didn't answer in time
+    private(set) var failedEvents = 0
     /// True while a re-read after a refused write is waiting to run. Not private only so the
     /// tests can see it, like `classAndID(of:)`.
     var hasPendingRereadAfterRefusedWrite: Bool {
@@ -474,8 +476,9 @@ extension iTunesRadioStation {
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) })
     }
 
-    /// The library's track for a song `MusicLibraryIndex` found, by persistent ID, or nil
-    /// when it is gone or is no longer that song.
+    /// The library's track for a song `MusicLibraryIndex` found, by persistent ID: `.gone`
+    /// when it has gone or is no longer that song, and `.unanswered` when Music didn't
+    /// answer, which says nothing about the song.
     ///
     /// The index can be a library notification behind, so the track's name and artist are
     /// read and compared with the index's before anything uses it: a rating written to the
@@ -483,20 +486,31 @@ extension iTunesRadioStation {
     /// again by database ID (see `libraryCopy(of:)`).
     ///
     /// A few Apple Events, under the short timeout so a hung Music can't hold the menu bar.
-    /// Main thread, like every read through this connection.
-    func libraryTrack(for song: LibrarySong) -> iTunesTrack? {
-        return MenuBarRatingControl.withShortTimeout { iTunes -> iTunesTrack? in
+    /// **A timeout looks exactly like a song that has gone**: Scripting Bridge answers the
+    /// failed count with an empty list. Measured 2026-10-29, after Music had sat idle for
+    /// seven minutes the count took over the 1 s timeout, and the song the user had just
+    /// been shown the stars of was dropped as gone. So the station's failed events are
+    /// counted across the lookup. Main thread, like every read through this connection.
+    func libraryTrack(for song: LibrarySong) -> LibraryTrackLookup {
+        let failuresBefore = failedEvents
+        let lookup = MenuBarRatingControl.withShortTimeout { iTunes -> LibraryTrackLookup in
             guard let library = iTunesRadioStation.librarySource(of: iTunes),
-                  let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else { return nil }
+                  let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else { return .unanswered }
             let predicate = NSPredicate(format: "persistentID == %@", song.persistentID)
             let found = libraryPlaylist.tracks?().filtered(using: predicate) as? [iTunesTrack] ?? []
-            guard found.count == 1, let track = found.first,
-                  track.name == song.name, track.artist == song.artist else {
-                os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
-                return nil
+            let isThatSong = found.count == 1 && found.first?.name == song.name && found.first?.artist == song.artist
+            guard failedEvents == failuresBefore else {
+                os_log("%{public}s[%{public}ld], %{public}s: Music didn't answer about library song %{public}s in time", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID)
+                return .unanswered
             }
-            return track
-        } ?? nil
+            guard isThatSong, let track = found.first else {
+                os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
+                return .gone
+            }
+            return .found(track)
+        }
+        // Nil when Music isn't running
+        return lookup ?? .unanswered
     }
 
     /// The user's own library, as opposed to a shared library, an iPod or the store.
@@ -618,6 +632,10 @@ extension iTunesRadioStation: SBApplicationDelegate {
     /// that the project guide warns against: that one races a write that is about to succeed,
     /// and this one follows a write that has already failed.
     func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
+        // Every event through this connection is sent from the main thread, and this runs
+        // on the thread that sent it, inside the call, so a caller can compare the count
+        // before and after
+        failedEvents += 1
         let (eventClass, eventID) = iTunesRadioStation.classAndID(of: event)
         os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
 

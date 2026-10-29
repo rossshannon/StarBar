@@ -20,7 +20,7 @@ import os
 ///
 /// Only what finding a song takes is read here: the persistent ID, name, artist and album
 /// artist. What chooses between copies (album, length, rating, plays) and whether a copy is
-/// a song at all are read by `LibraryMatchFinder` for the few copies a song has. Measured
+/// a song at all are read for the few copies a song has (`readCopies`). Measured
 /// 2026-10-28 on 8,092 tracks, a bulk read took 14 to 48 ms; on 2026-10-29, on the same
 /// library, the ten properties first read took 0.35 s, 4.4 s and 25 s at three launches.
 /// Music answers Apple Events one at a time, so while one of these is out, every other
@@ -78,6 +78,8 @@ final class MusicLibraryIndex {
 
     /// Reads the library, on the background queue
     private let readLibrary: (pid_t) -> [LibrarySong]?
+    /// Reads a few library songs from Music, on the background queue
+    private let readCopiesOfSong: (pid_t, [LibrarySong], Bool) -> [LibrarySong?]?
     /// Music's process, or nil when it isn't running
     private let musicPID: () -> pid_t?
 
@@ -88,8 +90,10 @@ final class MusicLibraryIndex {
     /// The parameters are for the tests, which count reads and play at Music launching and
     /// quitting without touching the real one
     init(readLibrary: @escaping (pid_t) -> [LibrarySong]? = MusicLibraryIndex.readSongs(pid:),
+         readCopies: @escaping (pid_t, [LibrarySong], Bool) -> [LibrarySong?]? = MusicLibraryIndex.readCopies(pid:of:choosing:),
          musicPID: @escaping () -> pid_t? = MusicLibraryIndex.runningMusicPID) {
         self.readLibrary = readLibrary
+        self.readCopiesOfSong = readCopies
         self.musicPID = musicPID
     }
 
@@ -171,6 +175,29 @@ final class MusicLibraryIndex {
         callers.forEach { $0(matcher) }
     }
 
+    /// What Music says now about each of `songs`, the copies of one song, with what
+    /// `LibrarySong.reading(_:choosing:)` reads. On the index's queue and connection, so a
+    /// Music slow to answer holds no thread anything else waits on: these are a few Apple
+    /// Events per copy, and Music has taken over a second to answer the first after a spell
+    /// idle.
+    ///
+    /// `completion` runs on the main thread with an entry per song, nil for one that has
+    /// gone, has changed or isn't a song; or with nil when Music isn't running or didn't
+    /// answer, which says nothing about the songs. Before this returns when there is no Music.
+    func readCopies(_ songs: [LibrarySong], choosing: Bool, completion: @escaping ([LibrarySong?]?) -> Void) {
+        guard let pid = musicPID() else { return completion(nil) }
+        let readCopies = readCopiesOfSong
+        queue.async {
+            let started = Date()
+            let copies = readCopies(pid, songs, choosing)
+            let elapsed = Date().timeIntervalSince(started) * 1000
+            DispatchQueue.main.async {
+                os_log("%{public}s[%{public}ld], %{public}s: read %{public}ld library copies in %{public}.0f ms%{public}s", ((#file as NSString).lastPathComponent), #line, #function, songs.count, elapsed, copies == nil ? ", but Music didn't answer" : "")
+                completion(copies)
+            }
+        }
+    }
+
     static func runningMusicPID() -> pid_t? {
         return NSRunningApplication.runningApplications(withBundleIdentifier: OSVersionHelper.bundleIdentifier)
             .first(where: { !$0.isTerminated })?.processIdentifier
@@ -249,6 +276,47 @@ final class MusicLibraryIndex {
             return reading?.columns
         } catch {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: reading the library raised: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
+            return nil
+        }
+    }
+
+    /// What one try at reading copies came to, boxed for `ExceptionCatcher` like `Reading`
+    private struct CopiesReading {
+        var copies: [LibrarySong?]?
+    }
+
+    /// `readCopies(_:choosing:completion:)`'s read. Each copy is found by persistent ID (a
+    /// `whose` search, never `object(withID:)`) and must still have the index's name and
+    /// artist. Nil when any Apple Event failed: Scripting Bridge answers a timed-out search
+    /// with an empty list, which would look like a song that has gone. Background queue only.
+    static func readCopies(pid: pid_t, of songs: [LibrarySong], choosing: Bool) -> [LibrarySong?]? {
+        guard let application = SBApplication(processIdentifier: pid) else { return nil }
+        let failures = FailureCounter()
+        application.delegate = failures
+        application.timeout = readTimeout
+        do {
+            let reading = try ExceptionCatcher.catchException {
+                guard let source = iTunesRadioStation.librarySource(of: application),
+                      let playlist = iTunesRadioStation.libraryPlaylist(of: source),
+                      let tracks = playlist.tracks?() else { return CopiesReading() }
+                return CopiesReading(copies: songs.map { song -> LibrarySong? in
+                    let found = tracks.filtered(using: NSPredicate(format: "persistentID == %@", song.persistentID)) as? [iTunesTrack] ?? []
+                    guard found.count == 1, let track = found.first,
+                          track.name == song.name, track.artist == song.artist else {
+                        os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
+                        return nil
+                    }
+                    guard let read = song.reading(track, choosing: choosing) else {
+                        os_log("%{public}s[%{public}ld], %{public}s: library track %{public}s, \u{201C}%{public}s\u{201D} by %{public}s, isn't a song", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist)
+                        return nil
+                    }
+                    return read
+                })
+            } as? CopiesReading
+            guard failures.failures == 0 else { return nil }
+            return reading?.copies
+        } catch {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: reading library copies raised: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)
             return nil
         }
     }
