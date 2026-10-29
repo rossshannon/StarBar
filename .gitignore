@@ -102,3 +102,6 @@ Dependencies/**
 # Claude Code tools (project skills are tracked)
 .claude/*
 !.claude/skills/
+
+# Git worktrees (see "Worktrees" in AGENTS.md)
+.worktrees/
