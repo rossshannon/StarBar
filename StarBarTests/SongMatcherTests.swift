@@ -72,11 +72,19 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.match(for: query("Theme", by: "Composer Name")), track)
     }
 
-    func testAFeaturedArtistOnSpotifyCanBeTheLibrarysArtist() {
-        let track = song("Collaboration", by: "Second Artist")
-        let matcher = SongMatcher(library: [track])
+    func testAGuestAloneIsNotACredit() {
+        // Spotify's song features the library's artist, or the other way round. On their
+        // own, a guest's name would find their own song of the same title, and the user's
+        // rating would go on it.
+        let theirOwn = song("Collaboration", by: "Guest Artist")
+        let featuring = song("Collaboration (feat. Guest Artist)", by: "Main Artist")
+        let credited = song("Collaboration", by: "Main Artist feat. Guest Artist")
 
-        XCTAssertEqual(matcher.match(for: query("Collaboration (feat. Second Artist)", by: "First Artist")), track)
+        XCTAssertNil(SongMatcher(library: [theirOwn]).match(for: query("Collaboration (feat. Guest Artist)", by: "Main Artist")))
+        XCTAssertNil(SongMatcher(library: [featuring]).match(for: query("Collaboration", by: "Guest Artist")))
+        XCTAssertNil(SongMatcher(library: [credited]).match(for: query("Collaboration", by: "Guest Artist")))
+        XCTAssertEqual(SongMatcher(library: [theirOwn, featuring, credited])
+            .copies(of: query("Collaboration (feat. Guest Artist)", by: "Main Artist")).count, 2, "the main artist finds both")
     }
 
     // MARK: - A different song
@@ -94,7 +102,23 @@ final class SongMatcherTests: XCTestCase {
         let matcher = SongMatcher(library: [studio, live])
 
         XCTAssertEqual(matcher.copies(of: query("One", by: "Metallica")), [studio])
-        XCTAssertEqual(matcher.copies(of: query("One - Live", by: "Metallica")), [live])
+        XCTAssertEqual(matcher.match(for: query("One - Live", by: "Metallica")), live)
+    }
+
+    func testALiveSongFindsACopyOnlyItsAlbumSaysIsLive() {
+        // Spotify can say so in the title where the library says it only in the album's
+        // name, as it does for this song, or the other way round
+        let studio = song("Idioteque", by: "Radiohead", on: "Kid A", length: 309)
+        let live = song("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings", length: 265)
+        let liveTitled = song("Idioteque (Live)", by: "Radiohead", on: "Live From The Basement")
+        let liveOnSpotify = query("Idioteque - Live", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")
+
+        XCTAssertEqual(SongMatcher(library: [studio, live]).match(for: liveOnSpotify), live)
+        XCTAssertEqual(SongMatcher(library: [studio, liveTitled])
+            .match(for: query("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")), liveTitled)
+        // Before their albums are read, a copy whose title says what Spotify's does comes
+        // first, so it is among those read when there are more copies than are read
+        XCTAssertEqual(SongMatcher(library: [studio, live, liveTitled]).copies(of: liveOnSpotify).first, liveTitled)
     }
 
     func testARemixIsNotTheOriginal() {

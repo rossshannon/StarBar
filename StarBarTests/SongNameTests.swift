@@ -157,8 +157,15 @@ final class SongNameTests: XCTestCase {
     func testACreditNamesEachArtistAndItsWhole() {
         XCTAssertEqual(SongName.artists("Calvin Harris & Dua Lipa"), ["calvin harris", "dua lipa", "calvin harris and dua lipa"])
         XCTAssertTrue(SongName.artists("Cave, Nick & Warren Ellis").contains("warren ellis"))
-        XCTAssertTrue(SongName.artists("Calvin Harris feat. Rihanna").contains("rihanna"))
-        XCTAssertTrue(SongName.artists("Aaliyah ft. Timbaland").contains("timbaland"))
+        XCTAssertEqual(SongName.artists("Run-DMC vs. Jason Nevins"), ["run dmc", "jason nevins", "run dmc vs jason nevins"])
+    }
+
+    func testAGuestIsNotOneOfTheCreditsOwnArtists() {
+        // On their own, a guest would find their own song of the same title
+        XCTAssertFalse(SongName.artists("Calvin Harris feat. Rihanna").contains("rihanna"))
+        XCTAssertFalse(SongName.artists("Aaliyah ft. Timbaland").contains("timbaland"))
+        XCTAssertEqual(SongName.artists("Ella Fitzgerald with Chick Webb & His Orchestra"),
+                       ["ella fitzgerald", "ella fitzgerald with chick webb and his orchestra"])
     }
 
     func testABandNamedLikeAListStaysOneName() {
@@ -169,8 +176,8 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.artists("Crosby, Stills, Nash & Young"), ["crosby stills nash and young"])
     }
 
-    func testAFeaturedArtistIsSplitOffEvenAsOneWord() {
-        XCTAssertEqual(SongName.artists("Drake feat. Rihanna"), ["drake", "rihanna", "drake feat rihanna"])
+    func testAGuestIsSplitOffEvenAsOneWord() {
+        XCTAssertEqual(SongName.artists("Drake feat. Rihanna"), ["drake", "drake feat rihanna"])
     }
 
     // MARK: - Albums

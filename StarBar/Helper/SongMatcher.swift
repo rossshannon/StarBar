@@ -50,11 +50,12 @@ struct SongQuery: Equatable {
 
 /// The user's Music library, keyed for finding the song another player is playing.
 ///
-/// Two tracks are the same song when their titles agree once edition words are dropped, they
-/// share an artist, and they mark the same kind of recording: a live or remixed version is a
-/// different song from the studio one. `SongName` holds the rules. The kind of recording comes
-/// from the album's name as well as the title's, but the index holds no albums, so that part
-/// waits for `ranked(_:for:)`, once the copies' albums have been read.
+/// Two tracks are the same song when their titles agree once edition words are dropped, the
+/// copy credits Spotify's artist as one of its own, and they mark the same kind of recording:
+/// a live or remixed version is a different song from the studio one. `SongName` holds the
+/// rules. The kind of recording comes from the album's name as well as the title's, but the
+/// index holds no albums, so that part waits for `ranked(_:for:)`, once the copies' albums
+/// have been read.
 ///
 /// Album and duration never decide whether it is the same song: "Move On Up" is 2:46 as the
 /// single edit and 8:49 on the album. They only choose between copies when the user has the
@@ -68,7 +69,7 @@ struct SongMatcher {
 
     private struct Entry {
         let song: LibrarySong
-        /// Everyone credited on the track: its artists, its album artist, anyone featured
+        /// The track's own artists and its album artist, never a guest (`SongName.artists(_:)`)
         let artists: Set<String>
         let versions: Set<String>
         let album: String
@@ -98,7 +99,7 @@ struct SongMatcher {
 
         init(_ names: Names) {
             let title = SongName.title(names.name)
-            var artists = SongName.artists(names.artist).union(title.featured)
+            var artists = SongName.artists(names.artist)
             if !names.albumArtist.isEmpty {
                 artists.formUnion(SongName.artists(names.albumArtist))
             }
@@ -138,21 +139,34 @@ struct SongMatcher {
     }
 
     /// Every copy of the song the user has, going by the names alone, the one to show and rate
-    /// first. Empty when they don't have it. A copy on a live or remix album is still here:
-    /// `ranked(_:for:)` leaves it out.
+    /// first. Empty when they don't have it.
+    ///
+    /// A copy's title can say less than the query's: "Idioteque" on "I Might Be Wrong: Live
+    /// Recordings" is the live song Spotify calls "Idioteque - Live", so a copy is kept
+    /// whenever what its title marks, the query's title or album marks too. Copies whose
+    /// titles mark the same as the query's come first. `ranked(_:for:)` then holds each copy
+    /// to the query once its album has been read, and leaves out one that is a different
+    /// recording after all.
     func copies(of query: SongQuery) -> [LibrarySong] {
         let title = SongName.title(query.name)
         let artist = SongName.artist(query.artist)
         guard !title.core.isEmpty, !artist.isEmpty else { return [] }
 
-        // The query's artist is compared whole and never split, and the library keeps a band
-        // named like a list whole (`SongName.artists(_:)`), so "Earth" can't find "Earth,
-        // Wind & Fire"
-        let credited = Set([artist]).union(title.featured)
+        // Spotify's artist is compared whole and never split, and the library keeps a band
+        // named like a list whole, so "Earth" can't find "Earth, Wind & Fire". Anyone featured
+        // in Spotify's title is left out too: on their own they would find their own song of
+        // the same name.
+        let versions = SongName.versions(of: query.name, on: query.album)
         let album = SongName.album(query.album)
         return (byTitle[title.core] ?? [])
-            .filter { !$0.artists.isDisjoint(with: credited) && $0.versions == title.versions }
-            .sorted { SongMatcher.choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
+            .filter { $0.artists.contains(artist) && $0.versions.isSubset(of: versions) }
+            .sorted { a, b in
+                let sameA = a.versions == title.versions, sameB = b.versions == title.versions
+                if sameA != sameB {
+                    return sameA
+                }
+                return SongMatcher.choose(a.song, a.album, over: b.song, b.album, album: album, duration: query.duration)
+            }
             .map { $0.song }
     }
 

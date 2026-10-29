@@ -182,16 +182,24 @@ enum SongName {
         return name.hasPrefix("the ") ? String(name.dropFirst(4)) : name
     }
 
-    /// Every artist a credit names, and the whole credit too: "Calvin Harris & Dua Lipa"
-    /// gives "calvin harris", "dua lipa" and "calvin harris and dua lipa", and "Cave, Nick &
-    /// Warren Ellis" gives "warren ellis" among others. A band named like a list stays one
-    /// name: see `artistNames(in:)`.
+    /// Every artist a credit names as its own, and the whole credit too: "Calvin Harris & Dua
+    /// Lipa" gives "calvin harris", "dua lipa" and "calvin harris and dua lipa", and "Cave,
+    /// Nick & Warren Ellis" gives "warren ellis" among others. A band named like a list stays
+    /// one name: see `artistNames(in:)`.
+    ///
+    /// A guest, after "feat." or "with", is left out, as one in a title is: "Calvin Harris
+    /// feat. Rihanna" gives "calvin harris" and the whole credit, never "rihanna". On their
+    /// own, a guest's name would find their own song of the same title, and put the user's
+    /// rating on it.
     ///
     /// Only for the library's side. Spotify's artist is one name, compared whole.
     static func artists(_ raw: String) -> Set<String> {
-        var names = Set(artistNames(in: raw))
-        let credit = artist(raw)
-        if !credit.isEmpty {
+        var own = fold(raw)
+        if let guest = guestSeparator.firstMatch(in: own, range: whole(own)), let range = Range(guest.range, in: own) {
+            own = String(own[..<range.lowerBound])
+        }
+        var names = Set(artistNames(in: own))
+        for credit in [artist(own), artist(raw)] where !credit.isEmpty {
             names.insert(credit)
         }
         return names
@@ -301,7 +309,9 @@ enum SongName {
     private static let dashSuffix = pattern(#"\s+-\s+(.*)$"#)
     private static let trailingThe = pattern(#"^(.+?)\s*,\s*the$"#)
     /// Always between two artists
-    private static let creditSeparator = pattern(#"\s*(?:;|/|\sx\s|\sfeat\.?\s|\sft\.?\s|\sfeaturing\s|\swith\s|\svs\.?\s)\s*"#)
+    private static let creditSeparator = pattern(#"\s*(?:;|/|\sx\s|\svs\.?\s)\s*"#)
+    /// Before a credit's guests
+    private static let guestSeparator = pattern(#"\s(?:feat\.?|ft\.?|featuring|with)\s"#)
     /// Between two artists, or inside a band's name: see `artistNames(in:)`
     private static let listSeparator = pattern(#"\s*(?:,|\s&\s|\sand\s|\s\+\s)\s*"#)
 
@@ -320,7 +330,7 @@ enum SongName {
 
     /// The artists a credit names, each folded as `artist(_:)`.
     ///
-    /// "feat.", "with", "vs.", "x", ";" and "/" always separate artists. A comma, "&", "and"
+    /// "vs.", "x", ";" and "/" always separate artists. A comma, "&", "and"
     /// or "+" does only when a name it separates is more than one word. A list of single
     /// words is a band's name -- "Earth, Wind & Fire", "Simon & Garfunkel", "Echo & the
     /// Bunnymen" -- and splitting it would let a band called Earth match Earth, Wind & Fire's
