@@ -113,6 +113,12 @@ final class MusicLibraryIndex {
 
     @objc func libraryDidChange(_ notification: Notification) {
         // Distributed notifications arrive on the main thread, where this state lives
+        markStale()
+    }
+
+    /// The library has changed, or something has shown it has before its notification came:
+    /// the next `withMatcher` reads it again. Main thread.
+    func markStale() {
         generation += 1
         isStale = true
     }

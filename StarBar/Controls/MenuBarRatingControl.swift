@@ -827,8 +827,17 @@ extension MenuBarRatingControl: RatingControlDelegate {
         // before committing: a refused gesture must not change the stars, announcement or
         // reminder. UI tests intentionally have no Music target.
         if !MenuBarRatingControl.isUITesting && ratingTarget?.exists?() != true {
-            os_log("%{public}s[%{public}ld], %{public}s: rating target disappeared; refreshing the player", ((#file as NSString).lastPathComponent), #line, #function)
-            iTunesPlayer.shared.update()
+            guard libraryMatch != nil else {
+                os_log("%{public}s[%{public}ld], %{public}s: rating target disappeared; refreshing the player", ((#file as NSString).lastPathComponent), #line, #function)
+                iTunesPlayer.shared.update()
+                return false
+            }
+            // The user's copy of the Spotify song, deleted in Music since it was found.
+            // Reading Music's player would bring the same answer back; the library has to be
+            // read again.
+            os_log("%{public}s[%{public}ld], %{public}s: the library copy on show has gone; looking for the Spotify song again", ((#file as NSString).lastPathComponent), #line, #function)
+            LibraryMatchFinder.shared.copyIsGone()
+            applySpotifyDisplay()
             return false
         }
         return playbackState.canInteract
@@ -964,8 +973,12 @@ extension MenuBarRatingControl {
         }
         ratingControl.update(mode: .rating)
         // A new match brings what was read with it. After that the copy is read again each
-        // time rather than kept, so a rating changed in Music shows at the next update.
-        let shown = match.shown ?? LibraryMatch.Shown(reading: match.track)
+        // time rather than kept, so a rating changed in Music shows at the next update. That
+        // read is on the main thread, so under the short timeout: at the default, a Music
+        // that hangs would hold the menu bar for two minutes.
+        let shown = match.shown
+            ?? MenuBarRatingControl.withShortTimeout { _ in LibraryMatch.Shown(reading: match.track) }
+            ?? LibraryMatch.Shown(rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
         // Don't overwrite the stars the user is dragging across
         if !clickController.isDragging {
             ratingControl.update(rating: shown.rating ?? 0)

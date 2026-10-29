@@ -208,6 +208,18 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(reads, 2)
     }
 
+    func testACopyDeletedBeforeTheNotificationIsLookedForAgain() {
+        // Deleted in Music while its stars are on show: the menu bar finds the copy gone
+        // before Music announces the change, and the next answer can't be the same copy
+        XCTAssertNotNil(ask(spotify("Zombie", by: "The Cranberries")))
+        library = [linger]
+
+        finder.copyIsGone()
+
+        XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries")))
+        XCTAssertEqual(reads, 2)
+    }
+
     func testTheLastAnswerIsKeptUntilANewOneReplacesIt() {
         // So the strip doesn't drop the stars while the library is read again after a rating
         _ = ask(spotify("Zombie", by: "The Cranberries"))
@@ -364,7 +376,7 @@ final class LibraryMatchFinderTests: XCTestCase {
     }
 
     func testOnlyTheFirstFewCopiesAreRead() {
-        // Each copy is Apple Events on the main thread
+        // Each copy is up to eight Apple Events
         library = (0..<10).map {
             LibrarySong(persistentID: String(format: "%016X", $0), name: "Zombie", artist: "The Cranberries", albumArtist: "")
         }

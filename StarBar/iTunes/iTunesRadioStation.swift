@@ -338,7 +338,9 @@ extension iTunesRadioStation {
     /// Main thread only, like `setRating(_:on:)`.
     func setRating(_ rating: Int, on match: LibraryMatch) {
         let song = match.song
-        let had = match.track.userRating
+        // Only for the log, which is the one record of what the copy had before, so read now
+        // rather than when matched. Main thread, so under the short timeout.
+        let had = MenuBarRatingControl.withShortTimeout { _ in match.track.userRating } ?? nil
         os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: match.track, name: song.name, songIdentity: {
             song.persistentID

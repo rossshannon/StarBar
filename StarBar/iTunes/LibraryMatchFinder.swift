@@ -122,8 +122,11 @@ final class LibraryMatchFinder {
 
     static let shared = LibraryMatchFinder()
 
-    /// The most copies of one song read from Music. Each is up to eight Apple Events; one
-    /// song held more often than this is rare, and the copies past it are never chosen.
+    /// The most copies of one song read from Music. Each is up to eight Apple Events. The
+    /// index holds no albums, ratings or lengths to order them by, so past this many, which
+    /// are read is down to their titles and then their persistent IDs, and the copy that
+    /// would have been chosen can be among those left out. One song held more often than
+    /// this is rare.
     static let copiesRead = 6
 
     /// How long to wait before asking a Music that didn't answer again. Measured 2026-10-29,
@@ -190,6 +193,13 @@ final class LibraryMatchFinder {
         return answer.match
     }
 
+    /// The copy a match named has gone from the library, deleted in Music before the library
+    /// notification came. The next question reads the library again, rather than hand back
+    /// the copy that is gone.
+    func copyIsGone() {
+        index.markStale()
+    }
+
     private func look(for query: SongQuery, identity: String, triesLeft: Int) {
         index.withMatcher { [weak self] matcher in
             guard let self = self, self.asking?.identity == identity else { return }
@@ -245,6 +255,7 @@ final class LibraryMatchFinder {
             return finish(knownMatch(for: identity), for: identity, remember: false)
         }
         os_log("%{public}s[%{public}ld], %{public}s: Music didn't answer about %{public}s; asking again in %{public}.0f s", ((#file as NSString).lastPathComponent), #line, #function, identity, LibraryMatchFinder.retryDelay)
+        retry?.invalidate()
         retry = clock.schedule(after: LibraryMatchFinder.retryDelay, repeats: false) { [weak self] in
             guard let self = self, self.asking?.identity == identity else { return }
             self.retry = nil
