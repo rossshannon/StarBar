@@ -114,6 +114,28 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertNil(MusicLibraryIndex.songs(from: columns))
     }
 
+    func testARejectedReadSaysWhy() throws {
+        // Every read failing the same way has to be told apart from a library that really
+        // changed under it, from the log alone
+        let two = [row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")]
+        XCTAssertNil(MusicLibraryIndex.misalignment(in: columns(two)))
+
+        var short = columns(two)
+        short["rating"]?.removeLast()
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: short), "2 persistent IDs, but rating has 1")
+
+        var missing = columns(two)
+        missing["album"] = nil
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: missing), "no column for album")
+
+        var moved = columns(two)
+        moved[MusicLibraryIndex.recheckKey] = ["A1", "C3"]
+        let reason = try XCTUnwrap(MusicLibraryIndex.misalignment(in: moved))
+        XCTAssertTrue(reason.hasPrefix("the persistent IDs read again differ from row 1: B2"), reason)
+
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: columns([])), "no tracks")
+    }
+
     func testAReadWithNoTracksIsAFailure() {
         // A read that went wrong quietly looks exactly like this; an empty library would match
         // nothing until the next edit

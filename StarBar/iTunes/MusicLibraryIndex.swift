@@ -190,7 +190,7 @@ final class MusicLibraryIndex {
             if let songs = songs(from: columns) {
                 return songs
             }
-            os_log("%{public}s[%{public}ld], %{public}s: the library changed during read %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, attempt)
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: read %{public}ld can't be used: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, attempt, misalignment(in: columns) ?? "no reason found")
         }
         return nil
     }
@@ -250,9 +250,7 @@ final class MusicLibraryIndex {
     /// song. Also nil for no tracks at all, because a read that went wrong quietly looks
     /// exactly like that, and an empty index would match nothing until the next library edit.
     static func songs(from columns: Columns) -> [LibrarySong]? {
-        guard let ids = columns["persistentID"], !ids.isEmpty,
-              keys.allSatisfy({ columns[$0]?.count == ids.count }),
-              let recheck = columns[recheckKey], (recheck as NSArray).isEqual(to: ids) else { return nil }
+        guard misalignment(in: columns) == nil, let ids = columns["persistentID"] else { return nil }
         let names = columns["name"] ?? []
         let artists = columns["artist"] ?? []
         let albumArtists = columns["albumArtist"] ?? []
@@ -283,6 +281,25 @@ final class MusicLibraryIndex {
             ))
         }
         return songs
+    }
+
+    /// Why a bulk read can't be used, in words for the log, or nil when its columns line up.
+    /// The causes look alike from outside -- each makes the read useless -- but not when
+    /// working out why every read fails.
+    static func misalignment(in columns: Columns) -> String? {
+        guard let ids = columns["persistentID"] else { return "no persistent ID column" }
+        guard !ids.isEmpty else { return "no tracks" }
+        let missing = keys.filter { columns[$0] == nil }
+        guard missing.isEmpty else { return "no column for " + missing.joined(separator: ", ") }
+        let uneven = keys.filter { columns[$0]?.count != ids.count }
+        guard uneven.isEmpty else {
+            return "\(ids.count) persistent IDs, but " + uneven.map { "\($0) has \(columns[$0]?.count ?? 0)" }.joined(separator: ", ")
+        }
+        guard let recheck = columns[recheckKey] else { return "the persistent IDs weren't read again" }
+        guard !(recheck as NSArray).isEqual(to: ids) else { return nil }
+        guard recheck.count == ids.count else { return "\(ids.count) persistent IDs, then \(recheck.count) when read again" }
+        let row = ids.indices.first(where: { !(ids[$0] as AnyObject).isEqual(recheck[$0]) }) ?? 0
+        return "the persistent IDs read again differ from row \(row): \(ids[row]) (\(type(of: ids[row]))) then \(recheck[row]) (\(type(of: recheck[row])))"
     }
 
     /// An enumerated value's four-character code. Scripting Bridge hands one back as a number
