@@ -64,8 +64,22 @@ Four reviews of the first build, 2026-10-29, ran real titles through the matcher
 - "Rock of Ages - Re-Recorded" found the original, "re" and "recorded" both being edition words. A re-recording is now a version.
 - "Yesterday (With Strings)" found the Beatles' "Yesterday", and a bare "feat" cut "A Feat of Strength" to "A". Someone credited with "with" must be credited on the other side, and a bare featured credit needs its dot.
 - "AC/DC" split into "ac" and "dc". A slash now splits only like a comma.
-- "Intro" by The xx on *Coexist* (60 s) found the "Intro" on *xx* (127 s). A copy is now ruled out when it is on an album Spotify doesn't name and its length is more than 10% off, unless either title names an edit, so the single edit of "Move On Up" still finds the album version.
-- With seven or more copies, which six were read came down to persistent IDs. All copies are now read, up to twelve, and a song held more often than that is no match.
+- "Intro" by The xx on *Coexist* (60 s) found the "Intro" on *xx* (127 s). A length rule was tried first and replaced after the second review (below).
+- With seven or more copies, which six were read came down to persistent IDs. All copies are now read, up to twelve; past that, see the second review.
+
+## Rules from the second review
+
+The same reviewers, on the fixes above, 2026-10-29. Three of those fixes brought problems of their own, and the length rule cost more than it saved.
+
+- "Live at Wembley 1986" matched "Live at Wembley 1987", and "Take 1" matched "Take 2": a version's name dropped its numbers. Numbers now stay in it; a remaster's year ("- 2011 Remaster") is taken out first.
+- Plain "Clocks" on *Live in Sydney* matched plain "Clocks" on *Live in Buenos Aires*. Two performances neither title names (live, remix, acoustic, demo, session, re-recording, orchestral) are now the same recording only on the same release: the albums once their edition words and Music's " - Single" or " - EP" are off. An instrumental or a reprise is the same on any album.
+- Spotify's "Hotel California - Live On MTV, 1994" missed the "(Live)" on *Hell Freezes Over*, because a named version needed the name in the other's album. A version one side names now also matches a plain one on the same release. "Recorded Live at Wembley" now names Wembley, and "Live 2003" is a live album.
+- "Queen & David Bowie" no longer found Queen's "Under Pressure": only names of more than one word were kept from a split credit. Every name is kept again, once the split itself has been allowed. "Metro Boomin, The Weeknd & 21 Savage" lost The Weeknd, because ", The" was always joined to the name before it; a credit is now read both ways.
+- **The length rule went.** It lost "Sweet Harmony" (4:22 against the album's 15:18), radio edits that don't say so and singles, and still let "Intro" at 131 s match one at 127 s. Instead a title that names a part of an album ("Intro", "Interlude 2", "Untitled", "Skit") must be on the same release. Chosen on 2026-10-29. Length now only orders copies, and is read only when there are copies to choose between.
+- "One - Live" with thirteen studio copies of "One" in the library went over the twelve read and found nothing. Past twelve, only the copies whose titles mark the same kinds of recording as Spotify's are read; still too many is no match. Reading copies also has a 10 s deadline in all.
+- A slow Music showed a 4-star copy as unrated, since a failed read answers 0, and Rate Up then saved 1 star. A read Music didn't answer is now ignored: the stars stay, or what was last read of the copy comes back. A slow Music also counted as a deleted copy, refusing the first click; only Music saying the copy has gone counts now. The rating shortcuts check the copy as a click does, and a rating just chosen holds over a read that comes back before Music has it, as the heart already did.
+- The first song after a launch showed Spotify's heart before its stars, the matcher taking 420 ms to build from nothing. The first wait is now 2 s, and each track's credits are worked out once.
+- Known misses kept: " x " splits "Lil Nas X & Billy Ray Cyrus" after "Nas"; "Title - Subtitle - Remastered 2011" keeps its remaster; "Live After Death" and "Live and Dangerous" don't read as live albums.
 
 ## Open
 
