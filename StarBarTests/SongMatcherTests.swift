@@ -89,6 +89,25 @@ final class SongMatcherTests: XCTestCase {
 
     // MARK: - A different song
 
+    func testTheSameTitleOnAnotherAlbumAtAnotherLengthIsAnotherSong() {
+        // Decided 2026-10-29: an "Intro" on one album is not the "Intro" on another
+        let intro = song("Intro", by: "The xx", on: "xx", length: 127)
+        let matcher = SongMatcher(library: [intro])
+
+        XCTAssertNil(matcher.match(for: query("Intro", by: "The xx", on: "Another Album", length: 60)))
+        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", on: "xx", length: 60)), intro, "the same album says it is")
+        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", on: "Another Album", length: 131)), intro,
+                       "a few seconds is the same recording on another release")
+        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", length: 60)), intro, "no album, no rule")
+    }
+
+    func testAnEditIsTheSameSongAtAnyLength() {
+        let album = song("Move On Up", by: "Curtis Mayfield", on: "Curtis", length: 529)
+        let matcher = SongMatcher(library: [album])
+
+        XCTAssertEqual(matcher.match(for: query("Move On Up - Single Edit", by: "Curtis Mayfield", on: "Move On Up", length: 166)), album)
+    }
+
     func testTheSameTitleByAnotherArtistIsADifferentSong() {
         // Five artists in the measured library have a song called "One"
         let matcher = SongMatcher(library: [song("One", by: "U2"), song("One", by: "Aimee Mann")])

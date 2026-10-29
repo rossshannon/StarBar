@@ -57,10 +57,13 @@ struct SongQuery: Equatable {
 /// index holds no albums, so that part waits for `ranked(_:for:)`, once the copies' albums
 /// have been read.
 ///
-/// Album and duration never decide whether it is the same song: "Move On Up" is 2:46 as the
-/// single edit and 8:49 on the album. They only choose between copies when the user has the
-/// song more than once -- 442 songs in the library measured on 2026-10-28, 103 of them with
-/// copies rated differently -- so the same copy is chosen every time the song comes round.
+/// Album and length choose between copies when the user has the song more than once -- 442
+/// songs in the library measured on 2026-10-28, 103 of them with copies rated differently --
+/// so the same copy is chosen every time the song comes round. Together they can also rule a
+/// copy out: one on an album the query doesn't name, whose length is more than
+/// `lengthTolerance` off, is another song that shares the name, such as an "Intro" (decided
+/// 2026-10-29). Not for an edit, whose length says nothing: "Move On Up" is 2:46 as the single
+/// edit and 8:49 on the album.
 ///
 /// A wrong match puts the user's rating on a song they didn't mean, in a library Music keeps
 /// no history of. So the rules lean strict: a song that isn't found is shown as it was before
@@ -186,14 +189,23 @@ struct SongMatcher {
             .map { $0.song }
     }
 
+    /// How far a copy's length may be from the query's, as a share of the longer, when the
+    /// copy is on another album and neither title names an edit. Releases of one recording
+    /// differ by a few seconds of silence or fade.
+    static let lengthTolerance = 0.1
+
     /// Copies from `copies(of:)` whose album, length, rating and plays have since been read,
     /// the one to show and rate first, and without any whose album makes it a different
     /// recording from the song `query` names: one on "Live at the Fillmore West" when Spotify
     /// is playing the studio song, or the other way round, or another night's live recording
-    /// (`SongName.isSameRecording`).
+    /// (`SongName.isSameRecording`), or another song of the same name (`isAnotherSong`).
     static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
         let album = SongName.album(query.album)
-        return copies.filter { SongName.isSameRecording(query.name, on: query.album, as: $0.name, on: $0.album) }
+        let queryIsEdit = SongName.title(query.name).isEdit
+        return copies.filter {
+            SongName.isSameRecording(query.name, on: query.album, as: $0.name, on: $0.album)
+                && !isAnotherSong($0, for: query, album: album, queryIsEdit: queryIsEdit)
+        }
             .map { (song: $0, album: SongName.album($0.album)) }
             .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
             .map { $0.song }
@@ -225,6 +237,16 @@ struct SongMatcher {
             return a.playedCount > b.playedCount
         }
         return a.persistentID < b.persistentID
+    }
+
+    /// A copy on an album the query doesn't name, at a length too far from the query's, is
+    /// another song of the same name. Nothing is ruled out when the query names no album, a
+    /// length is unknown, or either title names an edit.
+    private static func isAnotherSong(_ copy: LibrarySong, for query: SongQuery, album: String, queryIsEdit: Bool) -> Bool {
+        guard !album.isEmpty, !queryIsEdit, closeness(of: SongName.album(copy.album), to: album) == 2,
+              let wanted = query.duration, let length = copy.duration, wanted > 0, length > 0,
+              !SongName.title(copy.name).isEdit else { return false }
+        return abs(length - wanted) > lengthTolerance * max(length, wanted)
     }
 
     /// 0 for the same album, 1 when one name holds all the other's words ("abba gold" and

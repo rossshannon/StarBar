@@ -68,10 +68,10 @@ extension LibrarySong {
 
     /// This song with what Music says now about its live track, or nil when that track isn't
     /// a song: the index holds every kind of track, and a music video of the song is no place
-    /// for its stars. Each property is an Apple Event, so only the album and what would be
-    /// shown (the rating and heart) are read unless `choosing`, when the length and plays
-    /// that choose between copies are too, and the rating's kind only when there is a rating
-    /// for it to describe.
+    /// for its stars. Each property is an Apple Event, so only the album and length, which
+    /// can rule a copy out (`SongMatcher.ranked(_:for:)`), and what would be shown (the
+    /// rating and heart) are read unless `choosing`, when the plays that choose between
+    /// copies are too, and the rating's kind only when there is a rating for it to describe.
     ///
     /// One property at a time, never the track's `properties` record, though the record is
     /// one event: it holds `location`, and measured 2026-10-29, every read of a track's
@@ -87,9 +87,9 @@ extension LibrarySong {
         song.rating = track.rating ?? 0
         song.isRatingComputed = song.rating > 0 && track.ratingKind == .computed
         song.isFavorited = track.isFavorited
+        // Scripting Bridge gives a number 0 when its Apple Event fails
+        song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
         if choosing {
-            // Scripting Bridge gives a number 0 when its Apple Event fails
-            song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
             song.playedCount = track.playedCount ?? 0
         }
         return song

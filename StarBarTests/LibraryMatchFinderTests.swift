@@ -300,7 +300,7 @@ final class LibraryMatchFinderTests: XCTestCase {
     func testOneCopyReadsOnlyWhatShowsIt() {
         _ = ask(spotify("Zombie", by: "The Cranberries"))
 
-        XCTAssertEqual(choosing, [false], "no length, rating or plays: there is nothing to choose between")
+        XCTAssertEqual(choosing, [false], "no plays: there is nothing to choose between")
     }
 
     func testTheAlbumSpotifyNamesChoosesTheCopy() throws {
@@ -398,8 +398,9 @@ final class LibraryMatchFinderTests: XCTestCase {
                                    playedCount: 7, isFavorited: true))
         XCTAssertEqual(song.reading(track, choosing: false),
                        LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "",
-                                   album: "No Need to Argue", rating: 60, isRatingComputed: true, isFavorited: true),
-                       "what is shown, but not the length or plays")
+                                   album: "No Need to Argue", duration: 306.5, rating: 60, isRatingComputed: true,
+                                   isFavorited: true),
+                       "what is shown and what can rule the copy out, but not the plays")
     }
 
     func testALengthOfNothingIsNoLength() {
