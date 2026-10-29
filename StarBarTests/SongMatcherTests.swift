@@ -65,6 +65,18 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.match(for: query("Destined For Great Things", by: "Warren Ellis")), track)
     }
 
+    func testAOneWordLeadOfAJointCreditFindsIt() {
+        // Dropping single words from a list lost these (2026-10-29)
+        let underPressure = song("Under Pressure", by: "Queen & David Bowie")
+        let creepin = song("Creepin'", by: "Metro Boomin, The Weeknd & 21 Savage")
+        let matcher = SongMatcher(library: [underPressure, creepin])
+
+        XCTAssertEqual(matcher.match(for: query("Under Pressure", by: "Queen")), underPressure)
+        XCTAssertEqual(matcher.match(for: query("Under Pressure", by: "David Bowie")), underPressure)
+        XCTAssertEqual(matcher.match(for: query("Creepin'", by: "The Weeknd")), creepin)
+        XCTAssertEqual(matcher.match(for: query("Creepin'", by: "Metro Boomin")), creepin)
+    }
+
     func testTheAlbumArtistCountsAsACredit() {
         let track = song("Theme", by: "London Session Orchestra", albumArtist: "Composer Name")
         let matcher = SongMatcher(library: [track])
@@ -89,23 +101,25 @@ final class SongMatcherTests: XCTestCase {
 
     // MARK: - A different song
 
-    func testTheSameTitleOnAnotherAlbumAtAnotherLengthIsAnotherSong() {
-        // Decided 2026-10-29: an "Intro" on one album is not the "Intro" on another
+    func testAnIntroOnAnotherAlbumIsAnotherTrack() {
+        // Every album can have one, whatever its length
         let intro = song("Intro", by: "The xx", on: "xx", length: 127)
         let matcher = SongMatcher(library: [intro])
 
-        XCTAssertNil(matcher.match(for: query("Intro", by: "The xx", on: "Another Album", length: 60)))
-        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", on: "xx", length: 60)), intro, "the same album says it is")
-        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", on: "Another Album", length: 131)), intro,
-                       "a few seconds is the same recording on another release")
-        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", length: 60)), intro, "no album, no rule")
+        XCTAssertNil(matcher.match(for: query("Intro", by: "The xx", on: "Coexist", length: 60)))
+        XCTAssertNil(matcher.match(for: query("Intro", by: "The xx", on: "Coexist", length: 131)), "close in length is no help")
+        XCTAssertNil(matcher.match(for: query("Intro", by: "The xx", length: 127)), "no album says nothing")
+        XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", on: "xx (Deluxe Edition)", length: 127)), intro)
     }
 
-    func testAnEditIsTheSameSongAtAnyLength() {
-        let album = song("Move On Up", by: "Curtis Mayfield", on: "Curtis", length: 529)
-        let matcher = SongMatcher(library: [album])
+    func testLengthNeverRulesACopyOut() {
+        // The single and the album version, 4:22 and 15:18, and an edit and the album's
+        let harmony = song("Sweet Harmony", by: "The Beloved", on: "Happiness", length: 918)
+        let moveOnUp = song("Move On Up", by: "Curtis Mayfield", on: "Curtis", length: 529)
+        let matcher = SongMatcher(library: [harmony, moveOnUp])
 
-        XCTAssertEqual(matcher.match(for: query("Move On Up - Single Edit", by: "Curtis Mayfield", on: "Move On Up", length: 166)), album)
+        XCTAssertEqual(matcher.match(for: query("Sweet Harmony", by: "The Beloved", on: "Sweet Harmony", length: 262)), harmony)
+        XCTAssertEqual(matcher.match(for: query("Move On Up - Single Edit", by: "Curtis Mayfield", on: "Move On Up", length: 166)), moveOnUp)
     }
 
     func testTheSameTitleByAnotherArtistIsADifferentSong() {
@@ -116,12 +130,14 @@ final class SongMatcherTests: XCTestCase {
     }
 
     func testALiveVersionIsNotTheStudioOne() {
-        let studio = song("One", by: "Metallica")
-        let live = song("One (Live)", by: "Metallica")
+        let studio = song("One", by: "Metallica", on: "...And Justice for All")
+        let live = song("One (Live)", by: "Metallica", on: "S&M")
         let matcher = SongMatcher(library: [studio, live])
 
         XCTAssertEqual(matcher.copies(of: query("One", by: "Metallica")), [studio])
-        XCTAssertEqual(matcher.match(for: query("One - Live", by: "Metallica")), live)
+        XCTAssertEqual(matcher.match(for: query("One - Live", by: "Metallica", on: "S&M")), live)
+        XCTAssertNil(matcher.match(for: query("One - Live", by: "Metallica", on: "Live Shit: Binge & Purge")),
+                     "a plain (Live) on another release is another night")
     }
 
     func testALiveSongFindsACopyOnlyItsAlbumSaysIsLive() {
@@ -129,15 +145,30 @@ final class SongMatcherTests: XCTestCase {
         // name, as it does for this song, or the other way round
         let studio = song("Idioteque", by: "Radiohead", on: "Kid A", length: 309)
         let live = song("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings", length: 265)
-        let liveTitled = song("Idioteque (Live)", by: "Radiohead", on: "Live From The Basement")
-        let liveOnSpotify = query("Idioteque - Live", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")
+        let liveTitled = song("Idioteque (Live)", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")
 
-        XCTAssertEqual(SongMatcher(library: [studio, live]).match(for: liveOnSpotify), live)
+        XCTAssertEqual(SongMatcher(library: [studio, live])
+            .match(for: query("Idioteque - Live", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")), live)
         XCTAssertEqual(SongMatcher(library: [studio, liveTitled])
             .match(for: query("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")), liveTitled)
-        // Before their albums are read, a copy whose title says what Spotify's does comes
-        // first, so it is among those read when there are more copies than are read
-        XCTAssertEqual(SongMatcher(library: [studio, live, liveTitled]).copies(of: liveOnSpotify).first, liveTitled)
+    }
+
+    func testTwoLiveAlbumsAreTwoRecordings() {
+        // Neither title names the night, and the albums are different ones
+        let basement = song("Idioteque (Live)", by: "Radiohead", on: "Live From The Basement")
+        let sydney = song("Clocks", by: "Coldplay", on: "Live in Sydney")
+
+        XCTAssertNil(SongMatcher(library: [basement])
+            .match(for: query("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")))
+        XCTAssertNil(SongMatcher(library: [sydney]).match(for: query("Clocks", by: "Coldplay", on: "Live in Buenos Aires")))
+    }
+
+    func testANamedLiveTrackFindsThePlainOneOnTheSameRelease() {
+        let copy = song("Hotel California (Live)", by: "Eagles", on: "Hell Freezes Over")
+        let matcher = SongMatcher(library: [copy])
+
+        XCTAssertEqual(matcher.match(for: query("Hotel California - Live On MTV, 1994", by: "Eagles",
+                                                on: "Hell Freezes Over (Remaster 2018)")), copy)
     }
 
     func testARemixIsNotTheOriginal() {
@@ -157,8 +188,11 @@ final class SongMatcherTests: XCTestCase {
     func testAnotherNightsLiveRecordingIsAnotherRecording() {
         let glastonbury = song("Clocks (Live at Glastonbury 2011)", by: "Coldplay")
         let sydney = song("Clocks", by: "Coldplay", on: "Live in Sydney")
+        let wembley86 = song("Song (Live at Wembley 1986)", by: "Band")
 
         XCTAssertNil(SongMatcher(library: [glastonbury]).match(for: query("Clocks - Live in Sydney", by: "Coldplay")))
+        XCTAssertNil(SongMatcher(library: [glastonbury]).match(for: query("Clocks - Live at Glastonbury 2016", by: "Coldplay")))
+        XCTAssertNil(SongMatcher(library: [wembley86]).match(for: query("Song - Live at Wembley 1987", by: "Band")))
         XCTAssertEqual(SongMatcher(library: [glastonbury, sydney]).match(for: query("Clocks - Live in Sydney", by: "Coldplay")), sydney,
                        "the album can say which night")
     }

@@ -59,11 +59,10 @@ struct SongQuery: Equatable {
 ///
 /// Album and length choose between copies when the user has the song more than once -- 442
 /// songs in the library measured on 2026-10-28, 103 of them with copies rated differently --
-/// so the same copy is chosen every time the song comes round. Together they can also rule a
-/// copy out: one on an album the query doesn't name, whose length is more than
-/// `lengthTolerance` off, is another song that shares the name, such as an "Intro" (the
-/// 2026-10-29 review's recommendation). Not for an edit, whose length says nothing: "Move On
-/// Up" is 2:46 as the single edit and 8:49 on the album.
+/// so the same copy is chosen every time the song comes round. Neither rules a copy out on
+/// its own: "Sweet Harmony" is 4:22 on the single and 15:18 on the album. Only a title that
+/// names no song, such as "Intro" or "Interlude", has to be on the same release, since every
+/// album can have one (`SongName.isGenericTitle`).
 ///
 /// A wrong match puts the user's rating on a song they didn't mean, in a library Music keeps
 /// no history of. So the rules lean strict: a song that isn't found is shown as it was before
@@ -146,15 +145,15 @@ struct SongMatcher {
         count = library.count
     }
 
-    /// Every copy of the song the user has, going by the names alone, the one to show and rate
-    /// first. Empty when they don't have it.
+    /// Every copy of the song the user might have, going by the names alone, in no particular
+    /// order: `ranked(_:for:)` orders them once what chooses between them has been read.
+    /// Empty when they don't have it.
     ///
     /// A copy's title can say less than the query's: "Idioteque" on "I Might Be Wrong: Live
     /// Recordings" is the live song Spotify calls "Idioteque - Live", so a copy is kept
     /// whenever the kinds of recording its title marks, the query's title or album marks too.
-    /// Copies whose titles mark the same as the query's come first. `ranked(_:for:)` then
-    /// holds each copy to the query once its album has been read, and leaves out one that is
-    /// a different recording after all.
+    /// `ranked(_:for:)` then holds each copy to the query once its album has been read, and
+    /// leaves out one that is a different recording after all.
     ///
     /// Someone a title credits with "with" has to be credited on the other side too: "Stay
     /// (with Justin Bieber)" is the "Stay" by The Kid LAROI & Justin Bieber, but "Yesterday
@@ -171,7 +170,6 @@ struct SongMatcher {
         let kinds = SongName.versions(of: query.name, on: query.album)
         let credits = Set([artist]).union(title.featured)
         let withNames = Set(title.withNames)
-        let album = SongName.album(query.album)
         return (byTitle[title.core] ?? [])
             .filter {
                 $0.work.artists.contains(artist)
@@ -179,32 +177,27 @@ struct SongMatcher {
                     && withNames.isSubset(of: $0.work.credits)
                     && $0.work.withNames.isSubset(of: credits)
             }
-            .sorted { a, b in
-                let sameA = a.work.versions == title.versions, sameB = b.work.versions == title.versions
-                if sameA != sameB {
-                    return sameA
-                }
-                return SongMatcher.choose(a.song, a.work.album, over: b.song, b.work.album, album: album, duration: query.duration)
-            }
             .map { $0.song }
     }
 
-    /// How far a copy's length may be from the query's, as a share of the longer, when the
-    /// copy is on another album and neither title names an edit. Releases of one recording
-    /// differ by a few seconds of silence or fade.
-    static let lengthTolerance = 0.1
+    /// Whether a copy's title marks the same kinds of recording as the query's: "One (Live)"
+    /// for "One - Live", but not plain "One", which is only a candidate in case its album says
+    /// it is live
+    static func titleMarksTheSame(_ copy: LibrarySong, as query: SongQuery) -> Bool {
+        return SongName.kinds(of: SongName.title(copy.name).versions) == SongName.kinds(of: SongName.title(query.name).versions)
+    }
 
     /// Copies from `copies(of:)` whose album, length, rating and plays have since been read,
     /// the one to show and rate first, and without any whose album makes it a different
     /// recording from the song `query` names: one on "Live at the Fillmore West" when Spotify
     /// is playing the studio song, or the other way round, or another night's live recording
-    /// (`SongName.isSameRecording`), or another song of the same name (`isAnotherSong`).
+    /// (`SongName.isSameRecording`), or an "Intro" on another album.
     static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
         let album = SongName.album(query.album)
-        let queryIsEdit = SongName.title(query.name).isEdit
+        let isGeneric = SongName.isGenericTitle(SongName.title(query.name).core)
         return copies.filter {
             SongName.isSameRecording(query.name, on: query.album, as: $0.name, on: $0.album)
-                && !isAnotherSong($0, for: query, album: album, queryIsEdit: queryIsEdit)
+                && (!isGeneric || SongName.isSameRelease(query.album, $0.album))
         }
             .map { (song: $0, album: SongName.album($0.album)) }
             .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
@@ -237,16 +230,6 @@ struct SongMatcher {
             return a.playedCount > b.playedCount
         }
         return a.persistentID < b.persistentID
-    }
-
-    /// A copy on an album the query doesn't name, at a length too far from the query's, is
-    /// another song of the same name. Nothing is ruled out when the query names no album, a
-    /// length is unknown, or either title names an edit.
-    private static func isAnotherSong(_ copy: LibrarySong, for query: SongQuery, album: String, queryIsEdit: Bool) -> Bool {
-        guard !album.isEmpty, !queryIsEdit, closeness(of: SongName.album(copy.album), to: album) == 2,
-              let wanted = query.duration, let length = copy.duration, wanted > 0, length > 0,
-              !SongName.title(copy.name).isEdit else { return false }
-        return abs(length - wanted) > lengthTolerance * max(length, wanted)
     }
 
     /// 0 for the same album, 1 when one name holds all the other's words ("abba gold" and
