@@ -40,8 +40,16 @@ final class MusicLibraryIndex {
     static let keys = ["persistentID", "name", "artist", "albumArtist", "album", "duration",
                        "rating", "ratingKind", "playedCount", "mediaKind"]
 
-    /// One bulk read: an array per key, every one in library order and the same length.
-    /// Values are whatever Scripting Bridge decoded them to; `songs(from:)` sorts that out.
+    /// The columns a song can't do without. A short one of these makes the whole read
+    /// useless; a short one of the rest is only left out of it (`unpairedColumns(in:)`).
+    static let requiredKeys: Set<String> = ["persistentID", "name", "artist", "mediaKind"]
+
+    /// One bulk read: an array per key, in library order. Values are whatever Scripting
+    /// Bridge decoded them to; `songs(from:)` sorts that out. **A column can be shorter than
+    /// the library**: Scripting Bridge leaves a missing value out of the array rather than
+    /// hold its place. Measured 2026-10-29 on 8,093 tracks: three songs with no length left
+    /// `duration` with 8,090 values, and every one after the first gap belonged to the row
+    /// before.
     typealias Columns = [String: [Any]]
 
     /// How long one Apple Event of the read may take, in ticks of 1/60 s. Each took at most
@@ -188,6 +196,11 @@ final class MusicLibraryIndex {
         for attempt in 1...2 {
             guard let columns = readColumns(pid: pid) else { return nil }
             if let songs = songs(from: columns) {
+                let unpaired = unpairedColumns(in: columns)
+                if !unpaired.isEmpty, let count = columns["persistentID"]?.count {
+                    let counts = unpaired.map { "\($0) has \(columns[$0]?.count ?? 0)" }.joined(separator: ", ")
+                    os_log("%{public}s[%{public}ld], %{public}s: %{public}ld tracks, but %{public}s, so Music left a value out and those can't be paired with their tracks; read without them", ((#file as NSString).lastPathComponent), #line, #function, count, counts)
+                }
                 return songs
             }
             os_log(.error, "%{public}s[%{public}ld], %{public}s: read %{public}ld can't be used: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, attempt, misalignment(in: columns) ?? "no reason found")
@@ -245,21 +258,29 @@ final class MusicLibraryIndex {
     /// The library's songs, from one bulk read. Only songs: not music videos, podcasts or the
     /// rest, which no music player's song should match.
     ///
-    /// Nil when the columns don't line up, which means the library changed during the read:
-    /// pairing one track's name with another's persistent ID would aim a rating at the wrong
-    /// song. Also nil for no tracks at all, because a read that went wrong quietly looks
-    /// exactly like that, and an empty index would match nothing until the next library edit.
+    /// Nil when the columns a song needs don't line up, which means the library changed
+    /// during the read or Music left one of those values out: pairing one track's name with
+    /// another's persistent ID would aim a rating at the wrong song. Also nil for no tracks
+    /// at all, because a read that went wrong quietly looks exactly like that, and an empty
+    /// index would match nothing until the next library edit. Any other column that doesn't
+    /// line up is left out, as if every track lacked that value: the songs lose only a way
+    /// of choosing between copies.
     static func songs(from columns: Columns) -> [LibrarySong]? {
         guard misalignment(in: columns) == nil, let ids = columns["persistentID"] else { return nil }
-        let names = columns["name"] ?? []
-        let artists = columns["artist"] ?? []
-        let albumArtists = columns["albumArtist"] ?? []
-        let albums = columns["album"] ?? []
-        let durations = columns["duration"] ?? []
-        let ratings = columns["rating"] ?? []
-        let ratingKinds = columns["ratingKind"] ?? []
-        let playedCounts = columns["playedCount"] ?? []
-        let mediaKinds = columns["mediaKind"] ?? []
+        let unpaired = Set(unpairedColumns(in: columns))
+        let none = [Any](repeating: NSNull(), count: ids.count)
+        func column(_ key: String) -> [Any] {
+            return unpaired.contains(key) ? none : columns[key] ?? none
+        }
+        let names = column("name")
+        let artists = column("artist")
+        let albumArtists = column("albumArtist")
+        let albums = column("album")
+        let durations = column("duration")
+        let ratings = column("rating")
+        let ratingKinds = column("ratingKind")
+        let playedCounts = column("playedCount")
+        let mediaKinds = column("mediaKind")
 
         var songs: [LibrarySong] = []
         songs.reserveCapacity(ids.count)
@@ -283,15 +304,16 @@ final class MusicLibraryIndex {
         return songs
     }
 
-    /// Why a bulk read can't be used, in words for the log, or nil when its columns line up.
-    /// The causes look alike from outside -- each makes the read useless -- but not when
-    /// working out why every read fails.
+    /// Why a bulk read can't be used, in words for the log, or nil when the columns a song
+    /// needs line up. The causes look alike from outside -- each makes the read useless --
+    /// but not when working out why every read fails.
     static func misalignment(in columns: Columns) -> String? {
         guard let ids = columns["persistentID"] else { return "no persistent ID column" }
         guard !ids.isEmpty else { return "no tracks" }
-        let missing = keys.filter { columns[$0] == nil }
+        let required = keys.filter { requiredKeys.contains($0) }
+        let missing = required.filter { columns[$0] == nil }
         guard missing.isEmpty else { return "no column for " + missing.joined(separator: ", ") }
-        let uneven = keys.filter { columns[$0]?.count != ids.count }
+        let uneven = required.filter { columns[$0]?.count != ids.count }
         guard uneven.isEmpty else {
             return "\(ids.count) persistent IDs, but " + uneven.map { "\($0) has \(columns[$0]?.count ?? 0)" }.joined(separator: ", ")
         }
@@ -300,6 +322,14 @@ final class MusicLibraryIndex {
         guard recheck.count == ids.count else { return "\(ids.count) persistent IDs, then \(recheck.count) when read again" }
         let row = ids.indices.first(where: { !(ids[$0] as AnyObject).isEqual(recheck[$0]) }) ?? 0
         return "the persistent IDs read again differ from row \(row): \(ids[row]) (\(type(of: ids[row]))) then \(recheck[row]) (\(type(of: recheck[row])))"
+    }
+
+    /// The columns other than `requiredKeys` that don't have a value for every track, which
+    /// `songs(from:)` leaves out. Only `duration` has been seen short, for songs Music had no
+    /// length for, but any property Music can answer "missing value" for can be.
+    static func unpairedColumns(in columns: Columns) -> [String] {
+        guard let count = columns["persistentID"]?.count else { return [] }
+        return keys.filter { !requiredKeys.contains($0) && columns[$0]?.count != count }
     }
 
     /// An enumerated value's four-character code. Scripting Bridge hands one back as a number

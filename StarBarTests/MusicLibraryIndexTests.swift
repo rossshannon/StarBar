@@ -91,18 +91,49 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertEqual(songs.map { $0.persistentID }, ["A1"])
     }
 
-    func testAShortColumnThrowsTheReadAway() {
-        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")])
-        columns["rating"]?.removeLast()
+    func testAShortColumnASongNeedsThrowsTheReadAway() {
+        for key in ["persistentID", "name", "artist", "mediaKind"] {
+            var columns = self.columns([row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")])
+            columns[key]?.removeLast()
+            if key == "persistentID" { columns[MusicLibraryIndex.recheckKey]?.removeLast() }
+
+            XCTAssertNil(MusicLibraryIndex.songs(from: columns), key)
+        }
+    }
+
+    func testAMissingColumnASongNeedsThrowsTheReadAway() {
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries")])
+        columns["artist"] = nil
 
         XCTAssertNil(MusicLibraryIndex.songs(from: columns))
     }
 
-    func testAMissingColumnThrowsTheReadAway() {
-        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries")])
-        columns["album"] = nil
+    func testAShortColumnOfTheRestIsLeftOut() throws {
+        // Measured 2026-10-29: Scripting Bridge drops a missing value from the array rather
+        // than hold its place, so three songs with no length left `duration` three short and
+        // threw away every read of a real library. Paired by row, every length after the gap
+        // would have been the song before's.
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", album: "No Need to Argue", duration: 306.0),
+                                    row("B2", "Linger", by: "The Cranberries", album: "Everybody Else", duration: 274.0),
+                                    row("C3", "Dreams", by: "The Cranberries", album: "Everybody Else", duration: 271.0)])
+        columns["duration"] = [306.0, 271.0]
 
-        XCTAssertNil(MusicLibraryIndex.songs(from: columns))
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns))
+
+        XCTAssertEqual(songs.map { $0.persistentID }, ["A1", "B2", "C3"])
+        XCTAssertEqual(songs.map { $0.duration }, [nil, nil, nil], "no length rather than the wrong one")
+        XCTAssertEqual(songs.map { $0.album }, ["No Need to Argue", "Everybody Else", "Everybody Else"], "the rest still read")
+        XCTAssertEqual(MusicLibraryIndex.unpairedColumns(in: columns), ["duration"])
+    }
+
+    func testAMissingColumnOfTheRestIsLeftOut() throws {
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries", rating: 80)])
+        columns["albumArtist"] = nil
+
+        let song = try XCTUnwrap(MusicLibraryIndex.songs(from: columns)?.first)
+
+        XCTAssertEqual(song.albumArtist, "")
+        XCTAssertEqual(song.rating, 80)
     }
 
     func testIDsThatMovedDuringTheReadThrowItAway() {
@@ -121,12 +152,16 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertNil(MusicLibraryIndex.misalignment(in: columns(two)))
 
         var short = columns(two)
-        short["rating"]?.removeLast()
-        XCTAssertEqual(MusicLibraryIndex.misalignment(in: short), "2 persistent IDs, but rating has 1")
+        short["name"]?.removeLast()
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: short), "2 persistent IDs, but name has 1")
 
         var missing = columns(two)
-        missing["album"] = nil
-        XCTAssertEqual(MusicLibraryIndex.misalignment(in: missing), "no column for album")
+        missing["artist"] = nil
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: missing), "no column for artist")
+
+        var shortOptional = columns(two)
+        shortOptional["rating"]?.removeLast()
+        XCTAssertNil(MusicLibraryIndex.misalignment(in: shortOptional), "left out, not a reason to throw the read away")
 
         var moved = columns(two)
         moved[MusicLibraryIndex.recheckKey] = ["A1", "C3"]
