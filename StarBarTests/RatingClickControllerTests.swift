@@ -295,6 +295,25 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(recorder.savedRatings, [80])
     }
 
+    /// The song on show changed while the button was down. Let go of, the drag would rate
+    /// the new song, so it is dropped: nothing is saved then or on release.
+    func testACancelledDragSavesNothingWhenLetGo() {
+        XCTAssertTrue(press(at: 12))
+        XCTAssertTrue(move(to: 97))
+        controller.cancelDrag()
+        XCTAssertFalse(controller.isDragging)
+        XCTAssertEqual(ratingControl.rating, 40, "the preview goes, for the new song's rating to replace")
+        XCTAssertFalse(release(at: 97))
+        XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertEqual(dragEnds, [], "the owner already shows the new song, so it isn't asked to refresh")
+    }
+
+    func testCancellingWithNoDragChangesNothing() {
+        controller.cancelDrag()
+        XCTAssertEqual(ratingControl.rating, 40)
+        XCTAssertEqual(dragEnds, [])
+    }
+
     func testNewClickStartsFreshDrag() {
         XCTAssertTrue(press(at: 97))
         click(at: 52)

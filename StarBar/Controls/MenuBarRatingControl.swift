@@ -108,7 +108,14 @@ final class MenuBarRatingControl {
 
     /// The user's own Music copy of the Spotify song on show, whose stars and heart stand in
     /// for Spotify's. Nil whenever Music's own song or Spotify's heart is on show.
-    private var libraryMatch: LibraryMatch?
+    private var libraryMatch: LibraryMatch? {
+        didSet {
+            // A drag under way would be let go of over another copy's stars, or Music's own
+            if libraryMatch?.song.persistentID != oldValue?.song.persistentID {
+                clickController.cancelDrag()
+            }
+        }
+    }
     /// The Spotify song whose Music copy is being looked for. The display waits for the
     /// answer, briefly, rather than show Spotify's heart and then swap it for stars.
     private var awaitingMatch: String?
@@ -139,7 +146,15 @@ final class MenuBarRatingControl {
         MenuBarStripLayout(starSize: ratingControl.starSize, spacing: ratingControl.spacing)
     }
     private let widthClock: RatingReminderClock
-    private var displayedSongIdentity: String?
+    /// The song on show, Music's or Spotify's. A drag under way began on the one before, so a
+    /// change drops it: let go of over the new song's stars, it would rate that song.
+    private var displayedSongIdentity: String? {
+        didSet {
+            if displayedSongIdentity != oldValue {
+                clickController.cancelDrag()
+            }
+        }
+    }
     private lazy var playbackState = MenuBarPlaybackState { [weak self] in
         guard let self = self else { return }
         os_log("Music quit; returning to the stopped icon and resetting the menu bar session")
@@ -225,10 +240,13 @@ final class MenuBarRatingControl {
     /// Read once per gesture: it reaches `PlayingTrack`, which asks Music whether the track
     /// still exists. For a Spotify song it is the user's own copy in Music, when they have
     /// one, and otherwise nil, so the rating shortcuts can't rate the song left paused in
-    /// Music -- nor while that copy is still being looked for.
+    /// Music -- nor while that copy is still being looked for, nor once Music has quit, which
+    /// an Apple Event to the copy would open again.
     private var ratingTarget: iTunesTrack? {
         guard awaitingMatch == nil else { return nil }
-        if let match = libraryMatch { return match.track }
+        if let match = libraryMatch {
+            return iTunesRadioStation.shared.iTunes == nil ? nil : match.track
+        }
         guard ratingControl.mode != .spotify else { return nil }
         return iTunesPlayer.shared.playing?.ratingTrack
     }
@@ -704,6 +722,8 @@ extension MenuBarRatingControl {
     /// heart, written to the copy, and logged because it changes the user's library.
     private func toggleFavorite(of match: LibraryMatch) {
         guard playbackState.canInteract else { return }
+        // Flipped on screen for a copy that has gone, the heart would say it was saved
+        guard copyIsInMusic(match) else { return lookForSpotifySongAgain() }
         let isFavorited = !ratingControl.isFavorited
         os_log("%{public}s[%{public}ld], %{public}s: favourite %{public}d chosen for %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s", ((#file as NSString).lastPathComponent), #line, #function, isFavorited ? 1 : 0, match.identity, match.song.persistentID, match.song.name, match.song.artist)
         match.track.updateFavorited(isFavorited)
@@ -713,6 +733,22 @@ extension MenuBarRatingControl {
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
+    }
+
+    /// Whether the user's copy of the Spotify song on show is still in Music. A copy deleted
+    /// there keeps its stars until Music's notification arrives, seconds later. Never asks a
+    /// Music that has quit, which the question would open again, and asks under the short
+    /// timeout, since this is the main thread.
+    private func copyIsInMusic(_ match: LibraryMatch) -> Bool {
+        return (MenuBarRatingControl.withShortTimeout { _ in match.track.exists?() } ?? nil) == true
+    }
+
+    /// The copy on show has gone from Music, or Music has quit. Reading Music's player would
+    /// bring the same answer back; the library has to be read again.
+    private func lookForSpotifySongAgain() {
+        os_log("%{public}s[%{public}ld], %{public}s: the library copy on show has gone, or Music has quit; looking for the Spotify song again", ((#file as NSString).lastPathComponent), #line, #function)
+        LibraryMatchFinder.shared.copyIsGone()
+        applySpotifyDisplay()
     }
 
     /// The heart to show: the user's own while Music has yet to report it, otherwise Music's.
@@ -826,18 +862,14 @@ extension MenuBarRatingControl: RatingControlDelegate {
         // A deleted track can keep its stars until the library notification arrives. Check
         // before committing: a refused gesture must not change the stars, announcement or
         // reminder. UI tests intentionally have no Music target.
-        if !MenuBarRatingControl.isUITesting && ratingTarget?.exists?() != true {
-            guard libraryMatch != nil else {
-                os_log("%{public}s[%{public}ld], %{public}s: rating target disappeared; refreshing the player", ((#file as NSString).lastPathComponent), #line, #function)
-                iTunesPlayer.shared.update()
+        if !MenuBarRatingControl.isUITesting, let match = libraryMatch {
+            guard copyIsInMusic(match) else {
+                lookForSpotifySongAgain()
                 return false
             }
-            // The user's copy of the Spotify song, deleted in Music since it was found.
-            // Reading Music's player would bring the same answer back; the library has to be
-            // read again.
-            os_log("%{public}s[%{public}ld], %{public}s: the library copy on show has gone; looking for the Spotify song again", ((#file as NSString).lastPathComponent), #line, #function)
-            LibraryMatchFinder.shared.copyIsGone()
-            applySpotifyDisplay()
+        } else if !MenuBarRatingControl.isUITesting && ratingTarget?.exists?() != true {
+            os_log("%{public}s[%{public}ld], %{public}s: rating target disappeared; refreshing the player", ((#file as NSString).lastPathComponent), #line, #function)
+            iTunesPlayer.shared.update()
             return false
         }
         return playbackState.canInteract
