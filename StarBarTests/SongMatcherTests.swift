@@ -135,6 +135,25 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertEqual(SongMatcher(library: [intro]).match(for: query("Intro", by: "The xx", on: "Coexist")), intro)
     }
 
+    func testAnIntroOnAnotherMarketsOrAnExpandedEditionIsTheSameTrack() {
+        // Each was another release to the rules before the fourth review (2026-10-29)
+        let japan = song("Intro", by: "The xx", on: "xx (Japan Version)")
+        let expanded = song("Intro", by: "The xx", on: "Coexist (Expanded & Remastered)")
+
+        XCTAssertEqual(SongMatcher(library: [japan]).match(for: query("Intro", by: "The xx", on: "xx")), japan)
+        XCTAssertEqual(SongMatcher(library: [expanded]).match(for: query("Intro", by: "The xx", on: "Coexist")), expanded)
+    }
+
+    func testAFilmCueFindsItsScoreWhicheverWayTheSoundtrackIsCredited() {
+        let spiderMan = song("Main Titles", by: "Danny Elfman", on: "Spider-Man")
+        let bladeRunner = song("End Titles", by: "Vangelis", on: "Blade Runner: Original Motion Picture Soundtrack")
+
+        XCTAssertEqual(SongMatcher(library: [spiderMan])
+            .match(for: query("Main Titles", by: "Danny Elfman", on: "Spider-Man (Original Motion Picture Score)")), spiderMan)
+        XCTAssertEqual(SongMatcher(library: [bladeRunner])
+            .match(for: query("End Titles", by: "Vangelis", on: "Blade Runner (Original Motion Picture Soundtrack)")), bladeRunner)
+    }
+
     func testAFilmCueOnAnotherScoreIsAnotherTrack() {
         let aliens = song("Main Title", by: "James Horner", on: "Aliens")
         let beetlejuice = song("Main Titles", by: "Danny Elfman", on: "Beetlejuice")
@@ -274,6 +293,40 @@ final class SongMatcherTests: XCTestCase {
                                                 on: "Live Anthology")), remastered2016)
     }
 
+    func testANameThatSaysLessIsTheSameOnlyWhenItLeavesOutAYear() {
+        // Leaving out a show, a place or a remixer's style named another recording, which
+        // the fourth review found rated in place of this one (2026-10-29)
+        let firstShow = song("Folsom Prison Blues (Live at Folsom State Prison)", by: "Johnny Cash", on: "At Folsom Prison")
+        let deepHouse = song("Song (Tiesto Deep House Remix)", by: "Artist", on: "Song (Remixes)", rating: 80)
+        let remix = song("Song (Tiesto Remix)", by: "Artist", on: "Song (Remixes)")
+
+        XCTAssertNil(SongMatcher(library: [firstShow]).match(for: query(
+            "Folsom Prison Blues - Live at Folsom State Prison, Folsom, CA (2nd Show) - January 1968", by: "Johnny Cash",
+            on: "At Folsom Prison (Legacy Edition)")))
+        XCTAssertNil(SongMatcher(library: [deepHouse]).match(for: query("Song - Tiësto Remix", by: "Artist", on: "Song (Remixes)")))
+        XCTAssertEqual(SongMatcher(library: [deepHouse, remix])
+            .match(for: query("Song - Tiësto Remix", by: "Artist", on: "Song (Remixes)")), remix)
+    }
+
+    func testATwelveInchRemixIsNotTheSevenInch() {
+        let seven = song("Song (7\" Remix)", by: "Artist", on: "Song - Single", rating: 80)
+        let twelve = song("Song (12\" Remix)", by: "Artist", on: "Song - Single")
+        let bakerSeven = song("Song (Arthur Baker 7\" Remix)", by: "Artist", on: "Singles 1985")
+
+        XCTAssertEqual(SongMatcher(library: [seven, twelve]).match(for: query("Song - 12\" Remix", by: "Artist", on: "Song")), twelve)
+        XCTAssertNil(SongMatcher(library: [bakerSeven])
+            .match(for: query("Song - Arthur Baker 12\" Remix", by: "Artist", on: "Greatest Hits")))
+    }
+
+    func testALiveTrackIsNotAPlainOneOnAnotherEditionsLiveAlbum() {
+        let inConcert = song("Song", by: "Artist", on: "Album: In Concert")
+        let matcher = SongMatcher(library: [inConcert])
+
+        XCTAssertNil(matcher.match(for: query("Song - Live", by: "Artist", on: "Album (Deluxe Edition)")),
+                     "a deluxe edition is not the concert")
+        XCTAssertEqual(matcher.match(for: query("Song - Live", by: "Artist", on: "Album")), inConcert)
+    }
+
     func testAReRecordingIsNotTheOriginal() {
         let original = song("Rock of Ages", by: "Def Leppard", on: "Pyromania")
 
@@ -299,6 +352,45 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertNil(SongMatcher(library: [titled]).match(for: query("Stay", by: "Justin Bieber")))
     }
 
+    func testSomeoneCreditedWithWithIsFoundInAJointCreditWhateverTheirName() {
+        // A one-word name after the lead isn't the copy's artist (testABackingBandIsNotTheArtist),
+        // but it is credited, which is all "with" asks. The fourth review found each of these
+        // missed (2026-10-29).
+        let stars = song("All the Stars", by: "Kendrick Lamar & SZA", on: "Black Panther The Album")
+        let lovely = song("lovely", by: "Billie Eilish & Khalid", on: "lovely - Single")
+        let sourCandy = song("Sour Candy", by: "Lady Gaga & BLACKPINK", on: "Chromatica")
+        let creepin = song("Creepin'", by: "Metro Boomin, The Weeknd & 21 Savage", on: "Heroes & Villains")
+        let basement = song("Tears of Rage", by: "Bob Dylan & The Band", on: "The Basement Tapes")
+        let bigPink = song("Tears of Rage", by: "The Band", on: "Music from Big Pink")
+        let matcher = SongMatcher(library: [stars, lovely, sourCandy, creepin, basement, bigPink])
+
+        XCTAssertEqual(matcher.match(for: query("All The Stars (with SZA)", by: "Kendrick Lamar",
+                                                on: "Black Panther The Album Music From And Inspired By")), stars)
+        XCTAssertEqual(matcher.match(for: query("lovely (with Khalid)", by: "Billie Eilish", on: "lovely (with Khalid)")), lovely)
+        XCTAssertEqual(matcher.match(for: query("Sour Candy (with BLACKPINK)", by: "Lady Gaga", on: "Chromatica")), sourCandy)
+        XCTAssertEqual(matcher.match(for: query("Creepin' (with The Weeknd & 21 Savage)", by: "Metro Boomin",
+                                                on: "HEROES & VILLAINS")), creepin)
+        XCTAssertEqual(matcher.match(for: query("Tears of Rage (with The Band)", by: "Bob Dylan", on: "The Basement Tapes")), basement)
+        XCTAssertEqual(matcher.copies(of: query("Tears of Rage", by: "The Band", on: "Music from Big Pink")), [bigPink],
+                       "credited is not the artist")
+    }
+
+    func testEveryoneCreditedWithWithMustBeCredited() {
+        // Only the first of two was looked for, so this found the duet without Rihanna
+        let stay = song("Stay", by: "The Kid LAROI & Justin Bieber", on: "F*CK LOVE 3")
+        let matcher = SongMatcher(library: [stay])
+
+        XCTAssertNil(matcher.match(for: query("Stay (with Justin Bieber & Rihanna)", by: "The Kid LAROI", on: "Collaborations")))
+        XCTAssertEqual(matcher.match(for: query("Stay (with Justin Bieber)", by: "The Kid LAROI", on: "F*CK LOVE 3")), stay)
+    }
+
+    func testAOneWordNameAfterTheLeadIsAMissTheRulesAccept() {
+        // The Supremes are "one word after the lead", like The Band behind Bob Dylan
+        let babyLove = song("Baby Love", by: "Diana Ross & The Supremes", on: "Gold")
+
+        XCTAssertNil(SongMatcher(library: [babyLove]).match(for: query("Baby Love", by: "The Supremes", on: "Where Did Our Love Go")))
+    }
+
     func testATrackOnALiveAlbumIsNotTheStudioOne() {
         // Both in the measured library, and neither title says which is live. The live copy
         // is the one rated, so only its album keeps it out.
@@ -321,6 +413,17 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertNil(matcher.match(for: query("Foregone Destruction", by: "Michiel van den Bos",
                                               on: "Tournament Rematch: Unreal Tournament Remixed", length: 373)))
         XCTAssertEqual(matcher.match(for: query("Foregone Destruction", by: "Michiel van den Bos", on: "Unreal Tournament")), original)
+    }
+
+    func testAPlainTrackOnARemixAlbumIsNotANamedRemix() {
+        // The EP's plain track is the original mix; its remixes name their remixers
+        let original = song("Sweet Nothing", by: "Calvin Harris", on: "18 Months")
+        let tiesto = song("Sweet Nothing (feat. Florence Welch) [Tiësto Remix]", by: "Calvin Harris", on: "Sweet Nothing (Remixes)")
+        let onTheEP = song("Sweet Nothing (feat. Florence Welch)", by: "Calvin Harris", on: "Sweet Nothing (Remixes)")
+        let ep = query("Sweet Nothing (feat. Florence Welch)", by: "Calvin Harris", on: "Sweet Nothing (Remixes)")
+
+        XCTAssertNil(SongMatcher(library: [original, tiesto]).match(for: ep))
+        XCTAssertEqual(SongMatcher(library: [onTheEP, tiesto]).match(for: ep), onTheEP)
     }
 
     func testAnArtistNameIsNeverSplitOnTheQuerySide() {
@@ -457,6 +560,25 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertEqual(SongMatcher.titledAlike(studio + [live], as: query("Clocks - Live", by: "Coldplay")), [live])
         XCTAssertEqual(SongMatcher.titledAlike(studio + [live], as: query("Clocks", by: "Coldplay", on: "A Rush of Blood to the Head")),
                        studio)
+    }
+
+    func testPastTheLimitARemixAlbumsPlainTrackFindsNoNamedRemix() {
+        let studio = (1...13).map { song("Sweet Nothing", by: "Calvin Harris", on: "18 Months \($0)") }
+        let tiesto = song("Sweet Nothing (feat. Florence Welch) [Tiësto Remix]", by: "Calvin Harris", on: "Sweet Nothing (Remixes)")
+        let ep = query("Sweet Nothing (feat. Florence Welch)", by: "Calvin Harris", on: "Sweet Nothing (Remixes)")
+
+        XCTAssertEqual(SongMatcher.ranked(SongMatcher.titledAlike(studio + [tiesto], as: ep), for: ep), [])
+    }
+
+    func testPastTheLimitACopyTitledWithPartOfWhatTheSongSaysIsRead() {
+        // Spotify says acoustic in its title and live in its album's name, and the copy says
+        // only acoustic: no copy is titled with both
+        let studio = (1...13).map { song("Song", by: "Artist", on: "Studio \($0)") }
+        let acoustic = song("Song (Acoustic)", by: "Artist", on: "MTV Unplugged")
+        let unplugged = query("Song - Acoustic", by: "Artist", on: "MTV Unplugged")
+
+        XCTAssertEqual(SongMatcher.titledAlike(studio + [acoustic], as: unplugged), [acoustic])
+        XCTAssertEqual(SongMatcher.ranked(SongMatcher.titledAlike(studio + [acoustic], as: unplugged), for: unplugged), [acoustic])
     }
 
     func testAlbumCloseness() {

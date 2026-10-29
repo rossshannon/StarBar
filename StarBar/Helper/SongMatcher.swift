@@ -94,7 +94,8 @@ struct SongMatcher {
         let core: String
         /// The track's own artists and its album artist, never a guest (`SongName.artists(_:)`)
         let artists: Set<String>
-        /// Everyone the track credits, guests too, for a "(with ...)" to be checked against
+        /// Everyone the track credits, guests and anyone after the lead too
+        /// (`SongName.credited(_:)`), for a "(with ...)" to be checked against
         let credits: Set<String>
         /// Who its title credits with "with" (`SongName.Title.withNames`)
         let withNames: Set<String>
@@ -103,17 +104,17 @@ struct SongMatcher {
 
         init(_ names: Names) {
             let title = SongName.title(names.name)
-            var artists = SongName.artists(names.artist)
-            var guests = SongName.guests(names.artist)
+            var (artists, everyone) = SongName.credited(names.artist)
             // Most tracks name the same artist twice, and this runs for every track in the
             // library: about 420 ms of the first read measured on 2026-10-29
             if !names.albumArtist.isEmpty, names.albumArtist != names.artist {
-                artists.formUnion(SongName.artists(names.albumArtist))
-                guests.formUnion(SongName.guests(names.albumArtist))
+                let albumArtist = SongName.credited(names.albumArtist)
+                artists.formUnion(albumArtist.artists)
+                everyone.formUnion(albumArtist.everyone)
             }
             core = title.core
             self.artists = artists
-            credits = artists.union(guests).union(title.featured)
+            credits = everyone.union(title.featured)
             withNames = Set(title.withNames)
             versions = title.versions
             album = SongName.album(names.album)
@@ -185,11 +186,17 @@ struct SongMatcher {
     /// The copies whose own titles mark every kind of recording the query is, by its title and
     /// album together: "Clocks (Live)" for "Clocks - Live", or for plain "Clocks" on "Live
     /// 2003", but not plain "Clocks", which is only a candidate in case its album says it is
-    /// live. For when there are too many copies to read them all, since only reading a copy
-    /// tells its album.
+    /// live. When none does, those whose titles mark some of the kinds, and at least what
+    /// the query's title marks: "Song (Acoustic)" for "Song - Acoustic" on "MTV Unplugged",
+    /// which is acoustic and live. For when there are too many copies to read them all, since
+    /// only reading a copy tells its album.
     static func titledAlike(_ copies: [LibrarySong], as query: SongQuery) -> [LibrarySong] {
         let kinds = SongName.versions(of: query.name, on: query.album)
-        return copies.filter { SongName.kinds(of: SongName.title($0.name).versions) == kinds }
+        let titled = copies.map { (song: $0, kinds: SongName.kinds(of: SongName.title($0.name).versions)) }
+        let alike = titled.filter { $0.kinds == kinds }.map { $0.song }
+        guard alike.isEmpty else { return alike }
+        let marked = SongName.kinds(of: SongName.title(query.name).versions)
+        return titled.filter { !$0.kinds.isEmpty && marked.isSubset(of: $0.kinds) && $0.kinds.isSubset(of: kinds) }.map { $0.song }
     }
 
     /// Copies from `copies(of:)` whose album, length, rating and plays have since been read,

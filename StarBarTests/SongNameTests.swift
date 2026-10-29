@@ -209,10 +209,15 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(versions("Song - Live at Wembley / Digitally Remastered 2009"), ["live:wembley"])
     }
 
-    func testARecordsSizeNamesNoVersion() {
-        XCTAssertEqual(versions("Song - 12\" Remix"), ["remix"])
-        XCTAssertEqual(versions("Song (12 Inch Remix)"), ["remix"])
-        XCTAssertEqual(versions("Song (7-inch Remix)"), ["remix"])
+    func testARecordsSizeNamesAVersion() {
+        // Deleting it made one remixer's 12" and 7" one recording (the fourth review)
+        XCTAssertEqual(versions("Song - 12\" Remix"), ["remix:12in"])
+        XCTAssertEqual(versions("Song (12 Inch Remix)"), ["remix:12in"])
+        XCTAssertEqual(versions("Song (7-inch Remix)"), ["remix:7in"])
+        XCTAssertFalse(SongName.isSameRecording("Song - Arthur Baker 12\" Remix", on: "Greatest Hits",
+                                                as: "Song (Arthur Baker 7\" Remix)", on: "Singles 1985"))
+        XCTAssertFalse(SongName.isSameRecording("Song - 12\" Remix", on: "Song", as: "Song (7\" Remix)", on: "Song - Single"))
+        XCTAssertTrue(SongName.isSameRecording("Song - 12\" Remix", on: "Song", as: "Song (12 Inch Remix)", on: "Song - Single"))
     }
 
     func testRecordedLiveIsLive() {
@@ -260,6 +265,34 @@ final class SongNameTests: XCTestCase {
                                                 as: "Hotel California (Live on MTV)", on: "Eagles Live"))
     }
 
+    func testOnOneReleaseANameSaysLessOnlyByAYear() {
+        // The fourth review, 2026-10-29: anything else the longer name says tells another
+        // show, night, place or mix
+        XCTAssertFalse(SongName.isSameRecording(
+            "Folsom Prison Blues - Live at Folsom State Prison, Folsom, CA (2nd Show) - January 1968", on: "At Folsom Prison (Legacy Edition)",
+            as: "Folsom Prison Blues (Live at Folsom State Prison)", on: "At Folsom Prison"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live at the Royal Albert Hall, 2nd Night", on: "Live at the Royal Albert Hall",
+                                                as: "Song (Live at the Royal Albert Hall)", on: "Live at the Royal Albert Hall"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Tiësto Remix", on: "Song (Remixes)", as: "Song (Tiësto Deep House Remix)", on: "Song (Remixes)"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Calvin Harris Remix", on: "Song (Remixes)",
+                                                as: "Song (Calvin Harris & Disciples Remix)", on: "Song (Remixes)"))
+        XCTAssertFalse(SongName.isSameRecording("Clocks - Live in New York", on: "Live Anthology", as: "Clocks (Live in York)", on: "Live Anthology"))
+        XCTAssertTrue(SongName.isSameRecording("Song - Live at Wembley, 1986", on: "Live Anthology", as: "Song (Live at Wembley)", on: "Live Anthology"))
+    }
+
+    func testARemixAlbumsPlainTrackIsNotItsNamedRemix() {
+        // The fourth review: such an album holds the original too, and the original's rating
+        // went to the remix
+        XCTAssertFalse(SongName.isSameRecording("Sweet Nothing (feat. Florence Welch)", on: "Sweet Nothing (Remixes)",
+                                                as: "Sweet Nothing (feat. Florence Welch) [Tiësto Remix]", on: "Sweet Nothing (Remixes)"))
+        XCTAssertTrue(SongName.isSameRecording("Sweet Nothing (feat. Florence Welch)", on: "Sweet Nothing (Remixes)",
+                                               as: "Sweet Nothing (feat. Florence Welch)", on: "Sweet Nothing (Remixes)"))
+        XCTAssertTrue(SongName.isSameRecording("Strobe - Michael Woods Remix", on: "", as: "Strobe", on: "Strobe (Michael Woods Remixes)"),
+                      "an album that names the remixer still names the remix")
+        XCTAssertTrue(SongName.isSameRecording("Clocks - Live in Sydney", on: "Live 2003", as: "Clocks", on: "Live 2003"),
+                      "a live album's plain track is still its performance")
+    }
+
     func testTwoPlainPerformancesAreOneOnlyOnOneRelease() {
         // Nothing else says which night or which remixer
         XCTAssertTrue(SongName.isSameRecording("Clocks - Live", on: "Viva la Vida (Deluxe Edition)",
@@ -297,6 +330,38 @@ final class SongNameTests: XCTestCase {
         // One app's name for the album has it, the other's not
         XCTAssertTrue(SongName.isSameRelease("I Might Be Wrong: Live Recordings", "I Might Be Wrong"))
         XCTAssertTrue(SongName.isSameRelease("Parklive (Live)", "Parklive"))
+        XCTAssertTrue(SongName.isSameRelease("Parklive (Live) [Deluxe Edition]", "Parklive: Live"))
+    }
+
+    func testAPlainVersionIsTheSameReleaseOnlyAsTheBareAlbum() {
+        // The fourth review: an edition of the album is the studio album, not its live one
+        XCTAssertFalse(SongName.isSameRelease("Album (Deluxe Edition)", "Album: In Concert"))
+        XCTAssertFalse(SongName.isSameRelease("Album (Deluxe Edition)", "Album: Unplugged"))
+        XCTAssertFalse(SongName.isSameRelease("Album - Single", "Album (Remixes)"))
+        XCTAssertFalse(SongName.isSameRelease("Album (Live)", "Album: Remixed"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live", on: "Album (Deluxe Edition)", as: "Song", on: "Album: In Concert"))
+    }
+
+    func testAnEditionThatNamesAShowIsAnotherRelease() {
+        XCTAssertFalse(SongName.isSameRelease("Tour Anthology (Bonus Disc: Live in Sydney 2003)",
+                                              "Tour Anthology (Bonus Disc: Live in Buenos Aires 2017)"))
+        XCTAssertFalse(SongName.isSameRelease("Album (Live at Budokan + Bonus Tracks)", "Album (Live at Wembley + Bonus Tracks)"))
+    }
+
+    func testAMarketsOrAnExpandedEditionIsTheSameRelease() {
+        for edition in ["xx (Japan Version)", "xx (International Version)", "xx (Tour Version)", "xx [Explicit Version]"] {
+            XCTAssertTrue(SongName.isSameRelease(edition, "xx"), edition)
+        }
+        XCTAssertTrue(SongName.isSameRelease("Rumours (Expanded & Remastered)", "Rumours"))
+        XCTAssertFalse(SongName.isSameRelease("Fearless (Taylor's Version)", "Fearless (Japan Version)"), "a re-recording")
+    }
+
+    func testASoundtrackCreditNamesNoRelease() {
+        XCTAssertTrue(SongName.isSameRelease("Spider-Man (Original Motion Picture Score)", "Spider-Man"))
+        XCTAssertTrue(SongName.isSameRelease("Blade Runner (Original Motion Picture Soundtrack)",
+                                             "Blade Runner: Original Motion Picture Soundtrack"))
+        XCTAssertFalse(SongName.isSameRelease("Star Wars: A New Hope (Original Motion Picture Soundtrack)",
+                                              "Star Wars: The Empire Strikes Back (Original Motion Picture Soundtrack)"))
     }
 
     func testAVersionAnAlbumNamesIsAnotherRelease() {
@@ -375,6 +440,16 @@ final class SongNameTests: XCTestCase {
         XCTAssertFalse(SongName.artists("Huey Lewis & The News").contains("news"))
         XCTAssertFalse(SongName.artists("Elvis Costello & The Attractions").contains("attractions"))
         XCTAssertTrue(SongName.artists("Rihanna, Kanye West & Paul McCartney").isSuperset(of: ["kanye west", "paul mccartney"]))
+    }
+
+    func testEveryoneACreditNamesIsKeptForAWithCredit() {
+        // Leaving a one-word name after the lead out of these too lost "All The Stars (with
+        // SZA)" (the fourth review)
+        XCTAssertTrue(SongName.credited("Kendrick Lamar & SZA").everyone.contains("sza"))
+        XCTAssertFalse(SongName.credited("Kendrick Lamar & SZA").artists.contains("sza"))
+        XCTAssertTrue(SongName.credited("Bob Dylan & The Band").everyone.contains("band"))
+        XCTAssertTrue(SongName.credited("Calvin Harris feat. Rihanna").everyone.isSuperset(of: ["calvin harris", "rihanna"]))
+        XCTAssertEqual(SongName.title("Stay (with Justin Bieber & Rihanna)").withNames, ["justin bieber", "rihanna"])
     }
 
     func testAGuestIsNamedByTheCredit() {
