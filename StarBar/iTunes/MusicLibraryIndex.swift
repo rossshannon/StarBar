@@ -68,6 +68,12 @@ final class MusicLibraryIndex {
     /// again later.
     static let copiesTimeout = 180
 
+    /// The longest reading the copies may take in all. Every event has `copiesTimeout`, and a
+    /// Music answering each one just inside it would hold the queue for minutes over twelve
+    /// copies; an answer that late is no use to the menu bar, so the read is given up as one
+    /// Music didn't answer, and the finder asks again later.
+    static let copiesDeadline: TimeInterval = 10
+
     private let queue = DispatchQueue(label: "com.rossshannon.starbar.library-index", qos: .userInitiated)
 
     /// The last good read, as a matcher
@@ -132,6 +138,12 @@ final class MusicLibraryIndex {
     /// Whether the next `withMatcher` will read Music first
     var needsRead: Bool {
         return matcher == nil || isStale || readFromPID != musicPID()
+    }
+
+    /// Whether a read has succeeded since StarBar started, so the next one can reuse what it
+    /// worked out (`SongMatcher(library:reusing:)`)
+    var hasRead: Bool {
+        return matcher != nil
     }
 
     /// Whether Music is running, which tells a `withMatcher` nil for a read that failed from
@@ -324,8 +336,9 @@ final class MusicLibraryIndex {
 
     /// `readCopies(_:choosing:completion:)`'s read. Each copy is found by persistent ID (a
     /// `whose` search, never `object(withID:)`) and must still have the index's name and
-    /// artist. Nil when any Apple Event failed: Scripting Bridge answers a timed-out search
-    /// with an empty list, which would look like a song that has gone. Background queue only.
+    /// artist. Nil when any Apple Event failed, since Scripting Bridge answers a timed-out
+    /// search with an empty list, which would look like a song that has gone, or when the
+    /// read ran past `copiesDeadline`. Background queue only.
     ///
     /// Each copy is one event for the search, resolved with `get()`, which hands back Music's
     /// own reference to the track, by ID, so the reads after it don't search the library
@@ -343,13 +356,19 @@ final class MusicLibraryIndex {
         // The delegate isn't retained, and the connection outlives this read
         defer { application.delegate = nil }
         application.timeout = copiesTimeout
+        let deadline = Date().addingTimeInterval(copiesDeadline)
+        var overran = false
         do {
             let reading = try ExceptionCatcher.catchException {
                 guard let playlist = kept?.playlist ?? iTunesRadioStation.libraryPlaylistByID(of: application),
                       let tracks = playlist.tracks?() else { return CopiesReading() }
                 return CopiesReading(playlist: playlist, copies: songs.map { song -> LibrarySong? in
+                    if !overran, Date() > deadline {
+                        overran = true
+                        os_log(.error, "%{public}s[%{public}ld], %{public}s: reading %{public}ld library copies took over %{public}.0f s; giving up", ((#file as NSString).lastPathComponent), #line, #function, songs.count, MusicLibraryIndex.copiesDeadline)
+                    }
                     // The read is thrown away after a failure: ask Music nothing more
-                    guard failures.failures == 0 else { return nil }
+                    guard failures.failures == 0, !overran else { return nil }
                     // The name and artist are checked by the search itself, which saves an
                     // event for each
                     let predicate = NSPredicate(format: "persistentID == %@ AND name == %@ AND artist == %@",
@@ -368,7 +387,7 @@ final class MusicLibraryIndex {
                     return read
                 })
             } as? CopiesReading
-            guard failures.failures == 0 else { return nil }
+            guard failures.failures == 0, !overran else { return nil }
             if let playlist = reading?.playlist {
                 copiesConnection = (pid: pid, application: application, playlist: playlist)
             }

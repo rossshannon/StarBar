@@ -115,10 +115,7 @@ enum SongName {
 
         func take(_ part: String) -> Bool {
             guard let descriptor = describe(part) else { return false }
-            switch descriptor {
-            case .edition:
-                break
-            case .version(let kinds):
+            if case .version(let kinds) = descriptor {
                 versions.formUnion(kinds)
             }
             return true
@@ -240,7 +237,13 @@ enum SongName {
     /// Everyone a credit names, its guests too: what a "(with ...)" in another track's title
     /// is checked against (`Title.withNames`), never who the track is by
     static func credits(_ raw: String) -> Set<String> {
-        return artists(raw).union(split(fold(raw), on: guestSeparator).dropFirst().flatMap { artistNames(in: $0) })
+        return artists(raw).union(guests(raw))
+    }
+
+    /// The guests a credit names, after "feat." or "with": `credits(_:)` without the track's
+    /// own artists, for when those have been worked out already
+    static func guests(_ raw: String) -> Set<String> {
+        return Set(split(fold(raw), on: guestSeparator).dropFirst().flatMap { artistNames(in: $0) })
     }
 
     /// An album's name without its edition words: "A Night At The Opera (2011 Remaster)" is

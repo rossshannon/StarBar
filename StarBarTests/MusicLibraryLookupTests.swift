@@ -390,16 +390,19 @@ final class MusicLibraryLookupTests: XCTestCase {
     }
 
     /// Reading copies keeps its connection and library playlist for the next read. A kept
-    /// one must still answer, and answer about the song it is asked about.
+    /// one must still answer, and answer about the song it is asked about: the two tracks
+    /// read differently, so an answer about the other one fails.
     func testReadingCopiesTwiceAnswersBothTimes() throws {
         let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
         let (first, second) = try twoDifferentLibraryTracks()
         try XCTSkipUnless(first.mediaKind == .music && second.mediaKind == .music,
                           "a track that isn't a song reads as no copy, which proves nothing about the connection")
+        try XCTSkipIf(first.album == second.album && first.duration == second.duration,
+                      "the two tracks read alike, so an answer about the wrong one would pass")
         for track in [first, second, first] {
             let song = LibrarySong(persistentID: try XCTUnwrap(track.persistentID), name: track.name ?? "",
                                    artist: track.artist ?? "", albumArtist: "")
-            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: false),
+            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: true),
                                      "Music didn't answer")
             // What was read from Music, not the persistent ID passed in, which comes back as it went
             let copy = try XCTUnwrap(read.first ?? nil, "a song read as no copy")

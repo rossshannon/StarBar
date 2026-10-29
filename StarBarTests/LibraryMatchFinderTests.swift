@@ -430,6 +430,23 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(copiesRead, [], "nothing read")
     }
 
+    func testPastTheLimitOnlyTheCopiesTitledAlikeAreRead() throws {
+        // A live song among more studio copies than are read: plain ones could only be live by
+        // their albums, and the copy whose title says so is the likely one (the second review)
+        let studio = (0...LibraryMatchFinder.copiesRead).map {
+            LibrarySong(persistentID: String(format: "%016X", $0), name: "Zombie", artist: "The Cranberries",
+                        albumArtist: "", album: "Compilation \($0)")
+        }
+        let live = LibrarySong(persistentID: "FFFFFFFFFFFFFFFF", name: "Zombie (Live)", artist: "The Cranberries",
+                               albumArtist: "", album: "Live in Paris")
+        library = studio + [live]
+
+        let match = try XCTUnwrap(ask(spotify("Zombie - Live", by: "The Cranberries", on: "Live in Paris")))
+
+        XCTAssertEqual(match.song.persistentID, live.persistentID)
+        XCTAssertEqual(copiesRead, [live.persistentID])
+    }
+
     // MARK: - Reading a copy
 
     func testReadingACopyToChooseBetweenTakesWhatChooses() throws {
@@ -443,9 +460,9 @@ final class LibraryMatchFinderTests: XCTestCase {
                                    playedCount: 7, isFavorited: true))
         XCTAssertEqual(song.reading(track, choosing: false),
                        LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "",
-                                   album: "No Need to Argue", duration: 306.5, rating: 60, isRatingComputed: true,
+                                   album: "No Need to Argue", rating: 60, isRatingComputed: true,
                                    isFavorited: true),
-                       "what is shown and what can rule the copy out, but not the plays")
+                       "what is shown and what can rule the copy out, but not the length or plays")
     }
 
     func testALengthOfNothingIsNoLength() {

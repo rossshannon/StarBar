@@ -47,6 +47,11 @@ struct LibraryMatch {
             self.rating = rating
             self.isFavorited = isFavorited
         }
+
+        /// What was last read of the copy in the background, for when Music doesn't answer
+        init(song: LibrarySong) {
+            self.init(rating: song.isRatingComputed ? nil : song.rating, isFavorited: song.isFavorited)
+        }
     }
 }
 
@@ -68,9 +73,9 @@ extension LibrarySong {
 
     /// This song with what Music says now about its live track, or nil when that track isn't
     /// a song: the index holds every kind of track, and a music video of the song is no place
-    /// for its stars. Each property is an Apple Event, so only the album and length, which
-    /// can rule a copy out (`SongMatcher.ranked(_:for:)`), and what would be shown (the
-    /// rating and heart) are read unless `choosing`, when the plays that choose between
+    /// for its stars. Each property is an Apple Event, so only the album, which can rule a
+    /// copy out (`SongMatcher.ranked(_:for:)`), and what would be shown (the rating and
+    /// heart) are read unless `choosing`, when the length and plays that choose between
     /// copies are too, and the rating's kind only when there is a rating for it to describe.
     ///
     /// One property at a time, never the track's `properties` record, though the record is
@@ -87,9 +92,9 @@ extension LibrarySong {
         song.rating = track.rating ?? 0
         song.isRatingComputed = song.rating > 0 && track.ratingKind == .computed
         song.isFavorited = track.isFavorited
-        // Scripting Bridge gives a number 0 when its Apple Event fails
-        song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
         if choosing {
+            // Scripting Bridge gives a number 0 when its Apple Event fails
+            song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
             song.playedCount = track.playedCount ?? 0
         }
         return song
@@ -122,11 +127,13 @@ final class LibraryMatchFinder {
 
     static let shared = LibraryMatchFinder()
 
-    /// The most copies of one song read from Music; a song the user has more often than this
-    /// is no match. Each copy is up to eight Apple Events, on the index's queue. The index
-    /// holds no albums, ratings or lengths to choose by, so reading only some would leave the
-    /// choice to their persistent IDs, and the copy on the album Spotify names, or the one the
-    /// user rated, could be among those never read.
+    /// The most copies of one song read from Music. Each copy is up to eight Apple Events, on
+    /// the index's queue. The index holds no albums, ratings or lengths to choose by, so
+    /// reading only some would leave the choice to their persistent IDs, and the copy on the
+    /// album Spotify names, or the one the user rated, could be among those never read. So
+    /// past this, only the copies whose titles mark the same kinds of recording as Spotify's
+    /// are read ("One (Live)" of 13 copies of "One", for "One - Live"), and when those are
+    /// still too many, the song is no match.
     static let copiesRead = 12
 
     /// How long to wait before asking a Music that didn't answer again. Measured 2026-10-29,
@@ -187,6 +194,12 @@ final class LibraryMatchFinder {
         look(for: query, identity: identity, triesLeft: 1)
     }
 
+    /// Whether the library has been read since StarBar started. The first read builds the
+    /// matcher from nothing, which takes longer than any read after it.
+    var hasReadLibrary: Bool {
+        return index.hasRead
+    }
+
     /// The last answer given for this song, asking Music nothing, or nil when there isn't
     /// one. Kept after a library change until a new answer replaces it: the copy it names was
     /// fetched by persistent ID and is still the right one to show unless the change removed
@@ -220,11 +233,18 @@ final class LibraryMatchFinder {
                 os_log("%{public}s[%{public}ld], %{public}s: no library copy of %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, identity, query.name, query.artist, query.album)
                 return self.finish(nil, for: identity)
             }
-            guard copies.count <= LibraryMatchFinder.copiesRead else {
-                os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s, more than the %{public}ld read; the one to choose could be among the rest, so no match", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, LibraryMatchFinder.copiesRead)
-                return self.finish(nil, for: identity)
+            let reading: [LibrarySong]
+            if copies.count <= LibraryMatchFinder.copiesRead {
+                reading = copies
+            } else {
+                let marked = copies.filter { SongMatcher.titleMarksTheSame($0, as: query) }
+                guard !marked.isEmpty, marked.count <= LibraryMatchFinder.copiesRead else {
+                    os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s, %{public}ld of them titled alike, more than the %{public}ld read; the one to choose could be among the rest, so no match", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, marked.count, LibraryMatchFinder.copiesRead)
+                    return self.finish(nil, for: identity)
+                }
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s; reading the %{public}ld titled alike", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, marked.count)
+                reading = marked
             }
-            let reading = copies
             self.index.readCopies(reading, choosing: reading.count > 1) { [weak self] read in
                 guard let self = self, self.asking?.identity == identity else { return }
                 guard let read = read else {
@@ -236,16 +256,15 @@ final class LibraryMatchFinder {
                     os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s, \u{201C}%{public}s\u{201D} on %{public}s, is a different recording from %{public}s, \u{201C}%{public}s\u{201D} on %{public}s, by its album", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.album, identity, query.name, query.album)
                 }
                 guard let song = ranked.first else {
-                    os_log("%{public}s[%{public}ld], %{public}s: the index matched %{public}s to %{public}ld library tracks, none of them that recording and still there; no match", ((#file as NSString).lastPathComponent), #line, #function, identity, copies.count)
+                    os_log("%{public}s[%{public}ld], %{public}s: the index matched %{public}s to %{public}ld library tracks, none of them that recording and still there; no match", ((#file as NSString).lastPathComponent), #line, #function, identity, reading.count)
                     return self.finish(nil, for: identity)
                 }
                 guard let track = self.fetchTrack(song) else {
                     return self.noAnswer(for: query, identity: identity, triesLeft: triesLeft)
                 }
-                os_log("%{public}s[%{public}ld], %{public}s: %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, is library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s (%{public}ld of %{public}ld copies read)", ((#file as NSString).lastPathComponent), #line, #function, identity, query.name, query.artist, query.album, song.persistentID, song.name, song.artist, song.album, ranked.count, copies.count)
-                let shown = LibraryMatch.Shown(rating: song.isRatingComputed ? nil : song.rating,
-                                               isFavorited: song.isFavorited)
-                self.finish(LibraryMatch(identity: identity, query: query, song: song, track: track, shown: shown),
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, is library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s (%{public}ld of %{public}ld copies read)", ((#file as NSString).lastPathComponent), #line, #function, identity, query.name, query.artist, query.album, song.persistentID, song.name, song.artist, song.album, ranked.count, reading.count)
+                self.finish(LibraryMatch(identity: identity, query: query, song: song, track: track,
+                                         shown: LibraryMatch.Shown(song: song)),
                             for: identity)
             }
         }
