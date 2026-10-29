@@ -397,7 +397,7 @@ final class MusicLibraryLookupTests: XCTestCase {
         for track in [first, second, first] {
             let song = LibrarySong(persistentID: try XCTUnwrap(track.persistentID), name: track.name ?? "",
                                    artist: track.artist ?? "", albumArtist: "")
-            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song]),
+            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: false),
                                      "Music didn't answer")
             // Nil when the track isn't a song, which still proves the read was answered
             if let copy = read.first ?? nil {
@@ -408,12 +408,37 @@ final class MusicLibraryLookupTests: XCTestCase {
         }
     }
 
-    /// `LibraryMatchFinder` reads a copy from Music's `properties` record in one Apple Event.
-    /// If a value came back in another shape than `TrackProperties` expects, the copy would
-    /// show the wrong stars or, for the media kind, never be a song at all, with only "isn't
-    /// a song" in the log. So each value is checked against the same property read on its
-    /// own. Most of a music library is songs, so a sample with none read as one means the
-    /// read is wrong, not the library.
+    /// The search that finds a copy checks its name and artist too, because the index can be
+    /// a library notification behind, and a track that has been renamed since may be another
+    /// song by now. If Music ignored either clause, a copy asked for under another name would
+    /// still be read. A song, so the copy asked for under its own names is read, or a search
+    /// that found nothing at all would pass.
+    func testACopyUnderAnotherNameIsNotRead() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        let track = try XCTUnwrap((0..<min(tracks.count, 50)).lazy.compactMap { (tracks.object(at: $0) as? SBObject)?.get() as? iTunesTrack }
+                                    .first(where: { $0.mediaKind == .music }), "no song among the first 50 tracks")
+        let persistentID = try XCTUnwrap(track.persistentID)
+        let name = try XCTUnwrap(track.name)
+        let artist = try XCTUnwrap(track.artist)
+        let asked = [
+            LibrarySong(persistentID: persistentID, name: name, artist: artist, albumArtist: ""),
+            LibrarySong(persistentID: persistentID, name: name + " (another song)", artist: artist, albumArtist: ""),
+            LibrarySong(persistentID: persistentID, name: name, artist: artist + " (another artist)", albumArtist: ""),
+        ]
+
+        let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: asked, choosing: false), "Music didn't answer")
+
+        XCTAssertEqual(read.count, 3)
+        XCTAssertEqual((read.first ?? nil)?.persistentID, persistentID, "under its own names")
+        XCTAssertNil(read.dropFirst().first ?? nil, "under another name")
+        XCTAssertNil(read.dropFirst(2).first ?? nil, "under another artist")
+    }
+
+    /// `LibraryMatchFinder` leaves out any copy whose media kind doesn't read as a song. If
+    /// the kind came back in another shape, every copy would be left out and nothing would
+    /// ever match, with only "isn't a song" in the log. Most of a music library is songs, so
+    /// a sample with none read as one means the read is wrong, not the library.
     func testASongReadsAsASong() throws {
         let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
         try XCTSkipUnless(tracks.count > 0, "the library is empty")
@@ -428,15 +453,11 @@ final class MusicLibraryLookupTests: XCTestCase {
                                       "track \(position) unreadable")
             let song = LibrarySong(persistentID: track.persistentID ?? "", name: track.name ?? "",
                                    artist: track.artist ?? "", albumArtist: "")
-            if let read = song.reading(track) {
+            if let read = song.reading(track, choosing: true) {
                 songs += 1
-                XCTAssertEqual(track.mediaKind, .music, "track \(position)")
                 XCTAssertEqual(read.album, track.album ?? "", "track \(position)")
                 XCTAssertEqual(read.rating, track.rating ?? 0, "track \(position)")
-                XCTAssertEqual(read.isRatingComputed, read.rating > 0 && track.ratingKind == .computed, "track \(position)")
-                XCTAssertEqual(read.isFavorited, track.isFavorited, "track \(position)")
                 XCTAssertEqual(read.playedCount, track.playedCount ?? 0, "track \(position)")
-                XCTAssertEqual(read.duration ?? 0, track.duration ?? 0, accuracy: 0.001, "track \(position)")
                 rated += read.rating > 0 ? 1 : 0
             } else {
                 XCTAssertNotEqual(track.mediaKind, .music, "track \(position) is a song but didn't read as one")
@@ -444,6 +465,57 @@ final class MusicLibraryLookupTests: XCTestCase {
         }
         print("Sampled \(positions.count) tracks: \(songs) songs, \(rated) of them rated")
         XCTAssertGreaterThan(songs, 0, "none of \(positions.count) tracks sampled read as a song")
+    }
+
+    // MARK: - Reads that change nothing
+
+    /// Reading a copy must not make Music announce a library change. Measured 2026-10-29: a
+    /// read of a track's `location`, alone or in its `properties` record, did, 2.8 s later,
+    /// every time, and a library change sends StarBar to read the playing song's copy again,
+    /// so the build that read the record read the whole library every 3 s for as long as a
+    /// matched song played. The app subscribes to none of Music's notifications under tests,
+    /// so this listens for itself, and first checks that it hears a distributed notification
+    /// at all: a deaf listener would pass whatever Music did.
+    func testReadingACopyAnnouncesNoLibraryChange() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let (first, _) = try twoDifferentLibraryTracks()
+        let song = LibrarySong(persistentID: try XCTUnwrap(first.persistentID), name: first.name ?? "",
+                               artist: first.artist ?? "", albumArtist: "")
+
+        let center = DistributedNotificationCenter.default()
+        var changes: [Date] = []
+        var heard = false
+        let probe = Notification.Name("com.rossshannon.starbar.tests.probe.\(UUID().uuidString)")
+        let observers = [Notification.Name.ITLibraryDidChange, Notification.Name("com.apple.iTunes.libraryChanged")].map {
+            center.addObserver(forName: $0, object: nil, queue: .main) { _ in changes.append(Date()) }
+        } + [center.addObserver(forName: probe, object: nil, queue: .main) { _ in heard = true }]
+        defer { observers.forEach(center.removeObserver) }
+
+        center.postNotificationName(probe, object: nil, userInfo: nil, deliverImmediately: true)
+        spin(for: 5, until: { heard })
+        XCTAssertTrue(heard, "the listener heard nothing, so it can't tell what Music announced")
+
+        // An earlier read, or the user, may have set one off: wait for 4 s without one
+        let waitStarted = Date()
+        let isQuiet = { Date().timeIntervalSince(max(waitStarted, changes.last ?? waitStarted)) >= 4 }
+        spin(for: 20, until: isQuiet)
+        try XCTSkipUnless(isQuiet(), "Music's library kept changing, so a change can't be pinned on the read")
+
+        changes = []
+        let read = Date()
+        _ = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: true), "Music didn't answer")
+        spin(for: 6)
+
+        XCTAssertEqual(changes.map { String(format: "%.1f s", $0.timeIntervalSince(read)) }, [],
+                       "Music announced a library change after a copy was read")
+    }
+
+    /// Run the main run loop for `seconds`, or until `done`
+    private func spin(for seconds: TimeInterval, until done: () -> Bool = { false }) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done() && Date() < deadline {
+            RunLoop.current.run(until: min(deadline, Date().addingTimeInterval(0.05)))
+        }
     }
 
 }
