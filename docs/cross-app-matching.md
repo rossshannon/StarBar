@@ -81,8 +81,23 @@ The same reviewers, on the fixes above, 2026-10-29. Three of those fixes brought
 - The first song after a launch showed Spotify's heart before its stars, the matcher taking 420 ms to build from nothing. The first wait is now 2 s, and each track's credits are worked out once.
 - Known misses kept: " x " splits "Lil Nas X & Billy Ray Cyrus" after "Nas"; "Title - Subtitle - Remastered 2011" keeps its remaster; "Live After Death" and "Live and Dangerous" don't read as live albums.
 
+## Rules from the third review
+
+The same reviewers, minus one, on the second round's fixes, 2026-10-29. Each is a rule with a test.
+
+- **What counts as one release was too loose and too strict at once.** "Tour Anthology (Live in Sydney 2003)" and "(Live in Buenos Aires 2017)" were one release, since the brackets came off with the edition words, so plain "Clocks" on one matched plain "Clocks" on the other. And "I Might Be Wrong: Live Recordings" was not "I Might Be Wrong", nor "Coexist (Tour Edition)" "Coexist". The release is now the album without its edition words, an edition the rules don't know by its last word or its bonus tracks, Music's " - Single", and a plain version, bracketed, after a dash or as a subtitle. A version the album names stays, and so does a subtitle that is no version: "TRON: Legacy" is not "TRON".
+- On one release, "Live On MTV, 1994" and "Live on MTV" didn't match, a named version needing the same name on both sides. On the same release one name may now say less than the other.
+- Johnny Cash's "Folsom Prison Blues" from the 1st Show matched the one from the 2nd Show, on the same Legacy Edition: ordinals were dropped as edition words. Ordinals now stay with numbers. An anniversary ("25th Anniversary") and a record's size ("12\" Remix") go, and "2003 Digital Remaster" goes whole. A year beside a remaster can be the performance's: "Live at Glastonbury 2011 Remastered 2020" is Glastonbury 2011, not plain Glastonbury.
+- "Bob Dylan & The Band" found The Band's own "Tears of Rage", once every name of a split credit was kept. A one-word name is kept only when it leads the credit, which keeps Queen's "Under Pressure" and makes "Metro Boomin, The Weeknd & 21 Savage" a known miss for a song Spotify credits to The Weeknd.
+- James Horner's "Main Title" on *Braveheart* would match the one on *Aliens*. A film score's cues ("Main Title", "End Credits", "Opening Titles") are now generic titles, as are titles made of two generic parts ("Intro (Skit)") and Roman numerals ("Interlude II"). "Theme", "Finale" and "Opening" are not, being songs' names too.
+- Past twelve copies, the copies read were chosen by Spotify's title alone, so a song on a live album found the studio copies. They are now chosen by title and album together. Known limit: a plainly titled copy on a live album isn't read for a Spotify title that says "Live"; the copy read in its place is the same recording.
+- **A held rating or heart ended early.** A read Music didn't answer fell back to what was on screen, and that matched the held choice, so the hold ended and the next read, still Music's old value, put the old stars back. The hold is now `HeldChoice`, which only Music's own answer can end by agreeing. A write Music refuses also ends it, so the re-read after a refusal shows Music's value.
+- What was last read of a copy didn't know about a rating chosen since, so a later fall-back to it showed the old stars. A choice now updates it. The strip uses it only when Music doesn't answer, never as Music's answer, or its own hold would end.
+- The 10 s deadline was only checked between copies, so one more 3 s event could pass it. Each event's timeout is now cut to what is left.
+- Known misses added: "P*U*L*S*E" and other albums named with symbols were not tried; a click while Music isn't answering sends its write on the main thread at the default timeout, as a click on Music's own song already does.
+
 ## Open
 
 - Recall against the user's likes is above; recall against what they actually play has not been measured. The first live checks, 2026-10-29: three versions of "The Maker" by Daniel Lanois each got the right answer. The studio version found the user's studio copy on Sling Blade, "The Maker - Live" found their "The Maker (Live)" on the same live album, and "The Maker - Calypso Demo" found nothing, the word "demo" keeping it from the studio copy. Seven songs the user doesn't own were correctly not found.
-- Whether the names-only read is reliably quick has not been measured yet.
+- The names-only read, on the third review's install, 2026-10-29: the first song after a launch took 1,832 ms from the question to the answer, with the matcher built in about 163 ms; the next five took 85 to 124 ms. One launch is not a measure of how reliably quick it is.
 - No rating has been written through this path to a real library yet.
