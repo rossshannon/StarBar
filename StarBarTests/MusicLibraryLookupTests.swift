@@ -365,6 +365,49 @@ final class MusicLibraryLookupTests: XCTestCase {
         }
     }
 
+    /// The station's track for a matched copy is a reference made without asking Music
+    /// anything, found by persistent ID each time it is read or written. Two different tracks,
+    /// so a reference that ignored the ID (always the library's first track, say) can't pass.
+    func testTheStationsTrackForACopyIsThatCopy() throws {
+        let (first, second) = try twoDifferentLibraryTracks()
+        for track in [first, second] {
+            let persistentID = try XCTUnwrap(track.persistentID, "persistent ID unreadable")
+            let song = LibrarySong(persistentID: persistentID, name: track.name ?? "", artist: track.artist ?? "",
+                                   albumArtist: "")
+            let reference = try XCTUnwrap(iTunesRadioStation.shared.libraryTrack(for: song), "no reference made")
+            XCTAssertEqual(reference.persistentID, persistentID)
+            XCTAssertEqual(reference.name, track.name)
+            XCTAssertEqual(reference.databaseID, track.databaseID)
+        }
+    }
+
+    /// And one for a song no longer there reads as nothing, rather than as another song
+    func testTheStationsTrackForAGoneCopyIsNoSong() throws {
+        let song = LibrarySong(persistentID: "0000000000000000", name: "Gone", artist: "Nobody", albumArtist: "")
+        let reference = try XCTUnwrap(iTunesRadioStation.shared.libraryTrack(for: song), "no reference made")
+
+        XCTAssertTrue((reference.persistentID ?? "").isEmpty, "read as \(reference.persistentID ?? "nil")")
+    }
+
+    /// Reading copies keeps its connection and library playlist for the next read. A kept
+    /// one must still answer, and answer about the song it is asked about.
+    func testReadingCopiesTwiceAnswersBothTimes() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let (first, second) = try twoDifferentLibraryTracks()
+        for track in [first, second, first] {
+            let song = LibrarySong(persistentID: try XCTUnwrap(track.persistentID), name: track.name ?? "",
+                                   artist: track.artist ?? "", albumArtist: "")
+            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: false),
+                                     "Music didn't answer")
+            // Nil when the track isn't a song, which still proves the read was answered
+            if let copy = read.first ?? nil {
+                XCTAssertEqual(copy.persistentID, song.persistentID)
+                XCTAssertEqual(copy.album, track.album ?? "")
+                XCTAssertEqual(copy.isFavorited, track.isFavorited)
+            }
+        }
+    }
+
     /// `LibraryMatchFinder` leaves out any copy whose media kind doesn't read as a song. If
     /// the kind came back in another shape, every copy would be left out and nothing would
     /// ever match, with only "isn't a song" in the log. Most of a music library is songs, so

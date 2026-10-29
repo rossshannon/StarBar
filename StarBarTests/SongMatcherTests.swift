@@ -212,6 +212,45 @@ final class SongMatcherTests: XCTestCase {
                        Set(copies.map { $0.persistentID }))
     }
 
+    // MARK: - Building again after a library change
+
+    func testAMatcherBuiltAgainFindsWhatAFreshOneFinds() {
+        let before = [song("Zombie", by: "The Cranberries"), song("Linger", by: "The Cranberries"),
+                      song("Strawberry Swing", by: "Coldplay")]
+        let after = before + [song("Dreams", by: "The Cranberries"), song("Zombie", by: "The Cranberries", on: "Stars")]
+        let reused = SongMatcher(library: after, reusing: SongMatcher(library: before))
+        let fresh = SongMatcher(library: after)
+
+        for name in ["Zombie", "Linger", "Dreams", "Strawberry Swing"] {
+            let artist = name == "Strawberry Swing" ? "Coldplay" : "The Cranberries"
+            XCTAssertEqual(reused.copies(of: query(name, by: artist)), fresh.copies(of: query(name, by: artist)), name)
+        }
+        XCTAssertEqual(reused.count, 5)
+    }
+
+    func testARenamedTrackIsFoundByItsNewName() {
+        // What is reused goes by the names, never by the track: the persistent ID stays
+        let zombie = song("Zombie", by: "The Cranberries")
+        let renamed = LibrarySong(persistentID: zombie.persistentID, name: "Linger", artist: "The Cranberries",
+                                  albumArtist: "")
+        let matcher = SongMatcher(library: [renamed], reusing: SongMatcher(library: [zombie]))
+
+        XCTAssertEqual(matcher.copies(of: query("Zombie", by: "The Cranberries")), [])
+        XCTAssertEqual(matcher.copies(of: query("Linger", by: "The Cranberries")), [renamed])
+    }
+
+    func testATrackAddedAgainIsTheNewTrack() {
+        // Deleted and added again: the same names, another persistent ID, and only the new
+        // one is there to rate
+        let old = song("Zombie", by: "The Cranberries")
+        let new = song("Zombie", by: "The Cranberries")
+        let matcher = SongMatcher(library: [new], reusing: SongMatcher(library: [old]))
+
+        XCTAssertEqual(matcher.copies(of: query("Zombie", by: "The Cranberries")), [new])
+        XCTAssertEqual(SongMatcher(library: [], reusing: matcher).copies(of: query("Zombie", by: "The Cranberries")), [],
+                       "nothing carried over from a library the track has left")
+    }
+
     func testAlbumCloseness() {
         XCTAssertEqual(SongMatcher.closeness(of: "abba gold", to: "abba gold"), 0)
         XCTAssertEqual(SongMatcher.closeness(of: "abba gold", to: "abba gold greatest hits"), 1)

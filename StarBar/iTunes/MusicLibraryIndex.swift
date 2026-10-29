@@ -142,11 +142,12 @@ final class MusicLibraryIndex {
         isReading = true
         let generation = self.generation
         let readLibrary = self.readLibrary
+        let previous = matcher
         queue.async { [weak self] in
             let started = Date()
             let songs = readLibrary(pid)
             let readDone = Date()
-            let matcher = songs.map { SongMatcher(library: $0) }
+            let matcher = songs.map { SongMatcher(library: $0, reusing: previous) }
             let built = Date()
             DispatchQueue.main.async {
                 guard let self = self else { return }
@@ -282,24 +283,34 @@ final class MusicLibraryIndex {
 
     /// What one try at reading copies came to, boxed for `ExceptionCatcher` like `Reading`
     private struct CopiesReading {
+        var playlist: iTunesPlaylist?
         var copies: [LibrarySong?]?
     }
+
+    /// The connection and library playlist the last `readCopies` read through, kept for the
+    /// next one in the same Music process: finding the playlist is four Apple Events of the
+    /// nine one copy took. Dropped after any failure, so a read that failed finds it afresh.
+    /// Index queue only.
+    private static var copiesConnection: (pid: pid_t, application: SBApplication, playlist: iTunesPlaylist)?
 
     /// `readCopies(_:choosing:completion:)`'s read. Each copy is found by persistent ID (a
     /// `whose` search, never `object(withID:)`) and must still have the index's name and
     /// artist. Nil when any Apple Event failed: Scripting Bridge answers a timed-out search
     /// with an empty list, which would look like a song that has gone. Background queue only.
     static func readCopies(pid: pid_t, of songs: [LibrarySong], choosing: Bool) -> [LibrarySong?]? {
-        guard let application = SBApplication(processIdentifier: pid) else { return nil }
+        let kept = copiesConnection?.pid == pid ? copiesConnection : nil
+        copiesConnection = nil
+        guard let application = kept?.application ?? SBApplication(processIdentifier: pid) else { return nil }
         let failures = FailureCounter()
         application.delegate = failures
+        // The delegate isn't retained, and the connection outlives this read
+        defer { application.delegate = nil }
         application.timeout = readTimeout
         do {
             let reading = try ExceptionCatcher.catchException {
-                guard let source = iTunesRadioStation.librarySource(of: application),
-                      let playlist = iTunesRadioStation.libraryPlaylist(of: source),
+                guard let playlist = kept?.playlist ?? iTunesRadioStation.libraryPlaylistByID(of: application),
                       let tracks = playlist.tracks?() else { return CopiesReading() }
-                return CopiesReading(copies: songs.map { song -> LibrarySong? in
+                return CopiesReading(playlist: playlist, copies: songs.map { song -> LibrarySong? in
                     let found = tracks.filtered(using: NSPredicate(format: "persistentID == %@", song.persistentID)) as? [iTunesTrack] ?? []
                     guard found.count == 1, let track = found.first,
                           track.name == song.name, track.artist == song.artist else {
@@ -314,6 +325,9 @@ final class MusicLibraryIndex {
                 })
             } as? CopiesReading
             guard failures.failures == 0 else { return nil }
+            if let playlist = reading?.playlist {
+                copiesConnection = (pid: pid, application: application, playlist: playlist)
+            }
             return reading?.copies
         } catch {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: reading library copies raised: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, error.localizedDescription)

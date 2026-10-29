@@ -11,8 +11,9 @@ import Foundation
 /// One track of the user's Music library.
 ///
 /// `MusicLibraryIndex` reads the persistent ID and the names, which are what finding a song
-/// takes. The rest only chooses between copies, and `LibraryMatchFinder` reads it from Music
-/// for the few copies a song has; until then it holds these defaults.
+/// takes. The rest chooses between copies or is shown for the one chosen, and
+/// `LibraryMatchFinder` reads it from Music for the few copies a song has; until then it
+/// holds these defaults.
 struct LibrarySong: Equatable {
     /// Music's persistent ID, the hexadecimal string Scripting Bridge reads. What the track is
     /// fetched by before anything is shown or written.
@@ -23,11 +24,12 @@ struct LibrarySong: Equatable {
     var album: String = ""
     /// Seconds, or nil when Music had none
     var duration: Double? = nil
-    /// 0 to 100. Only used to choose between copies: what is shown is read from Music again.
+    /// 0 to 100
     var rating: Int = 0
     /// True when Music worked the rating out from the album's rather than the user setting it
     var isRatingComputed: Bool = false
     var playedCount: Int = 0
+    var isFavorited: Bool = false
 
     /// The user chose this track's rating themselves
     var isRatedByUser: Bool {
@@ -72,25 +74,66 @@ struct SongMatcher {
         let album: String
     }
 
+    /// A track's names, which are all an entry is worked out from
+    private struct Names: Hashable {
+        let name: String
+        let artist: String
+        let albumArtist: String
+        let album: String
+
+        init(_ song: LibrarySong) {
+            name = song.name
+            artist = song.artist
+            albumArtist = song.albumArtist
+            album = song.album
+        }
+    }
+
+    /// What `SongName` makes of a track's names
+    private struct Worked {
+        let core: String
+        let artists: Set<String>
+        let versions: Set<String>
+        let album: String
+
+        init(_ names: Names) {
+            let title = SongName.title(names.name)
+            var artists = SongName.artists(names.artist).union(title.featured)
+            if !names.albumArtist.isEmpty {
+                artists.formUnion(SongName.artists(names.albumArtist))
+            }
+            core = title.core
+            self.artists = artists
+            versions = title.versions
+            album = SongName.album(names.album)
+        }
+    }
+
     private let byTitle: [String: [Entry]]
+    /// Each track's names as worked out, for the next matcher to reuse
+    private let worked: [Names: Worked]
 
     /// How many tracks it was built from
     let count: Int
 
-    init(library: [LibrarySong]) {
+    /// `previous` is the matcher built from the library before it changed. Working out a
+    /// track's names is most of the build, 1.2 to 1.6 s for 8,092 tracks measured on
+    /// 2026-10-29 against 0.6 s to read them, and a library change leaves nearly every name
+    /// as it was, so a track whose names are unchanged takes what `previous` worked out.
+    init(library: [LibrarySong], reusing previous: SongMatcher? = nil) {
         var byTitle: [String: [Entry]] = [:]
+        var worked: [Names: Worked] = [:]
+        worked.reserveCapacity(library.count)
         for song in library {
-            let title = SongName.title(song.name)
-            guard !title.core.isEmpty else { continue }
-            var artists = SongName.artists(song.artist).union(title.featured)
-            if !song.albumArtist.isEmpty {
-                artists.formUnion(SongName.artists(song.albumArtist))
-            }
-            byTitle[title.core, default: []].append(Entry(song: song, artists: artists,
-                                                          versions: title.versions,
-                                                          album: SongName.album(song.album)))
+            let names = Names(song)
+            let work = worked[names] ?? previous?.worked[names] ?? Worked(names)
+            worked[names] = work
+            guard !work.core.isEmpty else { continue }
+            byTitle[work.core, default: []].append(Entry(song: song, artists: work.artists,
+                                                         versions: work.versions, album: work.album))
         }
         self.byTitle = byTitle
+        self.worked = worked
         count = library.count
     }
 

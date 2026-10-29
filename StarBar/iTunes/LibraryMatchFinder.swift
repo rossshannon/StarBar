@@ -23,8 +23,31 @@ struct LibraryMatch {
     let query: SongQuery
     /// The library song, as `MusicLibraryIndex` had it when the match was made
     let song: LibrarySong
-    /// The live Music track, found again by persistent ID and checked to still be that song
+    /// The copy in Music, on the connection ratings are written through: a reference by
+    /// persistent ID (`iTunesRadioStation.libraryTrack(for:)`), so a copy deleted since makes
+    /// a write to it fail rather than land on another song
     let track: iTunesTrack
+    /// The copy's stars and heart as they were read with it, a moment before the match was
+    /// handed out, so showing a new match asks Music nothing more on the main thread. Nil in
+    /// a match handed out again later, from memory or `knownMatch(for:)`: the rating can
+    /// have changed by then, so anything shown later reads `track` again.
+    var shown: Shown?
+
+    struct Shown: Equatable {
+        /// The user's own rating, 0 to 100, or nil when Music worked it out from the album's
+        let rating: Int?
+        let isFavorited: Bool
+
+        /// What `track` says now. Two Apple Events, or more for an older Music.
+        init(reading track: iTunesTrack) {
+            self.init(rating: track.userRating, isFavorited: track.isFavorited)
+        }
+
+        init(rating: Int?, isFavorited: Bool) {
+            self.rating = rating
+            self.isFavorited = isFavorited
+        }
+    }
 }
 
 extension SpotifyPlayInfo {
@@ -45,32 +68,25 @@ extension LibrarySong {
 
     /// This song with what Music says now about its live track, or nil when that track isn't
     /// a song: the index holds every kind of track, and a music video of the song is no place
-    /// for its stars. Each property is an Apple Event, so the album alone is read unless
-    /// `choosing`, when the length, rating and plays that choose between copies are too.
+    /// for its stars. Each property is an Apple Event, so only the album and what would be
+    /// shown (the rating and heart) are read unless `choosing`, when the length and plays
+    /// that choose between copies are too.
     func reading(_ track: iTunesTrack, choosing: Bool) -> LibrarySong? {
         // A read that failed gives an enumeration of no known kind, so the copy is left out
         guard track.mediaKind == .music else { return nil }
         var song = self
         song.album = track.album ?? ""
+        song.rating = track.rating ?? 0
+        song.isRatingComputed = track.ratingKind == .computed
+        song.isFavorited = track.isFavorited
         if choosing {
             // Scripting Bridge gives a number 0 when its Apple Event fails
             song.duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
-            song.rating = track.rating ?? 0
-            song.isRatingComputed = track.ratingKind == .computed
             song.playedCount = track.playedCount ?? 0
         }
         return song
     }
 
-}
-
-/// What looking up a library song's track in Music came to
-enum LibraryTrackLookup {
-    case found(iTunesTrack)
-    /// Gone from the library, or no longer the song the index had
-    case gone
-    /// Music isn't running or didn't answer in time, which says nothing about the song
-    case unanswered
 }
 
 /// Answers "does the user have this Spotify song in Music?", once per song.
@@ -79,11 +95,15 @@ enum LibraryTrackLookup {
 /// copies it finds are read from Music again on the index's background connection
 /// (`MusicLibraryIndex.readCopies`), each found by persistent ID and its name and artist
 /// compared with the index's, because the index can be a library notification behind and a
-/// rating written to the wrong song can't be undone, and what chooses between them read
-/// from each. Their albums leave out any copy that is a live or remixed recording when the
-/// song playing isn't, or the other way round (`SongMatcher.ranked(_:for:)`). The chosen
-/// copy's track is then fetched through the station's own connection, which is the one that
-/// writes ratings.
+/// rating written to the wrong song can't be undone, and what chooses between them and what
+/// is shown read from each. Their albums leave out any copy that is a live or remixed
+/// recording when the song playing isn't, or the other way round
+/// (`SongMatcher.ranked(_:for:)`). The chosen copy's track is then a reference on the
+/// station's own connection, which is the one that writes ratings, made without asking Music
+/// anything: the copy was checked a moment before, and its stars and heart come with the
+/// answer (`LibraryMatch.shown`), so nothing on the main thread waits on Music to show them.
+/// Measured 2026-10-29, Music answering slowly took the stars 3.9 s to arrive where they
+/// usually take 0.3 to 0.6 s, and the main thread had been held 2 s on reads it didn't answer.
 ///
 /// Music that didn't answer is not taken for a song the user doesn't have. It is asked
 /// again once, `retryDelay` later; failing that, nothing is remembered, so the next time
@@ -104,7 +124,9 @@ final class LibraryMatchFinder {
     static let retryDelay: TimeInterval = 2
 
     private let index: MusicLibraryIndex
-    private let fetchTrack: (LibrarySong) -> LibraryTrackLookup
+    /// The chosen copy's track on the station's connection, or nil when Music isn't running
+    /// or its library can't be found
+    private let fetchTrack: (LibrarySong) -> iTunesTrack?
     private let clock: RatingReminderClock
     private let center: NotificationCenter
 
@@ -118,7 +140,7 @@ final class LibraryMatchFinder {
 
     /// The parameters are for the tests
     init(index: MusicLibraryIndex = .shared,
-         fetchTrack: @escaping (LibrarySong) -> LibraryTrackLookup = { iTunesRadioStation.shared.libraryTrack(for: $0) },
+         fetchTrack: @escaping (LibrarySong) -> iTunesTrack? = { iTunesRadioStation.shared.libraryTrack(for: $0) },
          clock: RatingReminderClock = RunLoopClock(),
          center: NotificationCenter = .default) {
         self.index = index
@@ -187,16 +209,14 @@ final class LibraryMatchFinder {
                     os_log("%{public}s[%{public}ld], %{public}s: the index matched %{public}s to %{public}ld library tracks, none of them that recording and still there; no match", ((#file as NSString).lastPathComponent), #line, #function, identity, copies.count)
                     return self.finish(nil, for: identity)
                 }
-                switch self.fetchTrack(song) {
-                case .found(let track):
-                    os_log("%{public}s[%{public}ld], %{public}s: %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, is library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s (%{public}ld of %{public}ld copies read)", ((#file as NSString).lastPathComponent), #line, #function, identity, query.name, query.artist, query.album, song.persistentID, song.name, song.artist, song.album, ranked.count, copies.count)
-                    self.finish(LibraryMatch(identity: identity, query: query, song: song, track: track), for: identity)
-                case .gone:
-                    // Changed in the moment between the two reads
-                    self.finish(nil, for: identity)
-                case .unanswered:
-                    self.noAnswer(for: query, identity: identity, triesLeft: triesLeft)
+                guard let track = self.fetchTrack(song) else {
+                    return self.noAnswer(for: query, identity: identity, triesLeft: triesLeft)
                 }
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, is library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s (%{public}ld of %{public}ld copies read)", ((#file as NSString).lastPathComponent), #line, #function, identity, query.name, query.artist, query.album, song.persistentID, song.name, song.artist, song.album, ranked.count, copies.count)
+                let shown = LibraryMatch.Shown(rating: song.isRatingComputed ? nil : song.rating,
+                                               isFavorited: song.isFavorited)
+                self.finish(LibraryMatch(identity: identity, query: query, song: song, track: track, shown: shown),
+                            for: identity)
             }
         }
     }
@@ -225,6 +245,11 @@ final class LibraryMatchFinder {
         }
         waiting.forEach { $0(match) }
         center.post(name: .libraryMatchDidChange, object: self, userInfo: [SpotifyPlayer.identityKey: identity])
+        // What was read is shown by now, and anything that asks later reads the track again
+        if remember, var kept = match {
+            kept.shown = nil
+            answer = (identity, kept)
+        }
     }
 
 }

@@ -963,12 +963,14 @@ extension MenuBarRatingControl {
             return
         }
         ratingControl.update(mode: .rating)
-        // Read again each time rather than kept, so a rating changed in Music shows at the
-        // next update. Don't overwrite the stars the user is dragging across.
+        // A new match brings what was read with it. After that the copy is read again each
+        // time rather than kept, so a rating changed in Music shows at the next update.
+        let shown = match.shown ?? LibraryMatch.Shown(reading: match.track)
+        // Don't overwrite the stars the user is dragging across
         if !clickController.isDragging {
-            ratingControl.update(rating: match.track.userRating ?? 0)
+            ratingControl.update(rating: shown.rating ?? 0)
         }
-        ratingControl.updateFavorited(favoriteToShow(musicSays: match.track.isFavorited,
+        ratingControl.updateFavorited(favoriteToShow(musicSays: shown.isFavorited,
                                                      trackID: match.song.persistentID))
         updateMenuBar(animate: true, previousStars: previousStars, animateRatingChange: isNewMatch)
     }

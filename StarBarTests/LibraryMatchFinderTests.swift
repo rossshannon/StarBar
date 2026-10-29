@@ -13,7 +13,7 @@ final class LibraryMatchFinderTests: XCTestCase {
 
     private let zombie = LibrarySong(persistentID: "00000000000000A1", name: "Zombie", artist: "The Cranberries",
                                      albumArtist: "", album: "No Need to Argue", duration: 306, rating: 80,
-                                     isRatingComputed: false, playedCount: 12)
+                                     isRatingComputed: false, playedCount: 12, isFavorited: true)
     private let linger = LibrarySong(persistentID: "00000000000000B2", name: "Linger", artist: "The Cranberries",
                                      albumArtist: "", album: "Everybody Else Is Doing It", duration: 274, rating: 60,
                                      isRatingComputed: false, playedCount: 3)
@@ -32,8 +32,6 @@ final class LibraryMatchFinderTests: XCTestCase {
     private var fetched: [String] = []
     /// Persistent IDs the fake Music no longer has
     private var gone: Set<String> = []
-    /// Persistent IDs gone by the time the chosen copy is fetched
-    private var goneAtFetch: Set<String> = []
     /// How many reads of copies, and how many fetches, Music won't answer
     private var silentReads = 0
     private var silentFetches = 0
@@ -50,7 +48,6 @@ final class LibraryMatchFinderTests: XCTestCase {
         choosing = []
         fetched = []
         gone = []
-        goneAtFetch = []
         silentReads = 0
         silentFetches = 0
         clock = FakeClock()
@@ -67,12 +64,13 @@ final class LibraryMatchFinderTests: XCTestCase {
         index.observeLibraryChanges(in: center)
         finder = LibraryMatchFinder(index: index, fetchTrack: { [unowned self] song in
             self.fetched.append(song.persistentID)
+            // Nil only when the station can't reach Music's library: the real one makes a
+            // reference that asks Music nothing
             if self.silentFetches > 0 {
                 self.silentFetches -= 1
-                return .unanswered
+                return nil
             }
-            guard !self.goneAtFetch.contains(song.persistentID), let track = self.track(song.persistentID) else { return .gone }
-            return .found(track)
+            return self.track(song.persistentID)
         }, clock: clock, center: center)
     }
 
@@ -82,6 +80,7 @@ final class LibraryMatchFinderTests: XCTestCase {
         return FakeTrack(name: music.name, artist: music.artist, album: music.album,
                          persistentID: music.persistentID, duration: music.duration ?? 0,
                          rating: music.rating, ratingKind: music.isRatingComputed ? .computed : .user,
+                         favorited: music.isFavorited,
                          mediaKind: musicVideos.contains(music.persistentID) ? .musicVideo : .music,
                          playedCount: music.playedCount)
     }
@@ -179,14 +178,6 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(fetched, [], "nothing left to fetch")
     }
 
-    func testATrackGoneByTheTimeItIsFetchedIsNoMatch() {
-        goneAtFetch = [zombie.persistentID]
-
-        XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries")))
-        XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries")))
-        XCTAssertEqual(fetched.count, 1, "an answer, so remembered")
-    }
-
     func testTheSameSongIsAnsweredFromMemory() {
         _ = ask(spotify("Zombie", by: "The Cranberries"))
         _ = ask(spotify("Zombie", by: "The Cranberries"))
@@ -228,6 +219,45 @@ final class LibraryMatchFinderTests: XCTestCase {
         _ = ask(spotify("Zombie", by: "The Cranberries"))
 
         XCTAssertEqual(posted, ["spotify:track:4uLU6hMCjMI75M1A2tKUQC"], "once: the second answer came from memory")
+    }
+
+    // MARK: - What a new match shows
+
+    func testANewMatchBringsTheStarsAndHeartReadWithIt() throws {
+        // So nothing on the main thread waits on Music to show them. Measured 2026-10-29,
+        // a slow Music held the stars back 3.9 s, two of them on the main thread.
+        let match = try XCTUnwrap(ask(spotify("Zombie", by: "The Cranberries")))
+
+        XCTAssertEqual(match.shown, LibraryMatch.Shown(rating: 80, isFavorited: true))
+    }
+
+    func testARatingMusicWorkedOutIsNotShownAsTheUsers() throws {
+        library = [LibrarySong(persistentID: "00000000000000A1", name: "Zombie", artist: "The Cranberries",
+                               albumArtist: "", album: "No Need to Argue", rating: 60, isRatingComputed: true)]
+
+        XCTAssertEqual(try XCTUnwrap(ask(spotify("Zombie", by: "The Cranberries"))).shown,
+                       LibraryMatch.Shown(rating: nil, isFavorited: false))
+    }
+
+    func testWhatWasReadIsForgottenOnceShown() throws {
+        // A rating changed in Music after the match was made would otherwise never show
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+
+        XCTAssertNil(try XCTUnwrap(finder.knownMatch(for: "spotify:track:4uLU6hMCjMI75M1A2tKUQC")).shown)
+        XCTAssertNil(try XCTUnwrap(ask(spotify("Zombie", by: "The Cranberries"))).shown, "an answer from memory")
+    }
+
+    func testTheStripHearsAboutANewMatchWithWhatWasRead() {
+        // The strip reads `knownMatch` when the answer is posted
+        var shown: LibraryMatch.Shown?
+        let observer = center.addObserver(forName: .libraryMatchDidChange, object: finder, queue: nil) { [unowned self] _ in
+            shown = self.finder.knownMatch(for: "spotify:track:4uLU6hMCjMI75M1A2tKUQC")?.shown
+        }
+        defer { center.removeObserver(observer) }
+
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+
+        XCTAssertEqual(shown, LibraryMatch.Shown(rating: 80, isFavorited: true))
     }
 
     func testTwoAsksAboutOneSongBothHearBack() {
@@ -348,7 +378,8 @@ final class LibraryMatchFinderTests: XCTestCase {
                                    playedCount: 7))
         XCTAssertEqual(song.reading(track, choosing: false),
                        LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "",
-                                   album: "No Need to Argue"))
+                                   album: "No Need to Argue", rating: 60, isRatingComputed: true),
+                       "what is shown, but not the length or plays")
     }
 
     func testALengthOfNothingIsNoLength() {
