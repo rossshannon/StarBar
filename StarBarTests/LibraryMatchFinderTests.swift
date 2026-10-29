@@ -296,6 +296,27 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries", id: "spotify:track:again")), "a video alone is no match")
     }
 
+    func testACopyOnALiveAlbumIsLeftOutOnceItsAlbumIsRead() throws {
+        // The index has names only, so this is a copy until its album is read. Rated higher
+        // and played more, it would otherwise be the one chosen.
+        let live = LibrarySong(persistentID: "00000000000000E5", name: "Zombie", artist: "The Cranberries",
+                               albumArtist: "", album: "MTV Unplugged", duration: 260, rating: 100,
+                               isRatingComputed: false, playedCount: 50)
+        library = [live, zombie]
+
+        let match = try XCTUnwrap(ask(spotify("Zombie", by: "The Cranberries")))
+
+        XCTAssertEqual(match.song.persistentID, zombie.persistentID)
+        XCTAssertEqual(Set(copiesRead), [live.persistentID, zombie.persistentID])
+        XCTAssertEqual(fetched, [zombie.persistentID], "the live copy is never fetched")
+
+        library = [live]
+        center.post(name: .ITLibraryDidChange, object: nil)
+        XCTAssertNil(ask(spotify("Zombie", by: "The Cranberries", id: "spotify:track:again")), "a live recording alone is no match")
+        XCTAssertEqual(ask(spotify("Zombie", by: "The Cranberries", on: "MTV Unplugged", id: "spotify:track:unplugged"))?
+            .song.persistentID, live.persistentID, "but it is the live song's copy")
+    }
+
     func testACopyThatIsGoneLeavesTheOthers() {
         library = [zombie, zombieOnStars]
         gone = [zombieOnStars.persistentID]

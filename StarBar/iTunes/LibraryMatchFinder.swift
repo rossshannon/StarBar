@@ -80,8 +80,10 @@ enum LibraryTrackLookup {
 /// (`MusicLibraryIndex.readCopies`), each found by persistent ID and its name and artist
 /// compared with the index's, because the index can be a library notification behind and a
 /// rating written to the wrong song can't be undone, and what chooses between them read
-/// from each. The chosen copy's track is then fetched through the station's own connection,
-/// which is the one that writes ratings.
+/// from each. Their albums leave out any copy that is a live or remixed recording when the
+/// song playing isn't, or the other way round (`SongMatcher.ranked(_:for:)`). The chosen
+/// copy's track is then fetched through the station's own connection, which is the one that
+/// writes ratings.
 ///
 /// Music that didn't answer is not taken for a song the user doesn't have. It is asked
 /// again once, `retryDelay` later; failing that, nothing is remembered, so the next time
@@ -176,9 +178,13 @@ final class LibraryMatchFinder {
                 guard let read = read else {
                     return self.noAnswer(for: query, identity: identity, triesLeft: triesLeft)
                 }
-                let ranked = SongMatcher.ranked(read.compactMap { $0 }, for: query)
+                let songs = read.compactMap { $0 }
+                let ranked = SongMatcher.ranked(songs, for: query)
+                for song in songs where !ranked.contains(song) {
+                    os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s, \u{201C}%{public}s\u{201D} on %{public}s, is a different recording from %{public}s, \u{201C}%{public}s\u{201D} on %{public}s, by its album", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.album, identity, query.name, query.album)
+                }
                 guard let song = ranked.first else {
-                    os_log(.error, "%{public}s[%{public}ld], %{public}s: the index matched %{public}s to %{public}ld library tracks, none of them a song still there; no match", ((#file as NSString).lastPathComponent), #line, #function, identity, copies.count)
+                    os_log("%{public}s[%{public}ld], %{public}s: the index matched %{public}s to %{public}ld library tracks, none of them that recording and still there; no match", ((#file as NSString).lastPathComponent), #line, #function, identity, copies.count)
                     return self.finish(nil, for: identity)
                 }
                 switch self.fetchTrack(song) {

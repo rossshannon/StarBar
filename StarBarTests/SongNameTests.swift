@@ -186,4 +186,29 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.album("Wonderful Life - Single"), "wonderful life single")
     }
 
+    func testALiveOrRemixAlbumMarksItsTracks() {
+        XCTAssertEqual(SongName.albumVersions("I Might Be Wrong: Live Recordings"), ["live"])
+        XCTAssertEqual(SongName.albumVersions("Live at the Fillmore West"), ["live"])
+        XCTAssertEqual(SongName.albumVersions("Where the Light Is - John Mayer Live In Los Angeles"), ["live"])
+        XCTAssertEqual(SongName.albumVersions("MTV Unplugged In New York"), ["live"])
+        XCTAssertEqual(SongName.albumVersions("Parklive (Live)"), ["live"])
+        XCTAssertEqual(SongName.albumVersions("World Wide Live"), ["live"])
+        XCTAssertEqual(SongName.albumVersions("Tournament Rematch: Unreal Tournament Remixed"), ["remix"])
+        XCTAssertEqual(SongName.albumVersions("Strobe (Remixes)"), ["remix"])
+    }
+
+    func testAnAlbumNamedAfterASongIsNotLiveForSayingLive() {
+        XCTAssertEqual(SongName.albumVersions("Live to Tell - Single"), [])
+        XCTAssertEqual(SongName.albumVersions("Live Forever"), [])
+        XCTAssertEqual(SongName.albumVersions("Alive 1997"), [])
+        XCTAssertEqual(SongName.albumVersions("Kid A"), [])
+    }
+
+    func testATracksVersionsComeFromItsTitleAndItsAlbumTogether() {
+        XCTAssertEqual(SongName.versions(of: "Black - Live at GTE Amphitheater", on: "Live On Two Legs"), ["live"])
+        XCTAssertEqual(SongName.versions(of: "Black (Live)", on: "Rearviewmirror"), ["live"])
+        XCTAssertEqual(SongName.versions(of: "Idioteque", on: "I Might Be Wrong: Live Recordings"), ["live"])
+        XCTAssertEqual(SongName.versions(of: "Idioteque", on: "Kid A"), [])
+    }
+
 }

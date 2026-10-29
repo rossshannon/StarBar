@@ -103,6 +103,30 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertNil(matcher.match(for: query("Strawberry Swing - Frankmusik Remix", by: "Coldplay")))
     }
 
+    func testATrackOnALiveAlbumIsNotTheStudioOne() {
+        // Both in the measured library, and neither title says which is live. The live copy
+        // is the one rated, so only its album keeps it out.
+        let studio = song("Idioteque", by: "Radiohead", on: "Kid A", length: 309)
+        let live = song("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings", length: 265, rating: 100)
+        let matcher = SongMatcher(library: [studio, live])
+
+        XCTAssertEqual(matcher.match(for: query("Idioteque", by: "Radiohead")), studio)
+        XCTAssertEqual(matcher.match(for: query("Idioteque", by: "Radiohead", on: "I Might Be Wrong: Live Recordings")), live)
+        XCTAssertEqual(Set(matcher.copies(of: query("Idioteque", by: "Radiohead")).map { $0.persistentID }),
+                       [studio.persistentID, live.persistentID], "the names alone can't tell them apart")
+    }
+
+    func testATrackOnARemixAlbumIsNotTheOriginal() {
+        // Measured 2026-10-29: Spotify credits this remix to the original's composer and says
+        // nothing in its title. It runs 373 s against the original's 251.
+        let original = song("Foregone Destruction", by: "Michiel Van Den Bos", on: "Unreal Tournament", length: 251, rating: 60)
+        let matcher = SongMatcher(library: [original])
+
+        XCTAssertNil(matcher.match(for: query("Foregone Destruction", by: "Michiel van den Bos",
+                                              on: "Tournament Rematch: Unreal Tournament Remixed", length: 373)))
+        XCTAssertEqual(matcher.match(for: query("Foregone Destruction", by: "Michiel van den Bos", on: "Unreal Tournament")), original)
+    }
+
     func testAnArtistNameIsNeverSplitOnTheQuerySide() {
         // "Earth" is a band of its own; splitting Spotify's name would let it find this
         let matcher = SongMatcher(library: [song("September", by: "Earth, Wind & Fire")])
@@ -153,7 +177,7 @@ final class SongMatcherTests: XCTestCase {
 
     func testACopyTheUserRatedBeatsOneTheyDidnt() {
         let unrated = song("Zombie", by: "The Cranberries", on: "Greatest Hits", played: 40)
-        let computed = song("Zombie", by: "The Cranberries", on: "Live", rating: 80, computed: true, played: 30)
+        let computed = song("Zombie", by: "The Cranberries", on: "Stars: The Best of 1992-2002", rating: 80, computed: true, played: 30)
         let rated = song("Zombie", by: "The Cranberries", on: "No Need to Argue", rating: 60, played: 1)
         let matcher = SongMatcher(library: [unrated, computed, rated])
 

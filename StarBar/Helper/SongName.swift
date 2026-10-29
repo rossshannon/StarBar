@@ -218,6 +218,30 @@ enum SongName {
         return squash(text)
     }
 
+    /// What an album's name says about every track on it: "live" for "Live at the Fillmore
+    /// West", "MTV Unplugged" or "Parklive (Live)", "remix" for "Strobe (Remixes)" or
+    /// "Machinarium Remixed". Empty for most albums.
+    ///
+    /// A track on such an album often says nothing about it in its own title: Spotify's
+    /// "Foregone Destruction" on "Tournament Rematch: Unreal Tournament Remixed" is someone's
+    /// remix, and the library's "Everything In Its Right Place" on "I Might Be Wrong: Live
+    /// Recordings" is live. Measured 2026-10-29: of the 736 pairs of library tracks the title
+    /// rules call the same song, these words told 26 apart, 22 of them rightly. The other four
+    /// are albums that only sound live or remixed, such as "I Could Live In Hope"; each costs
+    /// one copy where the user has another.
+    static func albumVersions(_ raw: String) -> Set<String> {
+        let folded = fold(raw)
+        return Set(albumVersionKinds
+            .filter { $0.words.firstMatch(in: folded, range: whole(folded)) != nil }
+            .map { $0.kind })
+    }
+
+    /// Every kind of recording a track is, from its title and its album together. Two tracks
+    /// are only the same recording when these are equal.
+    static func versions(of name: String, on album: String) -> Set<String> {
+        return title(name).versions.union(albumVersions(album))
+    }
+
     // MARK: - Rules
 
     /// Words that mark a different recording, with what they are filed as
@@ -232,6 +256,15 @@ enum SongName {
         ("orchestral", pattern(#"\borchestral\b|\bsymphonic\b"#)),
         ("reprise", pattern(#"\breprise\b"#)),
         ("session", pattern(#"\bsessions?\b|\brehearsal\b|\bouttake\b|\balternate\b|\balt\.? take\b|\btake \d+\b"#)),
+    ]
+
+    /// Words in an album's name that mark every track on it as a different recording. Narrower
+    /// than `versionKinds`, because an album is often named after a song: "Live to Tell" and
+    /// "Live Forever" are not live albums, so "live" counts only before "at", "in", "from" or
+    /// "on", or after a bracket, or at the end.
+    private static let albumVersionKinds: [(kind: String, words: NSRegularExpression)] = [
+        ("live", pattern(#"\blive (at|in|from|on|recordings?|sessions?)\b|[\(\[]live\b|\blive[\)\]]?$|\bin concert\b|\bunplugged\b"#)),
+        ("remix", pattern(#"\bremix(es|ed)?\b"#)),
     ]
 
     /// Words that only ever describe an edition of a recording, or a trivial edit of it.

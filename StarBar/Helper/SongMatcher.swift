@@ -50,7 +50,9 @@ struct SongQuery: Equatable {
 ///
 /// Two tracks are the same song when their titles agree once edition words are dropped, they
 /// share an artist, and they mark the same kind of recording: a live or remixed version is a
-/// different song from the studio one. `SongName` holds the rules.
+/// different song from the studio one. `SongName` holds the rules. The kind of recording comes
+/// from the album's name as well as the title's, but the index holds no albums, so that part
+/// waits for `ranked(_:for:)`, once the copies' albums have been read.
 ///
 /// Album and duration never decide whether it is the same song: "Move On Up" is 2:46 as the
 /// single edit and 8:49 on the album. They only choose between copies when the user has the
@@ -92,8 +94,9 @@ struct SongMatcher {
         count = library.count
     }
 
-    /// Every copy of the song the user has, the one to show and rate first. Empty when they
-    /// don't have it.
+    /// Every copy of the song the user has, going by the names alone, the one to show and rate
+    /// first. Empty when they don't have it. A copy on a live or remix album is still here:
+    /// `ranked(_:for:)` leaves it out.
     func copies(of query: SongQuery) -> [LibrarySong] {
         let title = SongName.title(query.name)
         let artist = SongName.artist(query.artist)
@@ -110,19 +113,23 @@ struct SongMatcher {
             .map { $0.song }
     }
 
-    /// Copies of the song `query` names, the one to show and rate first: the order
-    /// `copies(of:)` gives, for copies whose album, length, rating and plays have since been
-    /// read
+    /// Copies from `copies(of:)` whose album, length, rating and plays have since been read,
+    /// the one to show and rate first, and without any whose album makes it a different
+    /// recording from the song `query` names: one on "Live at the Fillmore West" when Spotify
+    /// is playing the studio song, or the other way round (`SongName.versions(of:on:)`).
     static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
         let album = SongName.album(query.album)
-        return copies.map { (song: $0, album: SongName.album($0.album)) }
+        let versions = SongName.versions(of: query.name, on: query.album)
+        return copies.filter { SongName.versions(of: $0.name, on: $0.album) == versions }
+            .map { (song: $0, album: SongName.album($0.album)) }
             .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
             .map { $0.song }
     }
 
-    /// The copy to show and rate, or nil when the user doesn't have the song
+    /// The copy to show and rate, or nil when the user doesn't have the song: what
+    /// `LibraryMatchFinder` chooses, for a library whose albums are already known
     func match(for query: SongQuery) -> LibrarySong? {
-        return copies(of: query).first
+        return SongMatcher.ranked(copies(of: query), for: query).first
     }
 
     /// Which of two copies comes first: the one on the album the query names, then one the
