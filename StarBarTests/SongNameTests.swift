@@ -88,6 +88,21 @@ final class SongNameTests: XCTestCase {
 
     func testASoundtrackCreditIsDropped() {
         XCTAssertEqual(core("Lose Yourself - From \"8 Mile\" Soundtrack"), "lose yourself")
+        XCTAssertEqual(core("The Son of Flynn - From \"TRON: Legacy\"/Score"), "the son of flynn")
+        XCTAssertEqual(core("My Heart Will Go On - From the Motion Picture Titanic"), "my heart will go on")
+    }
+
+    func testFromIsOnlyASoundtrackCreditWhenItNamesOne() {
+        XCTAssertEqual(core("Song (From The Heart)"), "song from the heart")
+    }
+
+    func testAnEditSaysSo() {
+        // The length of an edit says nothing about whether it is the same song
+        XCTAssertTrue(SongName.title("Move On Up - Single Edit").isEdit)
+        XCTAssertTrue(SongName.title("Halo (Radio Edit)").isEdit)
+        XCTAssertTrue(SongName.title("Take On Me - 1985 12\" Version").isEdit)
+        XCTAssertFalse(SongName.title("Bohemian Rhapsody - Remastered 2011").isEdit)
+        XCTAssertFalse(SongName.title("Move On Up").isEdit)
     }
 
     func testFeaturedArtistsComeOffTheTitle() {
@@ -107,6 +122,23 @@ final class SongNameTests: XCTestCase {
         let title = SongName.title("Stay - with Rihanna")
         XCTAssertEqual(title.core, "stay")
         XCTAssertEqual(title.featured, ["rihanna"])
+        XCTAssertEqual(title.withNames, ["rihanna"])
+    }
+
+    func testWithIsKeptApartFromFeat() {
+        // "(With Strings)" is an arrangement as often as "(with Justin Bieber)" is a guest;
+        // the matcher decides by the other track's credits
+        XCTAssertEqual(SongName.title("Yesterday (With Strings)").withNames, ["strings"])
+        XCTAssertEqual(SongName.title("Stay (with Justin Bieber)").withNames, ["justin bieber"])
+        XCTAssertEqual(SongName.title("Wake Me Up (feat. Aloe Blacc)").withNames, [])
+    }
+
+    func testABareFeatNeedsItsDot() {
+        // Without one, these are words of the title
+        XCTAssertEqual(core("A Feat of Strength"), "a feat of strength")
+        XCTAssertEqual(core("Fifty Ft Woman"), "fifty ft woman")
+        XCTAssertEqual(core("Song feat. Someone Else"), "song")
+        XCTAssertEqual(core("Song ft. Someone Else"), "song")
     }
 
     // MARK: - What is part of the name stays
@@ -130,13 +162,47 @@ final class SongNameTests: XCTestCase {
 
     func testLiveIsAVersion() {
         XCTAssertEqual(versions("One (Live)"), ["live"])
-        XCTAssertEqual(versions("Clocks - Live in Sydney"), ["live"])
+        XCTAssertEqual(versions("Clocks - Live in Sydney"), ["live:sydney"])
         XCTAssertEqual(core("Clocks - Live in Sydney"), "clocks")
     }
 
     func testRemixesAndDubsAreVersions() {
-        XCTAssertEqual(versions("Strawberry Swing - Frankmusik Remix"), ["remix"])
-        XCTAssertEqual(versions("Teardrop - Mad Professor Mazaruni Dub"), ["remix"])
+        XCTAssertEqual(versions("Strawberry Swing - Frankmusik Remix"), ["remix:frankmusik"])
+        XCTAssertEqual(versions("Teardrop - Mad Professor Mazaruni Dub"), ["remix:mad professor mazaruni"])
+        XCTAssertEqual(versions("Strobe (Extended Remix)"), ["remix"], "edition words name nothing")
+        XCTAssertEqual(SongName.kinds(of: versions("Strawberry Swing - Frankmusik Remix")), ["remix"])
+    }
+
+    func testAReRecordingIsAVersion() {
+        XCTAssertEqual(versions("Rock of Ages - Re-Recorded"), ["rerecording"])
+        XCTAssertEqual(versions("Rock of Ages (Re-Recorded Version)"), ["rerecording"])
+        XCTAssertEqual(versions("Rock of Ages (Rerecorded)"), ["rerecording"])
+        XCTAssertEqual(core("Rock of Ages - Re-Recorded"), "rock of ages")
+    }
+
+    // MARK: - The same recording
+
+    func testANamedVersionIsOnlyTheSameName() {
+        // Two remixers, or two nights, are two recordings
+        XCTAssertFalse(SongName.isSameRecording("Strobe - Michael Woods Remix", on: "", as: "Strobe (Sebastien Leger Remix)", on: ""))
+        XCTAssertTrue(SongName.isSameRecording("Strobe - Michael Woods Remix", on: "", as: "Strobe (Michael Woods Remix)", on: ""))
+        XCTAssertFalse(SongName.isSameRecording("Clocks - Live in Sydney", on: "", as: "Clocks (Live at Glastonbury 2011)", on: ""))
+        XCTAssertTrue(SongName.isSameRecording("Clocks - Live", on: "", as: "Clocks (Live)", on: ""))
+    }
+
+    func testANamedVersionCanBeNamedByTheOtherTracksAlbum() {
+        XCTAssertTrue(SongName.isSameRecording("Clocks - Live in Sydney", on: "", as: "Clocks", on: "Live in Sydney"))
+        XCTAssertTrue(SongName.isSameRecording("Clocks - Live in Sydney", on: "", as: "Clocks (Live)", on: "Live in Sydney"))
+        XCTAssertFalse(SongName.isSameRecording("Clocks - Live in Sydney", on: "", as: "Clocks (Live)", on: "Prospekt's March"),
+                       "a plain (Live) is not the Sydney performance")
+        XCTAssertTrue(SongName.isSameRecording("Idioteque - Live", on: "I Might Be Wrong: Live Recordings",
+                                               as: "Idioteque", on: "I Might Be Wrong: Live Recordings"))
+    }
+
+    func testKindsOfRecordingHaveToAgree() {
+        XCTAssertFalse(SongName.isSameRecording("Idioteque", on: "Kid A", as: "Idioteque", on: "I Might Be Wrong: Live Recordings"))
+        XCTAssertFalse(SongName.isSameRecording("Rock of Ages - Re-Recorded", on: "", as: "Rock of Ages", on: "Pyromania"))
+        XCTAssertTrue(SongName.isSameRecording("Bohemian Rhapsody - Remastered 2011", on: "", as: "Bohemian Rhapsody", on: "A Night at the Opera"))
     }
 
     func testAcousticDemoAndInstrumentalAreVersions() {
@@ -158,6 +224,27 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.artists("Calvin Harris & Dua Lipa"), ["calvin harris", "dua lipa", "calvin harris and dua lipa"])
         XCTAssertTrue(SongName.artists("Cave, Nick & Warren Ellis").contains("warren ellis"))
         XCTAssertEqual(SongName.artists("Run-DMC vs. Jason Nevins"), ["run dmc", "jason nevins", "run dmc vs jason nevins"])
+        XCTAssertEqual(SongName.artists("Eminem; Rihanna"), ["eminem", "rihanna", "eminem rihanna"])
+    }
+
+    func testOneWordBesideALongerNameIsNoName() {
+        // Anyone could be "cave", "nick" or "sly"
+        XCTAssertFalse(SongName.artists("Cave, Nick & Warren Ellis").contains("cave"))
+        XCTAssertFalse(SongName.artists("Cave, Nick & Warren Ellis").contains("nick"))
+        XCTAssertFalse(SongName.artists("Sly & The Family Stone").contains("sly"))
+        XCTAssertTrue(SongName.artists("Sly & The Family Stone").contains("sly and the family stone"))
+    }
+
+    func testACommaBeforeTheIsInsideAName() {
+        let names = SongName.artists("Tyler, The Creator, Kali Uchis")
+        XCTAssertTrue(names.contains("tyler the creator"))
+        XCTAssertTrue(names.contains("kali uchis"))
+    }
+
+    func testAGuestIsStillOneOfTheCredits() {
+        // For a "(with ...)" on the other side to be checked against
+        XCTAssertTrue(SongName.credits("Calvin Harris feat. Rihanna").contains("rihanna"))
+        XCTAssertTrue(SongName.credits("Calvin Harris feat. Rihanna").contains("calvin harris"))
     }
 
     func testAGuestIsNotOneOfTheCreditsOwnArtists() {
@@ -174,6 +261,7 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.artists("Simon & Garfunkel"), ["simon and garfunkel"])
         XCTAssertEqual(SongName.artists("Florence + The Machine"), ["florence and the machine"])
         XCTAssertEqual(SongName.artists("Crosby, Stills, Nash & Young"), ["crosby stills nash and young"])
+        XCTAssertEqual(SongName.artists("AC/DC"), ["ac dc"])
     }
 
     func testAGuestIsSplitOffEvenAsOneWord() {

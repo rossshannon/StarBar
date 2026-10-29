@@ -26,12 +26,21 @@ enum SongName {
     struct Title: Equatable {
         /// The song's own name, folded: "bohemian rhapsody"
         let core: String
-        /// What makes this recording a different one from the plain song: "live", "remix",
-        /// or a whole named version the rules don't know, such as "variant:salsa version".
-        /// Empty for the plain song. Two titles only match when these are equal.
+        /// What makes this recording a different one from the plain song: a kind, such as
+        /// "live" or "remix"; a kind with the name it was given, such as "remix:frankmusik"
+        /// or "live:sydney"; or a whole named version the rules don't know, such as
+        /// "variant:salsa version". Empty for the plain song. `isSameRecording` says how two
+        /// tracks' versions are compared.
         let versions: Set<String>
         /// Artists credited in the title, as in "(feat. Aloe Blacc)", folded like `artist(_:)`
         let featured: [String]
+        /// Those of `featured` credited with "with", as in "(with Justin Bieber)". Such a part
+        /// is a guest on the same recording or an arrangement of a different one ("(With
+        /// Strings)"), and only the other track's credits can tell which.
+        let withNames: [String]
+        /// The title names an edit or a version of the song that is usually a different length:
+        /// "Single Edit", "Radio Edit", "Album Version", "12\" Mix"
+        let isEdit: Bool
     }
 
     /// What a bracketed or dashed part of a title says about the recording
@@ -96,41 +105,57 @@ enum SongName {
     static func title(_ raw: String) -> Title {
         var text = fold(raw)
         var featured: [String] = []
+        var withNames: [String] = []
         var versions = Set<String>()
+        var isEdit = false
+
+        func credit(_ keyword: String, _ names: String) {
+            let names = artistNames(in: names)
+            featured += names
+            if keyword == "with" {
+                withNames += names
+            }
+        }
+
+        func take(_ part: String) -> Bool {
+            guard let descriptor = describe(part) else { return false }
+            switch descriptor {
+            case .edition:
+                isEdit = isEdit || !Set(squash(part).split(separator: " ").map(String.init)).isDisjoint(with: editWords)
+            case .version(let kinds):
+                versions.formUnion(kinds)
+            }
+            return true
+        }
 
         // "(feat. Aloe Blacc)", "[with Rihanna]"
         for match in featuredInBrackets.matches(in: text, range: whole(text)).reversed() {
-            featured += artistNames(in: substring(text, match.range(at: 2)))
+            credit(substring(text, match.range(at: 1)), substring(text, match.range(at: 2)))
             text = removing(match.range, from: text)
         }
 
         // Spotify's " - Remastered 2011", " - Live at Wembley", " - feat. X"
         if let match = dashSuffix.firstMatch(in: text, range: whole(text)) {
             let suffix = substring(text, match.range(at: 1))
-            if let credit = featuredCredit.firstMatch(in: suffix, range: whole(suffix)) {
-                featured += artistNames(in: substring(suffix, credit.range(at: 2)))
+            if let found = featuredCredit.firstMatch(in: suffix, range: whole(suffix)) {
+                credit(substring(suffix, found.range(at: 1)), substring(suffix, found.range(at: 2)))
                 text = removing(match.range, from: text)
-            } else if let descriptor = describe(suffix) {
-                if case .version(let kinds) = descriptor {
-                    versions.formUnion(kinds)
-                }
+            } else if take(suffix) {
                 text = removing(match.range, from: text)
             }
         }
 
         // "(Remastered)", "[Radio Edit]", "(Live)", but not "(Fade Out)" or "(Don't Fear) The
         // Reaper", which are part of the song's name
-        for match in bracketed.matches(in: text, range: whole(text)).reversed() {
-            guard let descriptor = describe(substring(text, match.range(at: 1))) else { continue }
-            if case .version(let kinds) = descriptor {
-                versions.formUnion(kinds)
-            }
+        for match in bracketed.matches(in: text, range: whole(text)).reversed()
+        where take(substring(text, match.range(at: 1))) {
             text = removing(match.range, from: text)
         }
 
-        // "Song feat. X", with no brackets
+        // "Song feat. X", with no brackets. Only with the dot: "A Feat of Strength" and "Fifty
+        // Ft Woman" are names.
         if let match = featuredBare.firstMatch(in: text, range: whole(text)) {
-            featured += artistNames(in: substring(text, match.range(at: 2)))
+            credit(substring(text, match.range(at: 1)), substring(text, match.range(at: 2)))
             text = removing(match.range, from: text)
         }
 
@@ -138,28 +163,32 @@ enum SongName {
             .split(separator: " ")
             .map { $0 == "pt" ? "part" : String($0) }
             .joined(separator: " ")
-        return Title(core: core, versions: versions, featured: featured)
+        return Title(core: core, versions: versions, featured: featured, withNames: withNames, isEdit: isEdit)
     }
 
     /// What a part of a title in brackets or after " - " says, or nil when it is part of the
     /// song's name.
     ///
     /// Words that mark a different recording win: "Live at Wembley" is a version, not an
-    /// edition, whatever else it says. Then a part made only of edition words ("2011
-    /// Remaster", "Single Version", "Radio Edit") is an edition. A part that ends in
-    /// "Version", "Mix" or "Edit" but has other words in it ("Salsa Version", "Matt Butcher
-    /// Mix") is a version the rules don't know, kept whole so it only matches itself.
+    /// edition, whatever else it says, and the name it gives the version is kept with it
+    /// ("live:wembley"), because two remixes by different people, or two nights' live
+    /// recordings, are different recordings. Then a part made only of edition words ("2011
+    /// Remaster", "Single Version", "Radio Edit") is an edition, and so is a soundtrack
+    /// credit. A part that ends in "Version", "Mix" or "Edit" but has other words in it ("Salsa
+    /// Version", "Matt Butcher Mix") is a version the rules don't know, kept whole so it only
+    /// matches itself.
     static func describe(_ part: String) -> Descriptor? {
         let folded = fold(part)
-        let kinds = Set(versionKinds
+        let kinds = versionKinds
             .filter { $0.words.firstMatch(in: folded, range: whole(folded)) != nil }
-            .map { $0.kind })
+            .map { $0.kind }
         if !kinds.isEmpty {
-            return .version(kinds)
+            let name = nameWords(of: folded).joined(separator: " ")
+            return .version(Set(kinds.map { name.isEmpty ? $0 : $0 + ":" + name }))
         }
         let words = squash(folded).split(separator: " ").map(String.init)
         guard let first = words.first, let last = words.last else { return nil }
-        if first == "from" || words.allSatisfy(isEditionWord) {
+        if words.allSatisfy(isEditionWord) || (first == "from" && isSoundtrackCredit(folded)) {
             return .edition
         }
         if namedVersionEndings.contains(last) {
@@ -205,6 +234,12 @@ enum SongName {
         return names
     }
 
+    /// Everyone a credit names, its guests too: what a "(with ...)" in another track's title
+    /// is checked against (`Title.withNames`), never who the track is by
+    static func credits(_ raw: String) -> Set<String> {
+        return artists(raw).union(split(fold(raw), on: guestSeparator).dropFirst().flatMap { artistNames(in: $0) })
+    }
+
     /// An album's name without its edition words: "A Night At The Opera (2011 Remaster)" is
     /// "a night at the opera". Only for choosing between copies, never for deciding whether
     /// two tracks are the same song.
@@ -244,10 +279,66 @@ enum SongName {
             .map { $0.kind })
     }
 
-    /// Every kind of recording a track is, from its title and its album together. Two tracks
-    /// are only the same recording when these are equal.
+    /// Every kind of recording a track is, from its title and its album together, without the
+    /// names the title gives them: "live" for "Black - Live at GTE Amphitheater". Two tracks
+    /// can only be the same recording when these are equal.
     static func versions(of name: String, on album: String) -> Set<String> {
-        return title(name).versions.union(albumVersions(album))
+        return kinds(of: title(name).versions).union(albumVersions(album))
+    }
+
+    /// The kinds of recording `versions` names, without the names: "remix:frankmusik" is a
+    /// "remix". A version the rules don't know is a kind of its own.
+    static func kinds(of versions: Set<String>) -> Set<String> {
+        return Set(versions.map { named($0)?.kind ?? $0 })
+    }
+
+    /// Whether two tracks are the same recording, as far as their titles and albums say. They
+    /// have to be the same kinds of recording (`versions(of:on:)`), and a version one of them
+    /// names has to be the other's too: by the same name in its title, or with the name in its
+    /// album's ("Clocks - Live in Sydney" is the "Clocks (Live)" on "Live in Sydney"). A plain
+    /// "(Live)" on an album that doesn't say where is not the Sydney performance, and "Live at
+    /// Glastonbury 2011" certainly isn't.
+    static func isSameRecording(_ name: String, on album: String, as otherName: String, on otherAlbum: String) -> Bool {
+        guard versions(of: name, on: album) == versions(of: otherName, on: otherAlbum) else { return false }
+        let mine = title(name).versions, theirs = title(otherName).versions
+        return isNamed(mine, by: theirs, on: otherAlbum) && isNamed(theirs, by: mine, on: album)
+    }
+
+    /// Every named version in `versions` is one the other track names the same way, or names
+    /// in its album without naming it any other way
+    private static func isNamed(_ versions: Set<String>, by other: Set<String>, on otherAlbum: String) -> Bool {
+        let albumWords = Set(nameWords(of: fold(otherAlbum)))
+        return versions.allSatisfy { version in
+            guard let own = named(version), !other.contains(version) else { return true }
+            return !other.contains { named($0)?.kind == own.kind }
+                && Set(own.name.split(separator: " ").map(String.init)).isSubset(of: albumWords)
+        }
+    }
+
+    /// A named version's kind and name: ("remix", "frankmusik") for "remix:frankmusik". Nil for
+    /// a plain kind, and for a version the rules don't know, whose whole text is its kind.
+    private static func named(_ version: String) -> (kind: String, name: String)? {
+        guard !version.hasPrefix("variant:"), let colon = version.firstIndex(of: ":") else { return nil }
+        return (String(version[..<colon]), String(version[version.index(after: colon)...]))
+    }
+
+    /// The words that name a version, from a folded part of a title or an album's name: what is
+    /// left once the words that mark the kind of recording, edition words and the words that
+    /// join a name ("at", "in", "from") are taken out. "sydney" for "Live in Sydney",
+    /// "michael woods" for "Michael Woods Remix - Radio Edit".
+    private static func nameWords(of folded: String) -> [String] {
+        var text = folded
+        for kind in versionKinds {
+            text = kind.words.stringByReplacingMatches(in: text, range: whole(text), withTemplate: " ")
+        }
+        return squash(text).split(separator: " ").map(String.init)
+            .filter { !isEditionWord($0) && !joiningWords.contains($0) }
+    }
+
+    /// "From \u{201C}8 Mile\u{201D} Soundtrack", "From the Motion Picture \u{201C}Titanic\u{201D}",
+    /// "From \u{201C}TRON: Legacy\u{201D}/Score", but not "From The Heart"
+    private static func isSoundtrackCredit(_ folded: String) -> Bool {
+        return folded.contains("\"") || soundtrackWords.firstMatch(in: folded, range: whole(folded)) != nil
     }
 
     // MARK: - Rules
@@ -264,6 +355,7 @@ enum SongName {
         ("orchestral", pattern(#"\borchestral\b|\bsymphonic\b"#)),
         ("reprise", pattern(#"\breprise\b"#)),
         ("session", pattern(#"\bsessions?\b|\brehearsal\b|\bouttake\b|\balternate\b|\balt\.? take\b|\btake \d+\b"#)),
+        ("rerecording", pattern(#"\bre-?record(ed|ing)?\b"#)),
     ]
 
     /// Words in an album's name that mark every track on it as a different recording. Narrower
@@ -279,13 +371,25 @@ enum SongName {
     /// "Mix" is here so that "2009 Mix" and "Stereo Mix" are editions; a named mix such as
     /// "Matt Butcher Mix" still has a word that isn't, so it stays a version.
     private static let editionWords: Set<String> = [
-        "remaster", "remastered", "re", "master", "mastered", "recorded", "deluxe", "expanded",
+        "remaster", "remastered", "re", "master", "mastered", "deluxe", "expanded",
         "edition", "anniversary", "bonus", "track", "single", "album", "radio", "edit",
         "version", "mono", "stereo", "explicit", "clean", "original", "lp", "ep", "digitally",
         "digital", "soundtrack", "motion", "picture", "feat", "ft", "featuring", "with",
         "extended", "mix", "mixed", "12", "7", "45", "inch", "super", "special", "collectors",
         "short", "long", "full", "length", "the", "a",
     ]
+
+    /// Edition words that say the length differs from the album's: see `Title.isEdit`
+    private static let editWords: Set<String> = [
+        "edit", "radio", "single", "album", "extended", "short", "long", "full", "length", "mix",
+        "version", "12", "7", "45", "inch",
+    ]
+
+    /// Words that join the name of a version to its kind, as in "Live at Wembley"
+    private static let joiningWords: Set<String> = ["at", "in", "from", "on", "of", "and", "for", "by", "to"]
+
+    /// A soundtrack credit says which film, or that it is one
+    private static let soundtrackWords = pattern(#"\bsoundtrack\b|\bmotion picture\b|\bfilm\b|\bmovie\b|\bseries\b|\bmusical\b|\bscore\b"#)
 
     /// How a named version the rules don't know ends
     private static let namedVersionEndings: Set<String> = ["version", "mix", "edit", "remaster", "remastered"]
@@ -304,16 +408,18 @@ enum SongName {
     private static let yearOrOrdinal = pattern(#"^(\d{4}s?|\d+(st|nd|rd|th))$"#)
     private static let featuredInBrackets = pattern(#"\s*[\(\[]\s*(feat\.?|ft\.?|featuring|with)\s+([^\)\]]*)[\)\]]"#)
     private static let featuredCredit = pattern(#"^(feat\.?|ft\.?|featuring|with)\s+(.*)$"#)
-    private static let featuredBare = pattern(#"\s+(feat\.?|ft\.?|featuring)\s+(.*)$"#)
+    private static let featuredBare = pattern(#"\s+(feat\.|ft\.|featuring)\s+(.*)$"#)
     private static let bracketed = pattern(#"\s*[\(\[]([^\(\)\[\]]*)[\)\]]"#)
     private static let dashSuffix = pattern(#"\s+-\s+(.*)$"#)
     private static let trailingThe = pattern(#"^(.+?)\s*,\s*the$"#)
     /// Always between two artists
-    private static let creditSeparator = pattern(#"\s*(?:;|/|\sx\s|\svs\.?\s)\s*"#)
+    private static let creditSeparator = pattern(#"\s*(?:;|\sx\s|\svs\.?\s)\s*"#)
     /// Before a credit's guests
     private static let guestSeparator = pattern(#"\s(?:feat\.?|ft\.?|featuring|with)\s"#)
     /// Between two artists, or inside a band's name: see `artistNames(in:)`
-    private static let listSeparator = pattern(#"\s*(?:,|\s&\s|\sand\s|\s\+\s)\s*"#)
+    private static let listSeparator = pattern(#"\s*(?:,|/|\s&\s|\sand\s|\s\+\s)\s*"#)
+    /// "Tyler, The Creator": a comma before "The" is inside a name
+    private static let commaThe = pattern(#",\s*the\s+"#)
 
     /// Typographic marks to their typewriter forms, and letters that Unicode does not take
     /// apart into a base letter and an accent
@@ -330,19 +436,23 @@ enum SongName {
 
     /// The artists a credit names, each folded as `artist(_:)`.
     ///
-    /// "vs.", "x", ";" and "/" always separate artists. A comma, "&", "and"
-    /// or "+" does only when a name it separates is more than one word. A list of single
-    /// words is a band's name -- "Earth, Wind & Fire", "Simon & Garfunkel", "Echo & the
-    /// Bunnymen" -- and splitting it would let a band called Earth match Earth, Wind & Fire's
-    /// "September". The cost is a duo credited by single names, like "Drake & Future", which
-    /// then only matches whole.
+    /// "vs.", "x" and ";" always separate artists. A comma, "/", "&", "and" or "+" does only
+    /// when a name it separates is more than one word, and then only the names of more than
+    /// one word count. A list of single words is a band's name -- "Earth, Wind & Fire",
+    /// "AC/DC", "Echo & the Bunnymen" -- and splitting it would let a band called Earth match
+    /// Earth, Wind & Fire's "September". A single word beside a longer name is no name either:
+    /// "Cave, Nick & Warren Ellis" names Warren Ellis, but "cave" and "nick" on their own could
+    /// be anyone, and "Sly & the Family Stone" is not Sly. The cost is a duo credited by
+    /// single names, like "Drake & Future", which then only matches whole.
     private static func artistNames(in credit: String) -> [String] {
-        return split(fold(credit), on: creditSeparator).flatMap { segment -> [String] in
+        let folded = fold(credit)
+        let joined = commaThe.stringByReplacingMatches(in: folded, range: whole(folded), withTemplate: " the ")
+        return split(joined, on: creditSeparator).flatMap { segment -> [String] in
             let names = split(segment, on: listSeparator).map { artist($0) }.filter { !$0.isEmpty }
             guard names.count > 1, names.contains(where: { $0.contains(" ") }) else {
                 return [artist(segment)]
             }
-            return names
+            return names.filter { $0.contains(" ") }
         }.filter { !$0.isEmpty }
     }
 

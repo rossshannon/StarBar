@@ -127,6 +127,48 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertNil(matcher.match(for: query("Strawberry Swing - Frankmusik Remix", by: "Coldplay")))
     }
 
+    func testTwoRemixersMakeTwoRecordings() {
+        let leger = song("Strobe (Sebastien Leger Remix)", by: "deadmau5")
+        let woods = song("Strobe (Michael Woods Remix)", by: "deadmau5")
+
+        XCTAssertNil(SongMatcher(library: [leger]).match(for: query("Strobe - Michael Woods Remix", by: "deadmau5")))
+        XCTAssertEqual(SongMatcher(library: [leger, woods]).match(for: query("Strobe - Michael Woods Remix", by: "deadmau5")), woods)
+    }
+
+    func testAnotherNightsLiveRecordingIsAnotherRecording() {
+        let glastonbury = song("Clocks (Live at Glastonbury 2011)", by: "Coldplay")
+        let sydney = song("Clocks", by: "Coldplay", on: "Live in Sydney")
+
+        XCTAssertNil(SongMatcher(library: [glastonbury]).match(for: query("Clocks - Live in Sydney", by: "Coldplay")))
+        XCTAssertEqual(SongMatcher(library: [glastonbury, sydney]).match(for: query("Clocks - Live in Sydney", by: "Coldplay")), sydney,
+                       "the album can say which night")
+    }
+
+    func testAReRecordingIsNotTheOriginal() {
+        let original = song("Rock of Ages", by: "Def Leppard", on: "Pyromania")
+
+        XCTAssertNil(SongMatcher(library: [original]).match(for: query("Rock of Ages - Re-Recorded", by: "Def Leppard")))
+    }
+
+    func testAnArrangementWithSomeoneIsNotThePlainSong() {
+        // Nothing in "with" says whether it is a guest or an orchestra; only the other
+        // track's credits can
+        let yesterday = song("Yesterday", by: "The Beatles", on: "Help!")
+        let orchestral = song("Love Me Tender (with The Royal Philharmonic Orchestra)", by: "Elvis Presley")
+
+        XCTAssertNil(SongMatcher(library: [yesterday]).match(for: query("Yesterday (With Strings)", by: "The Beatles")))
+        XCTAssertNil(SongMatcher(library: [orchestral]).match(for: query("Love Me Tender", by: "Elvis Presley")))
+    }
+
+    func testAGuestCreditedWithWithIsFoundWhereTheCopyCreditsThem() {
+        let joint = song("Stay", by: "The Kid LAROI & Justin Bieber")
+        let titled = song("Stay (with Justin Bieber)", by: "The Kid LAROI")
+
+        XCTAssertEqual(SongMatcher(library: [joint]).match(for: query("Stay (with Justin Bieber)", by: "The Kid LAROI")), joint)
+        XCTAssertEqual(SongMatcher(library: [titled]).match(for: query("Stay (with Justin Bieber)", by: "The Kid LAROI")), titled)
+        XCTAssertNil(SongMatcher(library: [titled]).match(for: query("Stay", by: "Justin Bieber")))
+    }
+
     func testATrackOnALiveAlbumIsNotTheStudioOne() {
         // Both in the measured library, and neither title says which is live. The live copy
         // is the one rated, so only its album keeps it out.

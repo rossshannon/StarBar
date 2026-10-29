@@ -69,10 +69,7 @@ struct SongMatcher {
 
     private struct Entry {
         let song: LibrarySong
-        /// The track's own artists and its album artist, never a guest (`SongName.artists(_:)`)
-        let artists: Set<String>
-        let versions: Set<String>
-        let album: String
+        let work: Worked
     }
 
     /// A track's names, which are all an entry is worked out from
@@ -93,18 +90,27 @@ struct SongMatcher {
     /// What `SongName` makes of a track's names
     private struct Worked {
         let core: String
+        /// The track's own artists and its album artist, never a guest (`SongName.artists(_:)`)
         let artists: Set<String>
+        /// Everyone the track credits, guests too, for a "(with ...)" to be checked against
+        let credits: Set<String>
+        /// Who its title credits with "with" (`SongName.Title.withNames`)
+        let withNames: Set<String>
         let versions: Set<String>
         let album: String
 
         init(_ names: Names) {
             let title = SongName.title(names.name)
             var artists = SongName.artists(names.artist)
+            var credits = SongName.credits(names.artist).union(title.featured)
             if !names.albumArtist.isEmpty {
                 artists.formUnion(SongName.artists(names.albumArtist))
+                credits.formUnion(SongName.credits(names.albumArtist))
             }
             core = title.core
             self.artists = artists
+            self.credits = credits
+            withNames = Set(title.withNames)
             versions = title.versions
             album = SongName.album(names.album)
         }
@@ -130,8 +136,7 @@ struct SongMatcher {
             let work = worked[names] ?? previous?.worked[names] ?? Worked(names)
             worked[names] = work
             guard !work.core.isEmpty else { continue }
-            byTitle[work.core, default: []].append(Entry(song: song, artists: work.artists,
-                                                         versions: work.versions, album: work.album))
+            byTitle[work.core, default: []].append(Entry(song: song, work: work))
         }
         self.byTitle = byTitle
         self.worked = worked
@@ -143,10 +148,14 @@ struct SongMatcher {
     ///
     /// A copy's title can say less than the query's: "Idioteque" on "I Might Be Wrong: Live
     /// Recordings" is the live song Spotify calls "Idioteque - Live", so a copy is kept
-    /// whenever what its title marks, the query's title or album marks too. Copies whose
-    /// titles mark the same as the query's come first. `ranked(_:for:)` then holds each copy
-    /// to the query once its album has been read, and leaves out one that is a different
-    /// recording after all.
+    /// whenever the kinds of recording its title marks, the query's title or album marks too.
+    /// Copies whose titles mark the same as the query's come first. `ranked(_:for:)` then
+    /// holds each copy to the query once its album has been read, and leaves out one that is
+    /// a different recording after all.
+    ///
+    /// Someone a title credits with "with" has to be credited on the other side too: "Stay
+    /// (with Justin Bieber)" is the "Stay" by The Kid LAROI & Justin Bieber, but "Yesterday
+    /// (With Strings)" is not the Beatles' "Yesterday".
     func copies(of query: SongQuery) -> [LibrarySong] {
         let title = SongName.title(query.name)
         let artist = SongName.artist(query.artist)
@@ -156,16 +165,23 @@ struct SongMatcher {
         // named like a list whole, so "Earth" can't find "Earth, Wind & Fire". Anyone featured
         // in Spotify's title is left out too: on their own they would find their own song of
         // the same name.
-        let versions = SongName.versions(of: query.name, on: query.album)
+        let kinds = SongName.versions(of: query.name, on: query.album)
+        let credits = Set([artist]).union(title.featured)
+        let withNames = Set(title.withNames)
         let album = SongName.album(query.album)
         return (byTitle[title.core] ?? [])
-            .filter { $0.artists.contains(artist) && $0.versions.isSubset(of: versions) }
+            .filter {
+                $0.work.artists.contains(artist)
+                    && SongName.kinds(of: $0.work.versions).isSubset(of: kinds)
+                    && withNames.isSubset(of: $0.work.credits)
+                    && $0.work.withNames.isSubset(of: credits)
+            }
             .sorted { a, b in
-                let sameA = a.versions == title.versions, sameB = b.versions == title.versions
+                let sameA = a.work.versions == title.versions, sameB = b.work.versions == title.versions
                 if sameA != sameB {
                     return sameA
                 }
-                return SongMatcher.choose(a.song, a.album, over: b.song, b.album, album: album, duration: query.duration)
+                return SongMatcher.choose(a.song, a.work.album, over: b.song, b.work.album, album: album, duration: query.duration)
             }
             .map { $0.song }
     }
@@ -173,11 +189,11 @@ struct SongMatcher {
     /// Copies from `copies(of:)` whose album, length, rating and plays have since been read,
     /// the one to show and rate first, and without any whose album makes it a different
     /// recording from the song `query` names: one on "Live at the Fillmore West" when Spotify
-    /// is playing the studio song, or the other way round (`SongName.versions(of:on:)`).
+    /// is playing the studio song, or the other way round, or another night's live recording
+    /// (`SongName.isSameRecording`).
     static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
         let album = SongName.album(query.album)
-        let versions = SongName.versions(of: query.name, on: query.album)
-        return copies.filter { SongName.versions(of: $0.name, on: $0.album) == versions }
+        return copies.filter { SongName.isSameRecording(query.name, on: query.album, as: $0.name, on: $0.album) }
             .map { (song: $0, album: SongName.album($0.album)) }
             .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
             .map { $0.song }
