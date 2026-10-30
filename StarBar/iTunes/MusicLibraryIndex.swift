@@ -377,7 +377,11 @@ final class MusicLibraryIndex {
         shortenTimeout()
         do {
             let reading = try ExceptionCatcher.catchException {
-                guard let playlist = kept?.playlist ?? iTunesRadioStation.libraryPlaylistByID(of: application),
+                // Finding the playlist is several events, the first read after Music starts;
+                // each was given the whole `copiesTimeout`, which could take the read past its
+                // deadline before a copy was read (the fourth review, 2026-10-29)
+                guard let playlist = kept?.playlist
+                        ?? iTunesRadioStation.libraryPlaylistByID(of: application, beforeEachEvent: shortenTimeout),
                       let tracks = playlist.tracks?() else { return CopiesReading() }
                 return CopiesReading(playlist: playlist, copies: songs.map { song -> LibrarySong? in
                     if !overran, Date() > deadline {

@@ -569,8 +569,13 @@ extension iTunesRadioStation {
 
     /// The user's own library, as opposed to a shared library, an iPod or the store.
     /// Static so `MusicLibraryIndex` can ask its own connection to Music.
-    static func librarySource(of iTunes: iTunesApplication) -> iTunesSource? {
-        return iTunes.sources?().first(where: { ($0 as? iTunesSource)?.kind == .library }) as? iTunesSource
+    /// - Parameter beforeEachEvent: runs before each source's kind is read, an Apple Event
+    ///   each, for a reader that cuts each event's timeout to a deadline
+    static func librarySource(of iTunes: iTunesApplication, beforeEachEvent: () -> Void = {}) -> iTunesSource? {
+        return iTunes.sources?().first(where: {
+            beforeEachEvent()
+            return ($0 as? iTunesSource)?.kind == .library
+        }) as? iTunesSource
     }
 
     static func libraryPlaylist(of source: iTunesSource) -> iTunesPlaylist? {
@@ -580,9 +585,14 @@ extension iTunesRadioStation {
     /// The library playlist as Music names it, by ID rather than by its place among the
     /// sources and playlists, so it can be kept while Music runs and still mean the library.
     /// One Apple Event more than finding it.
-    static func libraryPlaylistByID(of iTunes: iTunesApplication) -> iTunesPlaylist? {
-        guard let source = librarySource(of: iTunes),
-              let playlist = libraryPlaylist(of: source) as? SBObject else { return nil }
+    ///
+    /// - Parameter beforeEachEvent: as for `librarySource(of:beforeEachEvent:)`, and before
+    ///   the playlist is found and asked for its ID
+    static func libraryPlaylistByID(of iTunes: iTunesApplication, beforeEachEvent: () -> Void = {}) -> iTunesPlaylist? {
+        guard let source = librarySource(of: iTunes, beforeEachEvent: beforeEachEvent) else { return nil }
+        beforeEachEvent()
+        guard let playlist = libraryPlaylist(of: source) as? SBObject else { return nil }
+        beforeEachEvent()
         return playlist.get() as? iTunesPlaylist
     }
 
