@@ -54,6 +54,12 @@ struct LibraryMatch {
             self.init(rating: song.isRatingComputed ? nil : song.rating, isFavorited: song.isFavorited)
         }
     }
+
+    /// The copy's stars and heart: those that came with the match, or else read now under the
+    /// short timeout. Nil when Music didn't answer. Main thread.
+    func currentShown() -> Shown? {
+        return shown ?? MenuBarRatingControl.withShortTimeoutIfAnswered { _ in Shown(reading: track) }
+    }
 }
 
 extension SpotifyPlayInfo {
@@ -158,15 +164,21 @@ final class LibraryMatchFinder {
     private let clock: RatingReminderClock
     private let center: NotificationCenter
 
-    /// The last answer, and which song it answered for
-    private var answer: (identity: String, match: LibraryMatch?)?
-    /// The copy in `answer` as Music last answered for it, before anything the user chose
-    /// for it since (`userDidRate`), for when Music refuses one of those
-    private var answerAsRead: LibrarySong?
-    /// Music couldn't check `answer` when last asked, so it is shown but not given again:
-    /// the next question about the song asks Music, or a song added since would stay "not in
-    /// the library" until the next library change
-    private var answerIsUnchecked = false
+    /// An answer, and which song it answered for
+    private struct Answer {
+        let identity: String
+        var match: LibraryMatch?
+        /// The copy in `match` as Music last answered for it, before anything the user chose
+        /// for it since (`userDidRate`), for when Music refuses one of those
+        let asRead: LibrarySong?
+        /// Music couldn't check this answer when last asked, so it is shown but not given
+        /// again: the next question about the song asks Music, or a song added since would
+        /// stay "not in the library" until the next library change
+        var isUnchecked = false
+    }
+
+    /// The last answer
+    private var answer: Answer?
     /// The song being looked for, and everyone waiting to hear. An answer about any other
     /// song is dropped.
     private var asking: (identity: String, waiting: [(LibraryMatch?) -> Void])?
@@ -198,7 +210,7 @@ final class LibraryMatchFinder {
             asking?.waiting.append(completion)
             return
         }
-        if let answer = answer, answer.identity == identity, !index.needsRead, !answerIsUnchecked {
+        if let answer = answer, answer.identity == identity, !index.needsRead, !answer.isUnchecked {
             return completion(answer.match)
         }
         retry?.invalidate()
@@ -247,7 +259,7 @@ final class LibraryMatchFinder {
     /// with it, to the read before both: refusals are rare, and this is only what is shown
     /// when Music doesn't answer.
     func writeWasRefused(_ kind: iTunesRadioStation.WriteKind?, to persistentID: String?) {
-        guard let read = answerAsRead, persistentID == nil || persistentID == read.persistentID else { return }
+        guard let read = answer?.asRead, persistentID == nil || persistentID == read.persistentID else { return }
         updateAnswer(read.persistentID) {
             if kind != .favorite {
                 $0.rating = read.rating
@@ -260,9 +272,9 @@ final class LibraryMatchFinder {
     }
 
     private func updateAnswer(_ persistentID: String, _ change: (inout LibrarySong) -> Void) {
-        guard let answer = answer, var match = answer.match, match.song.persistentID == persistentID else { return }
+        guard var match = answer?.match, match.song.persistentID == persistentID else { return }
         change(&match.song)
-        self.answer = (answer.identity, match)
+        answer?.match = match
     }
 
     /// The copy a match named has gone from the library, deleted in Music before the library
@@ -349,19 +361,51 @@ final class LibraryMatchFinder {
         let waiting = asking?.waiting ?? []
         asking = nil
         if remember {
-            answer = (identity, match)
-            answerAsRead = match?.song
-            answerIsUnchecked = false
+            answer = Answer(identity: identity, match: match, asRead: match?.song)
         } else if answer?.identity == identity {
-            answerIsUnchecked = true
+            answer?.isUnchecked = true
         }
         waiting.forEach { $0(match) }
         center.post(name: .libraryMatchDidChange, object: self, userInfo: [SpotifyPlayer.identityKey: identity])
         // What was read is shown by now, and anything that asks later reads the track again
         if remember, var kept = match {
             kept.shown = nil
-            answer = (identity, kept)
+            answer = Answer(identity: identity, match: kept, asRead: kept.song)
         }
+    }
+
+}
+
+/// A short wait for `LibraryMatchFinder`'s answer about a Spotify song, rather than show it as
+/// a song the user doesn't have and redraw it with stars a moment later. The menu bar and the
+/// strip each keep one. Main thread.
+final class LibraryMatchWait {
+
+    /// The Spotify song whose Music copy is being waited for, or nil when there is no wait
+    private(set) var identity: String?
+    private var timer: Timer?
+
+    /// Wait for the answer about `identity`, for `MenuBarRatingControl.libraryMatchWaitNow`,
+    /// in place of any earlier wait, then stop waiting and run `onTimeout`. A plain `Timer`
+    /// in `.common`, so an open menu doesn't hold it back: `RunLoopClock` would add 0.2 s of
+    /// tolerance to its timers.
+    func start(_ identity: String, onTimeout: @escaping () -> Void) {
+        cancel()
+        self.identity = identity
+        let timer = Timer(timeInterval: MenuBarRatingControl.libraryMatchWaitNow, repeats: false) { [weak self] _ in
+            guard let self = self, self.identity == identity else { return }
+            self.cancel()
+            onTimeout()
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    /// Stop waiting: the answer came, or the song on show changed
+    func cancel() {
+        timer?.invalidate()
+        timer = nil
+        identity = nil
     }
 
 }

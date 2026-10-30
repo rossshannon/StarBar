@@ -198,11 +198,20 @@ final class iTunesRadioStation {
 
 extension iTunesRadioStation {
 
+    /// Music's two library-change notifications: Apple's documented `ITLibraryDidChange`
+    /// (`com.apple.AMPLibraryAgent.libraryChanged`) and the legacy iTunes one. See
+    /// `libraryChanged(_:)`; `MusicLibraryIndex` observes the same two.
+    static let libraryChangeNotifications: [Notification.Name] = [
+        .ITLibraryDidChange,
+        Notification.Name("com.apple.iTunes.libraryChanged"),
+    ]
+
     /// A local notification centre lets tests exercise the real subscriptions without
     /// sending synthetic Music notifications to other running apps.
     func observeLibraryChanges(in center: NotificationCenter) {
-        center.addObserver(self, selector: #selector(libraryChanged(_:)), name: .ITLibraryDidChange, object: nil)
-        center.addObserver(self, selector: #selector(libraryChanged(_:)), name: NSNotification.Name("com.apple.iTunes.libraryChanged"), object: nil)
+        for name in iTunesRadioStation.libraryChangeNotifications {
+            center.addObserver(self, selector: #selector(libraryChanged(_:)), name: name, object: nil)
+        }
     }
 
     @objc func sourceSaved(_ notification: Notification) {
@@ -349,19 +358,20 @@ extension iTunesRadioStation {
     /// Save a rating chosen for a song playing in another player to the user's own copy of
     /// it in Music.
     ///
-    /// Logged every time, with both songs and the rating the copy had, because a rating
-    /// cannot be undone and a wrong match would otherwise be invisible: the log is the only
-    /// way to find out which song took it and what it held before. The copy's identity is its
-    /// persistent ID, so a rating held for it is replaced by another for the same copy and
-    /// sent at once for any other song, whichever player that song is in.
+    /// Logged every time, with both songs and the rating the copy had when last read, because
+    /// a rating cannot be undone and a wrong match would otherwise be invisible: the log is
+    /// the only way to find out which song took it and what it held before. The copy's
+    /// identity is its persistent ID, so a rating held for it is replaced by another for the
+    /// same copy and sent at once for any other song, whichever player that song is in.
     ///
     /// Main thread only, like `setRating(_:on:)`.
     func setRating(_ rating: Int, on match: LibraryMatch) {
         let song = match.song
-        // Only for the log, which is the one record of what the copy had before, so read now
-        // rather than when matched. Main thread, so under the short timeout.
-        let had = MenuBarRatingControl.withShortTimeout { _ in match.track.userRating } ?? nil
-        os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
+        // Only for the log, which is the one record of what the copy had before: what was last
+        // read of it, since reading it again here was two Apple Events on the main thread for
+        // every rating
+        let had = song.isRatingComputed ? nil : song.rating
+        os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s when last read", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: match.track, name: song.name, songIdentity: {
             song.persistentID
         }, trackID: song.persistentID))
@@ -545,11 +555,17 @@ extension iTunesRadioStation {
     func libraryTrack(for song: LibrarySong) -> iTunesTrack? {
         guard let tracks = libraryPlaylist()?.tracks?() else { return nil }
         let predicate = NSPredicate(format: "persistentID == %@", song.persistentID)
-        // Through `perform`, so the search stays an `SBElementArray`: bridging it to a Swift
-        // array would count it, which is an Apple Event. Taking an element of it sends none.
-        guard let found = tracks.perform(#selector(NSArray.filtered(using:)), with: predicate)?
-                .takeUnretainedValue() as? SBElementArray else { return nil }
+        guard let found = iTunesRadioStation.tracks(tracks, matching: predicate) else { return nil }
+        // Taking an element of the search sends no Apple Event
         return found.object(at: 0) as? iTunesTrack
+    }
+
+    /// `tracks` searched with `predicate`, as a search Music hasn't been sent yet: through
+    /// `perform`, so it stays an `SBElementArray`. Bridging it to a Swift array would count
+    /// it, which is an Apple Event.
+    static func tracks(_ tracks: SBElementArray, matching predicate: NSPredicate) -> SBElementArray? {
+        return tracks.perform(#selector(NSArray.filtered(using:)), with: predicate)?
+            .takeUnretainedValue() as? SBElementArray
     }
 
     /// Music's library playlist, found once per Music process: finding it is four Apple

@@ -74,25 +74,24 @@ struct SongMatcher {
         let work: Worked
     }
 
-    /// A track's names, which are all an entry is worked out from
+    /// The names a track's `Worked` comes from, and what a matcher built again finds it by
     private struct Names: Hashable {
         let name: String
         let artist: String
         let albumArtist: String
-        let album: String
 
         init(_ song: LibrarySong) {
             name = song.name
             artist = song.artist
             albumArtist = song.albumArtist
-            album = song.album
         }
     }
 
     /// What `SongName` makes of a track's names
     private struct Worked {
         let core: String
-        /// The track's own artists and its album artist, never a guest (`SongName.artists(_:)`)
+        /// The track's own artists and its album artist, never a guest
+        /// (`SongName.credited(_:)`'s `artists`)
         let artists: Set<String>
         /// Everyone the track credits, guests and anyone after the lead too
         /// (`SongName.credited(_:)`), for a "(with ...)" to be checked against
@@ -100,15 +99,15 @@ struct SongMatcher {
         /// Who its title credits with "with" (`SongName.Title.withNames`)
         let withNames: Set<String>
         let versions: Set<String>
-        let album: String
 
-        init(_ names: Names) {
+        /// `credited` is `SongName.credited(_:)`, or a lookup of what it has already answered
+        init(_ names: Names, credited: (String) -> (artists: Set<String>, everyone: Set<String>)) {
             let title = SongName.title(names.name)
-            var (artists, everyone) = SongName.credited(names.artist)
+            var (artists, everyone) = credited(names.artist)
             // Most tracks name the same artist twice, and this runs for every track in the
             // library: about 420 ms of the first read measured on 2026-10-29
             if !names.albumArtist.isEmpty, names.albumArtist != names.artist {
-                let albumArtist = SongName.credited(names.albumArtist)
+                let albumArtist = credited(names.albumArtist)
                 artists.formUnion(albumArtist.artists)
                 everyone.formUnion(albumArtist.everyone)
             }
@@ -117,7 +116,6 @@ struct SongMatcher {
             credits = everyone.union(title.featured)
             withNames = Set(title.withNames)
             versions = title.versions
-            album = SongName.album(names.album)
         }
     }
 
@@ -136,9 +134,20 @@ struct SongMatcher {
         var byTitle: [String: [Entry]] = [:]
         var worked: [Names: Worked] = [:]
         worked.reserveCapacity(library.count)
+        // Each credit is worked out once however many tracks carry it, since most artists
+        // have many. `SongName.credited(_:)` is pure, so the answer can't differ.
+        var credits: [String: (artists: Set<String>, everyone: Set<String>)] = [:]
+        func credited(_ raw: String) -> (artists: Set<String>, everyone: Set<String>) {
+            if let known = credits[raw] {
+                return known
+            }
+            let found = SongName.credited(raw)
+            credits[raw] = found
+            return found
+        }
         for song in library {
             let names = Names(song)
-            let work = worked[names] ?? previous?.worked[names] ?? Worked(names)
+            let work = worked[names] ?? previous?.worked[names] ?? Worked(names, credited: credited)
             worked[names] = work
             guard !work.core.isEmpty else { continue }
             byTitle[work.core, default: []].append(Entry(song: song, work: work))
@@ -214,12 +223,6 @@ struct SongMatcher {
             .map { (song: $0, album: SongName.album($0.album)) }
             .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
             .map { $0.song }
-    }
-
-    /// The copy to show and rate, or nil when the user doesn't have the song: what
-    /// `LibraryMatchFinder` chooses, for a library whose albums are already known
-    func match(for query: SongQuery) -> LibrarySong? {
-        return SongMatcher.ranked(copies(of: query), for: query).first
     }
 
     /// Which of two copies comes first: the one on the album the query names, then one the

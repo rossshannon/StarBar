@@ -452,12 +452,6 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.title("Stay (with Justin Bieber & Rihanna)").withNames, ["justin bieber", "rihanna"])
     }
 
-    func testAGuestIsNamedByTheCredit() {
-        // For a "(with ...)" on the other side to be checked against
-        XCTAssertEqual(SongName.guests("Calvin Harris feat. Rihanna"), ["rihanna"])
-        XCTAssertEqual(SongName.guests("Calvin Harris"), [])
-    }
-
     func testAGuestIsNotOneOfTheCreditsOwnArtists() {
         // On their own, a guest would find their own song of the same title
         XCTAssertFalse(SongName.artists("Calvin Harris feat. Rihanna").contains("rihanna"))
@@ -517,6 +511,15 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(SongName.versions(of: "Black (Live)", on: "Rearviewmirror"), ["live"])
         XCTAssertEqual(SongName.versions(of: "Idioteque", on: "I Might Be Wrong: Live Recordings"), ["live"])
         XCTAssertEqual(SongName.versions(of: "Idioteque", on: "Kid A"), [])
+    }
+
+}
+
+extension SongName {
+
+    /// `credited(_:)`'s `artists` on its own: who a credit is by, never a guest
+    static func artists(_ raw: String) -> Set<String> {
+        return credited(raw).artists
     }
 
 }

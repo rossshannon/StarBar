@@ -18,13 +18,14 @@ import os
 /// about one song at a time instead (`whose`) would apply Music's idea of equal names, not
 /// the matcher's, so a remaster would never find the original.
 ///
-/// Only what finding a song takes is read here: the persistent ID, name, artist and album
-/// artist. What chooses between copies (album, length, rating, plays) and whether a copy is
-/// a song at all are read for the few copies a song has (`readCopies`). Measured
+/// Only what finding a song takes is read here: four properties (the persistent ID, name,
+/// artist and album artist), then the persistent IDs again to check the rows still line up
+/// (`recheckKey`). What chooses between copies (album, length, rating, plays) and whether a
+/// copy is a song at all are read for the few copies a song has (`readCopies`). Measured
 /// 2026-10-28 on 8,092 tracks, a bulk read took 14 to 48 ms; on 2026-10-29, on the same
-/// library, the ten properties first read took 0.35 s, 4.4 s and 25 s at three launches.
-/// Music answers Apple Events one at a time, so while one of these is out, every other
-/// read StarBar makes waits behind it. Each read's timing is logged.
+/// library, the ten properties an earlier build read took 0.35 s, 4.4 s and 25 s at three
+/// launches. Music answers Apple Events one at a time, so while one of these is out, every
+/// other read StarBar makes waits behind it. Each read's timing is logged.
 ///
 /// - The reads run on a background queue with a connection of their own, addressed to
 ///   Music's process ID once `NSRunningApplication` says it is running, so a Music that has
@@ -91,8 +92,9 @@ final class MusicLibraryIndex {
     private var matcher: SongMatcher?
     /// The Music process `matcher` was read from
     private var readFromPID: pid_t?
-    /// Set by a library notification, cleared by a read that started after it
-    private var isStale = true
+    /// `generation` when the read `matcher` came from began, or nil before any read has
+    /// succeeded. The index is stale whenever the two differ.
+    private var readGeneration: Int?
     /// Bumped by every library notification, so a read that one overtook is known to be stale
     private var generation = 0
     private var isReading = false
@@ -127,11 +129,13 @@ final class MusicLibraryIndex {
         observeLibraryChanges(in: DistributedNotificationCenter.default())
     }
 
-    /// The two names `iTunesRadioStation` observes, for the same reason: neither says which
-    /// song changed, and the documented one has come ten seconds before the legacy one.
+    /// The two names `iTunesRadioStation` observes (`libraryChangeNotifications`), for the
+    /// same reason: neither says which song changed, and the documented one has come ten
+    /// seconds before the legacy one.
     func observeLibraryChanges(in center: NotificationCenter) {
-        center.addObserver(self, selector: #selector(libraryDidChange(_:)), name: .ITLibraryDidChange, object: nil)
-        center.addObserver(self, selector: #selector(libraryDidChange(_:)), name: NSNotification.Name("com.apple.iTunes.libraryChanged"), object: nil)
+        for name in iTunesRadioStation.libraryChangeNotifications {
+            center.addObserver(self, selector: #selector(libraryDidChange(_:)), name: name, object: nil)
+        }
     }
 
     @objc func libraryDidChange(_ notification: Notification) {
@@ -143,12 +147,11 @@ final class MusicLibraryIndex {
     /// the next `withMatcher` reads it again. Main thread.
     func markStale() {
         generation += 1
-        isStale = true
     }
 
     /// Whether the next `withMatcher` will read Music first
     var needsRead: Bool {
-        return matcher == nil || isStale || readFromPID != musicPID()
+        return matcher == nil || readGeneration != generation || readFromPID != musicPID()
     }
 
     /// Whether a read has succeeded since StarBar started, so the next one can reuse what it
@@ -199,7 +202,7 @@ final class MusicLibraryIndex {
                     self.readFromPID = pid
                     // A notification that came while the read was out leaves it stale: the
                     // change may or may not be in it
-                    self.isStale = self.generation != generation
+                    self.readGeneration = generation
                 } else {
                     // Keep nothing from a failed read, and don't hand out the last good one
                     // either: Music may have gone, and nothing would be there to rate
@@ -368,6 +371,15 @@ final class MusicLibraryIndex {
         defer { application.delegate = nil }
         let deadline = Date().addingTimeInterval(copiesDeadline)
         var overran = false
+        // Whether the read has run past its deadline, logged the first time it is found to.
+        // `function` names this read in the log, where `#function` here would name the helper.
+        func pastDeadline(function: String = #function) -> Bool {
+            if !overran, Date() > deadline {
+                overran = true
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: reading %{public}ld library copies took over %{public}.0f s; giving up", ((#file as NSString).lastPathComponent), #line, function, songs.count, MusicLibraryIndex.copiesDeadline)
+            }
+            return overran
+        }
         // Before every event. After a failure, `FailureCounter` has cut the rest to a tick.
         func shortenTimeout() {
             if failures.failures == 0 {
@@ -384,19 +396,15 @@ final class MusicLibraryIndex {
                         ?? iTunesRadioStation.libraryPlaylistByID(of: application, beforeEachEvent: shortenTimeout),
                       let tracks = playlist.tracks?() else { return CopiesReading() }
                 return CopiesReading(playlist: playlist, copies: songs.map { song -> LibrarySong? in
-                    if !overran, Date() > deadline {
-                        overran = true
-                        os_log(.error, "%{public}s[%{public}ld], %{public}s: reading %{public}ld library copies took over %{public}.0f s; giving up", ((#file as NSString).lastPathComponent), #line, #function, songs.count, MusicLibraryIndex.copiesDeadline)
-                    }
+                    let isPastDeadline = pastDeadline()
                     // The read is thrown away after a failure: ask Music nothing more
-                    guard failures.failures == 0, !overran else { return nil }
+                    guard failures.failures == 0, !isPastDeadline else { return nil }
                     shortenTimeout()
                     // The name and artist are checked by the search itself, which saves an
                     // event for each
                     let predicate = NSPredicate(format: "persistentID == %@ AND name == %@ AND artist == %@",
                                                 song.persistentID, song.name, song.artist)
-                    let search = tracks.perform(#selector(NSArray.filtered(using:)), with: predicate)?
-                        .takeUnretainedValue() as? SBElementArray
+                    let search = iTunesRadioStation.tracks(tracks, matching: predicate)
                     let found = search?.get() as? [iTunesTrack] ?? []
                     guard found.count == 1, let track = found.first else {
                         os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, song.name, song.artist, found.count)
@@ -409,11 +417,8 @@ final class MusicLibraryIndex {
                     return read
                 })
             } as? CopiesReading
-            if !overran, Date() > deadline {
-                overran = true
-                os_log(.error, "%{public}s[%{public}ld], %{public}s: reading %{public}ld library copies took over %{public}.0f s; giving up", ((#file as NSString).lastPathComponent), #line, #function, songs.count, MusicLibraryIndex.copiesDeadline)
-            }
-            guard failures.failures == 0, !overran else { return nil }
+            let isPastDeadline = pastDeadline()
+            guard failures.failures == 0, !isPastDeadline else { return nil }
             if let playlist = reading?.playlist {
                 copiesConnection = (pid: pid, application: application, playlist: playlist)
             }
@@ -452,8 +457,10 @@ final class MusicLibraryIndex {
     /// another's persistent ID would aim a rating at the wrong song. Also nil for no tracks
     /// at all, because a read that went wrong quietly looks exactly like that, and an empty
     /// index would match nothing until the next library edit. Any other column that doesn't
-    /// line up is left out, as if every track lacked that value: the songs lose only a way
-    /// of choosing between copies.
+    /// line up is left out, as if every track lacked that value. Of the columns read now that
+    /// can only be the album artist, and `SongMatcher` takes a copy's artists from it as well
+    /// as from its artist, so a copy credited to Spotify's artist only as its album artist
+    /// then isn't found until a read lines up.
     static func songs(from columns: Columns) -> [LibrarySong]? {
         guard misalignment(in: columns) == nil, let ids = columns["persistentID"] else { return nil }
         let unpaired = Set(unpairedColumns(in: columns))
@@ -498,9 +505,9 @@ final class MusicLibraryIndex {
     }
 
     /// The columns other than `requiredKeys` that don't have a value for every track, which
-    /// `songs(from:)` leaves out. Only `duration` has been seen short (it isn't read any
-    /// more), for songs Music had no length for, but any property Music can answer "missing
-    /// value" for can be.
+    /// `songs(from:)` leaves out. Of the columns read now, only `albumArtist` can be one. Any
+    /// property Music can answer "missing value" for can come back short: `duration` did, for
+    /// songs Music had no length for, when the bulk read still read it.
     static func unpairedColumns(in columns: Columns) -> [String] {
         guard let count = columns["persistentID"]?.count else { return [] }
         return keys.filter { !requiredKeys.contains($0) && columns[$0]?.count != count }

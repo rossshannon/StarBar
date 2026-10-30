@@ -109,3 +109,16 @@ final class FakeTrack: NSObject, iTunesTrack {
     }
 
 }
+
+/// An Apple Event by its class and ID, such as 'core'/'setd' for a property write or
+/// 'core'/'getd' for a read, for a test to report to `iTunesRadioStation.eventDidFail` as
+/// one Music failed
+func appleEvent(eventClass: UInt32, eventID: UInt32) -> NSAppleEventDescriptor {
+    return NSAppleEventDescriptor.appleEvent(
+        withEventClass: AEEventClass(eventClass),
+        eventID: AEEventID(eventID),
+        targetDescriptor: nil,
+        returnID: AEReturnID(kAutoGenerateReturnID),
+        transactionID: AETransactionID(kAnyTransactionID)
+    )
+}

@@ -589,3 +589,14 @@ final class SongMatcherTests: XCTestCase {
     }
 
 }
+
+extension SongMatcher {
+
+    /// The copy to show and rate, or nil when the user doesn't have the song: what
+    /// `LibraryMatchFinder` chooses, for a library whose albums are already known.
+    /// `MusicLibraryIndexTests` uses it too.
+    func match(for query: SongQuery) -> LibrarySong? {
+        return SongMatcher.ranked(copies(of: query), for: query).first
+    }
+
+}

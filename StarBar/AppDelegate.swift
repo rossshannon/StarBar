@@ -20,12 +20,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
-    /// The Spotify song whose Music copy the strip is waiting to hear about. A new song is
-    /// held back until the answer comes, for at most `MenuBarRatingControl.libraryMatchWait`,
+    /// The strip's wait for the answer about a Spotify song's Music copy. A new song is held
+    /// back until the answer comes, for at most `MenuBarRatingControl.libraryMatchWaitNow`,
     /// as the menu bar is, rather than shown as a Spotify song and redrawn with stars a
     /// moment later.
-    private var stripAwaitingMatch: String?
-    private var stripMatchWaitTimer: Timer?
+    private let stripMatchWait = LibraryMatchWait()
+    /// The Spotify song whose Music copy the strip is waiting to hear about
+    private var stripAwaitingMatch: String? {
+        return stripMatchWait.identity
+    }
     
     @IBAction func openAboutWindow(_ sender: NSMenuItem) {
         WindowManager.shared.open(.about)
@@ -182,18 +185,18 @@ extension AppDelegate {
         // because the controller doesn't wait for anything.
         guard NowPlayingArbiter.shared.active == .spotify, let info = SpotifyPlayer.shared.latest,
               let identity = info.trackID, info.songQuery != nil else {
-            cancelStripMatchWait()
+            stripMatchWait.cancel()
             TrackAnnouncementController.shared?.playerDidUpdate()
             return
         }
         // The answer will bring the strip up to date with whatever Spotify says by then
         guard stripAwaitingMatch != identity else { return }
-        cancelStripMatchWait()
+        stripMatchWait.cancel()
         var answered = false
         LibraryMatchFinder.shared.match(for: info) { [weak self] _ in
             answered = true
             guard let self = self, self.stripAwaitingMatch == identity else { return }
-            self.cancelStripMatchWait()
+            self.stripMatchWait.cancel()
             TrackAnnouncementController.shared?.playerDidUpdate()
         }
         // Known already, or no copy by name, which needs no Apple Events
@@ -201,21 +204,10 @@ extension AppDelegate {
             TrackAnnouncementController.shared?.playerDidUpdate()
             return
         }
-        stripAwaitingMatch = identity
-        let timer = Timer(timeInterval: MenuBarRatingControl.libraryMatchWaitNow, repeats: false) { [weak self] _ in
-            guard let self = self, self.stripAwaitingMatch == identity else { return }
+        stripMatchWait.start(identity) {
             os_log("%{public}s[%{public}ld], %{public}s: still looking for %{public}s in the library; announcing it meanwhile", ((#file as NSString).lastPathComponent), #line, #function, identity)
-            self.cancelStripMatchWait()
             TrackAnnouncementController.shared?.playerDidUpdate()
         }
-        RunLoop.main.add(timer, forMode: .common)
-        stripMatchWaitTimer = timer
-    }
-
-    private func cancelStripMatchWait() {
-        stripMatchWaitTimer?.invalidate()
-        stripMatchWaitTimer = nil
-        stripAwaitingMatch = nil
     }
 
     @objc private func spotifyArtworkDidLoad(_ notification: Notification) {
@@ -266,8 +258,7 @@ extension AppDelegate {
             // doesn't answer, what the strip shows stands, or for a new strip what was last
             // read of the copy, rather than "unrated".
             live.canRate = true
-            if let read = match.shown
-                ?? MenuBarRatingControl.withShortTimeoutIfAnswered({ _ in LibraryMatch.Shown(reading: match.track) }) {
+            if let read = match.currentShown() {
                 live.rating = read.rating
                 live.isFavorited = read.isFavorited
             } else {

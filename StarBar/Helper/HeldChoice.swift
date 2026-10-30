@@ -49,15 +49,11 @@ struct HeldChoice<Value: Equatable> {
         held = nil
     }
 
-    /// What to show for the track `trackID` when Music says `musicSays`: the choice while it
-    /// is held for that track and Music has yet to report it, otherwise Music's answer.
-    mutating func value(musicSays: Value, trackID: String?, refusals: Int, now: Date = Date()) -> Value {
-        return value(answered: musicSays, trackID: trackID, refusals: refusals, now: now) ?? musicSays
-    }
-
-    /// The same when Music may not have answered (`answered` nil). No answer neither confirms
-    /// nor ends a hold, so the choice is shown while it stands; nil means Music didn't answer
-    /// and nothing is held for the track.
+    /// What to show for the track `trackID` when Music answers `answered`, or nil when Music
+    /// didn't answer: the choice while it is held for that track and Music has yet to report
+    /// it, otherwise Music's answer. No answer neither confirms nor ends a hold, so the choice
+    /// is shown while it stands; nil means Music didn't answer and nothing is held for the
+    /// track.
     mutating func value(answered: Value?, trackID: String?, refusals: Int, now: Date = Date()) -> Value? {
         guard let held = held else { return answered }
         guard held.trackID == trackID, now < held.expires, refusals == held.refusals else {

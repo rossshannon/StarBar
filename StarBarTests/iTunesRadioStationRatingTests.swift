@@ -368,14 +368,4 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         return clock
     }
 
-    private func appleEvent(eventClass: UInt32, eventID: UInt32) -> NSAppleEventDescriptor {
-        return NSAppleEventDescriptor.appleEvent(
-            withEventClass: AEEventClass(eventClass),
-            eventID: AEEventID(eventID),
-            targetDescriptor: nil,
-            returnID: AEReturnID(kAutoGenerateReturnID),
-            transactionID: AETransactionID(kAnyTransactionID)
-        )
-    }
-
 }

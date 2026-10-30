@@ -213,32 +213,26 @@ enum SongName {
         return name.hasPrefix("the ") ? String(name.dropFirst(4)) : name
     }
 
-    /// Every artist a credit names as its own, and the whole credit too: "Calvin Harris & Dua
-    /// Lipa" gives "calvin harris", "dua lipa" and "calvin harris and dua lipa", and "Queen &
-    /// David Bowie" gives "queen" among others. A band named like a list stays one name: see
-    /// `artistNames(in:)`.
+    /// Who a credit is by (`artists`), and everyone it names (`everyone`).
     ///
-    /// A guest, after "feat." or "with", is left out, as one in a title is: "Calvin Harris
-    /// feat. Rihanna" gives "calvin harris" and the whole credit, never "rihanna". On their
-    /// own, a guest's name would find their own song of the same title, and put the user's
-    /// rating on it.
+    /// `artists` is every artist the credit names as its own, and the whole credit too:
+    /// "Calvin Harris & Dua Lipa" gives "calvin harris", "dua lipa" and "calvin harris and dua
+    /// lipa", and "Queen & David Bowie" gives "queen" among others. A band named like a list
+    /// stays one name: see `artistNames(in:)`.
+    ///
+    /// A guest, after "feat." or "with", is left out of `artists`, as one in a title is:
+    /// "Calvin Harris feat. Rihanna" gives "calvin harris" and the whole credit, never
+    /// "rihanna". On their own, a guest's name would find their own song of the same title,
+    /// and put the user's rating on it.
+    ///
+    /// `everyone` is `artists` and the rest the credit names: its guests, and a one-word name
+    /// after the lead, which `artists` leaves out as a likely backing band. Everyone is
+    /// what a "(with ...)" in another track's title is checked against (`Title.withNames`),
+    /// never who the track is by: "All The Stars (with SZA)" by Kendrick Lamar is the
+    /// library's by "Kendrick Lamar & SZA", and leaving SZA out of everyone lost it (the fourth
+    /// review, 2026-10-29). One pass for both, since this runs for every track in the library.
     ///
     /// Only for the library's side. Spotify's artist is one name, compared whole.
-    static func artists(_ raw: String) -> Set<String> {
-        return credited(raw).artists
-    }
-
-    /// The guests a credit names, after "feat." or "with"
-    static func guests(_ raw: String) -> Set<String> {
-        return Set(split(fold(raw), on: guestSeparator).dropFirst().flatMap { artistNames(in: $0).everyone })
-    }
-
-    /// `artists(_:)`, and everyone the credit names: its guests, and a one-word name after the
-    /// lead, which `artists(_:)` leaves out as a likely backing band. Everyone is what a
-    /// "(with ...)" in another track's title is checked against (`Title.withNames`), never
-    /// who the track is by: "All The Stars (with SZA)" by Kendrick Lamar is the library's by
-    /// "Kendrick Lamar & SZA", and leaving SZA out of everyone lost it (the fourth review,
-    /// 2026-10-29). One pass for both, since this runs for every track in the library.
     static func credited(_ raw: String) -> (artists: Set<String>, everyone: Set<String>) {
         let parts = split(fold(raw), on: guestSeparator)
         let own = parts.first ?? ""
@@ -562,8 +556,10 @@ enum SongName {
     private static let recordSize = pattern(#"\b(7|10|12) ?(?:"|''|-?inch(?:es)?\b)"#)
 
     /// An edition named for where it was sold, or how: "(Japan Version)", "(International
-    /// Version)", "(Explicit Version)". Never "(Taylor's Version)", a re-recording.
-    private static let marketVersion = pattern(#"^(?:japan(?:ese)?|international|us|uk|european?|australian|tour|explicit|clean|standard|deluxe|expanded|special|digital) version$"#)
+    /// Version)", "(Tour Version)". Never "(Taylor's Version)", a re-recording. One named with
+    /// an edition word, such as "(Explicit Version)" or "(Deluxe Version)", is an edition by
+    /// `describe` already.
+    private static let marketVersion = pattern(#"^(?:japan(?:ese)?|international|us|uk|european?|australian|tour|standard) version$"#)
 
     /// A soundtrack credit says which film, or that it is one
     private static let soundtrackWords = pattern(#"\bsoundtrack\b|\bmotion picture\b|\bfilm\b|\bmovie\b|\bseries\b|\bmusical\b|\bscore\b"#)
@@ -657,7 +653,8 @@ enum SongName {
     private static func listedNames(in segment: String) -> (own: [String], everyone: [String]) {
         let names = split(segment, on: listSeparator).map { artist($0) }.filter { !$0.isEmpty }
         guard names.count > 1, names.contains(where: { $0.contains(" ") }) else {
-            return ([artist(segment)], [artist(segment)])
+            let whole = artist(segment)
+            return ([whole], [whole])
         }
         return (names.enumerated().filter { $0.offset == 0 || $0.element.contains(" ") }.map { $0.element }, names)
     }

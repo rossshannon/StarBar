@@ -370,10 +370,8 @@ final class RatingClickControllerTests: XCTestCase {
         // Music doesn't answer: Scripting Bridge reports the failure and answers false
         let unanswered = FakeTrack(name: "Song", persistentID: id, rating: 0, favorited: false)
         unanswered.whenRead = {
-            _ = station.eventDidFail(NSAppleEventDescriptor.appleEvent(
-                withEventClass: AEEventClass(0x636F7265), eventID: AEEventID(0x67657464), targetDescriptor: nil,   // core/getd
-                returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID)).aeDesc!,
-                withError: NSError(domain: NSOSStatusErrorDomain, code: -1712, userInfo: nil))
+            _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x67657464).aeDesc!,   // core/getd
+                                     withError: NSError(domain: NSOSStatusErrorDomain, code: -1712, userInfo: nil))
         }
         menu.applyTrackDisplay(PlayingTrack(track: unanswered), isStopped: false, musicIsRunning: true)
         XCTAssertFalse(menu.ratingControl.isFavorited)
