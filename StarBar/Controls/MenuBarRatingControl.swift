@@ -309,8 +309,12 @@ final class MenuBarRatingControl {
             let trackID = match.song.persistentID
             heldRating.hold(rating, for: trackID, during: MenuBarRatingControl.ratingWriteWindow,
                             refusals: station.refusedWrites(.rating, to: trackID))
+            // For the station's log, taken before this choice changes it: what the finder
+            // remembers of the copy includes a rating chosen since the match on show was read
+            let before = LibraryMatchFinder.shared.knownMatch(for: match.identity)
+                .flatMap { $0.song.persistentID == trackID ? $0.song : nil } ?? match.song
             LibraryMatchFinder.shared.userDidRate(trackID, rating: rating)
-            station.setRating(rating, on: match)
+            station.setRating(rating, on: match, before: before)
         } else {
             heldRating.hold(rating, for: trackID, during: MenuBarRatingControl.ratingWriteWindow,
                             refusals: station.refusedWrites(.rating, to: trackID))

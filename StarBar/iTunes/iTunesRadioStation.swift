@@ -358,20 +358,21 @@ extension iTunesRadioStation {
     /// Save a rating chosen for a song playing in another player to the user's own copy of
     /// it in Music.
     ///
-    /// Logged every time, with both songs and the rating the copy had when last read, because
-    /// a rating cannot be undone and a wrong match would otherwise be invisible: the log is
-    /// the only way to find out which song took it and what it held before. The copy's
-    /// identity is its persistent ID, so a rating held for it is replaced by another for the
-    /// same copy and sent at once for any other song, whichever player that song is in.
+    /// Logged every time, with both songs and the rating the copy had as far as StarBar knew,
+    /// `before`, because a rating cannot be undone and a wrong match would otherwise be
+    /// invisible: the log is the only way to find out which song took it and what it held
+    /// before. The copy's identity is its persistent ID, so a rating held for it is replaced by
+    /// another for the same copy and sent at once for any other song, whichever player that
+    /// song is in.
     ///
     /// Main thread only, like `setRating(_:on:)`.
-    func setRating(_ rating: Int, on match: LibraryMatch) {
+    func setRating(_ rating: Int, on match: LibraryMatch, before: LibrarySong) {
         let song = match.song
         // Only for the log, which is the one record of what the copy had before: what was last
-        // read of it, since reading it again here was two Apple Events on the main thread for
-        // every rating
-        let had = song.isRatingComputed ? nil : song.rating
-        os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s when last read", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
+        // read of it or chosen for it since, because reading it again here was two Apple Events
+        // on the main thread for every rating
+        let had = before.isRatingComputed ? nil : before.rating
+        os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s when last read or rated", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: match.track, name: song.name, songIdentity: {
             song.persistentID
         }, trackID: song.persistentID))
