@@ -286,29 +286,35 @@ final class MenuBarRatingControl {
 
     /// The user chose `rating` for the song on show: tell the reminder and the strip, then
     /// save it. The strip is told first, so that it counts Music's refusals from before the
-    /// write: one arrives while the write is sent.
+    /// write: one arrives while the write is sent. Where the rating goes is worked out once,
+    /// before the strip asks Music which song is playing, so that the strip's hold, the menu
+    /// bar's and the write are all for the one song: a hold under another persistent ID than
+    /// the write's never hears that Music refused it.
     private func choose(rating: Int) {
         reminderController?.userDidRate()
-        TrackAnnouncementController.shared?.userDidRate(rating, heldFor: ratedTrackID)
-        saveRating(rating)
+        let match = libraryMatch
+        let trackID = ratedTrackID
+        let target = ratingTarget
+        TrackAnnouncementController.shared?.userDidRate(rating, heldFor: trackID)
+        saveRating(rating, to: match, on: target, heldFor: trackID)
     }
 
-    /// Save a rating the user chose for the song on show: to Music's own song, or to the
-    /// user's copy of the Spotify song, a write the station logs in full
-    private func saveRating(_ rating: Int) {
+    /// Save a rating the user chose for the song on show: to the user's copy of the Spotify
+    /// song, `match`, a write the station logs in full, or else to Music's own song, `target`,
+    /// held under `trackID`
+    private func saveRating(_ rating: Int, to match: LibraryMatch?, on target: iTunesTrack?, heldFor trackID: String?) {
         let station = iTunesRadioStation.shared
         // Held before the write is sent, so that Music refusing it ends the hold
-        if let match = libraryMatch {
+        if let match = match {
             let trackID = match.song.persistentID
             heldRating.hold(rating, for: trackID, during: MenuBarRatingControl.ratingWriteWindow,
                             refusals: station.refusedWrites(.rating, to: trackID))
             LibraryMatchFinder.shared.userDidRate(trackID, rating: rating)
             station.setRating(rating, on: match)
         } else {
-            let trackID = iTunesPlayer.shared.playing?.persistentID
             heldRating.hold(rating, for: trackID, during: MenuBarRatingControl.ratingWriteWindow,
                             refusals: station.refusedWrites(.rating, to: trackID))
-            station.setRating(rating, on: ratingTarget, heldFor: trackID)
+            station.setRating(rating, on: target, heldFor: trackID)
         }
     }
 

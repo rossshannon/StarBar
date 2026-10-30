@@ -96,14 +96,17 @@ extension RatingReminderController {
     /// - Parameter ratingIsKnown: false when Music didn't answer the rating read, so that
     ///   `isRated` is only the stars on show: the player is then read again before the
     ///   reminder rings, since a new song's stars on show are none (the sixth review,
-    ///   2026-10-30)
+    ///   2026-10-30). Not at once, though: Music has just failed to answer, and asking again
+    ///   straight away would wait out its timeout on the main thread.
     func playerDidUpdate(_ snapshot: PlayerSnapshot?, ratingIsKnown: Bool = true) {
-        evaluate(snapshot, isFullRead: ratingIsKnown)
+        evaluate(snapshot, isFullRead: ratingIsKnown, readsNow: ratingIsKnown)
     }
 
-    /// - Parameter isFullRead: false when only the position is new, and the rest comes from
-    ///   the last full read
-    private func evaluate(_ snapshot: PlayerSnapshot?, isFullRead: Bool) {
+    /// - Parameters:
+    ///   - isFullRead: false when only the position is new, and the rest comes from the last
+    ///     full read
+    ///   - readsNow: false to read the player again at the next check rather than now
+    private func evaluate(_ snapshot: PlayerSnapshot?, isFullRead: Bool, readsNow: Bool = true) {
         reminderTimer?.invalidate()
         reminderTimer = nil
         pendingSnapshot = nil
@@ -114,9 +117,11 @@ extension RatingReminderController {
         // A bell and sweep already under way always finish, even if playback changes
         guard let snapshot = snapshot else { return }
         if snapshot.trackID != currentTrackID {
-            // A new track, or the same one played again later, gets its own reminder
+            // A new track, or the same one played again later, gets its own reminder, and
+            // its own count of failed reads
             currentTrackID = snapshot.trackID
             remindedTrackID = nil
+            failedReads = 0
         }
         guard snapshot.isPlaying else { return }
 
@@ -131,6 +136,9 @@ extension RatingReminderController {
             break
         case .remindNow where isBusy():
             // Don't sweep over the stars the user is dragging; look again shortly
+            pendingSnapshot = snapshot
+            scheduleCheck(after: RatingReminderController.minimumWait)
+        case .remindNow where !readsNow:
             pendingSnapshot = snapshot
             scheduleCheck(after: RatingReminderController.minimumWait)
         case .remindNow where !isFullRead:

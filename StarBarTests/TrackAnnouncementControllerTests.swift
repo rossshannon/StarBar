@@ -851,6 +851,17 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.refreshed.map { $0.isFavorited }, [true, false])
     }
 
+    func testARefusedHeartMusicNeverAnsweredForGoesBackToWhatWasShown() {
+        // The sixth review: with no answer from Music to go back to, the refused heart stayed
+        live = .loaded(.init())
+        update(snapshot(track: "A"))
+        controller.userDidFavorite(true, heldFor: "P1")
+        refusals["favorite|P1"] = 1
+
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.isFavorited }, [true, false])
+    }
+
     func testMusicIsBelievedAgainAsSoonAsItReportsTheSavedRating() {
         live = .loaded(.init(rating: 20))
         update(snapshot(track: "A"))

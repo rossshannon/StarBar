@@ -514,7 +514,7 @@ enum SongName {
         var text = recordSize.stringByReplacingMatches(in: folded, range: whole(folded), withTemplate: " $1in ")
         for match in shortYear.matches(in: text, range: whole(text)).reversed() {
             let digits = substring(text, match.range(at: 1))
-            text = (text as NSString).replacingCharacters(in: match.range, with: ((Int(digits) ?? 0) < 30 ? "20" : "19") + digits)
+            text = (text as NSString).replacingCharacters(in: match.range, with: ((Int(digits) ?? 0) <= thisYear % 100 ? "20" : "19") + digits)
         }
         for phrase in [remasterPhrase, anniversaryPhrase] {
             text = phrase.stringByReplacingMatches(in: text, range: whole(text), withTemplate: " ")
@@ -651,6 +651,8 @@ enum SongName {
     ]
     /// "'86", with its apostrophe, which a number in a name doesn't have
     private static let shortYear = pattern(#"(?<![\w'])'(\d{2})(?![\w'])"#)
+    /// A short year after this one's is last century's: "'27" is 1927 in 2026
+    private static let thisYear = Calendar(identifier: .gregorian).component(.year, from: Date())
     private static let featuredInBrackets = pattern(#"\s*[\(\[]\s*(feat\.?|ft\.?|featuring|with)\s+([^\)\]]*)[\)\]]"#)
     private static let featuredCredit = pattern(#"^(feat\.?|ft\.?|featuring|with)\s+(.*)$"#)
     private static let featuredBare = pattern(#"\s+(feat\.|ft\.|featuring)\s+(.*)$"#)
