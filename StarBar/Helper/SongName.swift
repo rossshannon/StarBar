@@ -183,7 +183,7 @@ enum SongName {
         guard let first = words.first, let last = words.last else { return nil }
         // "(Expanded & Remastered)"
         let editionWords = words.filter { $0 != "and" }
-        if (!editionWords.isEmpty && editionWords.allSatisfy(isEditionWord)) || (first == "from" && isSoundtrackCredit(folded)) {
+        if (!editionWords.isEmpty && editionWords.allSatisfy(isEditionWord)) || (first == "from" && namesASoundtrack(folded)) {
             return .edition
         }
         if namedVersionEndings.contains(last) {
@@ -325,12 +325,11 @@ enum SongName {
         guard kinds == versions(of: otherName, on: otherAlbum) else { return false }
         let myTitle = title(name).versions, theirTitle = title(otherName).versions
         let mine = names(in: myTitle), theirs = names(in: theirTitle)
-        let sameRelease = isSameRelease(album, otherAlbum,
-                                        markedByBoth: SongName.kinds(of: myTitle).intersection(SongName.kinds(of: theirTitle)))
+        let sameRelease = isSameRelease(name, on: album, as: otherName, on: otherAlbum)
         return kinds.allSatisfy { kind in
             let myNames = mine[kind] ?? [], theirNames = theirs[kind] ?? []
             if !myNames.isEmpty && !theirNames.isEmpty {
-                return myNames == theirNames || (sameRelease && oneNamesLess(myNames, theirNames))
+                return myNames == theirNames || (sameRelease && oneNamesLess(myNames, theirNames, kind: kind))
             }
             if !myNames.isEmpty || !theirNames.isEmpty {
                 let (given, plainAlbum, plainTitle) = myNames.isEmpty ? (theirNames, album, myTitle) : (myNames, otherAlbum, theirTitle)
@@ -365,6 +364,14 @@ enum SongName {
             || (one.versions.isEmpty && one.isBare)
             || (other.versions.isEmpty && other.isBare)
             || one.versions.symmetricDifference(other.versions).isSubset(of: markedByBoth)
+    }
+
+    /// `isSameRelease` for two tracks: a plain version both their titles mark doesn't tell
+    /// their albums apart (`markedByBoth`), so "Intro - Live" on "Alive! (Deluxe Edition)" is
+    /// on the release "Intro (Live)" on "Alive! (Live)" is.
+    static func isSameRelease(_ name: String, on album: String, as otherName: String, on otherAlbum: String) -> Bool {
+        let marked = kinds(of: title(name).versions).intersection(kinds(of: title(otherName).versions))
+        return isSameRelease(album, otherAlbum, markedByBoth: marked)
     }
 
     /// An album's name as a release (`name`): without its edition words ("(Remaster 2018)"),
@@ -434,18 +441,36 @@ enum SongName {
             && words.allSatisfy { soundtrackCreditWords.contains(String($0)) }
     }
 
-    /// Whether one side's names for a version say no more than the other's, but for when:
-    /// "mtv" against "mtv 1994" or "mtv december 1994", "wembley" against "wembley 86" (from
-    /// "'86"). Anything else the longer name says tells another recording: "folsom state
-    /// prison" is not "folsom state prison 2nd show", nor "tiesto" "tiesto deep house" (the
-    /// fourth review, 2026-10-29). A place is left out too, though Spotify's "Live in Paris,
-    /// France" is the "(Live in Paris)" on the same album, since "york" against "new york"
-    /// would be one.
-    private static func oneNamesLess(_ names: Set<String>, _ otherNames: Set<String>) -> Bool {
-        let words = Set(names.flatMap { $0.split(separator: " ").map(String.init) })
-        let otherWords = Set(otherNames.flatMap { $0.split(separator: " ").map(String.init) })
-        let (fewer, more) = words.count <= otherWords.count ? (words, otherWords) : (otherWords, words)
-        return fewer.isSubset(of: more) && more.subtracting(fewer).allSatisfy { saysWhen.firstMatch(in: $0, range: whole($0)) != nil }
+    /// Whether one side's names for a version of `kind` say no more than the other's, but for
+    /// when: a year, "mtv" against "mtv 1994" or "wembley 1986" (from "'86", `nameWords`), and
+    /// for a live recording a month or day beside its date, "mtv december 1994". Anything else
+    /// the longer name says tells another recording: "folsom state prison" is not "folsom state
+    /// prison 2nd show", nor "tiesto" "tiesto deep house" (the fourth review, 2026-10-29). Nor
+    /// is a bare number or a month on its own: Club 69 and Studio 54 are names, and so is
+    /// "Marshall Jefferson March Remix" (the sixth review, 2026-10-30). A place is left out too,
+    /// though Spotify's "Live in Paris, France" is the "(Live in Paris)" on the same album,
+    /// since "york" against "new york" would be one.
+    private static func oneNamesLess(_ names: Set<String>, _ otherNames: Set<String>, kind: String) -> Bool {
+        func words(_ names: Set<String>) -> Set<String> {
+            return Set(names.flatMap { $0.split(separator: " ").map(String.init) })
+        }
+        let (fewer, more) = words(names).count <= words(otherNames).count ? (words(names), otherNames) : (words(otherNames), names)
+        guard fewer.isSubset(of: words(more)) else { return false }
+        return more.allSatisfy { name in
+            let sequence = name.split(separator: " ").map(String.init)
+            return sequence.indices.allSatisfy { index in
+                let word = sequence[index]
+                if fewer.contains(word) || matches(year, word) {
+                    return true
+                }
+                guard kind == "live" else { return false }
+                let beside = [index - 1, index + 1].filter { sequence.indices.contains($0) }.map { sequence[$0] }
+                if months.contains(word) {
+                    return beside.contains { matches(year, $0) || matches(day, $0) }
+                }
+                return matches(day, word) && beside.contains { months.contains($0) }
+            }
+        }
     }
 
     /// The names a title gives each kind of version: ["live": ["sydney"]] for "Clocks - Live
@@ -478,13 +503,19 @@ enum SongName {
     /// Sydney", "michael woods" for "Michael Woods Remix - Radio Edit".
     ///
     /// Numbers and ordinals stay, since they tell performances apart: "wembley 1986" is not
-    /// "wembley 1987", "1st Show" is not "2nd Show", and "Take 2" is "session:2". So does a
+    /// "wembley 1987", "1st Show" is not "2nd Show", and "Take 2" is "session:2". A short
+    /// year is the long one, "'86" 1986 and "'05" 2005, so that it is the year another name
+    /// gives, and is not taken for a name such as Studio 54's. So does a
     /// record's size, as one word: Arthur Baker's 12\" remix is not his 7\" ("arthur baker
     /// 12in"). A remaster goes with its year ("2003 Digital Remaster"), and so does an
     /// anniversary with its ordinal, but a year the performance has stays beside a remaster's:
     /// "Live at Glastonbury 2011 Remastered 2020" is "glastonbury 2011".
     private static func nameWords(of folded: String) -> [String] {
         var text = recordSize.stringByReplacingMatches(in: folded, range: whole(folded), withTemplate: " $1in ")
+        for match in shortYear.matches(in: text, range: whole(text)).reversed() {
+            let digits = substring(text, match.range(at: 1))
+            text = (text as NSString).replacingCharacters(in: match.range, with: ((Int(digits) ?? 0) < 30 ? "20" : "19") + digits)
+        }
         for phrase in [remasterPhrase, anniversaryPhrase] {
             text = phrase.stringByReplacingMatches(in: text, range: whole(text), withTemplate: " ")
         }
@@ -502,7 +533,7 @@ enum SongName {
 
     /// "From \u{201C}8 Mile\u{201D} Soundtrack", "From the Motion Picture \u{201C}Titanic\u{201D}",
     /// "From \u{201C}TRON: Legacy\u{201D}/Score", but not "From The Heart"
-    private static func isSoundtrackCredit(_ folded: String) -> Bool {
+    private static func namesASoundtrack(_ folded: String) -> Bool {
         return folded.contains("\"") || soundtrackWords.firstMatch(in: folded, range: whole(folded)) != nil
     }
 
@@ -591,7 +622,8 @@ enum SongName {
     private static let soundtrackCreditWords: Set<String> = [
         "original", "motion", "picture", "score", "soundtrack", "music", "from", "the", "tv", "television",
         "series", "film", "movie", "musical", "cast", "recording", "netflix", "official", "and", "songs",
-        "inspired", "by", "video", "game",
+        "inspired", "by", "video", "game", "a", "an", "of", "to", "for", "hbo", "amazon", "apple", "disney",
+        "hulu", "bbc", "prime",
     ]
 
     /// How a named version the rules don't know ends
@@ -610,8 +642,15 @@ enum SongName {
 
     private static let yearOrOrdinal = pattern(#"^(\d{4}s?|\d+(st|nd|rd|th))$"#)
     private static let countWord = pattern(#"^\d+(st|nd|rd|th)?$"#)
-    /// A year, short or long, or a month: what a live recording's name can add to say when
-    private static let saysWhen = pattern(#"^(\d{4}|\d{2}|january|february|march|april|may|june|july|august|september|october|november|december)$"#)
+    /// What a live recording's name can add to say when: a year, and a month or a day beside
+    /// it (`oneNamesLess`)
+    private static let year = pattern(#"^(19|20)\d{2}$"#)
+    private static let day = pattern(#"^([1-9]|[12]\d|3[01])(st|nd|rd|th)?$"#)
+    private static let months: Set<String> = [
+        "january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+    ]
+    /// "'86", with its apostrophe, which a number in a name doesn't have
+    private static let shortYear = pattern(#"(?<![\w'])'(\d{2})(?![\w'])"#)
     private static let featuredInBrackets = pattern(#"\s*[\(\[]\s*(feat\.?|ft\.?|featuring|with)\s+([^\)\]]*)[\)\]]"#)
     private static let featuredCredit = pattern(#"^(feat\.?|ft\.?|featuring|with)\s+(.*)$"#)
     private static let featuredBare = pattern(#"\s+(feat\.|ft\.|featuring)\s+(.*)$"#)
@@ -711,6 +750,11 @@ enum SongName {
 
     private static func whole(_ text: String) -> NSRange {
         return NSRange(text.startIndex..., in: text)
+    }
+
+    /// Whether `regex` matches the whole of `word`, as the patterns anchored with ^ and $ do
+    private static func matches(_ regex: NSRegularExpression, _ word: String) -> Bool {
+        return regex.firstMatch(in: word, range: whole(word)) != nil
     }
 
     private static func substring(_ text: String, _ range: NSRange) -> String {

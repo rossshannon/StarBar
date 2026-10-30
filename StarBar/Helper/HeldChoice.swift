@@ -18,6 +18,10 @@ import Foundation
 /// Only an answer from Music can end the hold by agreeing. A read Music didn't answer says
 /// nothing either way: taking what was on screen as Music's answer ended the hold, and the
 /// next answer, still the old value, put the old stars back (the third review, 2026-10-29).
+///
+/// It also says what to show when Music didn't answer and nothing is held
+/// (`value(answered:trackID:refusals:onShow:isSameSong:otherwise:)`): the value on screen,
+/// unless it is a choice Music has refused since, when Music's last answer comes back.
 struct HeldChoice<Value: Equatable> {
 
     private struct Held {
@@ -30,6 +34,9 @@ struct HeldChoice<Value: Equatable> {
     }
 
     private var held: Held?
+
+    /// The track last shown, the refusals counted then, and Music's last answer for it
+    private var shown: (trackID: String?, refusals: Int, answer: Value?)?
 
     /// Whether a choice is being held
     var isHolding: Bool {
@@ -64,6 +71,24 @@ struct HeldChoice<Value: Equatable> {
             self.held = nil
         }
         return held.value
+    }
+
+    /// What to show for the track `trackID`, never nil: `value(answered:trackID:refusals:)`,
+    /// and when that is nil, `onShow`, the value on screen, while it is that track's
+    /// (`isSameSong`) and Music has refused no write to the track since it was last shown;
+    /// otherwise Music's last answer for the track, or `otherwise` when there was none.
+    ///
+    /// Keeping what was on screen whatever happened said a rating Music had refused was
+    /// saved, and Rate Up counted from it (the fifth and sixth reviews, 2026-10-30).
+    mutating func value(answered: Value?, trackID: String?, refusals: Int, onShow: Value, isSameSong: Bool,
+                        otherwise: Value, now: Date = Date()) -> Value {
+        let before = isSameSong ? shown.flatMap { $0.trackID == trackID ? $0 : nil } : nil
+        shown = (trackID, refusals, answered ?? before?.answer)
+        if let shownNow = self.value(answered: answered, trackID: trackID, refusals: refusals, now: now) {
+            return shownNow
+        }
+        guard let before = before else { return otherwise }
+        return before.refusals == refusals ? onShow : before.answer ?? otherwise
     }
 
 }

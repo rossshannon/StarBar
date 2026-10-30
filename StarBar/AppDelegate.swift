@@ -137,6 +137,7 @@ extension AppDelegate {
                 case .spotify: return SpotifyPlayer.shared.isRunning
                 }
             },
+            refusedWrites: { iTunesRadioStation.shared.refusedWrites($0, to: $1) },
             isEnabled: UserDefaults.standard.announceNewTracks
         )
         trackAnnouncementPanel = panel

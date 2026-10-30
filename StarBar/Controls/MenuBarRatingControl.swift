@@ -130,12 +130,6 @@ final class MenuBarRatingControl {
             }
         }
     }
-    /// `iTunesRadioStation.refusedWrites` for the copy on show, by kind, when its stars and
-    /// heart were last shown. A refusal since means the stars or heart on show are a choice
-    /// Music turned down, so a read Music doesn't answer falls back to what was last read of
-    /// the copy instead: keeping the stars on show said a refused rating was saved, and Rate
-    /// Up counted from it (the fifth review, 2026-10-30).
-    private var copyRefusalsShown: (persistentID: String, rating: Int, favorite: Int)?
     /// The display waits for the answer about a Spotify song's Music copy, briefly, rather
     /// than show Spotify's heart and then swap it for stars
     private let matchWait = LibraryMatchWait()
@@ -284,6 +278,21 @@ final class MenuBarRatingControl {
         return iTunesPlayer.shared.playing?.ratingTrack
     }
 
+    /// The persistent ID a rating chosen now is held and written under: the user's copy of the
+    /// Spotify song on show, or Music's own song
+    private var ratedTrackID: String? {
+        return libraryMatch?.song.persistentID ?? iTunesPlayer.shared.playing?.persistentID
+    }
+
+    /// The user chose `rating` for the song on show: tell the reminder and the strip, then
+    /// save it. The strip is told first, so that it counts Music's refusals from before the
+    /// write: one arrives while the write is sent.
+    private func choose(rating: Int) {
+        reminderController?.userDidRate()
+        TrackAnnouncementController.shared?.userDidRate(rating, heldFor: ratedTrackID)
+        saveRating(rating)
+    }
+
     /// Save a rating the user chose for the song on show: to Music's own song, or to the
     /// user's copy of the Spotify song, a write the station logs in full
     private func saveRating(_ rating: Int) {
@@ -379,9 +388,12 @@ final class MenuBarRatingControl {
         let reminderController = RatingReminderController(
             ratingControl: ratingControl,
             readPlayer: {
-                MenuBarRatingControl.withShortTimeout { _ in
-                    guard let track = iTunesPlayer.shared.currentTrack else { return nil }
-                    return MenuBarRatingControl.readPlayerSnapshot(track: track, userRating: track.userRating)
+                // The song's rating where the stars read it, and none when any of it went
+                // unanswered: a rating read Music didn't answer is 0, which rang the reminder
+                // for a rated song (the sixth review, 2026-10-30)
+                MenuBarRatingControl.withShortTimeoutIfAnswered { _ in
+                    guard let playing = iTunesPlayer.shared.playing, let track = playing.ratingTrack else { return nil }
+                    return MenuBarRatingControl.readPlayerSnapshot(track: track, userRating: track.userRating, trackID: playing.persistentID)
                 } ?? nil
             },
             readPosition: {
@@ -762,6 +774,8 @@ extension MenuBarRatingControl {
         // value -- and two presses in a row then set the same thing, which is how the heart
         // got stuck.
         let isFavorited = !ratingControl.isFavorited
+        // Before the write, so that the strip counts Music's refusals from before it
+        TrackAnnouncementController.shared?.userDidFavorite(isFavorited, heldFor: playing.persistentID)
         // The heart goes where the rating goes: the user's own copy of the song, not the
         // catalog track playing it. Music keeps a separate `favorited` on each.
         writeFavorite(isFavorited, heldFor: playing.persistentID) {
@@ -772,7 +786,6 @@ extension MenuBarRatingControl {
         ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
-        TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
 
         // Deliberately no forced player update here: it reads Music back before the write has
         // landed, and the stale answer would put the heart straight back.
@@ -788,13 +801,13 @@ extension MenuBarRatingControl {
         os_log("%{public}s[%{public}ld], %{public}s: favourite %{public}d chosen for %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s", ((#file as NSString).lastPathComponent), #line, #function, isFavorited ? 1 : 0, match.identity, match.song.persistentID, match.song.name, match.song.artist)
         let trackID = match.song.persistentID
         LibraryMatchFinder.shared.userDidFavorite(trackID, isFavorited: isFavorited)
+        TrackAnnouncementController.shared?.userDidFavorite(isFavorited, heldFor: trackID)
         writeFavorite(isFavorited, heldFor: trackID) {
             match.track.updateFavorited(isFavorited)
         }
         ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
-        TrackAnnouncementController.shared?.userDidFavorite(isFavorited)
     }
 
     /// Whether the user's copy of the Spotify song on show is still in Music: false when
@@ -839,21 +852,25 @@ extension MenuBarRatingControl {
 
     /// Show the stars and heart for the track `trackID` when Music answers `rating` and
     /// `favorite`, nil where it didn't answer: the user's own choice while Music has yet to
-    /// report it, otherwise Music's answer, otherwise `otherwise`. The stars stay as they are
-    /// while the user drags across them.
+    /// report it, otherwise Music's answer. Where Music didn't answer, the stars or heart on
+    /// show stay while they are this song's (`isSameSong`), unless Music has refused a write
+    /// since they were shown, when its last answer comes back; and otherwise `otherwise`
+    /// (`HeldChoice`). The stars stay as they are while the user drags across them.
     ///
     /// Music is believed again as soon as it agrees, so a change made in Music straight
     /// afterwards isn't held back for the rest of the window.
-    private func show(rating: Int?, favorite: Bool?, for trackID: String?, otherwise: (rating: Int, isFavorited: Bool)) {
+    private func show(rating: Int?, favorite: Bool?, for trackID: String?, isSameSong: Bool, otherwise: (rating: Int, isFavorited: Bool)) {
         let station = iTunesRadioStation.shared
         if !clickController.isDragging {
             ratingControl.update(rating: heldRating.value(answered: rating, trackID: trackID,
-                                                          refusals: station.refusedWrites(.rating, to: trackID))
-                                    ?? otherwise.rating)
+                                                          refusals: station.refusedWrites(.rating, to: trackID),
+                                                          onShow: ratingControl.rating, isSameSong: isSameSong,
+                                                          otherwise: otherwise.rating))
         }
         ratingControl.updateFavorited(heldFavorite.value(answered: favorite, trackID: trackID,
-                                                         refusals: station.refusedWrites(.favorite, to: trackID))
-                                         ?? otherwise.isFavorited)
+                                                         refusals: station.refusedWrites(.favorite, to: trackID),
+                                                         onShow: ratingControl.isFavorited, isSameSong: isSameSong,
+                                                         otherwise: otherwise.isFavorited))
     }
 
 }
@@ -965,11 +982,11 @@ extension MenuBarRatingControl: RatingControlDelegate {
     }
 
     func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
-        reminderController?.userDidRate()
-        TrackAnnouncementController.shared?.userDidRate(rating)
-        // Update iTunes current track rating
-        if !MenuBarRatingControl.isUITesting {
-            saveRating(rating)
+        if MenuBarRatingControl.isUITesting {
+            reminderController?.userDidRate()
+            TrackAnnouncementController.shared?.userDidRate(rating, heldFor: nil)
+        } else {
+            choose(rating: rating)
         }
         statusItem.button?.needsDisplay = true
     }
@@ -1098,17 +1115,9 @@ extension MenuBarRatingControl {
         // none of them ends a hold: taking the stars on show for one put the old stars back
         // at the next read (the third review). Stars or a heart Music has refused since they
         // were shown don't stay either.
-        let station = iTunesRadioStation.shared
-        let id = match.song.persistentID
-        let refusals = (rating: station.refusedWrites(.rating, to: id), favorite: station.refusedWrites(.favorite, to: id))
-        let shownBefore = isSameCopy ? copyRefusalsShown.flatMap { $0.persistentID == id ? $0 : nil } : nil
         let lastRead = LibraryMatch.Shown(song: match.song)
-        let ratingStands = shownBefore?.rating == refusals.rating
-        let favoriteStands = shownBefore?.favorite == refusals.favorite
-        show(rating: read.map { $0.rating ?? 0 }, favorite: read?.isFavorited, for: id,
-             otherwise: (ratingStands ? ratingControl.rating : lastRead.rating ?? 0,
-                         favoriteStands ? ratingControl.isFavorited : lastRead.isFavorited))
-        copyRefusalsShown = (id, refusals.rating, refusals.favorite)
+        show(rating: read.map { $0.rating ?? 0 }, favorite: read?.isFavorited, for: match.song.persistentID,
+             isSameSong: isSameCopy, otherwise: (lastRead.rating ?? 0, lastRead.isFavorited))
         updateMenuBar(animate: true, previousStars: previousStars, animateRatingChange: isNewMatch)
     }
 
@@ -1159,8 +1168,9 @@ extension MenuBarRatingControl {
         // A read Music didn't answer comes back as 0 or false rather than an error, and taken
         // for Music's answer it ended a rating or heart just chosen, so the next read, still
         // the old value, put the old one back (the fourth review, 2026-10-29). It says
-        // nothing: what is held stays, and otherwise the song's stars on show stay, or a new
-        // song's start from none, since nothing else is known of them.
+        // nothing: what is held stays, and otherwise the song's stars on show stay, unless
+        // Music has refused them, or a new song's start from none, since nothing else is
+        // known of them.
         var userRating: Int?
         let ratingAnswer = MenuBarRatingControl.ifAnswered { () -> Int? in
             userRating = ratedTrack?.userRating
@@ -1170,7 +1180,7 @@ extension MenuBarRatingControl {
             playing?.favoriteTrack.isFavorited ?? false
         }
         show(rating: ratingAnswer, favorite: favoriteAnswer, for: playing?.persistentID,
-             otherwise: isNewSong ? (0, false) : (ratingControl.rating, ratingControl.isFavorited))
+             isSameSong: !isNewSong, otherwise: (0, false))
         // Replacement songs change glyphs in place; mode changes also animate the width.
         // Preserve the old star shapes before the new song replaces the control's contents.
         updateMenuBar(animate: wasStopped || (!isNewSong && !wasWaiting), previousStars: previousStars,
@@ -1182,10 +1192,11 @@ extension MenuBarRatingControl {
         // every one of them and sweep a star across a control that has no stars
         if UserDefaults.standard.remindToRateUnrated && ratingControl.mode == .rating {
             // A read Music didn't answer is 0, which would ring the reminder for a rated
-            // song, so then the stars on show stand for it
+            // song, so then the stars on show stand for it, and the reminder reads the
+            // rating again before it rings: a new song's stars on show are none
             let known = ratingAnswer == nil ? ratingControl.rating : userRating
             let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: known, isPlaying: isPlaying, trackID: playing?.persistentID) }
-            reminderController?.playerDidUpdate(snapshot)
+            reminderController?.playerDidUpdate(snapshot, ratingIsKnown: ratingAnswer != nil)
         } else {
             reminderController?.playerDidUpdate(nil)
         }
@@ -1306,9 +1317,7 @@ extension MenuBarRatingControl {
         guard shortcutCanRate() else { return }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating + ratingChange)
-        saveRating(ratingControl.rating)
-        reminderController?.userDidRate()
-        TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
+        choose(rating: ratingControl.rating)
     }
 
     @objc func iTunesRadioRequestTrackRatingDown(_ notification: Notification) {
@@ -1321,9 +1330,7 @@ extension MenuBarRatingControl {
         guard shortcutCanRate() else { return }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
         ratingControl.update(rating: ratingControl.rating - ratingChange)
-        saveRating(ratingControl.rating)
-        reminderController?.userDidRate()
-        TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
+        choose(rating: ratingControl.rating)
     }
 
     @objc func iTunesRadioRequestTrackRating5(_ notification: Notification) {
@@ -1359,9 +1366,7 @@ extension MenuBarRatingControl {
 
       guard shortcutCanRate() else { return }
       ratingControl.update(rating: stars * 20)
-      saveRating(ratingControl.rating)
-      reminderController?.userDidRate()
-      TrackAnnouncementController.shared?.userDidRate(ratingControl.rating)
+      choose(rating: ratingControl.rating)
     }
 
     @objc func windowDidResize(_ notification: Notification) {

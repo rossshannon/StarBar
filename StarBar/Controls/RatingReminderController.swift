@@ -91,9 +91,14 @@ final class RatingReminderController {
 
 extension RatingReminderController {
 
-    /// Decide again after the player changed: a new track, play or pause, a new rating
-    func playerDidUpdate(_ snapshot: PlayerSnapshot?) {
-        evaluate(snapshot, isFullRead: true)
+    /// Decide again after the player changed: a new track, play or pause, a new rating.
+    ///
+    /// - Parameter ratingIsKnown: false when Music didn't answer the rating read, so that
+    ///   `isRated` is only the stars on show: the player is then read again before the
+    ///   reminder rings, since a new song's stars on show are none (the sixth review,
+    ///   2026-10-30)
+    func playerDidUpdate(_ snapshot: PlayerSnapshot?, ratingIsKnown: Bool = true) {
+        evaluate(snapshot, isFullRead: ratingIsKnown)
     }
 
     /// - Parameter isFullRead: false when only the position is new, and the rest comes from

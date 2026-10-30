@@ -33,6 +33,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var positionReads = 0
     /// The players the controller is told are running
     private var running: Set<PlayerKind> = [.music, .spotify]
+    /// Writes Music refused, by "kind|persistent ID"
+    private var refusals: [String: Int] = [:]
     private var controller: TrackAnnouncementController!
 
     override func setUp() {
@@ -52,6 +54,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         positions = []
         positionReads = 0
         running = [.music, .spotify]
+        refusals = [:]
         controller = makeController(enabled: true)
     }
 
@@ -87,6 +90,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
             clock: clock,
             accessibility: { [unowned self] in (self.reduceMotion, self.reduceTransparency) },
             isRunning: { [unowned self] kind in self.running.contains(kind) },
+            refusedWrites: { [unowned self] kind, trackID in self.refusals["\(kind.rawValue)|\(trackID ?? "")", default: 0] },
             isEnabled: enabled
         )
     }
@@ -808,6 +812,43 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         controller.userDidRate(80)
 
         XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
+    }
+
+    func testARatingMusicRefusesEndsTheHoldAndMusicsLastAnswerComesBack() {
+        // The sixth review, 2026-10-30: the strip kept showing a refused rating, where the
+        // menu bar went back to Music's
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80, heldFor: "P1")
+        refusals["rating|P1"] = 1
+
+        // Music doesn't answer the read after the refusal, nor the next
+        live = .loaded(.init())
+        update(snapshot(track: "A"))
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 20])
+    }
+
+    func testARefusalForAnotherSongOrKindLeavesTheHold() {
+        live = .loaded(.init(rating: 20, isFavorited: false))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80, heldFor: "P1")
+        refusals["rating|P2"] = 1
+        refusals["favorite|P1"] = 1
+
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
+    }
+
+    func testAHeartMusicRefusesEndsTheHold() {
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+        controller.userDidFavorite(true, heldFor: "P1")
+        refusals["favorite|P1"] = 1
+
+        live = .loaded(.init())
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.isFavorited }, [true, false])
     }
 
     func testMusicIsBelievedAgainAsSoonAsItReportsTheSavedRating() {

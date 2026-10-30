@@ -290,6 +290,28 @@ final class SongNameTests: XCTestCase {
         XCTAssertFalse(SongName.isSameRecording("Song - Live June 1986", on: "Live Anthology", as: "Song (Live July 1986)", on: "Live Anthology"))
         XCTAssertFalse(SongName.isSameRecording("Song - Live in Paris, France", on: "Live Anthology", as: "Song (Live in Paris)", on: "Live Anthology"),
                        "a place is left out, a known miss")
+        XCTAssertTrue(SongName.isSameRecording("Song - Live Aid, July 13, 1985", on: "Live Aid", as: "Song (Live Aid)", on: "Live Aid"))
+    }
+
+    func testAShortYearIsTheLongOne() {
+        // The sixth review, 2026-10-30
+        XCTAssertTrue(SongName.isSameRecording("Song - Live at Wembley '86", on: "Live Anthology", as: "Song (Live at Wembley 1986)", on: "Live Anthology"))
+        XCTAssertTrue(SongName.isSameRecording("Song - Live at Wembley \u{2019}86", on: "Live Anthology", as: "Song (Live at Wembley 1986)", on: "Greatest Hits Live"),
+                      "the same name, whatever the album")
+        XCTAssertTrue(SongName.isSameRecording("Song - Live '05", on: "Live", as: "Song (Live 2005)", on: "Live"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live at Wembley '86", on: "Live Anthology", as: "Song (Live at Wembley 1987)", on: "Live Anthology"))
+    }
+
+    func testANumberOrAMonthInAVersionsNameIsNoDate() {
+        // The sixth review, 2026-10-30: any two digits, or a month, counted as a date, so two
+        // remixes on one remix album were one recording
+        XCTAssertFalse(SongName.isSameRecording("Song (Club 69 Remix)", on: "Song (Remixes)", as: "Song (Club Remix)", on: "Song (Remixes)"))
+        XCTAssertFalse(SongName.isSameRecording("Song (Live at Studio 54)", on: "Live", as: "Song (Live at Studio)", on: "Live"))
+        XCTAssertFalse(SongName.isSameRecording("Song (Live at Studio 21)", on: "Live", as: "Song (Live at Studio)", on: "Live"))
+        XCTAssertFalse(SongName.isSameRecording("Song (Marshall Jefferson March Remix)", on: "Song (Remixes)",
+                                                as: "Song (Marshall Jefferson Remix)", on: "Song (Remixes)"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live at Wembley, March", on: "Live", as: "Song (Live at Wembley)", on: "Live"),
+                       "a month says when only beside a year or a day")
     }
 
     func testALiveAlbumOneAppTagsAsAnEditionIsTheLiveAlbumWhenBothTitlesSayLive() {
@@ -395,6 +417,9 @@ final class SongNameTests: XCTestCase {
                                               "Star Wars: The Empire Strikes Back (Original Motion Picture Soundtrack)"))
         XCTAssertTrue(SongName.isSameRelease("Stranger Things 4 (Music from the Netflix Original Series)", "Stranger Things 4"))
         XCTAssertTrue(SongName.isSameRelease("Doctor Who: Series 2 (Original Television Soundtrack)", "Doctor Who: Series 2"))
+        // The sixth review, 2026-10-30: a network or "a" in the credit kept it
+        XCTAssertTrue(SongName.isSameRelease("Game of Thrones: Season 1 (Music from the HBO Series)", "Game of Thrones: Season 1"))
+        XCTAssertTrue(SongName.isSameRelease("Stranger Things, Vol. 1 (A Netflix Original Series Soundtrack)", "Stranger Things, Vol. 1"))
     }
 
     func testASeriesOrVolumeASoundtrackNamesIsARelease() {

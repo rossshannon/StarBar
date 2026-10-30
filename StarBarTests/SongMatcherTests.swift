@@ -129,6 +129,12 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.match(for: query("Intro", by: "The xx", on: "xx (Deluxe Edition)", length: 127)), intro)
     }
 
+    func testALiveIntroOnALiveAlbumOneAppTagsAsAnEditionIsTheSameTrack() {
+        // The sixth review, 2026-10-30: what a generic title's release rule missed
+        let intro = song("Intro (Live)", by: "Kiss", on: "Alive! (Live)")
+        XCTAssertEqual(SongMatcher(library: [intro]).match(for: query("Intro - Live", by: "Kiss", on: "Alive! (Deluxe Edition)")), intro)
+    }
+
     func testAnIntroOnAnEditionTheRulesDontKnowIsTheSameTrack() {
         let intro = song("Intro", by: "The xx", on: "Coexist (Limited Edition)")
 

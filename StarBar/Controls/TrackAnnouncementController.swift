@@ -69,7 +69,7 @@ final class TrackAnnouncementController: NSObject {
         /// 0 to 100; nil when it could not be read
         var rating: Int? = nil
         var isFavorited: Bool? = nil
-        /// What was last read of the rating and heart, for a new strip when Music didn't
+        /// What was last read of the rating and heart, or chosen since, for when Music didn't
         /// answer just now (`rating` and `isFavorited` nil). Never taken for Music's answer:
         /// one the user has just chosen stays on show until Music gives a real one, where
         /// taking this for it, which is the user's choice once they rate, ended that wait
@@ -143,6 +143,9 @@ final class TrackAnnouncementController: NSObject {
     private(set) var isEnabled: Bool
     /// Whether a player is still running, so the songs seen in one that quit are forgotten
     private let isRunning: (PlayerKind) -> Bool
+    /// `iTunesRadioStation.refusedWrites(_:to:)`: how many writes of a kind Music has refused
+    /// for a persistent ID, so that a refusal ends the hold on the choice it refused
+    private let refusedWrites: (iTunesRadioStation.WriteKind, String?) -> Int
     /// The player the last update came from
     private var currentSource: PlayerKind = .music
     /// The last song seen playing (or there at launch) in each player, announced or not.
@@ -178,10 +181,15 @@ final class TrackAnnouncementController: NSObject {
     private var hideTimer: RatingReminderTimer?
     /// A rating the user just chose in StarBar. Music usually has it at once, but a rating
     /// that arrives in the shadow of another can wait up to `iTunesRadioStation.ratingSaveDelay`,
-    /// so until this expires it wins over Music's reads.
-    private var pendingRating: (identity: String, rating: Int, expires: Date)?
+    /// so until this expires, or Music refuses it, it wins over Music's reads. `trackID` is the
+    /// persistent ID it was written to, and `refusals` Music's refusals for it beforehand.
+    private var pendingRating: (identity: String, rating: Int, expires: Date, trackID: String?, refusals: Int)?
     /// The heart the user just set in StarBar, for the same reason as `pendingRating`
-    private var pendingFavorite: (identity: String, isFavorited: Bool, expires: Date)?
+    private var pendingFavorite: (identity: String, isFavorited: Bool, expires: Date, trackID: String?, refusals: Int)?
+    /// What Music last answered for a song's rating and heart, which comes back when Music
+    /// refuses a choice and then doesn't answer: the menu bar does the same, and the strip
+    /// went on showing the refused stars beside it (the sixth review, 2026-10-30)
+    private var lastAnswer: (identity: String, rating: Int?, isFavorited: Bool?)?
 
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
@@ -196,6 +204,7 @@ final class TrackAnnouncementController: NSObject {
              NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)
         },
         isRunning: @escaping (PlayerKind) -> Bool = { _ in true },
+        refusedWrites: @escaping (iTunesRadioStation.WriteKind, String?) -> Int = { _, _ in 0 },
         isEnabled: Bool
     ) {
         self.readPlayer = readPlayer
@@ -207,6 +216,7 @@ final class TrackAnnouncementController: NSObject {
         self.clock = clock
         self.accessibility = accessibility
         self.isRunning = isRunning
+        self.refusedWrites = refusedWrites
         self.isEnabled = isEnabled
         super.init()
     }
@@ -423,11 +433,15 @@ extension TrackAnnouncementController {
 
     /// The user chose a rating for the current track in StarBar. Shows it on the strip now,
     /// without asking Music, which may not have the rating for up to `ratingSaveDelay`.
+    /// Call it before the write is sent, since a refusal arrives while it is.
     ///
-    /// - Parameter rating: 0 to 100
-    func userDidRate(_ rating: Int) {
+    /// - Parameters:
+    ///   - rating: 0 to 100
+    ///   - trackID: the persistent ID the rating is written to
+    func userDidRate(_ rating: Int, heldFor trackID: String? = nil) {
         guard let identity = ratedTrackIdentity() else { return }
-        pendingRating = (identity, rating, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime))
+        pendingRating = (identity, rating, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime),
+                         trackID, refusedWrites(.rating, trackID))
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, rating: rating) }
     }
 
@@ -437,9 +451,10 @@ extension TrackAnnouncementController {
     /// used to say the heart was different because `iTunesTrack.updateFavorited(_:)` reaches
     /// Music at once -- it does not. A read taken straight after the write can still report
     /// the old value, and the strip would then put the heart back.
-    func userDidFavorite(_ isFavorited: Bool) {
+    func userDidFavorite(_ isFavorited: Bool, heldFor trackID: String? = nil) {
         guard let identity = ratedTrackIdentity() else { return }
-        pendingFavorite = (identity, isFavorited, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime))
+        pendingFavorite = (identity, isFavorited, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime),
+                           trackID, refusedWrites(.favorite, trackID))
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
     }
 
@@ -493,14 +508,23 @@ extension TrackAnnouncementController {
     }
 
     /// The rating to show: the user's own rating while Music has yet to save it, otherwise
-    /// Music's, and then the notification's.
+    /// Music's, and then the notification's. Once Music refuses the user's rating, Music's
+    /// answer, or the last it gave when it doesn't answer.
     ///
     /// Music is believed again as soon as it reports the saved rating, so a change made in
     /// Music straight afterwards isn't held back for the rest of the wait.
     private func rating(for identity: String, live: Int?, payload: Int?) -> Int? {
         expirePendingRating()
         let known = live ?? payload
+        let answered = lastAnswer?.identity == identity ? lastAnswer?.rating : nil
+        if let known = known {
+            lastAnswer = (identity, known, lastAnswer?.identity == identity ? lastAnswer?.isFavorited : nil)
+        }
         guard let pending = pendingRating, pending.identity == identity else { return known }
+        guard refusedWrites(.rating, pending.trackID) == pending.refusals else {
+            pendingRating = nil
+            return known ?? answered
+        }
         guard known != pending.rating else {
             // Music has the rating now
             pendingRating = nil
@@ -522,7 +546,15 @@ extension TrackAnnouncementController {
             pendingFavorite = nil
         }
         let known = live ?? payload
+        let answered = lastAnswer?.identity == identity ? lastAnswer?.isFavorited : nil
+        if let known = known {
+            lastAnswer = (identity, lastAnswer?.identity == identity ? lastAnswer?.rating : nil, known)
+        }
         guard let pending = pendingFavorite, pending.identity == identity else { return known }
+        guard refusedWrites(.favorite, pending.trackID) == pending.refusals else {
+            pendingFavorite = nil
+            return known ?? answered
+        }
         guard known != pending.isFavorited else {
             // Music has the heart now
             pendingFavorite = nil
@@ -563,8 +595,9 @@ extension TrackAnnouncementController {
             title: snapshot.title.isEmpty ? current.title : snapshot.title,
             artist: snapshot.artist.isEmpty ? current.artist : snapshot.artist,
             album: snapshot.album.isEmpty ? current.album : snapshot.album,
-            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? current.rating,
-            isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited) ?? current.isFavorited,
+            rating: rating(for: identity, live: live.rating, payload: snapshot.rating) ?? live.lastKnownRating ?? current.rating,
+            isFavorited: favorite(for: identity, live: live.isFavorited, payload: snapshot.isFavorited)
+                ?? live.lastKnownFavorite ?? current.isFavorited,
             artwork: current.artwork ?? live.artwork,
             canRate: live.canRate ?? current.canRate,
             source: current.source,
@@ -582,8 +615,8 @@ extension TrackAnnouncementController {
         guard let live = loadLive(identity: current.identity, wantsArtwork: false) else { return }
         let updated = TrackAnnouncement(
             copying: current,
-            rating: rating(for: current.identity, live: live.rating, payload: nil) ?? current.rating,
-            isFavorited: favorite(for: current.identity, live: live.isFavorited, payload: nil) ?? current.isFavorited,
+            rating: rating(for: current.identity, live: live.rating, payload: nil) ?? live.lastKnownRating ?? current.rating,
+            isFavorited: favorite(for: current.identity, live: live.isFavorited, payload: nil) ?? live.lastKnownFavorite ?? current.isFavorited,
             canRate: live.canRate ?? current.canRate,
             showsSpotifyHeart: live.showsSpotifyHeart
         )

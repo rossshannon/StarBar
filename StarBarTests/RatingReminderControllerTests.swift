@@ -108,6 +108,27 @@ final class RatingReminderControllerTests: XCTestCase {
         XCTAssertNil(clock.pendingOneShot)
     }
 
+    func testARatingMusicDidntAnswerIsReadAgainBeforeRinging() {
+        // The sixth review, 2026-10-30: a new song's first read went unanswered, its stars on
+        // show were none, and the reminder took that for unrated
+        player = snapshot(position: 575, rated: true)
+        controller.playerDidUpdate(snapshot(position: 575), ratingIsKnown: false)
+        XCTAssertEqual(fullReads, 1)
+        XCTAssertEqual(bell.playCount, 0)
+
+        player = snapshot(track: "B", position: 575)
+        controller.playerDidUpdate(snapshot(track: "B", position: 575), ratingIsKnown: false)
+        XCTAssertEqual(fullReads, 2)
+        XCTAssertEqual(bell.playCount, 1, "an unrated song still rings, once Music says so")
+    }
+
+    func testARatingMusicDidntAnswerAndCantBeReadAgainDoesntRing() {
+        readsFail = true
+        controller.playerDidUpdate(snapshot(position: 575), ratingIsKnown: false)
+        XCTAssertEqual(bell.playCount, 0)
+        XCTAssertNotNil(clock.pendingOneShot, "it tries again")
+    }
+
     func testCheckThatIsNotDueReadsOnlyThePosition() {
         update(snapshot(position: 500))
         player = snapshot(position: 502)

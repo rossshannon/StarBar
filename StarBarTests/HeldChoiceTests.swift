@@ -87,4 +87,61 @@ final class HeldChoiceTests: XCTestCase {
         XCTAssertFalse(heart.isHolding)
     }
 
+    // MARK: - When Music didn't answer and nothing is held
+
+    /// What the menu bar would show for "B" with the stars on show `onShow`
+    private func shown(_ choice: inout HeldChoice<Int>, answered: Int?, refusals: Int = 0, onShow: Int, isSameSong: Bool = true,
+                       at seconds: TimeInterval) -> Int {
+        return choice.value(answered: answered, trackID: "B", refusals: refusals, onShow: onShow, isSameSong: isSameSong,
+                            otherwise: 0, now: at(seconds))
+    }
+
+    func testNoAnswerKeepsTheSongsStarsOnShow() {
+        var choice = HeldChoice<Int>()
+        XCTAssertEqual(shown(&choice, answered: 60, onShow: 0, at: 0), 60)
+        XCTAssertEqual(shown(&choice, answered: nil, onShow: 60, at: 1), 60)
+    }
+
+    func testNoAnswerForANewSongIsOtherwise() {
+        var choice = HeldChoice<Int>()
+        XCTAssertEqual(shown(&choice, answered: 60, onShow: 0, at: 0), 60)
+        XCTAssertEqual(shown(&choice, answered: nil, onShow: 60, isSameSong: false, at: 1), 0, "the stars on show are another song's")
+        var other = HeldChoice<Int>()
+        XCTAssertEqual(other.value(answered: 60, trackID: "A", refusals: 0, onShow: 0, isSameSong: true, otherwise: 0, now: start), 60)
+        XCTAssertEqual(shown(&other, answered: nil, onShow: 60, at: 1), 0, "nor for another track")
+    }
+
+    func testARefusalSinceTheStarsWereShownBringsBackMusicsLastAnswer() {
+        // The sixth review, 2026-10-30: Music's own songs kept a refused rating on show
+        var choice = HeldChoice<Int>()
+        XCTAssertEqual(shown(&choice, answered: 40, onShow: 0, at: 0), 40)
+        choice.hold(80, for: "B", during: 3, refusals: 0, now: at(1))
+        // Music refuses the write, and doesn't answer the read after it
+        XCTAssertEqual(shown(&choice, answered: nil, refusals: 1, onShow: 80, at: 1.5), 40)
+        XCTAssertFalse(choice.isHolding)
+        // Nor the next: Music's answer stays on show
+        XCTAssertEqual(shown(&choice, answered: nil, refusals: 1, onShow: 40, at: 2), 40)
+    }
+
+    func testARefusalOnceTheHoldHasRunOutStillBringsBackMusicsLastAnswer() {
+        var choice = HeldChoice<Int>()
+        XCTAssertEqual(shown(&choice, answered: 40, onShow: 0, at: 0), 40)
+        choice.hold(80, for: "B", during: 3, refusals: 0, now: at(1))
+        XCTAssertEqual(shown(&choice, answered: nil, refusals: 1, onShow: 80, at: 5), 40)
+    }
+
+    func testARefusalWithNoAnswerYetIsOtherwise() {
+        var choice = HeldChoice<Int>()
+        XCTAssertEqual(shown(&choice, answered: nil, onShow: 0, isSameSong: false, at: 0), 0)
+        XCTAssertEqual(shown(&choice, answered: nil, refusals: 1, onShow: 80, at: 1), 0)
+    }
+
+    func testAnAnswerAfterARefusalIsShown() {
+        var choice = HeldChoice<Int>()
+        XCTAssertEqual(shown(&choice, answered: 40, onShow: 0, at: 0), 40)
+        choice.hold(80, for: "B", during: 3, refusals: 0, now: at(1))
+        XCTAssertEqual(shown(&choice, answered: 20, refusals: 1, onShow: 80, at: 1.5), 20, "Music's answer, which changed in Music")
+        XCTAssertEqual(shown(&choice, answered: nil, refusals: 1, onShow: 20, at: 2), 20)
+    }
+
 }

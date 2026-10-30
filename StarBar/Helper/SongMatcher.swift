@@ -218,7 +218,7 @@ struct SongMatcher {
         let isGeneric = SongName.isGenericTitle(SongName.title(query.name).core)
         return copies.filter {
             SongName.isSameRecording(query.name, on: query.album, as: $0.name, on: $0.album)
-                && (!isGeneric || SongName.isSameRelease(query.album, $0.album))
+                && (!isGeneric || SongName.isSameRelease(query.name, on: query.album, as: $0.name, on: $0.album))
         }
             .map { (song: $0, album: SongName.album($0.album)) }
             .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
