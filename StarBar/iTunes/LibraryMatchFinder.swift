@@ -160,6 +160,9 @@ final class LibraryMatchFinder {
 
     /// The last answer, and which song it answered for
     private var answer: (identity: String, match: LibraryMatch?)?
+    /// The copy in `answer` as Music last answered for it, before anything the user chose
+    /// for it since (`userDidRate`), for when Music refuses one of those
+    private var answerAsRead: LibrarySong?
     /// Music couldn't check `answer` when last asked, so it is shown but not given again:
     /// the next question about the song asks Music, or a song added since would stay "not in
     /// the library" until the next library change
@@ -235,6 +238,25 @@ final class LibraryMatchFinder {
     /// `userDidRate`
     func userDidFavorite(_ persistentID: String, isFavorited: Bool) {
         updateAnswer(persistentID) { $0.isFavorited = isFavorited }
+    }
+
+    /// Music refused a write of `kind` to the copy `persistentID`, or a write it couldn't
+    /// name (both nil). What is remembered of the copy goes back to what Music last answered
+    /// for it, or a Music that then didn't answer would show the refused choice as saved
+    /// (the fourth review, 2026-10-29). A choice Music took before the refused one goes back
+    /// with it, to the read before both: refusals are rare, and this is only what is shown
+    /// when Music doesn't answer.
+    func writeWasRefused(_ kind: iTunesRadioStation.WriteKind?, to persistentID: String?) {
+        guard let read = answerAsRead, persistentID == nil || persistentID == read.persistentID else { return }
+        updateAnswer(read.persistentID) {
+            if kind != .favorite {
+                $0.rating = read.rating
+                $0.isRatingComputed = read.isRatingComputed
+            }
+            if kind != .rating {
+                $0.isFavorited = read.isFavorited
+            }
+        }
     }
 
     private func updateAnswer(_ persistentID: String, _ change: (inout LibrarySong) -> Void) {
@@ -328,6 +350,7 @@ final class LibraryMatchFinder {
         asking = nil
         if remember {
             answer = (identity, match)
+            answerAsRead = match?.song
             answerIsUnchecked = false
         } else if answer?.identity == identity {
             answerIsUnchecked = true

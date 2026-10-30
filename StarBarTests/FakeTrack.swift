@@ -29,12 +29,18 @@ final class FakeTrack: NSObject, iTunesTrack {
     private var storedRatingKind: iTunesERtK
     private var storedFavorited: Bool
 
-    var rating: Int { return storedRating }
+    var rating: Int {
+        whenRead?()
+        return storedRating
+    }
     var ratingKind: iTunesERtK {
         ratingKindReads += 1
         return storedRatingKind
     }
-    var favorited: Bool { return storedFavorited }
+    var favorited: Bool {
+        whenRead?()
+        return storedFavorited
+    }
 
     /// How many times the rating's kind was read, each an Apple Event to a real Music
     private(set) var ratingKindReads = 0
@@ -44,6 +50,10 @@ final class FakeTrack: NSObject, iTunesTrack {
     private(set) var favoritesWritten: [Bool] = []
     var isPresent = true
     var objectClassCode: FourCharCode?
+    /// Runs as the rating or heart is read, and as either is written, the way Music's
+    /// failure reaches `iTunesRadioStation.eventDidFail` inside the call that sent the event
+    var whenRead: (() -> Void)?
+    var whenWritten: (() -> Void)?
 
     init(name: String = "Song", artist: String = "Artist", album: String = "Album",
          persistentID: String = "0123456789ABCDEF", databaseID: Int = 1, duration: Double = 240,
@@ -68,11 +78,13 @@ final class FakeTrack: NSObject, iTunesTrack {
         storedRating = rating
         storedRatingKind = .user
         ratingsWritten.append(rating)
+        whenWritten?()
     }
 
     func setFavorited(_ favorited: Bool) {
         storedFavorited = favorited
         favoritesWritten.append(favorited)
+        whenWritten?()
     }
 
     /// `iTunesTrack.scriptingClassCode` reads `objectClass` by key-value coding, which a real

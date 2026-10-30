@@ -45,6 +45,10 @@ final class RatingWriter {
         /// (Music's notification, say, which the rating shortcuts don't wait for) would make
         /// two songs look like one and the held rating would be replaced after all.
         let songIdentity: () -> String?
+        /// The persistent ID the menu bar holds this rating under, so that Music refusing the
+        /// write ends that hold and no other (`iTunesRadioStation.sendingWrite`). The writer
+        /// doesn't read it.
+        var trackID: String? = nil
     }
 
     private var throttle: RatingWriteThrottle

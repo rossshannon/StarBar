@@ -8,6 +8,7 @@
 //
 
 import XCTest
+import Cocoa
 @testable import StarBar
 
 final class RatingClickControllerTests: XCTestCase {
@@ -344,6 +345,44 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(first.ratingsWritten, [])
         XCTAssertEqual(second.ratingsWritten, [])
         XCTAssertEqual(menu.ratingControl.rating, 80)
+    }
+
+    func testAReadMusicDidNotAnswerKeepsTheHeartJustCleared() {
+        // A failed read answers false, which agreed with a heart just cleared and so ended
+        // the hold, and Music's next answer, still the old heart, put it back (the fourth
+        // review, 2026-10-29)
+        let menu = MenuBarRatingControl(widthClock: FakeClock(), pointer: pointer)
+        let station = iTunesRadioStation.shared
+        defer {
+            NSStatusBar.system.removeStatusItem(menu.statusItem)
+            iTunesPlayer.shared.update(nil, broadcast: false)
+        }
+        let id = "00000000000000D4"
+        let song = FakeTrack(name: "Song", persistentID: id, rating: 40, favorited: true)
+        iTunesPlayer.shared.update(song, broadcast: false)
+        menu.applyTrackDisplay(PlayingTrack(track: song), isStopped: false, musicIsRunning: true)
+        XCTAssertTrue(menu.ratingControl.isFavorited)
+
+        menu.toggleFavorite()
+        XCTAssertEqual(song.favoritesWritten, [false])
+        XCTAssertFalse(menu.ratingControl.isFavorited)
+
+        // Music doesn't answer: Scripting Bridge reports the failure and answers false
+        let unanswered = FakeTrack(name: "Song", persistentID: id, rating: 0, favorited: false)
+        unanswered.whenRead = {
+            _ = station.eventDidFail(NSAppleEventDescriptor.appleEvent(
+                withEventClass: AEEventClass(0x636F7265), eventID: AEEventID(0x67657464), targetDescriptor: nil,   // core/getd
+                returnID: AEReturnID(kAutoGenerateReturnID), transactionID: AETransactionID(kAnyTransactionID)).aeDesc!,
+                withError: NSError(domain: NSOSStatusErrorDomain, code: -1712, userInfo: nil))
+        }
+        menu.applyTrackDisplay(PlayingTrack(track: unanswered), isStopped: false, musicIsRunning: true)
+        XCTAssertFalse(menu.ratingControl.isFavorited)
+        XCTAssertEqual(menu.ratingControl.rating, 40, "no answer is not unrated: the stars on show stay")
+
+        // Music answers, before it has applied the write
+        let stale = FakeTrack(name: "Song", persistentID: id, rating: 40, favorited: true)
+        menu.applyTrackDisplay(PlayingTrack(track: stale), isStopped: false, musicIsRunning: true)
+        XCTAssertFalse(menu.ratingControl.isFavorited, "still held: the read that failed didn't end it")
     }
 
     /// Press at `x` on the menu bar's own stars

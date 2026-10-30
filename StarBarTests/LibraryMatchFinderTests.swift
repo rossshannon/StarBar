@@ -464,6 +464,23 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(copiesRead, [live.persistentID])
     }
 
+    func testPastTheLimitACopyTitledWithPartOfWhatTheSongSaysIsRead() throws {
+        // Spotify's title says acoustic and its album live; no copy's title says both, so
+        // none was read and the song was no match (the fourth review, 2026-10-29)
+        let studio = (0...LibraryMatchFinder.copiesRead).map {
+            LibrarySong(persistentID: String(format: "%016X", $0), name: "Song", artist: "Artist",
+                        albumArtist: "", album: "Studio \($0)")
+        }
+        let acoustic = LibrarySong(persistentID: "FFFFFFFFFFFFFFFF", name: "Song (Acoustic)", artist: "Artist",
+                                   albumArtist: "", album: "MTV Unplugged")
+        library = studio + [acoustic]
+
+        let match = try XCTUnwrap(ask(spotify("Song - Acoustic", by: "Artist", on: "MTV Unplugged")))
+
+        XCTAssertEqual(match.song.persistentID, acoustic.persistentID)
+        XCTAssertEqual(copiesRead, [acoustic.persistentID])
+    }
+
     // MARK: - What the user chooses
 
     func testWhatTheUserChoosesForTheCopyIsRemembered() throws {
@@ -488,6 +505,47 @@ final class LibraryMatchFinderTests: XCTestCase {
         finder.userDidRate(linger.persistentID, rating: 20)
 
         XCTAssertEqual(try XCTUnwrap(finder.knownMatch(for: identity)).song.rating, zombie.rating)
+    }
+
+    func testAChoiceMusicRefusedGoesBackToWhatMusicSaid() throws {
+        // Otherwise a Music that then didn't answer showed the refused choice as saved (the
+        // fourth review, 2026-10-29)
+        let identity = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        finder.userDidRate(zombie.persistentID, rating: 100)
+        finder.userDidFavorite(zombie.persistentID, isFavorited: false)
+
+        finder.writeWasRefused(.rating, to: zombie.persistentID)
+        var song = try XCTUnwrap(finder.knownMatch(for: identity)).song
+        XCTAssertEqual(song.rating, zombie.rating)
+        XCTAssertFalse(song.isFavorited, "a refused rating leaves the heart chosen")
+
+        finder.writeWasRefused(.favorite, to: zombie.persistentID)
+        song = try XCTUnwrap(finder.knownMatch(for: identity)).song
+        XCTAssertTrue(song.isFavorited)
+    }
+
+    func testARefusalForAnotherSongLeavesTheChoice() throws {
+        let identity = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        finder.userDidRate(zombie.persistentID, rating: 100)
+
+        finder.writeWasRefused(.rating, to: linger.persistentID)
+
+        XCTAssertEqual(try XCTUnwrap(finder.knownMatch(for: identity)).song.rating, 100)
+    }
+
+    func testARefusalMusicCouldNotNameTakesBackEveryChoice() throws {
+        let identity = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+        _ = ask(spotify("Zombie", by: "The Cranberries"))
+        finder.userDidRate(zombie.persistentID, rating: 100)
+        finder.userDidFavorite(zombie.persistentID, isFavorited: false)
+
+        finder.writeWasRefused(nil, to: nil)
+
+        let song = try XCTUnwrap(finder.knownMatch(for: identity)).song
+        XCTAssertEqual(song.rating, zombie.rating)
+        XCTAssertTrue(song.isFavorited)
     }
 
     func testARatingTheUserChoosesIsTheirsNotMusics() throws {

@@ -78,12 +78,19 @@ final class iTunesRadioStation {
     /// read is how to tell "unrated" from "Music didn't answer"
     /// (`MenuBarRatingControl.withShortTimeoutIfAnswered`).
     private(set) var failedEvents = 0
-    /// How many writes Music has refused (`core`/`setd`). A rating or heart held on screen
-    /// over Music's reads (`HeldChoice`) stops being believed when this moves, since Music's
-    /// value is then the true one: the corrective read below was otherwise overridden by
-    /// the hold, and nothing read Music again when the hold ran out (the third review,
-    /// 2026-10-29).
-    private(set) var refusedWrites = 0
+    /// What a write to Music sets
+    enum WriteKind: String {
+        case rating, favorite
+    }
+    /// The write being sent, while it is sent (`sendingWrite`). Scripting Bridge sends a
+    /// write and waits for Music's reply, and a refusal reaches `eventDidFail` inside that
+    /// call, so this says which write Music refused.
+    private var writeUnderWay: (kind: WriteKind, trackID: String?)?
+    /// Writes Music has refused, by what they set and the persistent ID they were held under
+    /// (`refusalKey`)
+    private var refusals: [String: Int] = [:]
+    /// Writes Music refused outside `sendingWrite`, which could have been any of them
+    private var unattributedRefusals = 0
     /// Music's library playlist on this connection, and the Music process it was found in
     /// (`libraryPlaylist()`)
     private var foundLibraryPlaylist: (pid: pid_t, playlist: iTunesPlaylist)?
@@ -314,7 +321,9 @@ extension iTunesRadioStation {
     ///
     ///   Main thread only: `RatingWriter` checks, and so does everything else that reads the
     ///   `PlayingTrack` record.
-    func setRating(_ rating: Int, on track: iTunesTrack?) {
+    /// - Parameter heldFor: the persistent ID the menu bar holds the rating under, so that
+    ///   Music refusing the write ends that hold (`refusedWrites(_:to:)`)
+    func setRating(_ rating: Int, on track: iTunesTrack?, heldFor trackID: String? = nil) {
         guard let targetTrack = track else {
             os_log("%{public}s[%{public}ld], %{public}s: nowhere to put a rating for this song, dropping it", ((#file as NSString).lastPathComponent), #line, #function)
             return
@@ -334,7 +343,7 @@ extension iTunesRadioStation {
         // never loses one.
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: targetTrack, name: name, songIdentity: { [weak self] in
             iTunesPlayer.shared.playing?.persistentID ?? self?.latestPlayInfo?.songIdentity
-        }))
+        }, trackID: trackID))
     }
 
     /// Save a rating chosen for a song playing in another player to the user's own copy of
@@ -355,7 +364,7 @@ extension iTunesRadioStation {
         os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: match.track, name: song.name, songIdentity: {
             song.persistentID
-        }))
+        }, trackID: song.persistentID))
     }
 
     /// Send a rating still waiting for the throttle window, now. `applicationWillTerminate`
@@ -364,16 +373,51 @@ extension iTunesRadioStation {
         ratingWriter.flush()
     }
 
+    /// How many writes of `kind` held under the persistent ID `trackID` Music has refused,
+    /// with those it refused without saying which. A rating or heart held on screen over
+    /// Music's reads (`HeldChoice`) stops being believed when this moves, since Music's value
+    /// is then the true one: the corrective read below was otherwise overridden by the hold,
+    /// and nothing read Music again when the hold ran out (the third review, 2026-10-29).
+    ///
+    /// Counted by kind and track because one count for every write let a refused heart end
+    /// a held rating, or a refusal for one song end the hold on another (the fourth review).
+    func refusedWrites(_ kind: WriteKind, to trackID: String?) -> Int {
+        return unattributedRefusals + (refusals[iTunesRadioStation.refusalKey(kind, trackID)] ?? 0)
+    }
+
+    /// Send a write of `kind`, held on screen under the persistent ID `trackID`, so that a
+    /// refusal from Music is put down to it and ends only that hold. Every write StarBar
+    /// makes to Music goes through here. Main thread only.
+    ///
+    /// Apple documents `SBApplicationDelegate.eventDidFail` as answering in place of the
+    /// failed event's reply, so it runs before the call that sent the write returns, which
+    /// is what lets `send` be bracketed. A refusal that came any later would be counted
+    /// against every hold, as all of them were before.
+    func sendingWrite(_ kind: WriteKind, to trackID: String?, _ send: () -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let outer = writeUnderWay
+        writeUnderWay = (kind, trackID)
+        defer { writeUnderWay = outer }
+        send()
+    }
+
+    private static func refusalKey(_ kind: WriteKind, _ trackID: String?) -> String {
+        return "\(kind.rawValue)|\(trackID ?? "")"
+    }
+
     /// Ask Music to store the request's rating on its track.
     ///
     /// Music can refuse: a song streamed from the Apple Music catalog isn't in the library,
     /// so there is nothing to store a rating on and the write comes back as OSStatus -54
-    /// through `eventDidFail`, after this returns. See `iTunesTrack.isCatalogStream`.
+    /// through `eventDidFail`, and this returns as if it had worked. See
+    /// `iTunesTrack.isCatalogStream`.
     private func write(_ request: RatingWriter.Request) {
         // No fallback to whatever is playing: a held write fires up to `ratingSaveDelay`
         // later, and resolving the current track then would rate the next song -- the FIXME
         // this file used to carry.
-        request.track.setRating?(request.rating)
+        sendingWrite(.rating, to: request.trackID) {
+            _ = request.track.setRating?(request.rating)
+        }
         logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(request.name, privacy: .public): \(request.rating)")
     }
 
@@ -663,16 +707,23 @@ extension iTunesRadioStation: SBApplicationDelegate {
             // it to scheduling: this may run inside the Scripting Bridge call that sent the
             // write, and reading Music from here would send Apple Events from within it.
             if Thread.isMainThread {
-                writeWasRefused()
+                writeWasRefused(writeUnderWay)
             } else {
-                DispatchQueue.main.async { [weak self] in self?.writeWasRefused() }
+                DispatchQueue.main.async { [weak self] in self?.writeWasRefused(nil) }
             }
         }
         return nil
     }
 
-    private func writeWasRefused() {
-        refusedWrites += 1
+    /// Music refused `write`, or a write it can't say when nil
+    private func writeWasRefused(_ write: (kind: WriteKind, trackID: String?)?) {
+        if let write = write {
+            refusals[iTunesRadioStation.refusalKey(write.kind, write.trackID), default: 0] += 1
+        } else {
+            unattributedRefusals += 1
+        }
+        os_log("%{public}s[%{public}ld], %{public}s: Music refused %{public}s", ((#file as NSString).lastPathComponent), #line, #function, write.map { "a \($0.kind.rawValue) for \($0.trackID ?? "a song with no ID")" } ?? "a write StarBar can't name")
+        LibraryMatchFinder.shared.writeWasRefused(write?.kind, to: write?.trackID)
         scheduleRereadAfterRefusedWrite()
     }
 

@@ -25,7 +25,7 @@ struct HeldChoice<Value: Equatable> {
         /// Music's persistent ID of the track it was written to
         let trackID: String?
         let expires: Date
-        /// `iTunesRadioStation.refusedWrites` when it was chosen
+        /// `iTunesRadioStation.refusedWrites(_:to:)` for its kind and track when it was chosen
         let refusals: Int
     }
 
@@ -37,8 +37,9 @@ struct HeldChoice<Value: Equatable> {
     }
 
     /// Hold `value`, chosen for the track `trackID`, for `duration`. `refusals` is
-    /// `iTunesRadioStation.refusedWrites` before the write is sent: a write Music refuses
-    /// after that makes Music's value the true one again.
+    /// `iTunesRadioStation.refusedWrites(_:to:)` for this kind of write and `trackID`, before
+    /// the write is sent: a write Music refuses after that makes Music's value the true one
+    /// again. Pass the same count for the same kind and track to `value`.
     mutating func hold(_ value: Value, for trackID: String?, during duration: TimeInterval, refusals: Int, now: Date = Date()) {
         held = Held(value: value, trackID: trackID, expires: now.addingTimeInterval(duration), refusals: refusals)
     }

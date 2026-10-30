@@ -281,14 +281,16 @@ final class MenuBarRatingControl {
         let station = iTunesRadioStation.shared
         // Held before the write is sent, so that Music refusing it ends the hold
         if let match = libraryMatch {
-            heldRating.hold(rating, for: match.song.persistentID, during: MenuBarRatingControl.ratingWriteWindow,
-                            refusals: station.refusedWrites)
-            LibraryMatchFinder.shared.userDidRate(match.song.persistentID, rating: rating)
+            let trackID = match.song.persistentID
+            heldRating.hold(rating, for: trackID, during: MenuBarRatingControl.ratingWriteWindow,
+                            refusals: station.refusedWrites(.rating, to: trackID))
+            LibraryMatchFinder.shared.userDidRate(trackID, rating: rating)
             station.setRating(rating, on: match)
         } else {
-            heldRating.hold(rating, for: iTunesPlayer.shared.playing?.persistentID, during: MenuBarRatingControl.ratingWriteWindow,
-                            refusals: station.refusedWrites)
-            station.setRating(rating, on: ratingTarget)
+            let trackID = iTunesPlayer.shared.playing?.persistentID
+            heldRating.hold(rating, for: trackID, during: MenuBarRatingControl.ratingWriteWindow,
+                            refusals: station.refusedWrites(.rating, to: trackID))
+            station.setRating(rating, on: ratingTarget, heldFor: trackID)
         }
     }
 
@@ -752,11 +754,14 @@ extension MenuBarRatingControl {
         // value -- and two presses in a row then set the same thing, which is how the heart
         // got stuck.
         let isFavorited = !ratingControl.isFavorited
+        let station = iTunesRadioStation.shared
         heldFavorite.hold(isFavorited, for: playing.persistentID, during: MenuBarRatingControl.favoriteWriteWindow,
-                          refusals: iTunesRadioStation.shared.refusedWrites)
+                          refusals: station.refusedWrites(.favorite, to: playing.persistentID))
         // The heart goes where the rating goes: the user's own copy of the song, not the
         // catalog track playing it. Music keeps a separate `favorited` on each.
-        playing.favoriteTrack.updateFavorited(isFavorited)
+        station.sendingWrite(.favorite, to: playing.persistentID) {
+            playing.favoriteTrack.updateFavorited(isFavorited)
+        }
 
         // Update our local state immediately
         ratingControl.updateFavorited(isFavorited)
@@ -776,10 +781,13 @@ extension MenuBarRatingControl {
         guard copyIsInMusic(match) != false else { return lookForSpotifySongAgain() }
         let isFavorited = !ratingControl.isFavorited
         os_log("%{public}s[%{public}ld], %{public}s: favourite %{public}d chosen for %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s", ((#file as NSString).lastPathComponent), #line, #function, isFavorited ? 1 : 0, match.identity, match.song.persistentID, match.song.name, match.song.artist)
-        heldFavorite.hold(isFavorited, for: match.song.persistentID, during: MenuBarRatingControl.favoriteWriteWindow,
-                          refusals: iTunesRadioStation.shared.refusedWrites)
-        LibraryMatchFinder.shared.userDidFavorite(match.song.persistentID, isFavorited: isFavorited)
-        match.track.updateFavorited(isFavorited)
+        let station = iTunesRadioStation.shared, trackID = match.song.persistentID
+        heldFavorite.hold(isFavorited, for: trackID, during: MenuBarRatingControl.favoriteWriteWindow,
+                          refusals: station.refusedWrites(.favorite, to: trackID))
+        LibraryMatchFinder.shared.userDidFavorite(trackID, isFavorited: isFavorited)
+        station.sendingWrite(.favorite, to: trackID) {
+            match.track.updateFavorited(isFavorited)
+        }
         ratingControl.updateFavorited(isFavorited)
         updateFavoriteHeartView()
         statusItem.button?.needsDisplay = true
@@ -815,13 +823,15 @@ extension MenuBarRatingControl {
     /// Music is believed again as soon as it agrees, so a change made in Music straight
     /// afterwards isn't held back for the rest of the window.
     private func favoriteToShow(musicSays: Bool?, trackID: String?) -> Bool? {
-        return heldFavorite.value(answered: musicSays, trackID: trackID, refusals: iTunesRadioStation.shared.refusedWrites)
+        return heldFavorite.value(answered: musicSays, trackID: trackID,
+                                  refusals: iTunesRadioStation.shared.refusedWrites(.favorite, to: trackID))
     }
 
     /// The stars to show, on the same terms as the heart: the user's own rating while Music
     /// has yet to report it, otherwise Music's
     private func ratingToShow(musicSays: Int?, trackID: String?) -> Int? {
-        return heldRating.value(answered: musicSays, trackID: trackID, refusals: iTunesRadioStation.shared.refusedWrites)
+        return heldRating.value(answered: musicSays, trackID: trackID,
+                                refusals: iTunesRadioStation.shared.refusedWrites(.rating, to: trackID))
     }
 
 }
@@ -1136,13 +1146,27 @@ extension MenuBarRatingControl {
         // a catalog track without a library copy shows the add button instead of stars.
         ratingControl.update(mode: playing.map { $0.canRate ? .rating : .addToLibrary } ?? .rating)
 
-        let userRating = ratedTrack?.userRating
+        // A read Music didn't answer comes back as 0 or false rather than an error, and taken
+        // for Music's answer it ended a rating or heart just chosen, so the next read, still
+        // the old value, put the old one back (the fourth review, 2026-10-29). It says
+        // nothing: what is held stays, and otherwise the song's stars on show stay, or a new
+        // song's start from none, since nothing else is known of them.
+        let failures = { iTunesRadioStation.shared.failedEvents }
+        var userRating: Int?
+        let ratingAnswer = MenuBarRatingControl.ifAnswered(failures: failures) { () -> Int? in
+            userRating = ratedTrack?.userRating
+            return userRating ?? 0
+        }
+        let favoriteAnswer = MenuBarRatingControl.ifAnswered(failures: failures) { () -> Bool? in
+            playing?.favoriteTrack.isFavorited ?? false
+        }
         // Don't overwrite the stars the user is dragging across
         if !clickController.isDragging {
-            ratingControl.update(rating: ratingToShow(musicSays: userRating ?? 0, trackID: playing?.persistentID) ?? 0)
+            ratingControl.update(rating: ratingToShow(musicSays: ratingAnswer, trackID: playing?.persistentID)
+                                    ?? (isNewSong ? 0 : ratingControl.rating))
         }
-        ratingControl.updateFavorited(favoriteToShow(musicSays: playing?.favoriteTrack.isFavorited ?? false,
-                                                     trackID: playing?.persistentID) ?? false)
+        ratingControl.updateFavorited(favoriteToShow(musicSays: favoriteAnswer, trackID: playing?.persistentID)
+                                         ?? (isNewSong ? false : ratingControl.isFavorited))
         // Replacement songs change glyphs in place; mode changes also animate the width.
         // Preserve the old star shapes before the new song replaces the control's contents.
         updateMenuBar(animate: wasStopped || (!isNewSong && !wasWaiting), previousStars: previousStars,
@@ -1202,9 +1226,12 @@ extension MenuBarRatingControl {
             // written to the catalog track, so carry it across or the next read empties it.
             // Only ever set, never clear -- nothing here should undo a favourite Music has.
             if self.ratingControl.isFavorited && !added.isFavorited {
+                let station = iTunesRadioStation.shared
                 self.heldFavorite.hold(true, for: playing.persistentID, during: MenuBarRatingControl.favoriteWriteWindow,
-                                       refusals: iTunesRadioStation.shared.refusedWrites)
-                added.updateFavorited(true)
+                                       refusals: station.refusedWrites(.favorite, to: playing.persistentID))
+                station.sendingWrite(.favorite, to: playing.persistentID) {
+                    added.updateFavorited(true)
+                }
             }
             self.ratingControl.update(mode: .rating)
             self.ratingControl.update(rating: added.userRating ?? 0)
