@@ -280,6 +280,36 @@ final class SongNameTests: XCTestCase {
         XCTAssertTrue(SongName.isSameRecording("Song - Live at Wembley, 1986", on: "Live Anthology", as: "Song (Live at Wembley)", on: "Live Anthology"))
     }
 
+    func testOnOneReleaseANameCanLeaveOutAMonthOrAShortYear() {
+        // The fifth review, 2026-10-30: Spotify's live titles give the month, or "'86"
+        XCTAssertTrue(SongName.isSameRecording("Bohemian Rhapsody - Live At Wembley Stadium / July 1986", on: "Live At Wembley Stadium",
+                                               as: "Bohemian Rhapsody (Live at Wembley Stadium)", on: "Live At Wembley Stadium"))
+        XCTAssertTrue(SongName.isSameRecording("Hotel California - Live On MTV, December 1994", on: "Hell Freezes Over",
+                                               as: "Hotel California (Live on MTV)", on: "Hell Freezes Over"))
+        XCTAssertTrue(SongName.isSameRecording("Song - Live at Wembley '86", on: "Live Anthology", as: "Song (Live at Wembley)", on: "Live Anthology"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live June 1986", on: "Live Anthology", as: "Song (Live July 1986)", on: "Live Anthology"))
+        XCTAssertFalse(SongName.isSameRecording("Song - Live in Paris, France", on: "Live Anthology", as: "Song (Live in Paris)", on: "Live Anthology"),
+                       "a place is left out, a known miss")
+    }
+
+    func testALiveAlbumOneAppTagsAsAnEditionIsTheLiveAlbumWhenBothTitlesSayLive() {
+        // The fifth review, 2026-10-30: Music's "(Live)" on the album against Spotify's edition
+        XCTAssertTrue(SongName.isSameRecording("Folsom Prison Blues - Live", on: "At Folsom Prison (Legacy Edition)",
+                                               as: "Folsom Prison Blues (Live)", on: "At Folsom Prison (Live)"))
+        XCTAssertTrue(SongName.isSameRecording("Psycho Killer - Live", on: "Stop Making Sense (Deluxe Edition)",
+                                               as: "Psycho Killer (Live)", on: "Stop Making Sense (Live) [Deluxe Edition]"))
+        XCTAssertTrue(SongName.isSameRecording("Show Me The Way - Live", on: "Frampton Comes Alive! (25th Anniversary Deluxe Edition)",
+                                               as: "Show Me the Way (Live)", on: "Frampton Comes Alive! (Live)"))
+        XCTAssertTrue(SongName.isSameRecording("Hotel California - Live On MTV, 1994", on: "Hell Freezes Over (Remaster 2018)",
+                                               as: "Hotel California (Live)", on: "Hell Freezes Over (Live)"))
+        XCTAssertTrue(SongName.isSameRecording("Wonderwall - Live", on: "Wonderwall (Live)", as: "Wonderwall (Live)", on: "Wonderwall - Single"))
+        // Only one title saying it is still the deluxe edition against the concert
+        XCTAssertFalse(SongName.isSameRecording("Song - Live", on: "Album (Deluxe Edition)", as: "Song", on: "Album: In Concert"))
+        // The cost, accepted: a live album named as its studio album is taken for a deluxe
+        // edition's live bonus track, which can be another night
+        XCTAssertTrue(SongName.isSameRecording("Song - Live", on: "Album (Live)", as: "Song (Live)", on: "Album (Deluxe Edition)"))
+    }
+
     func testARemixAlbumsPlainTrackIsNotItsNamedRemix() {
         // The fourth review: such an album holds the original too, and the original's rating
         // went to the remix
@@ -349,7 +379,8 @@ final class SongNameTests: XCTestCase {
     }
 
     func testAMarketsOrAnExpandedEditionIsTheSameRelease() {
-        for edition in ["xx (Japan Version)", "xx (International Version)", "xx (Tour Version)", "xx [Explicit Version]"] {
+        for edition in ["xx (Japan Version)", "xx (International Version)", "xx (Tour Version)", "xx [Explicit Version]",
+                        "xx (U.S. Version)", "xx (UK Version)"] {
             XCTAssertTrue(SongName.isSameRelease(edition, "xx"), edition)
         }
         XCTAssertTrue(SongName.isSameRelease("Rumours (Expanded & Remastered)", "Rumours"))
@@ -362,6 +393,16 @@ final class SongNameTests: XCTestCase {
                                              "Blade Runner: Original Motion Picture Soundtrack"))
         XCTAssertFalse(SongName.isSameRelease("Star Wars: A New Hope (Original Motion Picture Soundtrack)",
                                               "Star Wars: The Empire Strikes Back (Original Motion Picture Soundtrack)"))
+        XCTAssertTrue(SongName.isSameRelease("Stranger Things 4 (Music from the Netflix Original Series)", "Stranger Things 4"))
+        XCTAssertTrue(SongName.isSameRelease("Doctor Who: Series 2 (Original Television Soundtrack)", "Doctor Who: Series 2"))
+    }
+
+    func testASeriesOrVolumeASoundtrackNamesIsARelease() {
+        // The fifth review, 2026-10-30: a subtitle with a soundtrack word was dropped whole
+        XCTAssertFalse(SongName.isSameRelease("Doctor Who: Series 2", "Doctor Who: Series 1"))
+        XCTAssertFalse(SongName.isSameRelease("Batman: The Animated Series, Vol. 2", "Batman: The Animated Series, Vol. 1"))
+        XCTAssertFalse(SongName.isSameRelease("Sherlock: Music From Series Three", "Sherlock: Music From Series Two"))
+        XCTAssertFalse(SongName.isSameRelease("Doctor Who - Series 4 (Original Television Soundtrack)", "Doctor Who: Series 3"))
     }
 
     func testAVersionAnAlbumNamesIsAnotherRelease() {

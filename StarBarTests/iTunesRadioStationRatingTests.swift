@@ -326,14 +326,16 @@ final class iTunesRadioStationRatingTests: XCTestCase {
     }
 
     /// A rating goes through the writer, perhaps after being held, and its refusal is still put
-    /// down to the song it was held for
+    /// down to the song it was held for, not to the one playing: a Spotify song's copy in
+    /// Music is rated while Music plays something else, or nothing
     func testARefusedRatingIsPutDownToTheSongItWasHeldFor() {
         _ = useFakeRereadClock()
         let track = FakeTrack(name: "Refused", persistentID: "00000000000000C3", rating: 0)
         track.whenWritten = { [unowned self] in self.refuse() }
-        play(track)
+        play(FakeTrack(name: "Playing", persistentID: "00000000000000C4", rating: 0))
         let before = (rating: station.refusedWrites(.rating, to: "00000000000000C3"),
-                      heart: station.refusedWrites(.favorite, to: "00000000000000C3"))
+                      heart: station.refusedWrites(.favorite, to: "00000000000000C3"),
+                      playing: station.refusedWrites(.rating, to: "00000000000000C4"))
 
         station.setRating(60, on: track, heldFor: "00000000000000C3")
         station.flushHeldRatingWrite()
@@ -341,6 +343,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         XCTAssertEqual(track.ratingsWritten, [60])
         XCTAssertEqual(station.refusedWrites(.rating, to: "00000000000000C3"), before.rating + 1)
         XCTAssertEqual(station.refusedWrites(.favorite, to: "00000000000000C3"), before.heart)
+        XCTAssertEqual(station.refusedWrites(.rating, to: "00000000000000C4"), before.playing, "not the song playing")
     }
 
     /// The failed-event handler tells a property write from a read by the event's class and

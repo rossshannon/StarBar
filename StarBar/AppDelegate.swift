@@ -351,9 +351,8 @@ extension AppDelegate {
                 // song as unrated and end the strip's hold on a choice just made, so it counts
                 // as no answer (nil), as the menu bar's reads do.
                 let playing = iTunesPlayer.shared.playing
-                let failures = { iTunesRadioStation.shared.failedEvents }
-                live.rating = MenuBarRatingControl.ifAnswered(failures: failures) { playing?.ratingTrack?.userRating }
-                live.isFavorited = MenuBarRatingControl.ifAnswered(failures: failures) { () -> Bool? in
+                live.rating = MenuBarRatingControl.ifAnswered { playing?.ratingTrack?.userRating }
+                live.isFavorited = MenuBarRatingControl.ifAnswered { () -> Bool? in
                     playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
                 }
                 live.canRate = playing?.canRate ?? true

@@ -164,6 +164,21 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertEqual(matcher.match(for: query("Main Title", by: "James Horner", on: "Aliens (Original Motion Picture Soundtrack)")), aliens)
     }
 
+    func testACueFromOneSeriesOrVolumeIsNotAnothers() {
+        // The fifth review, 2026-10-30: the series was dropped with the soundtrack credit, and
+        // the cue took the other series' rating
+        let doctorWho = song("Main Titles", by: "Murray Gold", on: "Doctor Who: Series 1")
+        let batman = song("Main Title", by: "Shirley Walker", on: "Batman: The Animated Series, Vol. 1")
+        let sherlock = song("End Credits", by: "David Arnold & Michael Price", on: "Sherlock: Music From Series Two")
+        let matcher = SongMatcher(library: [doctorWho, batman, sherlock])
+
+        XCTAssertNil(matcher.match(for: query("Main Titles", by: "Murray Gold", on: "Doctor Who: Series 2")))
+        XCTAssertNil(matcher.match(for: query("Main Title", by: "Shirley Walker", on: "Batman: The Animated Series, Vol. 2")))
+        XCTAssertNil(matcher.match(for: query("End Credits", by: "David Arnold", on: "Sherlock: Music From Series Three")))
+        XCTAssertEqual(matcher.match(for: query("Main Titles", by: "Murray Gold", on: "Doctor Who: Series 1 (Original Television Soundtrack)")),
+                       doctorWho)
+    }
+
     func testLengthNeverRulesACopyOut() {
         // The single and the album version, 4:22 and 15:18, and an edit and the album's
         let harmony = song("Sweet Harmony", by: "The Beloved", on: "Happiness", length: 918)

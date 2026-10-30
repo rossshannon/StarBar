@@ -711,8 +711,9 @@ extension iTunesRadioStation {
 // MARK: - SBApplicationDelegate
 extension iTunesRadioStation: SBApplicationDelegate {
 
-    /// Music refused or failed an Apple Event. Scripting Bridge reports it here, after the
-    /// call that sent it has already returned, so the UI has shown the value as if it stuck.
+    /// Music refused or failed an Apple Event. Scripting Bridge reports it here in place of
+    /// the event's reply, so before the call that sent it returns (`sendingWrite`), but the
+    /// UI has already shown the value as if it stuck.
     ///
     /// For a failed *set*, what is on screen is now wrong, so the player is read again a
     /// moment later and the stars and heart fall back to what Music has. The known case, a
@@ -749,7 +750,11 @@ extension iTunesRadioStation: SBApplicationDelegate {
             unattributedRefusals += 1
         }
         os_log("%{public}s[%{public}ld], %{public}s: Music refused %{public}s", ((#file as NSString).lastPathComponent), #line, #function, write.map { "a \($0.kind.rawValue) for \($0.trackID ?? "a song with no ID")" } ?? "a write StarBar can't name")
-        LibraryMatchFinder.shared.writeWasRefused(write?.kind, to: write?.trackID)
+        // A write to a Spotify song's copy always names it, so one that names no song was to
+        // Music's own, and takes back nothing remembered of a copy (the fifth review)
+        if write == nil || write?.trackID != nil {
+            LibraryMatchFinder.shared.writeWasRefused(write?.kind, to: write?.trackID)
+        }
         scheduleRereadAfterRefusedWrite()
     }
 

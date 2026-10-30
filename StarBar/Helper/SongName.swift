@@ -275,8 +275,9 @@ enum SongName {
     ///
     /// A track on such an album often says nothing about it in its own title: Spotify's
     /// "Foregone Destruction" on "Tournament Rematch: Unreal Tournament Remixed" is someone's
-    /// remix, and the library's "Everything In Its Right Place" on "I Might Be Wrong: Live
-    /// Recordings" is live. Measured 2026-10-29: of the 736 pairs of library tracks the title
+    /// remix, though not which of the album's named remixes, so it is none of them
+    /// (`isSameRecording`); and the library's "Everything In Its Right Place" on "I Might Be
+    /// Wrong: Live Recordings" is live. Measured 2026-10-29: of the 736 pairs of library tracks the title
     /// rules call the same song, these words told 26 apart, 22 of them rightly. The other four
     /// are albums that only sound live or remixed, such as "I Could Live In Hope"; each costs
     /// one copy where the user has another.
@@ -324,7 +325,8 @@ enum SongName {
         guard kinds == versions(of: otherName, on: otherAlbum) else { return false }
         let myTitle = title(name).versions, theirTitle = title(otherName).versions
         let mine = names(in: myTitle), theirs = names(in: theirTitle)
-        let sameRelease = isSameRelease(album, otherAlbum)
+        let sameRelease = isSameRelease(album, otherAlbum,
+                                        markedByBoth: SongName.kinds(of: myTitle).intersection(SongName.kinds(of: theirTitle)))
         return kinds.allSatisfy { kind in
             let myNames = mine[kind] ?? [], theirNames = theirs[kind] ?? []
             if !myNames.isEmpty && !theirNames.isEmpty {
@@ -349,13 +351,20 @@ enum SongName {
     ///
     /// A plain version one name has and the other's not ("I Might Be Wrong: Live Recordings"
     /// and "I Might Be Wrong") is the same release only when the other says nothing else:
-    /// "Album (Deluxe Edition)" is the studio album, not "Album: In Concert".
-    static func isSameRelease(_ album: String, _ otherAlbum: String) -> Bool {
+    /// "Album (Deluxe Edition)" is the studio album, not "Album: In Concert". Or when both
+    /// tracks' titles say it, `markedByBoth`: Spotify's "Folsom Prison Blues - Live" on "At
+    /// Folsom Prison (Legacy Edition)" is Music's "(Live)" on "At Folsom Prison (Live)", which
+    /// the fifth review found missed (2026-10-30). The cost is the mirror of it: a "Song -
+    /// Live" on "Album (Live)" is taken for a "Song (Live)" bonus track on "Album (Deluxe
+    /// Edition)", which can be another night, should one artist give a studio and a live album
+    /// the same name.
+    static func isSameRelease(_ album: String, _ otherAlbum: String, markedByBoth: Set<String> = []) -> Bool {
         let one = release(album), other = release(otherAlbum)
         guard !one.name.isEmpty, one.name == other.name else { return false }
         return one.versions == other.versions
             || (one.versions.isEmpty && one.isBare)
             || (other.versions.isEmpty && other.isBare)
+            || one.versions.symmetricDifference(other.versions).isSubset(of: markedByBoth)
     }
 
     /// An album's name as a release (`name`): without its edition words ("(Remaster 2018)"),
@@ -409,21 +418,34 @@ enum SongName {
         let words = folded.split(separator: " ")
         if (descriptor == .edition && !(asSubtitle && words.count == 1)) || words.contains("bonus") || ["edition", "editions"].contains(words.last ?? "")
             || marketVersion.firstMatch(in: folded, range: whole(folded)) != nil
-            || soundtrackWords.firstMatch(in: folded, range: whole(folded)) != nil {
+            || isOnlyASoundtrackCredit(words, folded) {
             return []
         }
         return nil
     }
 
-    /// Whether one side's names for a version say no more than the other's, but for a year:
-    /// "mtv" against "mtv 1994". Anything else the longer name says tells another recording:
-    /// "folsom state prison" is not "folsom state prison 2nd show", nor "tiesto" "tiesto deep
-    /// house" (the fourth review, 2026-10-29).
+    /// Whether a part of an album's name is a soundtrack credit and nothing more: "Original
+    /// Motion Picture Score", "Music from the Netflix Original Series". A series, volume or
+    /// part it names is a release of its own, so "Doctor Who: Series 2" is not "Series 1",
+    /// nor "Vol. 2" "Vol. 1": dropping any part that held a soundtrack word put a cue from
+    /// one series on another's (the fifth review, 2026-10-30).
+    private static func isOnlyASoundtrackCredit(_ words: [Substring], _ folded: String) -> Bool {
+        return soundtrackWords.firstMatch(in: folded, range: whole(folded)) != nil
+            && words.allSatisfy { soundtrackCreditWords.contains(String($0)) }
+    }
+
+    /// Whether one side's names for a version say no more than the other's, but for when:
+    /// "mtv" against "mtv 1994" or "mtv december 1994", "wembley" against "wembley 86" (from
+    /// "'86"). Anything else the longer name says tells another recording: "folsom state
+    /// prison" is not "folsom state prison 2nd show", nor "tiesto" "tiesto deep house" (the
+    /// fourth review, 2026-10-29). A place is left out too, though Spotify's "Live in Paris,
+    /// France" is the "(Live in Paris)" on the same album, since "york" against "new york"
+    /// would be one.
     private static func oneNamesLess(_ names: Set<String>, _ otherNames: Set<String>) -> Bool {
         let words = Set(names.flatMap { $0.split(separator: " ").map(String.init) })
         let otherWords = Set(otherNames.flatMap { $0.split(separator: " ").map(String.init) })
         let (fewer, more) = words.count <= otherWords.count ? (words, otherWords) : (otherWords, words)
-        return fewer.isSubset(of: more) && more.subtracting(fewer).allSatisfy { year.firstMatch(in: $0, range: whole($0)) != nil }
+        return fewer.isSubset(of: more) && more.subtracting(fewer).allSatisfy { saysWhen.firstMatch(in: $0, range: whole($0)) != nil }
     }
 
     /// The names a title gives each kind of version: ["live": ["sydney"]] for "Clocks - Live
@@ -559,10 +581,18 @@ enum SongName {
     /// Version)", "(Tour Version)". Never "(Taylor's Version)", a re-recording. One named with
     /// an edition word, such as "(Explicit Version)" or "(Deluxe Version)", is an edition by
     /// `describe` already.
-    private static let marketVersion = pattern(#"^(?:japan(?:ese)?|international|us|uk|european?|australian|tour|standard) version$"#)
+    private static let marketVersion = pattern(#"^(?:japan(?:ese)?|international|u ?s|u ?k|european?|australian|tour|standard) version$"#)
 
     /// A soundtrack credit says which film, or that it is one
     private static let soundtrackWords = pattern(#"\bsoundtrack\b|\bmotion picture\b|\bfilm\b|\bmovie\b|\bseries\b|\bmusical\b|\bscore\b"#)
+
+    /// The words a soundtrack credit on an album is made of, and nothing that says which
+    /// series, volume or part
+    private static let soundtrackCreditWords: Set<String> = [
+        "original", "motion", "picture", "score", "soundtrack", "music", "from", "the", "tv", "television",
+        "series", "film", "movie", "musical", "cast", "recording", "netflix", "official", "and", "songs",
+        "inspired", "by", "video", "game",
+    ]
 
     /// How a named version the rules don't know ends
     private static let namedVersionEndings: Set<String> = ["version", "mix", "edit", "remaster", "remastered"]
@@ -580,7 +610,8 @@ enum SongName {
 
     private static let yearOrOrdinal = pattern(#"^(\d{4}s?|\d+(st|nd|rd|th))$"#)
     private static let countWord = pattern(#"^\d+(st|nd|rd|th)?$"#)
-    private static let year = pattern(#"^\d{4}$"#)
+    /// A year, short or long, or a month: what a live recording's name can add to say when
+    private static let saysWhen = pattern(#"^(\d{4}|\d{2}|january|february|march|april|may|june|july|august|september|october|november|december)$"#)
     private static let featuredInBrackets = pattern(#"\s*[\(\[]\s*(feat\.?|ft\.?|featuring|with)\s+([^\)\]]*)[\)\]]"#)
     private static let featuredCredit = pattern(#"^(feat\.?|ft\.?|featuring|with)\s+(.*)$"#)
     private static let featuredBare = pattern(#"\s+(feat\.|ft\.|featuring)\s+(.*)$"#)

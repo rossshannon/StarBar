@@ -130,6 +130,12 @@ final class MenuBarRatingControl {
             }
         }
     }
+    /// `iTunesRadioStation.refusedWrites` for the copy on show, by kind, when its stars and
+    /// heart were last shown. A refusal since means the stars or heart on show are a choice
+    /// Music turned down, so a read Music doesn't answer falls back to what was last read of
+    /// the copy instead: keeping the stars on show said a refused rating was saved, and Rate
+    /// Up counted from it (the fifth review, 2026-10-30).
+    private var copyRefusalsShown: (persistentID: String, rating: Int, favorite: Int)?
     /// The display waits for the answer about a Spotify song's Music copy, briefly, rather
     /// than show Spotify's heart and then swap it for stars
     private let matchWait = LibraryMatchWait()
@@ -1090,11 +1096,19 @@ extension MenuBarRatingControl {
         // answer, and otherwise the copy's stars stay as they are, or, for a copy not on
         // show, what was last read of it comes back. None of those is Music's answer, so
         // none of them ends a hold: taking the stars on show for one put the old stars back
-        // at the next read (the third review).
-        let lastKnown = isSameCopy ? LibraryMatch.Shown(rating: ratingControl.rating, isFavorited: ratingControl.isFavorited)
-                                   : LibraryMatch.Shown(song: match.song)
-        show(rating: read.map { $0.rating ?? 0 }, favorite: read?.isFavorited, for: match.song.persistentID,
-             otherwise: (lastKnown.rating ?? 0, lastKnown.isFavorited))
+        // at the next read (the third review). Stars or a heart Music has refused since they
+        // were shown don't stay either.
+        let station = iTunesRadioStation.shared
+        let id = match.song.persistentID
+        let refusals = (rating: station.refusedWrites(.rating, to: id), favorite: station.refusedWrites(.favorite, to: id))
+        let shownBefore = isSameCopy ? copyRefusalsShown.flatMap { $0.persistentID == id ? $0 : nil } : nil
+        let lastRead = LibraryMatch.Shown(song: match.song)
+        let ratingStands = shownBefore?.rating == refusals.rating
+        let favoriteStands = shownBefore?.favorite == refusals.favorite
+        show(rating: read.map { $0.rating ?? 0 }, favorite: read?.isFavorited, for: id,
+             otherwise: (ratingStands ? ratingControl.rating : lastRead.rating ?? 0,
+                         favoriteStands ? ratingControl.isFavorited : lastRead.isFavorited))
+        copyRefusalsShown = (id, refusals.rating, refusals.favorite)
         updateMenuBar(animate: true, previousStars: previousStars, animateRatingChange: isNewMatch)
     }
 
@@ -1147,13 +1161,12 @@ extension MenuBarRatingControl {
         // the old value, put the old one back (the fourth review, 2026-10-29). It says
         // nothing: what is held stays, and otherwise the song's stars on show stay, or a new
         // song's start from none, since nothing else is known of them.
-        let failures = { iTunesRadioStation.shared.failedEvents }
         var userRating: Int?
-        let ratingAnswer = MenuBarRatingControl.ifAnswered(failures: failures) { () -> Int? in
+        let ratingAnswer = MenuBarRatingControl.ifAnswered { () -> Int? in
             userRating = ratedTrack?.userRating
             return userRating ?? 0
         }
-        let favoriteAnswer = MenuBarRatingControl.ifAnswered(failures: failures) { () -> Bool? in
+        let favoriteAnswer = MenuBarRatingControl.ifAnswered { () -> Bool? in
             playing?.favoriteTrack.isFavorited ?? false
         }
         show(rating: ratingAnswer, favorite: favoriteAnswer, for: playing?.persistentID,
@@ -1168,7 +1181,10 @@ extension MenuBarRatingControl {
         // A catalog track is permanently unrated, so without this the reminder would ring for
         // every one of them and sweep a star across a control that has no stars
         if UserDefaults.standard.remindToRateUnrated && ratingControl.mode == .rating {
-            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: userRating, isPlaying: isPlaying, trackID: playing?.persistentID) }
+            // A read Music didn't answer is 0, which would ring the reminder for a rated
+            // song, so then the stars on show stand for it
+            let known = ratingAnswer == nil ? ratingControl.rating : userRating
+            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: known, isPlaying: isPlaying, trackID: playing?.persistentID) }
             reminderController?.playerDidUpdate(snapshot)
         } else {
             reminderController?.playerDidUpdate(nil)
@@ -1244,7 +1260,13 @@ extension MenuBarRatingControl {
     /// answers a failed read with nil, 0 or false rather than an error, which for a rating
     /// reads as "unrated". Main thread only, where the station counts its failures.
     static func withShortTimeoutIfAnswered<T>(_ read: (iTunesApplication) -> T) -> T? {
-        return ifAnswered(failures: { iTunesRadioStation.shared.failedEvents }) { withShortTimeout(read) }
+        return ifAnswered { withShortTimeout(read) }
+    }
+
+    /// `read`'s value, or nil when it has none or an Apple Event from the main thread failed
+    /// while it ran. Main thread only, where the station counts its failures.
+    static func ifAnswered<T>(_ read: () -> T?) -> T? {
+        return ifAnswered(failures: { iTunesRadioStation.shared.failedEvents }, read)
     }
 
     /// `read`'s value, or nil when it has none or `failures`, a count of failed Apple Events,
