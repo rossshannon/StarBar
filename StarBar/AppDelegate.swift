@@ -347,9 +347,15 @@ extension AppDelegate {
                 // read from the playing track until 2026-09-18, on the belief that it was
                 // written there; Music answered `favorited` false on a catalog track whose
                 // library copy answered true.
+                // A read Music didn't answer comes back 0 or false, which would show a rated
+                // song as unrated and end the strip's hold on a choice just made, so it counts
+                // as no answer (nil), as the menu bar's reads do.
                 let playing = iTunesPlayer.shared.playing
-                live.rating = playing?.ratingTrack?.userRating
-                live.isFavorited = playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
+                let failures = { iTunesRadioStation.shared.failedEvents }
+                live.rating = MenuBarRatingControl.ifAnswered(failures: failures) { playing?.ratingTrack?.userRating }
+                live.isFavorited = MenuBarRatingControl.ifAnswered(failures: failures) { () -> Bool? in
+                    playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
+                }
                 live.canRate = playing?.canRate ?? true
                 if wantsArtwork {
                     // The user's own copy first: a catalog track's artwork read can come back
