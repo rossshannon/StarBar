@@ -126,6 +126,17 @@ final class RatingClickController {
         return true
     }
 
+    /// Stop following a drag without saving anything, because another song is on show: the
+    /// drag began on the last one, and let go of now it would rate this one. The stars go
+    /// back to what they showed when it began, for the owner to replace with the new song's.
+    /// `didEndDrag` is not called, since the owner is already showing the new song.
+    func cancelDrag() {
+        guard let drag = drag else { return }
+        self.drag = nil
+        os_log("%{public}s[%{public}ld], %{public}s: another song is on show; dropping the drag", ((#file as NSString).lastPathComponent), #line, #function)
+        preview(drag.originalRating)
+    }
+
     private func preview(_ rating: Int) {
         guard rating != ratingControl.rating else { return }
         ratingControl.update(rating: rating)

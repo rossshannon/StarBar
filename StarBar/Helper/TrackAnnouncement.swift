@@ -53,10 +53,11 @@ struct TrackAnnouncement: Equatable {
     let artwork: NSImage?
     /// False for a song playing from the Apple Music catalog that isn't in the library.
     /// There is no rating to show, so the strip says how to get one instead of drawing five
-    /// empty dots that suggest the song is merely unrated.
+    /// empty dots that suggest the song is merely unrated. For a Spotify song, true when the
+    /// user has it in Music: the strip then shows that copy's stars and heart.
     let canRate: Bool
-    /// The player the song is playing in. A Spotify song has no rating, so its strip names
-    /// Spotify where the stars would be.
+    /// The player the song is playing in. Spotify keeps no rating, so a Spotify song the
+    /// user doesn't have in Music names Spotify where the stars would be.
     let source: PlayerKind
     /// True for a Spotify song while the user's Spotify account is connected: the strip then
     /// draws Spotify's green heart before "Spotify", filled when `isFavorited` (which holds
@@ -100,6 +101,12 @@ struct TrackAnnouncement: Equatable {
     /// What the strip says in place of the stars for a song playing in Spotify
     static let spotifyText = "Spotify"
 
+    /// The strip names Spotify, and its heart, where the stars would be: a Spotify song with
+    /// no copy in the user's Music library
+    var namesSpotify: Bool {
+        return source == .spotify && !canRate
+    }
+
     /// What the Preferences Preview button shows when Music has no track to show instead
     static var preview: TrackAnnouncement {
         return TrackAnnouncement(
@@ -133,11 +140,12 @@ struct TrackAnnouncement: Equatable {
     /// What VoiceOver reads when the strip appears
     var accessibilityLabel: String {
         let playing = artist.isEmpty ? "Now playing: \(title)" : "Now playing: \(title) by \(artist)"
-        guard source == .music else {
+        if namesSpotify {
             guard showsSpotifyHeart else { return playing + ", in Spotify" }
             return playing + ", in Spotify, " + (isFavorited ? "liked" : "not liked")
         }
-        return playing + ". " + RatingControl.accessibilityDescription(rating: rating, isFavorited: isFavorited)
+        let stars = RatingControl.accessibilityDescription(rating: rating, isFavorited: isFavorited)
+        return playing + (source == .spotify ? ", in Spotify. " : ". ") + stars
     }
 
     static func == (lhs: TrackAnnouncement, rhs: TrackAnnouncement) -> Bool {
@@ -147,6 +155,7 @@ struct TrackAnnouncement: Equatable {
             && lhs.album == rhs.album
             && lhs.rating == rhs.rating
             && lhs.isFavorited == rhs.isFavorited
+            && lhs.canRate == rhs.canRate
             && lhs.showsSpotifyHeart == rhs.showsSpotifyHeart
             && lhs.artwork === rhs.artwork
             && lhs.source == rhs.source

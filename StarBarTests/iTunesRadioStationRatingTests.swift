@@ -298,6 +298,54 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         XCTAssertFalse(station.hasPendingRereadAfterRefusedWrite)
     }
 
+    /// A refusal ends only the holds of its kind on its track. One count for every write let a
+    /// refused heart end a held rating, or a refusal for one song end the hold on another
+    /// (the fourth review, 2026-10-29).
+    func testARefusalCountsOnlyAgainstTheWritesKindAndTrack() {
+        _ = useFakeRereadClock()
+        let before = (heart: station.refusedWrites(.favorite, to: "A"), rating: station.refusedWrites(.rating, to: "A"),
+                      other: station.refusedWrites(.favorite, to: "B"))
+
+        station.sendingWrite(.favorite, to: "A") { refuse() }
+
+        XCTAssertEqual(station.refusedWrites(.favorite, to: "A"), before.heart + 1)
+        XCTAssertEqual(station.refusedWrites(.rating, to: "A"), before.rating, "a refused heart is not a refused rating")
+        XCTAssertEqual(station.refusedWrites(.favorite, to: "B"), before.other, "nor a refusal for another song")
+        XCTAssertTrue(station.hasPendingRereadAfterRefusedWrite, "Music is still read again")
+    }
+
+    /// A refusal that comes outside a write could have been any of them
+    func testARefusalOutsideAnyWriteCountsAgainstEveryHold() {
+        _ = useFakeRereadClock()
+        let before = (heart: station.refusedWrites(.favorite, to: "A"), rating: station.refusedWrites(.rating, to: "B"))
+
+        refuse()
+
+        XCTAssertEqual(station.refusedWrites(.favorite, to: "A"), before.heart + 1)
+        XCTAssertEqual(station.refusedWrites(.rating, to: "B"), before.rating + 1)
+    }
+
+    /// A rating goes through the writer, perhaps after being held, and its refusal is still put
+    /// down to the song it was held for, not to the one playing: a Spotify song's copy in
+    /// Music is rated while Music plays something else, or nothing
+    func testARefusedRatingIsPutDownToTheSongItWasHeldFor() {
+        _ = useFakeRereadClock()
+        let track = FakeTrack(name: "Refused", persistentID: "00000000000000C3", rating: 0)
+        track.whenWritten = { [unowned self] in self.refuse() }
+        play(FakeTrack(name: "Playing", persistentID: "00000000000000C4", rating: 0))
+        let before = (rating: station.refusedWrites(.rating, to: "00000000000000C3"),
+                      heart: station.refusedWrites(.favorite, to: "00000000000000C3"),
+                      playing: station.refusedWrites(.rating, to: "00000000000000C4"))
+
+        station.setRating(60, on: track, heldFor: "00000000000000C3")
+        station.flushHeldRatingWrite()
+
+        XCTAssertEqual(track.ratingsWritten, [60])
+        XCTAssertEqual(station.refusedWrites(.rating, to: "00000000000000C3"), before.rating + 1)
+        XCTAssertEqual(station.refusedWrites(.favorite, to: "00000000000000C3"), before.heart)
+        XCTAssertEqual(station.refusedWrites(.rating, to: "00000000000000C4"), before.playing, "not the song playing")
+    }
+
     /// The failed-event handler tells a property write from a read by the event's class and
     /// ID, which have to be read as attributes: the descriptor type is always 'aevt'
     func testFailedEventClassAndIDAreDecoded() {
@@ -310,21 +358,17 @@ final class iTunesRadioStationRatingTests: XCTestCase {
 
     // MARK: - Helpers
 
+    /// Music refusing a property write, as Scripting Bridge reports it
+    private func refuse() {
+        _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x73657464).aeDesc!,   // core/setd
+                                 withError: NSError(domain: NSOSStatusErrorDomain, code: -54, userInfo: nil))
+    }
+
     /// Time the station's re-reads by hand. `tearDown` puts the real clock back.
     private func useFakeRereadClock() -> FakeClock {
         let clock = FakeClock()
         station.rereadClock = clock
         return clock
-    }
-
-    private func appleEvent(eventClass: UInt32, eventID: UInt32) -> NSAppleEventDescriptor {
-        return NSAppleEventDescriptor.appleEvent(
-            withEventClass: AEEventClass(eventClass),
-            eventID: AEEventID(eventID),
-            targetDescriptor: nil,
-            returnID: AEReturnID(kAutoGenerateReturnID),
-            transactionID: AETransactionID(kAnyTransactionID)
-        )
     }
 
 }

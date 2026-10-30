@@ -8,6 +8,7 @@
 //
 
 import XCTest
+import Cocoa
 @testable import StarBar
 
 final class RatingClickControllerTests: XCTestCase {
@@ -295,11 +296,98 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(recorder.savedRatings, [80])
     }
 
+    /// The song on show changed while the button was down. Let go of, the drag would rate
+    /// the new song, so it is dropped: nothing is saved then or on release.
+    func testACancelledDragSavesNothingWhenLetGo() {
+        XCTAssertTrue(press(at: 12))
+        XCTAssertTrue(move(to: 97))
+        controller.cancelDrag()
+        XCTAssertFalse(controller.isDragging)
+        XCTAssertEqual(ratingControl.rating, 40, "the preview goes, for the new song's rating to replace")
+        XCTAssertFalse(release(at: 97))
+        XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertEqual(dragEnds, [], "the owner already shows the new song, so it isn't asked to refresh")
+    }
+
+    func testCancellingWithNoDragChangesNothing() {
+        controller.cancelDrag()
+        XCTAssertEqual(ratingControl.rating, 40)
+        XCTAssertEqual(dragEnds, [])
+    }
+
     func testNewClickStartsFreshDrag() {
         XCTAssertTrue(press(at: 97))
         click(at: 52)
         XCTAssertFalse(controller.isDragging)
         XCTAssertEqual(recorder.savedRatings, [60])
+    }
+
+    // MARK: - In the menu bar
+
+    func testASongChangeInTheMenuBarDropsTheDragAndSavesNothing() {
+        // The click controller's own test above shows what cancelling does; this one shows
+        // the menu bar cancels, which a test of the controller alone can't
+        let menu = MenuBarRatingControl(widthClock: FakeClock(), pointer: pointer)
+        defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
+        let first = FakeTrack(name: "First", persistentID: "00000000000000A1", rating: 40)
+        let second = FakeTrack(name: "Second", persistentID: "00000000000000B2", rating: 80)
+        menu.applyTrackDisplay(PlayingTrack(track: first), isStopped: false, musicIsRunning: true)
+        XCTAssertEqual(menu.ratingControl.rating, 40)
+
+        XCTAssertTrue(press(at: 97, in: menu), "the press began a drag")
+        XCTAssertEqual(menu.ratingControl.rating, 100, "the stars follow the drag")
+        menu.applyTrackDisplay(PlayingTrack(track: second), isStopped: false, musicIsRunning: true)
+
+        XCTAssertFalse(menu.isDragging)
+        XCTAssertEqual(menu.ratingControl.rating, 80, "the new song's stars, not the drag's")
+        pointer.isLeftButtonHeld = false
+        XCTAssertFalse(menu.clickController.tick())
+        XCTAssertEqual(first.ratingsWritten, [])
+        XCTAssertEqual(second.ratingsWritten, [])
+        XCTAssertEqual(menu.ratingControl.rating, 80)
+    }
+
+    func testAReadMusicDidNotAnswerKeepsTheHeartJustCleared() {
+        // A failed read answers false, which agreed with a heart just cleared and so ended
+        // the hold, and Music's next answer, still the old heart, put it back (the fourth
+        // review, 2026-10-29)
+        let menu = MenuBarRatingControl(widthClock: FakeClock(), pointer: pointer)
+        let station = iTunesRadioStation.shared
+        defer {
+            NSStatusBar.system.removeStatusItem(menu.statusItem)
+            iTunesPlayer.shared.update(nil, broadcast: false)
+        }
+        let id = "00000000000000D4"
+        let song = FakeTrack(name: "Song", persistentID: id, rating: 40, favorited: true)
+        iTunesPlayer.shared.update(song, broadcast: false)
+        menu.applyTrackDisplay(PlayingTrack(track: song), isStopped: false, musicIsRunning: true)
+        XCTAssertTrue(menu.ratingControl.isFavorited)
+
+        menu.toggleFavorite()
+        XCTAssertEqual(song.favoritesWritten, [false])
+        XCTAssertFalse(menu.ratingControl.isFavorited)
+
+        // Music doesn't answer: Scripting Bridge reports the failure and answers false
+        let unanswered = FakeTrack(name: "Song", persistentID: id, rating: 0, favorited: false)
+        unanswered.whenRead = {
+            _ = station.eventDidFail(appleEvent(eventClass: 0x636F7265, eventID: 0x67657464).aeDesc!,   // core/getd
+                                     withError: NSError(domain: NSOSStatusErrorDomain, code: -1712, userInfo: nil))
+        }
+        menu.applyTrackDisplay(PlayingTrack(track: unanswered), isStopped: false, musicIsRunning: true)
+        XCTAssertFalse(menu.ratingControl.isFavorited)
+        XCTAssertEqual(menu.ratingControl.rating, 40, "no answer is not unrated: the stars on show stay")
+
+        // Music answers, before it has applied the write
+        let stale = FakeTrack(name: "Song", persistentID: id, rating: 40, favorited: true)
+        menu.applyTrackDisplay(PlayingTrack(track: stale), isStopped: false, musicIsRunning: true)
+        XCTAssertFalse(menu.ratingControl.isFavorited, "still held: the read that failed didn't end it")
+    }
+
+    /// Press at `x` on the menu bar's own stars
+    private func press(at x: CGFloat, in menu: MenuBarRatingControl) -> Bool {
+        pointer.isLeftButtonHeld = true
+        pointer.imagePositionX = x
+        return menu.clickController.click()
     }
 
     // MARK: - Accessibility

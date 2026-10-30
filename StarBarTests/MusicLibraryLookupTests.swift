@@ -331,4 +331,211 @@ final class MusicLibraryLookupTests: XCTestCase {
         XCTAssertNotEqual(playing.scriptingClassCode, MusicTrackClass.fileTrack)
     }
 
+    // MARK: - The bulk read behind matching another player's songs
+
+    /// `MusicLibraryIndex` reads each property of every track in one Apple Event, then pairs
+    /// the lists up by position. That is only right if every list comes back in the same
+    /// order. Checked against tracks found one at a time by persistent ID, at rows spread
+    /// across the library: a list in another order, or shifted by one, gives a row another
+    /// song's name, and a rating chosen for one song would be written to another.
+    func testTheBulkReadKeepsEachTracksPropertiesTogether() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let started = Date()
+        let songs = try XCTUnwrap(MusicLibraryIndex.readSongs(pid: pid), "the bulk read failed")
+        let read = Date()
+        _ = SongMatcher(library: songs)
+        // For the record: the menu bar waits for both the first time a Spotify song plays
+        print(String(format: "Bulk read of %ld songs: %.0f ms; matcher built in %.0f ms",
+                     songs.count, read.timeIntervalSince(started) * 1000, Date().timeIntervalSince(read) * 1000))
+        try XCTSkipUnless(songs.count > 4, "the library has too few songs to sample")
+
+        let rows = Set([0, songs.count / 4, songs.count / 2, 3 * songs.count / 4, songs.count - 1]).sorted()
+        // Rows that can be told apart, or a shifted list could pair a song with its twin
+        XCTAssertGreaterThan(Set(rows.map { songs[$0].name }).count, 1, "the sampled songs all have one name")
+
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        for row in rows {
+            let song = songs[row]
+            let found = tracks.filtered(using: NSPredicate(format: "persistentID == %@", song.persistentID)) as? [iTunesTrack] ?? []
+            let track = try XCTUnwrap(found.first, "row \(row): no track has persistent ID \(song.persistentID)")
+            XCTAssertEqual(found.count, 1, "row \(row): a persistent ID names one track")
+            XCTAssertEqual(track.name, song.name, "row \(row)")
+            XCTAssertEqual(track.artist, song.artist, "row \(row)")
+            XCTAssertEqual(track.albumArtist ?? "", song.albumArtist, "row \(row)")
+        }
+    }
+
+    /// The station's track for a matched copy is a reference made without asking Music
+    /// anything, found by persistent ID each time it is read or written. Two different tracks,
+    /// so a reference that ignored the ID (always the library's first track, say) can't pass.
+    func testTheStationsTrackForACopyIsThatCopy() throws {
+        let (first, second) = try twoDifferentLibraryTracks()
+        for track in [first, second] {
+            let persistentID = try XCTUnwrap(track.persistentID, "persistent ID unreadable")
+            let song = LibrarySong(persistentID: persistentID, name: track.name ?? "", artist: track.artist ?? "",
+                                   albumArtist: "")
+            let reference = try XCTUnwrap(iTunesRadioStation.shared.libraryTrack(for: song), "no reference made")
+            XCTAssertEqual(reference.persistentID, persistentID)
+            XCTAssertEqual(reference.name, track.name)
+            XCTAssertEqual(reference.databaseID, track.databaseID)
+        }
+    }
+
+    /// And one for a song no longer there reads as nothing, rather than as another song
+    func testTheStationsTrackForAGoneCopyIsNoSong() throws {
+        let song = LibrarySong(persistentID: "0000000000000000", name: "Gone", artist: "Nobody", albumArtist: "")
+        let reference = try XCTUnwrap(iTunesRadioStation.shared.libraryTrack(for: song), "no reference made")
+
+        XCTAssertTrue((reference.persistentID ?? "").isEmpty, "read as \(reference.persistentID ?? "nil")")
+    }
+
+    /// Reading copies keeps its connection and library playlist for the next read. A kept
+    /// one must still answer, and answer about the song it is asked about: the two tracks
+    /// read differently, so an answer about the other one fails.
+    func testReadingCopiesTwiceAnswersBothTimes() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let (first, second) = try twoDifferentLibraryTracks()
+        try XCTSkipUnless(first.mediaKind == .music && second.mediaKind == .music,
+                          "a track that isn't a song reads as no copy, which proves nothing about the connection")
+        try XCTSkipIf(first.album == second.album && first.duration == second.duration,
+                      "the two tracks read alike, so an answer about the wrong one would pass")
+        for track in [first, second, first] {
+            let song = LibrarySong(persistentID: try XCTUnwrap(track.persistentID), name: track.name ?? "",
+                                   artist: track.artist ?? "", albumArtist: "")
+            let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: [song], choosing: true),
+                                     "Music didn't answer")
+            // What was read from Music, not the persistent ID passed in, which comes back as it went
+            let copy = try XCTUnwrap(read.first ?? nil, "a song read as no copy")
+            XCTAssertEqual(copy.album, track.album ?? "")
+            XCTAssertEqual(copy.duration, track.duration.flatMap { $0 > 0 ? $0 : nil })
+            XCTAssertEqual(copy.isFavorited, track.isFavorited)
+        }
+    }
+
+    /// The search that finds a copy checks its name and artist too, because the index can be
+    /// a library notification behind, and a track that has been renamed since may be another
+    /// song by now. If Music ignored either clause, a copy asked for under another name would
+    /// still be read. A song, so the copy asked for under its own names is read, or a search
+    /// that found nothing at all would pass.
+    func testACopyUnderAnotherNameIsNotRead() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        let track = try XCTUnwrap((0..<min(tracks.count, 50)).lazy.compactMap { (tracks.object(at: $0) as? SBObject)?.get() as? iTunesTrack }
+                                    .first(where: { $0.mediaKind == .music }), "no song among the first 50 tracks")
+        let persistentID = try XCTUnwrap(track.persistentID)
+        let name = try XCTUnwrap(track.name)
+        let artist = try XCTUnwrap(track.artist)
+        let asked = [
+            LibrarySong(persistentID: persistentID, name: name, artist: artist, albumArtist: ""),
+            LibrarySong(persistentID: persistentID, name: name + " (another song)", artist: artist, albumArtist: ""),
+            LibrarySong(persistentID: persistentID, name: name, artist: artist + " (another artist)", albumArtist: ""),
+        ]
+
+        let read = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: asked, choosing: false), "Music didn't answer")
+
+        XCTAssertEqual(read.count, 3)
+        XCTAssertEqual((read.first ?? nil)?.persistentID, persistentID, "under its own names")
+        XCTAssertNil(read.dropFirst().first ?? nil, "under another name")
+        XCTAssertNil(read.dropFirst(2).first ?? nil, "under another artist")
+    }
+
+    /// `LibraryMatchFinder` leaves out any copy whose media kind doesn't read as a song. If
+    /// the kind came back in another shape, every copy would be left out and nothing would
+    /// ever match, with only "isn't a song" in the log. Most of a music library is songs, so
+    /// a sample with none read as one means the read is wrong, not the library.
+    func testASongReadsAsASong() throws {
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        try XCTSkipUnless(tracks.count > 0, "the library is empty")
+
+        let positions = Set(stride(from: 0, to: tracks.count, by: max(1, tracks.count / 20))).sorted()
+        var songs = 0
+        var rated = 0
+        for position in positions {
+            // Resolved to Music's reference by ID first: a reference by position makes Music
+            // walk the library for every read, and this test took two minutes that way
+            let track = try XCTUnwrap((tracks.object(at: position) as? SBObject)?.get() as? iTunesTrack,
+                                      "track \(position) unreadable")
+            let song = LibrarySong(persistentID: track.persistentID ?? "", name: track.name ?? "",
+                                   artist: track.artist ?? "", albumArtist: "")
+            if let read = song.reading(track, choosing: true) {
+                songs += 1
+                XCTAssertEqual(read.album, track.album ?? "", "track \(position)")
+                XCTAssertEqual(read.rating, track.rating ?? 0, "track \(position)")
+                XCTAssertEqual(read.playedCount, track.playedCount ?? 0, "track \(position)")
+                rated += read.rating > 0 ? 1 : 0
+            } else {
+                XCTAssertNotEqual(track.mediaKind, .music, "track \(position) is a song but didn't read as one")
+            }
+        }
+        print("Sampled \(positions.count) tracks: \(songs) songs, \(rated) of them rated")
+        XCTAssertGreaterThan(songs, 0, "none of \(positions.count) tracks sampled read as a song")
+    }
+
+    // MARK: - Reads that change nothing
+
+    /// Reading a copy must not make Music announce a library change. Measured 2026-10-29: a
+    /// read of a track's `location`, alone or in its `properties` record, did, 2.8 s later,
+    /// every time, and a library change sends StarBar to read the playing song's copy again,
+    /// so the build that read the record read the whole library every 3 s for as long as a
+    /// matched song played. The app subscribes to none of Music's notifications under tests,
+    /// so this listens for itself, and first checks that it hears a distributed notification
+    /// at all: a deaf listener would pass whatever Music did.
+    ///
+    /// One song of each iCloud status found in a sample across the library, because that read
+    /// set Music off for an Apple Music download and not for a matched file: the first cut of
+    /// this test read only the library's first track, a matched file, and passed with the
+    /// bug put back. The whole library's read too, which runs after every library change. It
+    /// listens for 16 s, because Music's second announcement came 14.7 s after the read.
+    func testReadingACopyAnnouncesNoLibraryChange() throws {
+        let pid = try XCTUnwrap(MusicLibraryIndex.runningMusicPID(), "Music isn't running")
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        try XCTSkipUnless(tracks.count > 0, "the library is empty")
+        var sampled: [iTunesEClS: LibrarySong] = [:]
+        for position in stride(from: 0, to: tracks.count, by: max(1, tracks.count / 80)) {
+            guard let track = (tracks.object(at: position) as? SBObject)?.get() as? iTunesTrack,
+                  track.mediaKind == .music, let status = track.cloudStatus, sampled[status] == nil,
+                  let persistentID = track.persistentID, let name = track.name, let artist = track.artist else { continue }
+            sampled[status] = LibrarySong(persistentID: persistentID, name: name, artist: artist, albumArtist: "")
+        }
+        let songs = Array(sampled.values)
+        try XCTSkipUnless(!songs.isEmpty, "no song in the sample")
+        print("Reading \(songs.count) copies, \(sampled[.subscription] == nil ? "none" : "one") of them an Apple Music song")
+
+        let center = DistributedNotificationCenter.default()
+        var changes: [Date] = []
+        var heard = false
+        let probe = Notification.Name("com.rossshannon.starbar.tests.probe.\(UUID().uuidString)")
+        let observers = [Notification.Name.ITLibraryDidChange, Notification.Name("com.apple.iTunes.libraryChanged")].map {
+            center.addObserver(forName: $0, object: nil, queue: .main) { _ in changes.append(Date()) }
+        } + [center.addObserver(forName: probe, object: nil, queue: .main) { _ in heard = true }]
+        defer { observers.forEach(center.removeObserver) }
+
+        center.postNotificationName(probe, object: nil, userInfo: nil, deliverImmediately: true)
+        spin(for: 5, until: { heard })
+        XCTAssertTrue(heard, "the listener heard nothing, so it can't tell what Music announced")
+
+        // An earlier read, or the user, may have set one off: wait for 4 s without one
+        let waitStarted = Date()
+        let isQuiet = { Date().timeIntervalSince(max(waitStarted, changes.last ?? waitStarted)) >= 4 }
+        spin(for: 20, until: isQuiet)
+        try XCTSkipUnless(isQuiet(), "Music's library kept changing, so a change can't be pinned on the read")
+
+        changes = []
+        let read = Date()
+        _ = try XCTUnwrap(MusicLibraryIndex.readCopies(pid: pid, of: songs, choosing: true), "Music didn't answer")
+        _ = try XCTUnwrap(MusicLibraryIndex.readSongs(pid: pid), "Music didn't answer the library read")
+        spin(for: 16)
+
+        XCTAssertEqual(changes.map { String(format: "%.1f s", $0.timeIntervalSince(read)) }, [],
+                       "Music announced a library change after reading \(songs.map { $0.name }) and the library")
+    }
+
+    /// Run the main run loop for `seconds`, or until `done`
+    private func spin(for seconds: TimeInterval, until done: () -> Bool = { false }) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !done() && Date() < deadline {
+            RunLoop.current.run(until: min(deadline, Date().addingTimeInterval(0.05)))
+        }
+    }
+
 }

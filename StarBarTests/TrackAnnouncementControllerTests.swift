@@ -33,6 +33,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var positionReads = 0
     /// The players the controller is told are running
     private var running: Set<PlayerKind> = [.music, .spotify]
+    /// Writes Music refused, by "kind|persistent ID"
+    private var refusals: [String: Int] = [:]
     private var controller: TrackAnnouncementController!
 
     override func setUp() {
@@ -52,6 +54,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         positions = []
         positionReads = 0
         running = [.music, .spotify]
+        refusals = [:]
         controller = makeController(enabled: true)
     }
 
@@ -87,6 +90,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
             clock: clock,
             accessibility: { [unowned self] in (self.reduceMotion, self.reduceTransparency) },
             isRunning: { [unowned self] kind in self.running.contains(kind) },
+            refusedWrites: { [unowned self] kind, trackID in self.refusals["\(kind.rawValue)|\(trackID ?? "")", default: 0] },
             isEnabled: enabled
         )
     }
@@ -810,6 +814,54 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
     }
 
+    func testARatingMusicRefusesEndsTheHoldAndMusicsLastAnswerComesBack() {
+        // The sixth review, 2026-10-30: the strip kept showing a refused rating, where the
+        // menu bar went back to Music's
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80, heldFor: "P1")
+        refusals["rating|P1"] = 1
+
+        // Music doesn't answer the read after the refusal, nor the next
+        live = .loaded(.init())
+        update(snapshot(track: "A"))
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 20])
+    }
+
+    func testARefusalForAnotherSongOrKindLeavesTheHold() {
+        live = .loaded(.init(rating: 20, isFavorited: false))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80, heldFor: "P1")
+        refusals["rating|P2"] = 1
+        refusals["favorite|P1"] = 1
+
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
+    }
+
+    func testAHeartMusicRefusesEndsTheHold() {
+        live = .loaded(.init(rating: 0, isFavorited: false))
+        update(snapshot(track: "A"))
+        controller.userDidFavorite(true, heldFor: "P1")
+        refusals["favorite|P1"] = 1
+
+        live = .loaded(.init())
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.isFavorited }, [true, false])
+    }
+
+    func testARefusedHeartMusicNeverAnsweredForGoesBackToWhatWasShown() {
+        // The sixth review: with no answer from Music to go back to, the refused heart stayed
+        live = .loaded(.init())
+        update(snapshot(track: "A"))
+        controller.userDidFavorite(true, heldFor: "P1")
+        refusals["favorite|P1"] = 1
+
+        update(snapshot(track: "A"))
+        XCTAssertEqual(presenter.refreshed.map { $0.isFavorited }, [true, false])
+    }
+
     func testMusicIsBelievedAgainAsSoonAsItReportsTheSavedRating() {
         live = .loaded(.init(rating: 20))
         update(snapshot(track: "A"))
@@ -852,6 +904,30 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         update(snapshot(track: "A"))
 
         XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80, 40])
+    }
+
+    func testAReadMusicDidntAnswerNeverEndsTheWaitForARating() {
+        // The third review, 2026-10-29: what was last known of a Spotify song's copy is the
+        // rating just chosen, and taking it for Music's answer let the next read, still the
+        // old rating, put the old stars back
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80)
+
+        live = .loaded(.init(lastKnownRating: 80))
+        update(snapshot(track: "A"))
+        live = .loaded(.init(rating: 20))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.refreshed.map { $0.rating }, [80])
+    }
+
+    func testANewStripMusicDidntAnswerForShowsWhatWasLastKnown() {
+        live = .loaded(.init(lastKnownRating: 60, lastKnownFavorite: true))
+        update(snapshot(track: "A"))
+
+        XCTAssertEqual(presenter.shown.first?.rating, 60)
+        XCTAssertEqual(presenter.shown.first?.isFavorited, true)
     }
 
     func testFavouritingInStarBarShowsOnTheStrip() {
@@ -1318,6 +1394,94 @@ extension TrackAnnouncementControllerTests {
         controller.attachArtwork(NSImage(size: NSSize(width: 8, height: 8)), identity: "spotify:track:S")
 
         XCTAssertTrue(clock.pendingOneShot === hold)
+    }
+
+    // MARK: Spotify songs the user has in Music
+
+    /// The loader found the user's own copy: its stars and heart, as the menu bar shows them
+    private var musicCopy: TrackAnnouncementController.LiveTrackLoad {
+        return .loaded(.init(rating: 80, isFavorited: true, canRate: true, showsSpotifyHeart: false))
+    }
+
+    func testASpotifySongTheUserHasShowsItsMusicRating() throws {
+        live = musicCopy
+        update(spotify())
+
+        let shown = try XCTUnwrap(presenter.shown.last)
+        XCTAssertEqual(shown.source, .spotify)
+        XCTAssertFalse(shown.namesSpotify)
+        XCTAssertEqual(shown.rating, 80)
+        XCTAssertTrue(shown.isFavorited)
+        XCTAssertEqual(shown.accessibilityLabel, "Now playing: Song spotify:track:S by Artist, in Spotify. "
+                       + RatingControl.accessibilityDescription(rating: 80, isFavorited: true))
+    }
+
+    func testASpotifySongIsNamedAsSpotifysWhenTheLoaderSaysNothing() {
+        // Spotify keeps no rating, so stars need a copy in Music to come from
+        update(spotify())
+
+        XCTAssertEqual(presenter.shown.last?.namesSpotify, true)
+    }
+
+    func testACopyFoundAfterTheStripWentUpRedrawsIt() {
+        // The strip doesn't wait for the library to be read
+        live = .loaded(.init(canRate: false))
+        update(spotify())
+        let hold = clock.pendingOneShot
+        live = musicCopy
+
+        controller.libraryMatchDidChange(identity: "spotify:track:S")
+
+        XCTAssertEqual(presenter.shown.count, 1, "not a new strip")
+        XCTAssertEqual(presenter.refreshed.last?.namesSpotify, false)
+        XCTAssertEqual(presenter.refreshed.last?.rating, 80)
+        XCTAssertTrue(clock.pendingOneShot === hold, "the hold timer is untouched")
+    }
+
+    func testACopyThatHasGoneGivesSpotifyItsNameBack() {
+        live = musicCopy
+        update(spotify())
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: true))
+
+        controller.libraryMatchDidChange(identity: "spotify:track:S")
+
+        XCTAssertEqual(presenter.refreshed.last?.namesSpotify, true)
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, false, "Spotify's like, not the copy's heart")
+    }
+
+    func testACopyFoundForAnotherSongIsIgnored() {
+        update(spotify())
+        live = musicCopy
+
+        controller.libraryMatchDidChange(identity: "spotify:track:T")
+        update(snapshot(track: "A"))
+        controller.libraryMatchDidChange(identity: "A")
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testASpotifyLikeLeavesTheMusicCopysHeartAlone() {
+        live = musicCopy
+        update(spotify())
+
+        controller.spotifyLikeDidChange { _ in
+            XCTFail("the heart on show is the Music copy's")
+            return (true, false)
+        }
+
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+    }
+
+    func testARatingChosenForTheCopyShowsAtOnce() {
+        live = musicCopy
+        update(spotify())
+
+        controller.userDidRate(40)
+
+        XCTAssertEqual(presenter.refreshed.last?.rating, 40)
+        // And Music answering with the old rating before the write lands doesn't undo it
+        controller.libraryMatchDidChange(identity: "spotify:track:S")
+        XCTAssertEqual(presenter.refreshed.last?.rating, 40)
     }
 
 }

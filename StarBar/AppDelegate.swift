@@ -20,6 +20,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
+    /// The strip's wait for the answer about a Spotify song's Music copy. A new song is held
+    /// back until the answer comes, for at most `MenuBarRatingControl.libraryMatchWaitNow`,
+    /// as the menu bar is, rather than shown as a Spotify song and redrawn with stars a
+    /// moment later.
+    private let stripMatchWait = LibraryMatchWait()
+    /// The Spotify song whose Music copy the strip is waiting to hear about
+    private var stripAwaitingMatch: String? {
+        return stripMatchWait.identity
+    }
     
     @IBAction func openAboutWindow(_ sender: NSMenuItem) {
         WindowManager.shared.open(.about)
@@ -128,6 +137,7 @@ extension AppDelegate {
                 case .spotify: return SpotifyPlayer.shared.isRunning
                 }
             },
+            refusedWrites: { iTunesRadioStation.shared.refusedWrites($0, to: $1) },
             isEnabled: UserDefaults.standard.announceNewTracks
         )
         trackAnnouncementPanel = panel
@@ -141,6 +151,7 @@ extension AppDelegate {
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyArtworkDidLoad(_:)), name: .spotifyArtworkDidLoad, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyLikeDidChange, object: SpotifyAccount.shared)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyAccountDidChange, object: SpotifyAccount.shared)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.libraryMatchDidChange(_:)), name: .libraryMatchDidChange, object: LibraryMatchFinder.shared)
         // Spotify sends nothing at launch either. Its song is read in the background, and
         // only with permission already granted; it is recorded as seen when it arrives.
         if !MenuBarRatingControl.isUITesting {
@@ -148,6 +159,8 @@ extension AppDelegate {
                 controller?.recordSeen(info.snapshot)
             }
             SpotifyPlayer.shared.start()
+            // Read lazily, the first time a Spotify song is looked for in the library
+            MusicLibraryIndex.shared.start()
             // After the player, so a restored sign-in can ask about the song already playing
             SpotifyAccount.shared.start()
         }
@@ -169,7 +182,33 @@ extension AppDelegate {
             DispatchQueue.main.async { [weak self] in self?.playerDidUpdateForAnnouncement(notification) }
             return
         }
-        TrackAnnouncementController.shared?.playerDidUpdate()
+        // A Spotify song the user may have in Music waits for the answer. The wait is here
+        // because the controller doesn't wait for anything.
+        guard NowPlayingArbiter.shared.active == .spotify, let info = SpotifyPlayer.shared.latest,
+              let identity = info.trackID, info.songQuery != nil else {
+            stripMatchWait.cancel()
+            TrackAnnouncementController.shared?.playerDidUpdate()
+            return
+        }
+        // The answer will bring the strip up to date with whatever Spotify says by then
+        guard stripAwaitingMatch != identity else { return }
+        stripMatchWait.cancel()
+        var answered = false
+        LibraryMatchFinder.shared.match(for: info) { [weak self] _ in
+            answered = true
+            guard let self = self, self.stripAwaitingMatch == identity else { return }
+            self.stripMatchWait.cancel()
+            TrackAnnouncementController.shared?.playerDidUpdate()
+        }
+        // Known already, or no copy by name, which needs no Apple Events
+        guard !answered else {
+            TrackAnnouncementController.shared?.playerDidUpdate()
+            return
+        }
+        stripMatchWait.start(identity) {
+            os_log("%{public}s[%{public}ld], %{public}s: still looking for %{public}s in the library; announcing it meanwhile", ((#file as NSString).lastPathComponent), #line, #function, identity)
+            TrackAnnouncementController.shared?.playerDidUpdate()
+        }
     }
 
     @objc private func spotifyArtworkDidLoad(_ notification: Notification) {
@@ -180,6 +219,11 @@ extension AppDelegate {
 
     @objc private func spotifyLikeDidChange(_ notification: Notification) {
         TrackAnnouncementController.shared?.spotifyLikeDidChange(AppDelegate.spotifyHeart(for:))
+    }
+
+    @objc private func libraryMatchDidChange(_ notification: Notification) {
+        guard let identity = notification.userInfo?[SpotifyPlayer.identityKey] as? String else { return }
+        TrackAnnouncementController.shared?.libraryMatchDidChange(identity: identity)
     }
 
     /// What the strip's Spotify heart shows for a song: nothing without a sign-in; signed in,
@@ -198,14 +242,34 @@ extension AppDelegate {
     }
 
     /// A Spotify song's artwork, if it has already arrived, and its like as far as StarBar
-    /// knows it. No rating: Spotify keeps none. No Apple Events and no network; artwork that
-    /// comes later reaches the strip through `attachArtwork`.
+    /// knows it, or, for a song the user has in Music, that copy's rating and heart. No
+    /// network, and no Apple Events for a song they don't have or a copy just found, whose
+    /// rating and heart come with it; artwork that comes later reaches the strip through
+    /// `attachArtwork`, and a copy found later through `libraryMatchDidChange`.
     static func loadSpotifyLiveTrack(for identity: String) -> TrackAnnouncementController.LiveTrackLoad {
         if let playing = SpotifyPlayer.shared.latest?.trackID, playing != identity {
             return .trackChanged
         }
         var live = TrackAnnouncementController.LiveTrack()
         live.artwork = SpotifyPlayer.shared.artwork(for: identity)
+        // Without Music there is no copy to rate, as in the menu bar
+        if iTunesRadioStation.shared.iTunes != nil, let match = LibraryMatchFinder.shared.knownMatch(for: identity) {
+            // The same copy the menu bar shows and rates. A new match brings what was read
+            // with it; after that it is read live, as a Music song's is, and when Music
+            // doesn't answer, what the strip shows stands, or for a new strip what was last
+            // read of the copy, rather than "unrated".
+            live.canRate = true
+            if let read = match.currentShown() {
+                live.rating = read.rating
+                live.isFavorited = read.isFavorited
+            } else {
+                let last = LibraryMatch.Shown(song: match.song)
+                live.lastKnownRating = last.rating
+                live.lastKnownFavorite = last.isFavorited
+            }
+            live.showsSpotifyHeart = false
+            return .loaded(live)
+        }
         live.canRate = false
         // What StarBar already knows; a like that arrives later redraws through
         // spotifyLikeDidChange
@@ -284,9 +348,14 @@ extension AppDelegate {
                 // read from the playing track until 2026-09-18, on the belief that it was
                 // written there; Music answered `favorited` false on a catalog track whose
                 // library copy answered true.
+                // A read Music didn't answer comes back 0 or false, which would show a rated
+                // song as unrated and end the strip's hold on a choice just made, so it counts
+                // as no answer (nil), as the menu bar's reads do.
                 let playing = iTunesPlayer.shared.playing
-                live.rating = playing?.ratingTrack?.userRating
-                live.isFavorited = playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
+                live.rating = MenuBarRatingControl.ifAnswered { playing?.ratingTrack?.userRating }
+                live.isFavorited = MenuBarRatingControl.ifAnswered { () -> Bool? in
+                    playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
+                }
                 live.canRate = playing?.canRate ?? true
                 if wantsArtwork {
                     // The user's own copy first: a catalog track's artwork read can come back

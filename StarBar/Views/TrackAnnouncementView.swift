@@ -448,7 +448,7 @@ final class TrackAnnouncementContentView: NSView {
         let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
         let width: CGFloat
-        if announcement.source == .spotify {
+        if announcement.namesSpotify {
             let text = (TrackAnnouncement.spotifyText as NSString).size(withAttributes: [.font: cannotRateFont]).width.rounded(.up)
             width = announcement.showsSpotifyHeart ? starSize.width + spacing * 2 + text : text
         } else if announcement.canRate {
@@ -501,7 +501,7 @@ final class TrackAnnouncementContentView: NSView {
         let starSize = NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
         let spacing = TrackAnnouncementLayout.ratingSpacing * scale
 
-        if announcement.source == .spotify {
+        if announcement.namesSpotify {
             drawSpotify(in: rect, starSize: starSize, spacing: spacing)
             return
         }

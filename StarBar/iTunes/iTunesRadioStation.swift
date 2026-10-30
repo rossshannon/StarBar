@@ -73,6 +73,27 @@ final class iTunesRadioStation {
     static let refusedWriteRereadDelay: TimeInterval = 0.5
     /// The re-read scheduled after a refused write, so several refusals mean one read
     private var refusedWriteReread: RatingReminderTimer?
+    /// How many Apple Events sent from the main thread have failed. A read that fails
+    /// answers nil, 0 or false rather than raising, so comparing this before and after a
+    /// read is how to tell "unrated" from "Music didn't answer"
+    /// (`MenuBarRatingControl.withShortTimeoutIfAnswered`).
+    private(set) var failedEvents = 0
+    /// What a write to Music sets
+    enum WriteKind: String {
+        case rating, favorite
+    }
+    /// The write being sent, while it is sent (`sendingWrite`). Scripting Bridge sends a
+    /// write and waits for Music's reply, and a refusal reaches `eventDidFail` inside that
+    /// call, so this says which write Music refused.
+    private var writeUnderWay: (kind: WriteKind, trackID: String?)?
+    /// Writes Music has refused, by what they set and the persistent ID they were held under
+    /// (`refusalKey`)
+    private var refusals: [String: Int] = [:]
+    /// Writes Music refused outside `sendingWrite`, which could have been any of them
+    private var unattributedRefusals = 0
+    /// Music's library playlist on this connection, and the Music process it was found in
+    /// (`libraryPlaylist()`)
+    private var foundLibraryPlaylist: (pid: pid_t, playlist: iTunesPlaylist)?
     /// True while a re-read after a refused write is waiting to run. Not private only so the
     /// tests can see it, like `classAndID(of:)`.
     var hasPendingRereadAfterRefusedWrite: Bool {
@@ -177,11 +198,20 @@ final class iTunesRadioStation {
 
 extension iTunesRadioStation {
 
+    /// Music's two library-change notifications: Apple's documented `ITLibraryDidChange`
+    /// (`com.apple.AMPLibraryAgent.libraryChanged`) and the legacy iTunes one. See
+    /// `libraryChanged(_:)`; `MusicLibraryIndex` observes the same two.
+    static let libraryChangeNotifications: [Notification.Name] = [
+        .ITLibraryDidChange,
+        Notification.Name("com.apple.iTunes.libraryChanged"),
+    ]
+
     /// A local notification centre lets tests exercise the real subscriptions without
     /// sending synthetic Music notifications to other running apps.
     func observeLibraryChanges(in center: NotificationCenter) {
-        center.addObserver(self, selector: #selector(libraryChanged(_:)), name: .ITLibraryDidChange, object: nil)
-        center.addObserver(self, selector: #selector(libraryChanged(_:)), name: NSNotification.Name("com.apple.iTunes.libraryChanged"), object: nil)
+        for name in iTunesRadioStation.libraryChangeNotifications {
+            center.addObserver(self, selector: #selector(libraryChanged(_:)), name: name, object: nil)
+        }
     }
 
     @objc func sourceSaved(_ notification: Notification) {
@@ -300,7 +330,9 @@ extension iTunesRadioStation {
     ///
     ///   Main thread only: `RatingWriter` checks, and so does everything else that reads the
     ///   `PlayingTrack` record.
-    func setRating(_ rating: Int, on track: iTunesTrack?) {
+    /// - Parameter heldFor: the persistent ID the menu bar holds the rating under, so that
+    ///   Music refusing the write ends that hold (`refusedWrites(_:to:)`)
+    func setRating(_ rating: Int, on track: iTunesTrack?, heldFor trackID: String? = nil) {
         guard let targetTrack = track else {
             os_log("%{public}s[%{public}ld], %{public}s: nowhere to put a rating for this song, dropping it", ((#file as NSString).lastPathComponent), #line, #function)
             return
@@ -320,7 +352,30 @@ extension iTunesRadioStation {
         // never loses one.
         ratingWriter.rate(RatingWriter.Request(rating: rating, track: targetTrack, name: name, songIdentity: { [weak self] in
             iTunesPlayer.shared.playing?.persistentID ?? self?.latestPlayInfo?.songIdentity
-        }))
+        }, trackID: trackID))
+    }
+
+    /// Save a rating chosen for a song playing in another player to the user's own copy of
+    /// it in Music.
+    ///
+    /// Logged every time, with both songs and the rating the copy had as far as StarBar knew,
+    /// `before`, because a rating cannot be undone and a wrong match would otherwise be
+    /// invisible: the log is the only way to find out which song took it and what it held
+    /// before. The copy's identity is its persistent ID, so a rating held for it is replaced by
+    /// another for the same copy and sent at once for any other song, whichever player that
+    /// song is in.
+    ///
+    /// Main thread only, like `setRating(_:on:)`.
+    func setRating(_ rating: Int, on match: LibraryMatch, before: LibrarySong) {
+        let song = match.song
+        // Only for the log, which is the one record of what the copy had before: what was last
+        // read of it or chosen for it since, because reading it again here was two Apple Events
+        // on the main thread for every rating
+        let had = before.isRatingComputed ? nil : before.rating
+        os_log("%{public}s[%{public}ld], %{public}s: rating %{public}ld chosen for %{public}s, \u{201C}%{public}s\u{201D} by %{public}s; saving it to library song %{public}s, \u{201C}%{public}s\u{201D} by %{public}s on %{public}s, which had %{public}s when last read or rated", ((#file as NSString).lastPathComponent), #line, #function, rating, match.identity, match.query.name, match.query.artist, song.persistentID, song.name, song.artist, song.album, had.map { String($0) } ?? "no rating of its own")
+        ratingWriter.rate(RatingWriter.Request(rating: rating, track: match.track, name: song.name, songIdentity: {
+            song.persistentID
+        }, trackID: song.persistentID))
     }
 
     /// Send a rating still waiting for the throttle window, now. `applicationWillTerminate`
@@ -329,16 +384,51 @@ extension iTunesRadioStation {
         ratingWriter.flush()
     }
 
+    /// How many writes of `kind` held under the persistent ID `trackID` Music has refused,
+    /// with those it refused without saying which. A rating or heart held on screen over
+    /// Music's reads (`HeldChoice`) stops being believed when this moves, since Music's value
+    /// is then the true one: the corrective read below was otherwise overridden by the hold,
+    /// and nothing read Music again when the hold ran out (the third review, 2026-10-29).
+    ///
+    /// Counted by kind and track because one count for every write let a refused heart end
+    /// a held rating, or a refusal for one song end the hold on another (the fourth review).
+    func refusedWrites(_ kind: WriteKind, to trackID: String?) -> Int {
+        return unattributedRefusals + (refusals[iTunesRadioStation.refusalKey(kind, trackID)] ?? 0)
+    }
+
+    /// Send a write of `kind`, held on screen under the persistent ID `trackID`, so that a
+    /// refusal from Music is put down to it and ends only that hold. Every write StarBar
+    /// makes to Music goes through here. Main thread only.
+    ///
+    /// Apple documents `SBApplicationDelegate.eventDidFail` as answering in place of the
+    /// failed event's reply, so it runs before the call that sent the write returns, which
+    /// is what lets `send` be bracketed. A refusal that came any later would be counted
+    /// against every hold, as all of them were before.
+    func sendingWrite(_ kind: WriteKind, to trackID: String?, _ send: () -> Void) {
+        dispatchPrecondition(condition: .onQueue(.main))
+        let outer = writeUnderWay
+        writeUnderWay = (kind, trackID)
+        defer { writeUnderWay = outer }
+        send()
+    }
+
+    private static func refusalKey(_ kind: WriteKind, _ trackID: String?) -> String {
+        return "\(kind.rawValue)|\(trackID ?? "")"
+    }
+
     /// Ask Music to store the request's rating on its track.
     ///
     /// Music can refuse: a song streamed from the Apple Music catalog isn't in the library,
     /// so there is nothing to store a rating on and the write comes back as OSStatus -54
-    /// through `eventDidFail`, after this returns. See `iTunesTrack.isCatalogStream`.
+    /// through `eventDidFail`, and this returns as if it had worked. See
+    /// `iTunesTrack.isCatalogStream`.
     private func write(_ request: RatingWriter.Request) {
         // No fallback to whatever is playing: a held write fires up to `ratingSaveDelay`
         // later, and resolving the current track then would rate the next song -- the FIXME
         // this file used to carry.
-        request.track.setRating?(request.rating)
+        sendingWrite(.rating, to: request.trackID) {
+            _ = request.track.setRating?(request.rating)
+        }
         logger.log(level: .debug, "\((#file as NSString).lastPathComponent, privacy: .public)[\(#line, privacy: .public)], \(#function, privacy: .public): set rating for \(request.name, privacy: .public): \(request.rating)")
     }
 
@@ -381,7 +471,8 @@ extension iTunesRadioStation {
             os_log("%{public}s[%{public}ld], %{public}s: no track to add to the library", ((#file as NSString).lastPathComponent), #line, #function)
             return completion(nil)
         }
-        guard let library = librarySource(of: iTunes), let libraryPlaylist = libraryPlaylist(of: library) else {
+        guard let library = iTunesRadioStation.librarySource(of: iTunes),
+              let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: no library source to add to", ((#file as NSString).lastPathComponent), #line, #function)
             return completion(nil)
         }
@@ -444,8 +535,8 @@ extension iTunesRadioStation {
     /// remembers the answer, so everything on screen agrees about which track it means.
     func libraryCopy(of track: iTunesTrack) -> iTunesTrack? {
         guard let iTunes = iTunes,
-              let library = librarySource(of: iTunes),
-              let libraryPlaylist = libraryPlaylist(of: library) else { return nil }
+              let library = iTunesRadioStation.librarySource(of: iTunes),
+              let libraryPlaylist = iTunesRadioStation.libraryPlaylist(of: library) else { return nil }
 
         // Keep the track the search returned. Don't look it up again by database ID:
         // `object(withID:)` matches a track's `id`, which is a different number, and answers
@@ -454,13 +545,72 @@ extension iTunesRadioStation {
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) })
     }
 
-    /// The user's own library, as opposed to a shared library, an iPod or the store
-    private func librarySource(of iTunes: iTunesApplication) -> iTunesSource? {
-        return iTunes.sources?().first(where: { ($0 as? iTunesSource)?.kind == .library }) as? iTunesSource
+    /// The library's track for a song `LibraryMatchFinder` has just read on the index's
+    /// connection, as a reference on this one, which is the one ratings are written through.
+    ///
+    /// The reference finds the track by persistent ID afresh with each Apple Event sent
+    /// through it, so making it asks Music nothing, and a copy deleted since makes a read or
+    /// a write fail rather than land on another song. The finder has already checked the
+    /// copy's name and artist against the index's. Nil when Music isn't running or its
+    /// library can't be found. Main thread, like every read through this connection.
+    func libraryTrack(for song: LibrarySong) -> iTunesTrack? {
+        guard let tracks = libraryPlaylist()?.tracks?() else { return nil }
+        let predicate = NSPredicate(format: "persistentID == %@", song.persistentID)
+        guard let found = iTunesRadioStation.tracks(tracks, matching: predicate) else { return nil }
+        // Taking an element of the search sends no Apple Event
+        return found.object(at: 0) as? iTunesTrack
     }
 
-    private func libraryPlaylist(of source: iTunesSource) -> iTunesPlaylist? {
+    /// `tracks` searched with `predicate`, as a search Music hasn't been sent yet: through
+    /// `perform`, so it stays an `SBElementArray`. Bridging it to a Swift array would count
+    /// it, which is an Apple Event.
+    static func tracks(_ tracks: SBElementArray, matching predicate: NSPredicate) -> SBElementArray? {
+        return tracks.perform(#selector(NSArray.filtered(using:)), with: predicate)?
+            .takeUnretainedValue() as? SBElementArray
+    }
+
+    /// Music's library playlist, found once per Music process: finding it is four Apple
+    /// Events, as many again as fetching a song by persistent ID took. Nil when Music isn't
+    /// running or didn't answer in time.
+    private func libraryPlaylist() -> iTunesPlaylist? {
+        guard let pid = MusicLibraryIndex.runningMusicPID() else { return nil }
+        if let found = foundLibraryPlaylist, found.pid == pid {
+            return found.playlist
+        }
+        let playlist = MenuBarRatingControl.withShortTimeout { iTunes in
+            iTunesRadioStation.libraryPlaylistByID(of: iTunes)
+        } ?? nil
+        foundLibraryPlaylist = playlist.map { (pid: pid, playlist: $0) }
+        return playlist
+    }
+
+    /// The user's own library, as opposed to a shared library, an iPod or the store.
+    /// Static so `MusicLibraryIndex` can ask its own connection to Music.
+    /// - Parameter beforeEachEvent: runs before each source's kind is read, an Apple Event
+    ///   each, for a reader that cuts each event's timeout to a deadline
+    static func librarySource(of iTunes: iTunesApplication, beforeEachEvent: () -> Void = {}) -> iTunesSource? {
+        return iTunes.sources?().first(where: {
+            beforeEachEvent()
+            return ($0 as? iTunesSource)?.kind == .library
+        }) as? iTunesSource
+    }
+
+    static func libraryPlaylist(of source: iTunesSource) -> iTunesPlaylist? {
         return source.libraryPlaylists?().firstObject as? iTunesPlaylist
+    }
+
+    /// The library playlist as Music names it, by ID rather than by its place among the
+    /// sources and playlists, so it can be kept while Music runs and still mean the library.
+    /// One Apple Event more than finding it.
+    ///
+    /// - Parameter beforeEachEvent: as for `librarySource(of:beforeEachEvent:)`, and before
+    ///   the playlist is found and asked for its ID
+    static func libraryPlaylistByID(of iTunes: iTunesApplication, beforeEachEvent: () -> Void = {}) -> iTunesPlaylist? {
+        guard let source = librarySource(of: iTunes, beforeEachEvent: beforeEachEvent) else { return nil }
+        beforeEachEvent()
+        guard let playlist = libraryPlaylist(of: source) as? SBObject else { return nil }
+        beforeEachEvent()
+        return playlist.get() as? iTunesPlaylist
     }
 
     /// The library's songs that look like `track`: same name, artist and album.
@@ -562,8 +712,9 @@ extension iTunesRadioStation {
 // MARK: - SBApplicationDelegate
 extension iTunesRadioStation: SBApplicationDelegate {
 
-    /// Music refused or failed an Apple Event. Scripting Bridge reports it here, after the
-    /// call that sent it has already returned, so the UI has shown the value as if it stuck.
+    /// Music refused or failed an Apple Event. Scripting Bridge reports it here in place of
+    /// the event's reply, so before the call that sent it returns (`sendingWrite`), but the
+    /// UI has already shown the value as if it stuck.
     ///
     /// For a failed *set*, what is on screen is now wrong, so the player is read again a
     /// moment later and the stars and heart fall back to what Music has. The known case, a
@@ -573,6 +724,9 @@ extension iTunesRadioStation: SBApplicationDelegate {
     /// and this one follows a write that has already failed.
     func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
         let (eventClass, eventID) = iTunesRadioStation.classAndID(of: event)
+        if Thread.isMainThread {
+            failedEvents += 1
+        }
         os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
 
         if eventClass == "core" && eventID == "setd" {
@@ -581,12 +735,28 @@ extension iTunesRadioStation: SBApplicationDelegate {
             // it to scheduling: this may run inside the Scripting Bridge call that sent the
             // write, and reading Music from here would send Apple Events from within it.
             if Thread.isMainThread {
-                scheduleRereadAfterRefusedWrite()
+                writeWasRefused(writeUnderWay)
             } else {
-                DispatchQueue.main.async { [weak self] in self?.scheduleRereadAfterRefusedWrite() }
+                DispatchQueue.main.async { [weak self] in self?.writeWasRefused(nil) }
             }
         }
         return nil
+    }
+
+    /// Music refused `write`, or a write it can't say when nil
+    private func writeWasRefused(_ write: (kind: WriteKind, trackID: String?)?) {
+        if let write = write {
+            refusals[iTunesRadioStation.refusalKey(write.kind, write.trackID), default: 0] += 1
+        } else {
+            unattributedRefusals += 1
+        }
+        os_log("%{public}s[%{public}ld], %{public}s: Music refused %{public}s", ((#file as NSString).lastPathComponent), #line, #function, write.map { "a \($0.kind.rawValue) for \($0.trackID ?? "a song with no ID")" } ?? "a write StarBar can't name")
+        // A write to a Spotify song's copy always names it, so one that names no song was to
+        // Music's own, and takes back nothing remembered of a copy (the fifth review)
+        if write == nil || write?.trackID != nil {
+            LibraryMatchFinder.shared.writeWasRefused(write?.kind, to: write?.trackID)
+        }
+        scheduleRereadAfterRefusedWrite()
     }
 
     /// Read the player again shortly, once, however many writes were refused. It goes through

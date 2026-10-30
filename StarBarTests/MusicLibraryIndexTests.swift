@@ -1,0 +1,373 @@
+//
+//  MusicLibraryIndexTests.swift
+//  StarBarTests
+//
+//  Turning a bulk read of the library into songs, and when the index reads Music again. No
+//  Music here: the reads are fakes. `MusicLibraryLookupTests` checks the real bulk read
+//  against Music under --test-all.
+//
+
+import XCTest
+@testable import StarBar
+
+final class MusicLibraryIndexTests: XCTestCase {
+
+    /// Columns for `rows`, each a track's values in `MusicLibraryIndex.keys` order, with the
+    /// persistent IDs read again unchanged
+    private func columns(_ rows: [[Any]]) -> MusicLibraryIndex.Columns {
+        var columns = MusicLibraryIndex.Columns()
+        for (index, key) in MusicLibraryIndex.keys.enumerated() {
+            columns[key] = rows.map { $0[index] }
+        }
+        columns[MusicLibraryIndex.recheckKey] = columns["persistentID"]
+        return columns
+    }
+
+    private func row(_ id: Any, _ name: Any, by artist: Any, albumArtist: Any = "") -> [Any] {
+        return [id, name, artist, albumArtist]
+    }
+
+    // MARK: - Columns to songs
+
+    func testOnlyNamesAreReadInBulk() {
+        // Ten properties took 25 s at one launch on 2026-10-29. The rest is read for the few
+        // copies a song has, by `LibraryMatchFinder`.
+        XCTAssertEqual(MusicLibraryIndex.keys, ["persistentID", "name", "artist", "albumArtist"])
+    }
+
+    func testEachRowBecomesASong() throws {
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
+            row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries"),
+            row("B2", "Linger", by: "The Cranberries")
+        ])))
+
+        XCTAssertEqual(songs, [
+            LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "The Cranberries"),
+            LibrarySong(persistentID: "B2", name: "Linger", artist: "The Cranberries", albumArtist: "")
+        ])
+    }
+
+    func testEveryKindOfTrackIsKept() throws {
+        // Telling a song from a music video would be another column, so the finder checks the
+        // copies it finds instead
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
+            row("A1", "Zombie", by: "The Cranberries"),
+            row("B2", "Zombie", by: "The Cranberries")
+        ])))
+
+        XCTAssertEqual(songs.map { $0.persistentID }, ["A1", "B2"])
+    }
+
+    func testAValueMusicCouldNotGiveIsLeftOut() throws {
+        // A missing value comes back as NSNull or a null descriptor, never as a string
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
+            row("A1", "Zombie", by: "The Cranberries", albumArtist: NSNull()),
+            row("B2", "Linger", by: "The Cranberries", albumArtist: NSAppleEventDescriptor.null())
+        ])))
+
+        XCTAssertEqual(songs.map { $0.albumArtist }, ["", ""])
+    }
+
+    func testATrackWithNoNameOrIDIsSkipped() throws {
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns([
+            row("A1", "Zombie", by: "The Cranberries"),
+            row("", "Linger", by: "The Cranberries"),
+            row("C3", NSNull(), by: "The Cranberries"),
+            row("D4", "Dreams", by: NSNull())
+        ])))
+
+        XCTAssertEqual(songs.map { $0.persistentID }, ["A1"])
+    }
+
+    func testAShortColumnASongNeedsThrowsTheReadAway() {
+        for key in ["persistentID", "name", "artist"] {
+            var columns = self.columns([row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")])
+            columns[key]?.removeLast()
+            if key == "persistentID" { columns[MusicLibraryIndex.recheckKey]?.removeLast() }
+
+            XCTAssertNil(MusicLibraryIndex.songs(from: columns), key)
+        }
+    }
+
+    func testAMissingColumnASongNeedsThrowsTheReadAway() {
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries")])
+        columns["artist"] = nil
+
+        XCTAssertNil(MusicLibraryIndex.songs(from: columns))
+    }
+
+    func testAShortColumnOfTheRestIsLeftOut() throws {
+        // Measured 2026-10-29: Scripting Bridge drops a missing value from the array rather
+        // than hold its place, so three songs with no length left `duration` three short and
+        // threw away every read of a real library. Paired by row, every value after the gap
+        // would have been the song before's.
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries"),
+                                    row("B2", "Linger", by: "The Cranberries"),
+                                    row("C3", "Dreams", by: "The Cranberries", albumArtist: "The Cranberries")])
+        columns["albumArtist"] = ["The Cranberries", "The Cranberries"]
+
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(from: columns))
+
+        XCTAssertEqual(songs.map { $0.persistentID }, ["A1", "B2", "C3"])
+        XCTAssertEqual(songs.map { $0.albumArtist }, ["", "", ""], "no album artist rather than the wrong one")
+        XCTAssertEqual(MusicLibraryIndex.unpairedColumns(in: columns), ["albumArtist"])
+    }
+
+    func testAMissingColumnOfTheRestIsLeftOut() throws {
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries", albumArtist: "The Cranberries")])
+        columns["albumArtist"] = nil
+
+        let song = try XCTUnwrap(MusicLibraryIndex.songs(from: columns)?.first)
+
+        XCTAssertEqual(song.albumArtist, "")
+        XCTAssertEqual(song.name, "Zombie")
+    }
+
+    func testIDsThatMovedDuringTheReadThrowItAway() {
+        // One song deleted and another added between the reads: every count still agrees,
+        // and only the second read of the IDs can tell
+        var columns = self.columns([row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")])
+        columns[MusicLibraryIndex.recheckKey] = ["A1", "C3"]
+
+        XCTAssertNil(MusicLibraryIndex.songs(from: columns))
+    }
+
+    func testARejectedReadSaysWhy() throws {
+        // Every read failing the same way has to be told apart from a library that really
+        // changed under it, from the log alone
+        let two = [row("A1", "Zombie", by: "The Cranberries"), row("B2", "Linger", by: "The Cranberries")]
+        XCTAssertNil(MusicLibraryIndex.misalignment(in: columns(two)))
+
+        var short = columns(two)
+        short["name"]?.removeLast()
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: short), "2 persistent IDs, but name has 1")
+
+        var missing = columns(two)
+        missing["artist"] = nil
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: missing), "no column for artist")
+
+        var shortOptional = columns(two)
+        shortOptional["albumArtist"]?.removeLast()
+        XCTAssertNil(MusicLibraryIndex.misalignment(in: shortOptional), "left out, not a reason to throw the read away")
+
+        var moved = columns(two)
+        moved[MusicLibraryIndex.recheckKey] = ["A1", "C3"]
+        let reason = try XCTUnwrap(MusicLibraryIndex.misalignment(in: moved))
+        XCTAssertTrue(reason.hasPrefix("the persistent IDs read again differ from row 1: B2"), reason)
+
+        XCTAssertEqual(MusicLibraryIndex.misalignment(in: columns([])), "no tracks")
+    }
+
+    func testAReadWithNoTracksIsAFailure() {
+        // A read that went wrong quietly looks exactly like this; an empty library would match
+        // nothing until the next edit
+        XCTAssertNil(MusicLibraryIndex.songs(from: columns([])))
+    }
+
+    // MARK: - When Music is read
+
+    /// A fake library and Music process, counting reads. `gate`, when set, holds each read
+    /// until it is signalled, so a test can act while one is out.
+    private final class FakeMusic {
+        var pid: pid_t? = 501
+        var songs: [LibrarySong]? = [LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries",
+                                                  albumArtist: "")]
+        var gate: DispatchSemaphore?
+        private let lock = NSLock()
+        private var _reads = 0
+        var reads: Int {
+            lock.lock(); defer { lock.unlock() }
+            return _reads
+        }
+
+        func read(_ pid: pid_t) -> [LibrarySong]? {
+            lock.lock()
+            _reads += 1
+            let gate = self.gate
+            let songs = self.songs
+            lock.unlock()
+            gate?.wait()
+            return songs
+        }
+    }
+
+    private var music: FakeMusic!
+    private var center: NotificationCenter!
+    private var index: MusicLibraryIndex!
+
+    override func setUp() {
+        super.setUp()
+        music = FakeMusic()
+        center = NotificationCenter()
+        let music = self.music!
+        index = MusicLibraryIndex(readLibrary: { music.read($0) }, musicPID: { music.pid })
+        index.observeLibraryChanges(in: center)
+    }
+
+    /// The matcher `withMatcher` hands back, waiting for a read if there is one
+    private func ask() -> SongMatcher? {
+        let answered = expectation(description: "withMatcher answered")
+        var result: SongMatcher?
+        index.withMatcher {
+            result = $0
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 5)
+        return result
+    }
+
+    private func zombie(in matcher: SongMatcher?) -> LibrarySong? {
+        return matcher?.match(for: SongQuery(name: "Zombie", artist: "The Cranberries", album: "", duration: nil))
+    }
+
+    func testTheFirstAskReadsTheLibrary() {
+        XCTAssertEqual(zombie(in: ask())?.persistentID, "A1")
+        XCTAssertEqual(music.reads, 1)
+    }
+
+    func testLaterAsksUseTheSameRead() {
+        _ = ask()
+        _ = ask()
+        _ = ask()
+
+        XCTAssertEqual(music.reads, 1)
+        XCTAssertFalse(index.needsRead)
+    }
+
+    func testEitherLibraryNotificationMeansReadingAgain() {
+        _ = ask()
+
+        center.post(name: .ITLibraryDidChange, object: nil)
+        XCTAssertTrue(index.needsRead)
+        _ = ask()
+        XCTAssertEqual(music.reads, 2)
+
+        center.post(name: Notification.Name("com.apple.iTunes.libraryChanged"), object: nil)
+        _ = ask()
+        XCTAssertEqual(music.reads, 3)
+    }
+
+    func testANotificationReadsNothingByItself() {
+        // Event-driven, not eager: a library edit costs nothing until something asks
+        _ = ask()
+        center.post(name: .ITLibraryDidChange, object: nil)
+        center.post(name: .ITLibraryDidChange, object: nil)
+
+        XCTAssertEqual(music.reads, 1)
+    }
+
+    func testAsksDuringAReadShareIt() {
+        music.gate = DispatchSemaphore(value: 0)
+        let both = expectation(description: "both answered")
+        both.expectedFulfillmentCount = 2
+        var answers: [SongMatcher?] = []
+        index.withMatcher { answers.append($0); both.fulfill() }
+        index.withMatcher { answers.append($0); both.fulfill() }
+
+        music.gate?.signal()
+        wait(for: [both], timeout: 5)
+
+        XCTAssertEqual(music.reads, 1)
+        XCTAssertEqual(answers.compactMap { zombie(in: $0)?.persistentID }, ["A1", "A1"])
+    }
+
+    func testAChangeDuringAReadLeavesItStale() {
+        // The change may or may not be in what was read, so the read is used once and the
+        // next ask reads again
+        music.gate = DispatchSemaphore(value: 0)
+        let answered = expectation(description: "answered")
+        var answer: SongMatcher?
+        index.withMatcher { answer = $0; answered.fulfill() }
+
+        center.post(name: .ITLibraryDidChange, object: nil)
+        music.gate?.signal()
+        wait(for: [answered], timeout: 5)
+
+        XCTAssertNotNil(zombie(in: answer))
+        XCTAssertTrue(index.needsRead)
+        music.gate = nil
+        _ = ask()
+        XCTAssertEqual(music.reads, 2)
+    }
+
+    func testNoMusicMeansNoMatcherAndNoRead() {
+        music.pid = nil
+
+        XCTAssertNil(ask())
+        XCTAssertEqual(music.reads, 0)
+    }
+
+    func testMusicQuittingDropsTheIndex() {
+        _ = ask()
+        music.pid = nil
+
+        XCTAssertNil(ask())
+    }
+
+    func testANewMusicProcessIsReadAgain() {
+        // The library notifications don't cover edits made while StarBar wasn't listening to
+        // that Music, such as a cloud library sync at launch
+        _ = ask()
+        music.pid = 777
+
+        XCTAssertTrue(index.needsRead)
+        _ = ask()
+        XCTAssertEqual(music.reads, 2)
+    }
+
+    // MARK: - Reading a song's copies
+
+    func testCopiesAreReadOffTheMainThreadAndAnsweredOnIt() {
+        // Music has taken over a second to answer; the menu bar can't wait on that
+        var readOnMain: Bool?
+        let index = MusicLibraryIndex(readLibrary: { _ in [] }, readCopies: { _, songs, _ in
+            readOnMain = Thread.isMainThread
+            return songs.map { song -> LibrarySong? in
+                var read = song
+                read.album = "No Need to Argue"
+                return read
+            }
+        }, musicPID: { 501 })
+        let answered = expectation(description: "answered")
+        index.readCopies([LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")],
+                         choosing: false) { copies in
+            XCTAssertTrue(Thread.isMainThread)
+            XCTAssertEqual(copies?.first??.album, "No Need to Argue")
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 5)
+
+        XCTAssertEqual(readOnMain, false)
+    }
+
+    func testNoMusicMeansNoCopiesAndNoRead() {
+        music.pid = nil
+        var answers: [[LibrarySong?]?] = []
+
+        index.readCopies([LibrarySong(persistentID: "A1", name: "Zombie", artist: "The Cranberries", albumArtist: "")],
+                         choosing: false) { answers.append($0) }
+
+        XCTAssertEqual(answers.count, 1, "answered at once")
+        XCTAssertNil(answers.first ?? nil)
+    }
+
+    func testAFailedReadIsTriedAgainNextTime() {
+        music.songs = nil
+        XCTAssertNil(ask())
+
+        music.songs = [LibrarySong(persistentID: "B2", name: "Zombie", artist: "The Cranberries", albumArtist: "")]
+        XCTAssertEqual(zombie(in: ask())?.persistentID, "B2")
+        XCTAssertEqual(music.reads, 2)
+    }
+
+    func testEachEventOfACopiesReadHasOnlyTheTimeLeft() {
+        // A copy begun just inside the deadline could otherwise run on for eight timeouts
+        let now = Date(timeIntervalSinceReferenceDate: 0)
+
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(10), now: now), MusicLibraryIndex.copiesTimeout)
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(1), now: now), 60)
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(0.001), now: now), 1, "0 is no timeout at all")
+        XCTAssertEqual(MusicLibraryIndex.timeoutLeft(until: now.addingTimeInterval(-5), now: now), 1)
+    }
+
+}

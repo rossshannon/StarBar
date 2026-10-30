@@ -108,6 +108,48 @@ final class RatingReminderControllerTests: XCTestCase {
         XCTAssertNil(clock.pendingOneShot)
     }
 
+    func testARatingMusicDidntAnswerIsReadAgainBeforeRinging() {
+        // The sixth review, 2026-10-30: a new song's first read went unanswered, its stars on
+        // show were none, and the reminder took that for unrated
+        player = snapshot(position: 575, rated: true)
+        controller.playerDidUpdate(snapshot(position: 575), ratingIsKnown: false)
+        XCTAssertEqual(fullReads, 0, "not straight after Music failed to answer, on the main thread")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, RatingReminderController.minimumWait)
+        clock.fireOneShot()
+        XCTAssertEqual(fullReads, 1)
+        XCTAssertEqual(bell.playCount, 0)
+
+        player = snapshot(track: "B", position: 575)
+        controller.playerDidUpdate(snapshot(track: "B", position: 575), ratingIsKnown: false)
+        clock.fireOneShot()
+        XCTAssertEqual(fullReads, 2)
+        XCTAssertEqual(bell.playCount, 1, "an unrated song still rings, once Music says so")
+    }
+
+    func testARatingMusicDidntAnswerAndCantBeReadAgainDoesntRing() {
+        player = snapshot(position: 575)
+        controller.playerDidUpdate(snapshot(position: 575), ratingIsKnown: false)
+        readsFail = true
+        clock.fireOneShot()
+        XCTAssertEqual(bell.playCount, 0)
+        XCTAssertNotNil(clock.pendingOneShot, "it tries again")
+    }
+
+    func testANewSongStartsItsOwnCountOfFailedReads() {
+        // The sixth review: the last song's failures counted against the next one
+        update(snapshot(position: 500))
+        readsFail = true
+        for _ in 0..<(RatingReminderController.maximumFailedReads - 1) {
+            clock.fireOneShot()
+        }
+        readsFail = false
+        player = snapshot(track: "B", position: 575)
+        controller.playerDidUpdate(snapshot(track: "B", position: 575), ratingIsKnown: false)
+        readsFail = true
+        clock.fireOneShot()
+        XCTAssertNotNil(clock.pendingOneShot, "one failure for B is not the last song's third")
+    }
+
     func testCheckThatIsNotDueReadsOnlyThePosition() {
         update(snapshot(position: 500))
         player = snapshot(position: 502)
