@@ -159,12 +159,17 @@ extension PlayerViewController {
         }
 
         if let image = artwork {
-            let transition = CATransition()
-            transition.duration = 0.33
-            transition.type = .fade
-            transition.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
-            transition.isRemovedOnCompletion = true
-            coverImageView.layer?.add(transition, forKey: nil)
+            // The cover and the blurred backdrop behind it fade together, so a cover that
+            // arrives after the popover opened (Apple's, for a song Music had none for)
+            // cross-fades from the placeholder rather than the backdrop jumping under it
+            for layer in [coverImageView.layer, backCoverImageView.layer] {
+                let transition = CATransition()
+                transition.duration = 0.33
+                transition.type = .fade
+                transition.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
+                transition.isRemovedOnCompletion = true
+                layer?.add(transition, forKey: nil)
+            }
 
             coverImageView.image = image
             // Rendered once here. A drawing-handler NSImage would run the blur again on

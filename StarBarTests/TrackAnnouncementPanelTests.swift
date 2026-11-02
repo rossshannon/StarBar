@@ -186,6 +186,54 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled)
     }
 
+    /// A cover that comes after the strip went up (Spotify's, or Apple's for a song Music had
+    /// none for) cross-fades from the placeholder, stepped by the clock
+    func testACoverThatArrivesLaterFadesIn() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0, artworkFadeDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+        defer { animated.orderOut(nil) }
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: NSImage(size: NSSize(width: 10, height: 10))))
+        XCTAssertEqual(animated.stripView.artworkFade, 0, "the placeholder still shows on the first frame")
+        clock.advance(by: 0.15)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.artworkFade, 0.5, accuracy: 0.01, "half way at half time on an ease-in-out curve")
+        clock.advance(by: 0.2)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+        // Done: more frames change nothing
+        clock.advance(by: 1)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+    }
+
+    func testOnlyALateCoverForTheSameSongFades() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0, artworkFadeDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+        defer { animated.orderOut(nil) }
+        let cover = NSImage(size: NSSize(width: 10, height: 10))
+
+        // A song whose cover came with it shows it at once
+        animated.show(TrackAnnouncement(copying: sample, artwork: cover), reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+        // and a change to its stars doesn't fade it again
+        animated.refresh(TrackAnnouncement(identity: "1", title: "Title", artist: "Artist", album: "Album", rating: 80, artwork: cover))
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+
+        // Another song's arrival mid-fade shows its own artwork at once
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: cover))
+        XCTAssertEqual(animated.stripView.artworkFade, 0)
+        animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album", artwork: cover), reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+        clock.advance(by: 0.1)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.artworkFade, 1, "the old song's fade doesn't carry on over the new one")
+    }
+
     func testShowDuringSlideOutTurnsRoundFromWhereItIs() {
         let clock = FakeClock()
         let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
