@@ -368,17 +368,17 @@ extension AppDelegate {
                     playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
                 }
                 live.canRate = playing?.canRate ?? true
-                if wantsArtwork {
-                    // The user's own copy first: a catalog track's artwork read can come back
-                    // empty and raise even when the same song sits in the library with its
-                    // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
-                    // back to the playing track rather than refusing, and `sleeve()` for
-                    // the one answer it does refuse: the previous song's cover, left over.
-                    if let playing = playing {
-                        live.artwork = playing.sleeve()
-                    } else {
-                        live.artwork = track.firstArtworkImage()
-                    }
+                // The user's own copy first: a catalog track's artwork read can come back
+                // empty and raise even when the same song sits in the library with its
+                // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
+                // back to the playing track rather than refusing, and `sleeve()` for the
+                // one answer it does refuse: the previous song's cover, left over. A song the
+                // user doesn't have is read even when Music's notification says it has no
+                // artwork, because then `sleeve()` asks Apple for the cover.
+                if let playing = playing, wantsArtwork || !playing.canRate {
+                    live.artwork = playing.sleeve()
+                } else if playing == nil, wantsArtwork {
+                    live.artwork = track.firstArtworkImage()
                 }
                 return .loaded(live)
             case .changed:

@@ -197,7 +197,7 @@ encoding, and the albums as releases (`SongName.releaseName`), since consecutive
 album share a cover. The tolerance is a guess; StarBar logs every difference it measures.
 
 A cover refused this way is then fetched from Apple's public iTunes Search service, by the
-album's artist and name (`AppleMusicArtworkLoader`), and shown when it arrives, in the strip
+song's artist and title (`AppleMusicArtworkLoader`, below), and shown when it arrives, in the strip
 while it is still up and in the popover. Only an exact album and artist match is taken.
 
 Checked live the same evening, in Ireland's store: the search for "Tom Rogerson & Brian Eno
@@ -208,6 +208,21 @@ downloaded (100 KB and 77 KB JPEGs). On the installed build, two catalog songs i
 different artists (David Bowie, then Daniel Lanois) measured 0.193 apart, against both the
 cover shown for the first and Music's answer for it, so the second kept Music's cover and
 Apple was not asked. The refusal itself has not yet been seen live.
+
+### No cover at all
+
+Minutes later, two catalog songs in a row came with no artwork: "Exit Music (For a Film)
+[Remastered]" on *OK Computer OKNOTOK 1997 2017*, then "Obsidian" on *Mixing Colours
+(Expanded)*. Music reported `count of artworks` 0, and reading artwork 1 failed with a
+parameter error, for as long as the songs were looked at. This is the "absent at first" row of
+the table above, but it did not fill in. Such a song's cover is asked of Apple too.
+
+Apple's **album** search does not know every edition by Music's name for it: "Radiohead OK
+Computer OKNOTOK 1997 2017" answered with the plain *OK Computer* and seven unrelated albums,
+and the album rule rightly refused *OK Computer*, whose cover is another. The **song** search
+for "Radiohead Exit Music For a Film" answered with the track on *OK Computer OKNOTOK 1997
+2017* first, with its own cover, and the plain album's second. So the loader searches for the
+song and keeps the cover for its album.
 
 ### Open question
 

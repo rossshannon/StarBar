@@ -2,8 +2,8 @@
 //  AppleMusicArtworkLoaderTests.swift
 //  StarBarTests
 //
-//  Which album's cover is taken from Apple's search, and that each album is asked once. No
-//  network: the fetch is a fake.
+//  Which album's cover is taken from Apple's search, and that each song is asked for once. No
+//  network: the fetch is a fake, answering in the shape the live service gave on 2026-11-02.
 //
 
 import XCTest
@@ -27,20 +27,25 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         }, country: "IE")
     }
 
-    private let chainHome = (artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore")
+    private let chainHome = (title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore")
 
-    /// An answer in the shape Apple's search gives, with the album asked for second
-    private func answer(_ albums: [(artist: String, name: String, cover: String)]) -> Data {
-        let results: [[String: Any]] = albums.enumerated().map { index, album in
-            [
-                "wrapperType": "collection",
-                "collectionType": "Album",
+    /// An answer in the shape Apple's song search gives, one track per release
+    private func answer(_ tracks: [(artist: String, album: String, cover: String)], albumArtist: String? = nil) -> Data {
+        let results: [[String: Any]] = tracks.enumerated().map { index, track in
+            var result: [String: Any] = [
+                "wrapperType": "track",
+                "kind": "song",
                 "collectionId": 1_440_000_000 + index,
-                "artistName": album.artist,
-                "collectionName": album.name,
-                "artworkUrl60": album.cover.replacingOccurrences(of: "100x100bb", with: "60x60bb"),
-                "artworkUrl100": album.cover,
+                "trackName": "A Song",
+                "artistName": track.artist,
+                "collectionName": track.album,
+                "artworkUrl60": track.cover.replacingOccurrences(of: "100x100bb", with: "60x60bb"),
+                "artworkUrl100": track.cover,
             ]
+            if let albumArtist = albumArtist {
+                result["collectionArtistName"] = albumArtist
+            }
+            return result
         }
         return try! JSONSerialization.data(withJSONObject: ["resultCount": results.count, "results": results])
     }
@@ -49,6 +54,15 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         return answer([
             ("Brian Eno", "Another Green World", "https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/agw.jpg/100x100bb.jpg"),
             ("Tom Rogerson & Brian Eno", "Finding Shore", "https://is3-ssl.mzstatic.com/image/thumb/Music126/v4/bb/fs.jpg/100x100bb.jpg"),
+        ])
+    }
+
+    /// The song search for "Exit Music (For a Film)", 2026-11-02: the plain album and the
+    /// OKNOTOK edition, each with its own cover. The album search found only the plain one.
+    private var exitMusic: Data {
+        return answer([
+            ("Radiohead", "OK Computer OKNOTOK 1997 2017", "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/9c/oknotok.jpg/100x100bb.jpg"),
+            ("Radiohead", "OK Computer", "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/07/okc.png/100x100bb.jpg"),
         ])
     }
 
@@ -65,33 +79,43 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
 
     // MARK: - The search
 
-    func testTheSearchAsksForAlbumsByArtistAndName() {
-        let url = AppleMusicArtworkLoader.searchURL(artist: "Tom Rogerson & Brian Eno", album: "Finding Shore", country: "IE")!
+    func testTheSearchAsksForTheSongByArtistAndTitle() {
+        let url = AppleMusicArtworkLoader.searchURL(artist: "Radiohead", title: "Exit Music (For a Film) [Remastered]", country: "IE")!
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
         XCTAssertEqual(url.scheme, "https")
         XCTAssertEqual(url.host, "itunes.apple.com")
         XCTAssertEqual(url.path, "/search")
         let query = Dictionary(uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
-        XCTAssertEqual(query["term"], "Tom Rogerson & Brian Eno Finding Shore")
-        XCTAssertEqual(query["entity"], "album")
+        XCTAssertEqual(query["term"], "Radiohead Exit Music (For a Film) [Remastered]")
+        XCTAssertEqual(query["entity"], "song")
         XCTAssertEqual(query["media"], "music")
+        XCTAssertEqual(query["limit"], "25")
         XCTAssertEqual(query["country"], "ie")
-        XCTAssertNil(AppleMusicArtworkLoader.searchURL(artist: "", album: "", country: nil))
+        XCTAssertNil(AppleMusicArtworkLoader.searchURL(artist: "", title: "Chain Home", country: nil))
+        XCTAssertNil(AppleMusicArtworkLoader.searchURL(artist: "Radiohead", title: "", country: nil))
     }
 
     func testAnArtistsAmpersandOrPlusStaysInTheTerm() {
-        let url = AppleMusicArtworkLoader.searchURL(artist: "Florence + The Machine", album: "Lungs", country: nil)!
+        let url = AppleMusicArtworkLoader.searchURL(artist: "Florence + The Machine", title: "Dog Days Are Over", country: nil)!
         XCTAssertTrue(url.absoluteString.contains("Florence%20%2B%20The%20Machine"), url.absoluteString)
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "term" })?.value, "Florence + The Machine Lungs")
+        XCTAssertEqual(components.queryItems?.first(where: { $0.name == "term" })?.value, "Florence + The Machine Dog Days Are Over")
         XCTAssertNil(components.queryItems?.first(where: { $0.name == "country" }))
-        let ampersand = AppleMusicArtworkLoader.searchURL(artist: "Simon & Garfunkel", album: "Bookends", country: nil)!
-        XCTAssertEqual(URLComponents(url: ampersand, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "Simon & Garfunkel Bookends")
+        let ampersand = AppleMusicArtworkLoader.searchURL(artist: "Simon & Garfunkel", title: "America", country: nil)!
+        XCTAssertEqual(URLComponents(url: ampersand, resolvingAgainstBaseURL: false)?.queryItems?.first?.value, "Simon & Garfunkel America")
     }
 
     func testTheMatchingAlbumsCoverIsTakenLarger() {
         XCTAssertEqual(AppleMusicArtworkLoader.cover(in: finding, artists: chainHome.artists, album: chainHome.album),
                        URL(string: "https://is3-ssl.mzstatic.com/image/thumb/Music126/v4/bb/fs.jpg/600x600bb.jpg"))
+    }
+
+    func testAnEditionNamedLikeTheAlbumIsNotTheAlbum() {
+        // OKNOTOK and the plain OK Computer have different covers, and the search answers
+        // with both for one song
+        XCTAssertEqual(AppleMusicArtworkLoader.cover(in: exitMusic, artists: ["Radiohead"], album: "OK Computer OKNOTOK 1997 2017")?.lastPathComponent, "600x600bb.jpg")
+        XCTAssertEqual(AppleMusicArtworkLoader.cover(in: exitMusic, artists: ["Radiohead"], album: "OK Computer OKNOTOK 1997 2017")?.deletingLastPathComponent().lastPathComponent, "oknotok.jpg")
+        XCTAssertEqual(AppleMusicArtworkLoader.cover(in: exitMusic, artists: ["Radiohead"], album: "OK Computer")?.deletingLastPathComponent().lastPathComponent, "okc.png")
     }
 
     func testAnotherAlbumIsNeverTaken() {
@@ -102,9 +126,12 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
 
     func testTheArtistHasToBeTheSongs() {
         XCTAssertNil(AppleMusicArtworkLoader.cover(in: finding, artists: ["A Tribute Band"], album: "Finding Shore"))
-        // The album artist or the track's artist will do
+        // The track's artist or the album artist will do
         XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: finding, artists: ["Various Artists", "Tom Rogerson & Brian Eno"], album: "Finding Shore"))
         XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: finding, artists: ["tom rogerson & brian eno"], album: "finding shore"))
+        // and on Apple's side, the album artist of a compilation
+        let compilation = answer([("Someone Else", "Finding Shore", "https://is3-ssl.mzstatic.com/fs.jpg/100x100bb.jpg")], albumArtist: "Tom Rogerson & Brian Eno")
+        XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: compilation, artists: chainHome.artists, album: chainHome.album))
     }
 
     func testAnEditionOfTheAlbumIsTheAlbum() {
@@ -140,10 +167,10 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
 
     // MARK: - Loading
 
-    private func load(_ song: (artists: [String], album: String)) -> NSImage? {
+    private func load(_ song: (title: String, artists: [String], album: String)) -> NSImage? {
         let answered = expectation(description: "answered")
         var cover: NSImage?
-        loader.load(artists: song.artists, album: song.album) { image in
+        loader.load(title: song.title, artists: song.artists, album: song.album) { image in
             cover = image
             answered.fulfill()
         }
@@ -166,12 +193,12 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
     func testTwoAsksAtOnceShareOneSearch() {
         let both = expectation(description: "both answered")
         both.expectedFulfillmentCount = 2
-        loader.load(artists: chainHome.artists, album: chainHome.album) { image in
+        loader.load(title: chainHome.title, artists: chainHome.artists, album: chainHome.album) { image in
             XCTAssertNotNil(image)
             both.fulfill()
         }
         // The popover and the strip read the cover for one song
-        loader.load(artists: chainHome.artists, album: chainHome.album) { image in
+        loader.load(title: chainHome.title, artists: chainHome.artists, album: chainHome.album) { image in
             XCTAssertNotNil(image)
             both.fulfill()
         }
@@ -179,13 +206,21 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         XCTAssertEqual(requests.count, 2)
     }
 
-    func testAnAlbumAppleHasNotIsNotAskedForAgain() {
+    func testASongAppleHasNotIsNotAskedForAgain() {
         searchAnswer = answer([("Brian Eno", "Another Green World", "https://is1-ssl.mzstatic.com/agw.jpg/100x100bb.jpg")])
         XCTAssertNil(load(chainHome))
         XCTAssertEqual(requests.count, 1, "no cover to download")
         XCTAssertNil(load(chainHome))
         XCTAssertEqual(requests.count, 1, "the popover reads again on every update, and mustn't search each time")
         XCTAssertTrue(loader.isEmpty)
+
+        // Another song of the album is another search, which can find it
+        searchAnswer = finding
+        XCTAssertNotNil(load((title: "Marble Hill", artists: chainHome.artists, album: chainHome.album)))
+        XCTAssertEqual(requests.count, 3)
+        // and the album's cover then answers for every song of it
+        XCTAssertNotNil(load(chainHome))
+        XCTAssertEqual(requests.count, 3)
     }
 
     func testAFailedSearchIsTriedAgainNextTime() {
@@ -205,15 +240,16 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         XCTAssertTrue(loader.isEmpty)
     }
 
-    func testASongWithNoAlbumAsksNothing() {
-        XCTAssertNil(load((artists: ["Tom Rogerson & Brian Eno"], album: "")))
-        XCTAssertNil(load((artists: [], album: "Finding Shore")))
+    func testASongWithNoAlbumArtistOrTitleAsksNothing() {
+        XCTAssertNil(load((title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: "")))
+        XCTAssertNil(load((title: "Chain Home", artists: [], album: "Finding Shore")))
+        XCTAssertNil(load((title: "", artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore")))
         XCTAssertTrue(requests.isEmpty)
     }
 
     func testTheSharedLoaderNeverReachesTheNetworkUnderTests() {
         let answered = expectation(description: "answered")
-        AppleMusicArtworkLoader.shared.load(artists: chainHome.artists, album: "A Test Album Nobody Has") { image in
+        AppleMusicArtworkLoader.shared.load(title: chainHome.title, artists: chainHome.artists, album: "A Test Album Nobody Has") { image in
             XCTAssertNil(image)
             answered.fulfill()
         }

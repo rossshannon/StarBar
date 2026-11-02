@@ -2,9 +2,9 @@
 //  AppleMusicArtworkLoader.swift
 //  StarBar
 //
-//  An Apple Music album's cover, from Apple's public iTunes Search service, for when Music
-//  hands back the previous song's cover instead. The search's answer is read by pure rules:
-//  see `AppleMusicArtworkLoaderTests`.
+//  An Apple Music song's cover, from Apple's public iTunes Search service, for when Music hands
+//  back the previous song's cover instead, or none at all. The search's answer is read by pure
+//  rules: see `AppleMusicArtworkLoaderTests`.
 //
 
 import Cocoa
@@ -17,21 +17,26 @@ extension Notification.Name {
     static let appleMusicCoverDidLoad = Notification.Name("StarBarAppleMusicCoverDidLoad")
 }
 
-/// Finds an album's cover on Apple's iTunes Search service and downloads it.
+/// Finds a song's cover on Apple's iTunes Search service and downloads it.
 ///
-/// Asked only when Music answered a catalog track's artwork read with the previous song's
-/// cover (`PlayingTrack.sleeve()`), for a song the user doesn't have, so there is no copy to
-/// read instead. It sends the album's artist and name to `itunes.apple.com`, which belongs to
-/// the company streaming the song, and nothing else about the user. Only `https` on
-/// `itunes.apple.com` is asked and only `https` on `mzstatic.com`, Apple's image host, is
-/// downloaded; each answer is capped, and the image is decoded off the main thread. Answers
-/// on the main thread.
+/// Asked only for a catalog track the user doesn't have, so there is no copy to read instead,
+/// when Music answered its artwork read with the previous song's cover or with none at all
+/// (`PlayingTrack.sleeve()`). It sends the song's artist and title to `itunes.apple.com`,
+/// which belongs to the company streaming the song, and nothing else about the user. Only
+/// `https` on `itunes.apple.com` is asked and only `https` on `mzstatic.com`, Apple's image
+/// host, is downloaded; each answer is capped, and the image is decoded off the main thread.
+/// Answers on the main thread.
+///
+/// **It searches for the song, not the album.** Apple's album search doesn't know every
+/// edition by the name Music gives it: measured 2026-11-02, "Radiohead OK Computer OKNOTOK
+/// 1997 2017" found only the plain *OK Computer*, whose cover is another, while the song
+/// search for "Exit Music (For a Film)" found the track on OKNOTOK with its own cover.
 ///
 /// A result is taken only when its album and artist are the song's, folded as releases and
 /// names (`cover(in:artists:album:)`): a wrong cover is worse than the placeholder, which is
-/// what the strip and popover show when nothing matches. An album the search answered with no
+/// what the strip and popover show when nothing matches. A song the search answered with no
 /// match isn't asked again this session, so the popover's reads on every update don't search
-/// over and over.
+/// over and over. A cover found is kept for its album, since every track of it has that one.
 final class AppleMusicArtworkLoader {
 
     /// Fetches the bytes at a URL. `URLSession` in the app; a fake in tests, and nothing at all
@@ -57,6 +62,7 @@ final class AppleMusicArtworkLoader {
     private let fetch: Fetch
     private let country: String?
     private var cache: [(album: String, image: NSImage)] = []
+    /// Songs, by album key and folded title, the search answered without a match
     private var notFound: Set<String> = []
     private var inFlight: [String: [(NSImage?) -> Void]] = [:]
 
@@ -72,7 +78,7 @@ final class AppleMusicArtworkLoader {
     }
 
     /// The album's key: its release name and its first artist, folded, or nil when either is
-    /// missing. `artists` is the album artist first, then the track's artist.
+    /// missing. `artists` is the track's artist first, then the album artist.
     static func key(artists: [String], album: String) -> String? {
         let name = SongName.releaseName(album)
         guard !name.isEmpty, let artist = artists.map(SongName.fold).first(where: { !$0.isEmpty }) else { return nil }
@@ -91,11 +97,12 @@ final class AppleMusicArtworkLoader {
         return cache.last(where: { $0.album == key })?.image
     }
 
-    /// The album's cover, from the cache or from Apple. `completion` runs on the main thread,
-    /// with nil when there's no match or the network failed.
-    func load(artists: [String], album: String, completion: @escaping (NSImage?) -> Void) {
+    /// The cover of the song `title` on `album`, from the cache or from Apple. `artists` is the
+    /// track's artist first, then the album artist. `completion` runs on the main thread, with
+    /// nil when there's no match or the network failed.
+    func load(title: String, artists: [String], album: String, completion: @escaping (NSImage?) -> Void) {
         guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album),
-              let search = AppleMusicArtworkLoader.searchURL(artist: artists.first(where: { !$0.isEmpty }) ?? "", album: album, country: country) else {
+              let search = AppleMusicArtworkLoader.searchURL(artist: artists.first(where: { !$0.isEmpty }) ?? "", title: title, country: country) else {
             completion(nil)
             return
         }
@@ -103,7 +110,8 @@ final class AppleMusicArtworkLoader {
             completion(image)
             return
         }
-        guard !notFound.contains(key) else {
+        let song = key + "|" + SongName.fold(title)
+        guard !notFound.contains(song) else {
             completion(nil)
             return
         }
@@ -112,7 +120,7 @@ final class AppleMusicArtworkLoader {
             return
         }
         inFlight[key] = [completion]
-        os_log("%{public}s[%{public}ld], %{public}s: asking Apple for the cover of %{public}s by %{public}s", ((#file as NSString).lastPathComponent), #line, #function, album, artists.first ?? "nil")
+        os_log("%{public}s[%{public}ld], %{public}s: asking Apple for the cover of %{public}s by %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, title, artists.first ?? "nil", album)
 
         fetch(search) { [weak self] data in
             let found = data
@@ -123,7 +131,7 @@ final class AppleMusicArtworkLoader {
                     guard let self = self else { return }
                     if data != nil {
                         // Apple answered, and none of it was this album
-                        self.notFound.insert(key)
+                        self.notFound.insert(song)
                     }
                     os_log("%{public}s[%{public}ld], %{public}s: Apple has no cover for %{public}s by %{public}s%{public}s", ((#file as NSString).lastPathComponent), #line, #function, album, artists.first ?? "nil", data == nil ? " (the search failed)" : "")
                     self.finish(key, with: nil)
@@ -158,16 +166,18 @@ final class AppleMusicArtworkLoader {
 
     // MARK: - The search, pure
 
-    /// The search for an album: Apple's `search` endpoint, for albums, by artist and name
-    static func searchURL(artist: String, album: String, country: String?) -> URL? {
-        let term = [artist, album].filter { !$0.isEmpty }.joined(separator: " ")
-        guard !term.isEmpty else { return nil }
+    /// The search for a song: Apple's `search` endpoint, for songs, by artist and title as
+    /// Music gives them. Twenty-five results, because one song can be on many releases (the
+    /// album, its editions, singles, compilations, live albums) and only one is the album
+    /// being looked for.
+    static func searchURL(artist: String, title: String, country: String?) -> URL? {
+        guard !artist.isEmpty, !title.isEmpty else { return nil }
         var components = URLComponents(string: "https://itunes.apple.com/search")
         var items = [
-            ("term", term),
+            ("term", artist + " " + title),
             ("media", "music"),
-            ("entity", "album"),
-            ("limit", "10"),
+            ("entity", "song"),
+            ("limit", "25"),
         ]
         if let country = country, country.count == 2 {
             items.append(("country", country.lowercased()))
@@ -181,8 +191,8 @@ final class AppleMusicArtworkLoader {
         return components?.url
     }
 
-    /// The cover of the first album in a search's answer whose name is `album` as a release
-    /// and whose artist is one of `artists`, at `coverSide` pixels, or nil
+    /// The cover of the first result in a search's answer whose album is `album` as a release
+    /// and whose artist or album artist is one of `artists`, at `coverSide` pixels, or nil
     static func cover(in data: Data, artists: [String], album: String) -> URL? {
         guard let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let results = answer["results"] as? [[String: Any]] else { return nil }
@@ -190,8 +200,9 @@ final class AppleMusicArtworkLoader {
         let wantedArtists = Set(artists.map(SongName.fold).filter { !$0.isEmpty })
         guard !wanted.isEmpty, !wantedArtists.isEmpty else { return nil }
         for result in results {
+            let resultArtists = ["artistName", "collectionArtistName"].compactMap { result[$0] as? String }.map(SongName.fold)
             guard let name = result["collectionName"] as? String, SongName.releaseName(name) == wanted,
-                  let artist = result["artistName"] as? String, wantedArtists.contains(SongName.fold(artist)),
+                  resultArtists.contains(where: wantedArtists.contains),
                   let small = result["artworkUrl100"] as? String else { continue }
             let size = "\(coverSide)x\(coverSide)bb"
             guard let url = URL(string: small.replacingOccurrences(of: "100x100bb", with: size)),
