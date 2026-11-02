@@ -27,6 +27,13 @@ The app, Xcode project, schemes, targets, source folders and Swift module are al
 - `build.sh` fails a test run that executed fewer tests than `MIN_APP_TESTS` / `MIN_UI_TESTS`, so a test bundle that fails to load can't pass as "Executed 0 tests". Raise the floor when the suite grows well past it.
 - An install only counts when three things are proven: the new binary is in `/Applications`, the running app is that binary, and the changed code runs. `./build.sh --install` ends with a verification block (commit, binary hash, running PID) that covers the first two; read it rather than the exit code. For the third, check the app's log for the code path you changed. Claude Code has an `install-and-verify` skill for this.
 
+## Worktrees
+
+- Put every git worktree in `.worktrees/` at the repository root, never beside the checkout (`../StarBar-feature`): `git worktree add .worktrees/<name> -b <branch> origin/main`. `.worktrees/` is gitignored, so the main checkout's `git status` stays clean and all the project's checkouts stay in one folder.
+- A new worktree needs no setup. `build.sh` builds into that worktree's own `build/` (so its first build fetches the Swift package again), and `core.hooksPath` is shared by every worktree of the clone.
+- `grep -r` and `find` run from the main checkout descend into `.worktrees/` and report every file once per worktree, so give them a path such as `StarBar/`. ripgrep honours `.gitignore` and skips it.
+- Remove a worktree with `git worktree remove .worktrees/<name>` once its branch has merged. One made somewhere else can be brought in with `git worktree move <path> .worktrees/<name>`, but not while a session is still working in it.
+
 ## Testing gotchas
 
 - **UI tests: only run them when the user asks.** They click and drag the real menu bar and take over the mouse and screen for about two minutes. The script asks for confirmation; a non-interactive run stops unless `--yes` is passed. Pass `--yes` only after the user has asked for UI tests in this conversation. CI runs them on every push, so CI is the normal way to get them.
