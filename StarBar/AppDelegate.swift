@@ -361,8 +361,13 @@ extension AppDelegate {
                     // The user's own copy first: a catalog track's artwork read can come back
                     // empty and raise even when the same song sits in the library with its
                     // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
-                    // back to the playing track rather than refusing.
-                    live.artwork = (playing?.artworkTrack ?? track).firstArtworkImage()
+                    // back to the playing track rather than refusing, and `sleeve()` for
+                    // the one answer it does refuse: the previous song's cover, left over.
+                    if let playing = playing {
+                        live.artwork = playing.sleeve()
+                    } else {
+                        live.artwork = track.firstArtworkImage()
+                    }
                 }
                 return .loaded(live)
             case .changed:

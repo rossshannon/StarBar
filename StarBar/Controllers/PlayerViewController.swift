@@ -140,25 +140,25 @@ extension PlayerViewController {
 
 extension PlayerViewController {
 
-    /// Shows `track`, with the sleeve read from `artworkTrack` when one is given.
+    /// Shows `track` with `artwork` as its cover, or none.
     ///
-    /// Pass `PlayingTrack.artworkTrack` there, as the announcement strip does. A catalog
-    /// track can answer the artwork read with nothing even when the user's own copy of the
-    /// song has its sleeve, which left the popover blank for a song the strip showed with art.
-    func updateCurrentTrack(_ track: iTunesTrack?, artworkFrom artworkTrack: iTunesTrack? = nil) {
+    /// Pass `PlayingTrack.sleeve()` there, as the announcement strip does. Reading the
+    /// playing track's own artwork left the popover blank for a catalog track whose library
+    /// copy has its sleeve, and showed the previous song's cover for one the user doesn't have.
+    func updateCurrentTrack(_ track: iTunesTrack?, artwork: NSImage?) {
         defer {
             view.needsLayout = true
             playerPanelViewController.updateCurrentTrack(track)
         }
 
         // update cover image
-        guard let track = track else {
+        guard track != nil else {
             coverImageView.image = nil
             backCoverImageView.layer?.contents = nil
             return
         }
 
-        if let image = (artworkTrack ?? track).firstArtworkImage() {
+        if let image = artwork {
             let transition = CATransition()
             transition.duration = 0.33
             transition.type = .fade
@@ -244,9 +244,9 @@ struct PlayerViewController_Preview: PreviewProvider {
         NSViewControllerPreview {
             let playerViewController = PlayerViewController()
             NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: .main) { notification in
-                playerViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack)
+                playerViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack, artwork: iTunesPlayer.shared.playing?.sleeve())
             }
-            playerViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack)
+            playerViewController.updateCurrentTrack(iTunesPlayer.shared.currentTrack, artwork: iTunesPlayer.shared.playing?.sleeve())
             return playerViewController
         }.frame(width: 300, height: 800, alignment: .center)
     }

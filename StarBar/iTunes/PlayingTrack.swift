@@ -5,7 +5,7 @@
 //  One answer to "what is playing, and where does its rating go?"
 //
 
-import Foundation
+import AppKit
 import os
 
 /// The song Music is playing, and the track that carries its rating.
@@ -99,9 +99,59 @@ final class PlayingTrack {
     /// within minutes: two other catalog tracks measured right after returned their own
     /// covers correctly, so the rule blanked the artwork for every Apple Music song to avoid
     /// an occasional wrong one. Don't reinstate it without evidence that being wrong is the
-    /// common case rather than the exception.
+    /// common case rather than the exception. Read the cover through `sleeve()`, which
+    /// refuses the one wrong answer that can be caught: the previous song's cover.
     var artworkTrack: iTunesTrack? {
         return ratingTrack ?? track
+    }
+
+    /// The playing track's album, read once
+    private(set) lazy var album: String? = track.album
+
+    /// The cover Music gives for the playing track, as a fingerprint, read once. Asked only of
+    /// the record of the song before a catalog track whose cover is being checked, for when
+    /// StarBar never showed that song's cover itself: see `sleeve(history:previousSong:)`.
+    private(set) lazy var playedSleeve: SleeveHistory.Sleeve? = {
+        guard let image = track.firstArtworkImage(), let fingerprint = SleeveFingerprint(image: image) else { return nil }
+        return SleeveHistory.Sleeve(fingerprint: fingerprint, album: album)
+    }()
+
+    /// The cover to show for this song, for the strip and the popover alike: the artwork of
+    /// `artworkTrack`, or nil, for the placeholder, when there is none or **it is the previous
+    /// song's cover left over**.
+    ///
+    /// Music can answer for a catalog track with the cover of the song played before it (see
+    /// `SleeveHistory`), and that is the only answer checked: the one for a catalog track the
+    /// user doesn't have, where `artworkTrack` has nothing better to read. It is compared with
+    /// the cover StarBar last showed for the previous song and with the one Music gives for
+    /// that song now, the latter read once (`playedSleeve`) for when StarBar never showed it,
+    /// with the strip off and the popover first opened on the new song.
+    ///
+    /// Each call reads the artwork afresh, so a cover Music puts right later shows the next
+    /// time the popover reads it. A cover shown is kept in `history`, and one refused is not.
+    func sleeve(history: SleeveHistory = .shared,
+                previousSong: (String) -> PlayingTrack? = { iTunesPlayer.shared.previousSong(before: $0) }) -> NSImage? {
+        guard let image = artworkTrack?.firstArtworkImage() else { return nil }
+        guard let song = persistentID, let fingerprint = SleeveFingerprint(image: image) else { return image }
+
+        // No copy of the song to read from, so this is Music's answer for the catalog track
+        if ratingTrack == nil, let previous = previousSong(song), let previousID = previous.persistentID {
+            let earlier: [(source: String, read: () -> SleeveHistory.Sleeve?)] = [
+                ("shown", { history.sleeve(for: previousID) }),
+                ("in Music", { previous.playedSleeve }),
+            ]
+            for (source, read) in earlier {
+                guard let before = read() else { continue }
+                let isLeftOver = SleeveHistory.isLeftOver(fingerprint, onAlbum: { self.album }, from: before)
+                os_log("%{public}s[%{public}ld], %{public}s: the cover Music gave for %{public}s differs by %.3f from the one %{public}s for the song before it, %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, fingerprint.difference(from: before.fingerprint), source, previousID)
+                if isLeftOver {
+                    os_log("%{public}s[%{public}ld], %{public}s: %{public}s on %{public}s came with the cover of %{public}s on %{public}s; showing none rather than the wrong one", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil", previousID, before.album ?? "nil")
+                    return nil
+                }
+            }
+        }
+        history.record(fingerprint, for: song, album: { self.album })
+        return image
     }
 
     /// The song has just been added to the library, so that copy now carries its rating.

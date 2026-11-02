@@ -49,6 +49,13 @@ final class iTunesRadioStation {
     private(set) var latestPlayInfo: PlayInfo? {
         didSet {
             iTunesPlayer.shared.update()
+            if let playInfo = latestPlayInfo {
+                if let identity = playInfo.songIdentity {
+                    iTunesPlayer.shared.musicAnnounced(identity)
+                }
+            } else {
+                iTunesPlayer.shared.forgetRecentSongs()
+            }
             // os_log("%{public}s[%{public}ld], %{public}s: latestPlayInfo %s", ((#file as NSString).lastPathComponent), #line, #function, latestPlayInfo?.description ?? "nil")
         }
     }

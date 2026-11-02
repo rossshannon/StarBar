@@ -178,9 +178,30 @@ was tried and reverted within minutes: the sampling above shows catalog artwork 
 correct, so the strict rule blanked every Apple Music song's artwork to avoid an occasional
 wrong one.
 
+### The previous song's cover, left over
+
+Seen again on 2026-11-02: "Chain Home" by Tom Rogerson and Brian Eno, played from the catalog
+and not in the library, came back with the sleeve of *The Bends*, straight after "Fake Plastic
+Trees". The strip and the popover both showed it until the song was added to the library,
+when StarBar switched to the new copy's artwork, which was right. The sleeve on screen looked
+like the library file's own low-resolution scan rather than Apple's catalog artwork, which
+suggests Music handed back the previous track's artwork as it held it. That is a reading of a
+screenshot, not a measurement.
+
+Both wrong sleeves seen so far were **the previous song's**. That much can be caught without
+knowing which song a sleeve belongs to: `PlayingTrack.sleeve()` compares Music's answer for a
+catalog track the user doesn't have with the previous song's cover, and when they are the same
+cover for songs on different albums, shows the placeholder instead. The two are compared as
+16 by 16 grids of colours (`SleeveFingerprint`), since the bytes differ with size and
+encoding, and the albums as releases (`SongName.releaseName`), since consecutive tracks of one
+album share a cover. The tolerance is a guess; StarBar logs every difference it measures.
+
 ### Open question
 
-How to tell a wrong sleeve from a right one. Nothing on an artwork says which song it belongs
-to, and the catalog object and the library copy hold different resolutions (800×800 against
-600×600 for the same album), so the bytes cannot be compared either. Eliminating this would
-mean fetching artwork by song identifier rather than through the Scripting Bridge.
+How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it
+belongs to, and the catalog object and the library copy hold different resolutions (800×800
+against 600×600 for the same album), so the bytes cannot be compared either. Showing the right
+sleeve rather than the placeholder would mean fetching artwork by song identifier rather than
+through the Scripting Bridge. Whether Music's `playerInfo` notification carries the catalog ID
+for a catalog track (`PlayInfo` has a `storeURL` field for its `Store URL` key) has not been
+checked.

@@ -410,6 +410,14 @@ enum SongName {
         return (name, versions, name == squash(fold(raw)))
     }
 
+    /// An album's name as `isSameRelease` compares it, with its plain versions left aside as
+    /// well: "The Bends (Deluxe Edition)" is "the bends". For a rule where calling two
+    /// albums one release by mistake costs little, as when `SleeveHistory.mayShareCover`
+    /// asks whether two songs could have the same cover.
+    static func releaseName(_ album: String) -> String {
+        return release(album).name
+    }
+
     /// What a part of an album's name says about which release it is: nothing (an empty set)
     /// for an edition, one the rules don't know by its last word, its bonus tracks or its
     /// market ("Japan Version"), or a soundtrack credit; the kinds of a plain version

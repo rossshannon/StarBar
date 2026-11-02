@@ -44,6 +44,7 @@
 		5A7E1A000000000000000B02 /* SongName.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B01 /* SongName.swift */; };
 		5A7E1A000000000000000B04 /* SongMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B03 /* SongMatcher.swift */; };
 		5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C02 /* HeldChoice.swift */; };
+		5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D02 /* SleeveHistory.swift */; };
 		5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */; };
 		DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA722CA45BB00502D7C /* RatingControl.swift */; };
 		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
@@ -100,6 +101,7 @@
 		5A7E1A000000000000000B06 /* SongNameTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B05 /* SongNameTests.swift */; };
 		5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B07 /* SongMatcherTests.swift */; };
 		5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C04 /* HeldChoiceTests.swift */; };
+		5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */; };
 		5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */; };
 		5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */; };
 		5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */; };
@@ -187,6 +189,7 @@
 		5A7E1A000000000000000B01 /* SongName.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongName.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B03 /* SongMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcher.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000C02 /* HeldChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoice.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000D02 /* SleeveHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistory.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibraryBadge.swift; sourceTree = "<group>"; };
 		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
@@ -244,6 +247,7 @@
 		5A7E1A000000000000000B05 /* SongNameTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongNameTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B07 /* SongMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcherTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000C04 /* HeldChoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoiceTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistoryTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryIndexTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMatchFinderTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingWriteThrottleTests.swift; sourceTree = "<group>"; };
@@ -376,6 +380,7 @@
 				5A7E1A000000000000000B05 /* SongNameTests.swift */,
 				5A7E1A000000000000000B07 /* SongMatcherTests.swift */,
 				5A7E1A000000000000000C04 /* HeldChoiceTests.swift */,
+				5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */,
 				5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */,
 				5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */,
 				5A7E1A0000000000000000F5 /* RatingWriteThrottleTests.swift */,
@@ -458,6 +463,7 @@
 				5A7E1A000000000000000B01 /* SongName.swift */,
 				5A7E1A000000000000000B03 /* SongMatcher.swift */,
 				5A7E1A000000000000000C02 /* HeldChoice.swift */,
+				5A7E1A000000000000000D02 /* SleeveHistory.swift */,
 				5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000001F1 /* StarRollout.swift */,
@@ -719,6 +725,7 @@
 				5A7E1A000000000000000B02 /* SongName.swift in Sources */,
 				5A7E1A000000000000000B04 /* SongMatcher.swift in Sources */,
 				5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */,
+				5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */,
 				5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
 				5A7E1A0000000000000001F2 /* StarRollout.swift in Sources */,
@@ -791,6 +798,7 @@
 				5A7E1A000000000000000B06 /* SongNameTests.swift in Sources */,
 				5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */,
 				5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */,
+				5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */,
 				5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */,
 				5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */,
 				5A7E1A0000000000000000F6 /* RatingWriteThrottleTests.swift in Sources */,
