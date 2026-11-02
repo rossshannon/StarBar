@@ -240,6 +240,17 @@ other tracks of it, so a title that finds nothing is searched for again without 
 parts. And because an expanded edition and the album can have different covers, the album is
 matched letter for letter (case, accents and punctuation aside), not as a release.
 
+### What the search can't find
+
+"Germination (Coda)" by Ryuichi Sakamoto, on *Coda*, came with no cover from Music, and neither
+song search found that album: they answered with "Germination" on *Merry Christmas, Mr.
+Lawrence*, on the *Call Me By Your Name* soundtrack and in covers by other artists, which the
+album rule refused. An album search for "Ryuichi Sakamoto Coda" found no album of that name in
+the Irish, US, British or Japanese stores. The iTunes Search service lists what the iTunes Store
+sells, so an album that is only streamed on Apple Music is, by this reading, out of its reach;
+that it is streaming-only is an inference, not checked. Such a song keeps the placeholder. The
+Apple Music API would find it, but needs a developer token signed with a MusicKit key.
+
 ### Open question
 
 How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it
