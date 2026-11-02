@@ -196,12 +196,16 @@ cover for songs on different albums, shows the placeholder instead. The two are 
 encoding, and the albums as releases (`SongName.releaseName`), since consecutive tracks of one
 album share a cover. The tolerance is a guess; StarBar logs every difference it measures.
 
+A cover refused this way is then fetched from Apple's public iTunes Search service, by the
+album's artist and name (`AppleMusicArtworkLoader`), and shown when it arrives, in the strip
+while it is still up and in the popover. Only an exact album and artist match is taken.
+
 ### Open question
 
 How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it
 belongs to, and the catalog object and the library copy hold different resolutions (800×800
-against 600×600 for the same album), so the bytes cannot be compared either. Showing the right
-sleeve rather than the placeholder would mean fetching artwork by song identifier rather than
-through the Scripting Bridge. Whether Music's `playerInfo` notification carries the catalog ID
+against 600×600 for the same album), so the bytes cannot be compared either. Fetching the right
+sleeve for those too would mean fetching every catalog track's artwork from Apple, or doing it
+by song identifier rather than through the Scripting Bridge. Whether Music's `playerInfo` notification carries the catalog ID
 for a catalog track (`PlayInfo` has a `storeURL` field for its `Store URL` key) has not been
 checked.

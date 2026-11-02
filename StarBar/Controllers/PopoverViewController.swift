@@ -40,6 +40,9 @@ extension PopoverViewController {
         ])
 
         NotificationCenter.default.addObserver(self, selector: #selector(PopoverViewController.iTunesPlayerDidUpdated(_:)), name: .iTunesPlayerDidUpdated, object: nil)
+        // A cover Apple sent in place of a wrong one from Music: read again, and the song's
+        // cover now comes from Apple (`PlayingTrack.sleeve()`)
+        NotificationCenter.default.addObserver(self, selector: #selector(PopoverViewController.iTunesPlayerDidUpdated(_:)), name: .appleMusicCoverDidLoad, object: nil)
     }
 
     override func viewDidAppear() {
