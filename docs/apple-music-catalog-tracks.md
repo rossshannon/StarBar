@@ -224,6 +224,22 @@ for "Radiohead Exit Music For a Film" answered with the track on *OK Computer OK
 2017* first, with its own cover, and the plain album's second. So the loader searches for the
 song and keeps the cover for its album.
 
+The song search, checked live for five songs as the app sends it (artist and title as Music
+gives them, 25 results, Ireland's store):
+
+| Song | Album wanted | Found |
+|---|---|---|
+| Exit Music (For a Film) [Remastered] | OK Computer OKNOTOK 1997 2017 | 1st |
+| Obsidian | Mixing Colours (Expanded) | 1st; 2nd was the plain *Mixing Colours*, another cover |
+| Chain Home | Finding Shore | 1st |
+| Falling At Your Feet (with Bono) | Shine | 1st, the only result |
+| Life On Mars? (Original Ending Version) | Divine Symmetry | **not at all**: no Bowie song among 16 |
+
+Without "(Original Ending Version)", the Bowie search found *Divine Symmetry* 17th, through
+other tracks of it, so a title that finds nothing is searched for again without its bracketed
+parts. And because an expanded edition and the album can have different covers, the album is
+matched letter for letter (case, accents and punctuation aside), not as a release.
+
 ### Open question
 
 How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it

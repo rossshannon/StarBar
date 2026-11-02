@@ -13,6 +13,8 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
 
     private var requests: [URL] = []
     private var searchAnswer: Data?
+    /// Answers by search term, ahead of `searchAnswer`
+    private var answersByTerm: [String: Data?] = [:]
     private var coverAnswer: Data?
     private var loader: AppleMusicArtworkLoader!
 
@@ -20,11 +22,20 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         super.setUp()
         requests = []
         searchAnswer = finding
+        answersByTerm = [:]
         coverAnswer = png
         loader = AppleMusicArtworkLoader(fetch: { [unowned self] url, completion in
             self.requests.append(url)
-            completion(url.host == "itunes.apple.com" ? self.searchAnswer : self.coverAnswer)
+            guard url.host == "itunes.apple.com" else { return completion(self.coverAnswer) }
+            let term = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "term" })?.value ?? ""
+            completion(self.answersByTerm[term] ?? self.searchAnswer)
         }, country: "IE")
+    }
+
+    private func terms() -> [String] {
+        return requests.filter { $0.host == "itunes.apple.com" }.compactMap {
+            URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "term" })?.value
+        }
     }
 
     private let chainHome = (title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore")
@@ -59,6 +70,15 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
 
     /// The song search for "Exit Music (For a Film)", 2026-11-02: the plain album and the
     /// OKNOTOK edition, each with its own cover. The album search found only the plain one.
+    /// The song search for "Obsidian", 2026-11-02: the expanded edition first, then the plain
+    /// album, whose cover is another
+    private var obsidian: Data {
+        return answer([
+            ("Roger Eno & Brian Eno", "Mixing Colours (Expanded)", "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/82/expanded.jpg/100x100bb.jpg"),
+            ("Roger Eno & Brian Eno", "Mixing Colours", "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/b6/plain.jpg/100x100bb.jpg"),
+        ])
+    }
+
     private var exitMusic: Data {
         return answer([
             ("Radiohead", "OK Computer OKNOTOK 1997 2017", "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/9c/oknotok.jpg/100x100bb.jpg"),
@@ -134,9 +154,19 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: compilation, artists: chainHome.artists, album: chainHome.album))
     }
 
-    func testAnEditionOfTheAlbumIsTheAlbum() {
+    func testAnotherEditionOfTheAlbumIsAnotherAlbum() {
+        let roger = ["Roger Eno & Brian Eno"]
+        XCTAssertEqual(AppleMusicArtworkLoader.cover(in: obsidian, artists: roger, album: "Mixing Colours (Expanded)")?.deletingLastPathComponent().lastPathComponent, "expanded.jpg")
+        XCTAssertEqual(AppleMusicArtworkLoader.cover(in: obsidian, artists: roger, album: "Mixing Colours")?.deletingLastPathComponent().lastPathComponent, "plain.jpg",
+                       "whichever Apple puts first")
         let deluxe = answer([("Tom Rogerson & Brian Eno", "Finding Shore (Deluxe Edition)", "https://is3-ssl.mzstatic.com/fs.jpg/100x100bb.jpg")])
-        XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: deluxe, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertNil(AppleMusicArtworkLoader.cover(in: deluxe, artists: chainHome.artists, album: chainHome.album),
+                     "a deluxe edition's cover can be another")
+        // Only case, accents and punctuation are let go
+        let typographic = answer([("Tom Rogerson & Brian Eno", "FINDING SHORE", "https://is3-ssl.mzstatic.com/fs.jpg/100x100bb.jpg")])
+        XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: typographic, artists: chainHome.artists, album: "Finding Shore"))
+        XCTAssertNotNil(AppleMusicArtworkLoader.cover(in: answer([("Beyoncé", "Lemonade", "https://is1-ssl.mzstatic.com/l.jpg/100x100bb.jpg")]),
+                                                      artists: ["Beyonce"], album: "Lemonade"))
     }
 
     func testOnlyApplesImageHostIsDownloaded() {
@@ -157,12 +187,24 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
     }
 
     func testAnAlbumIsKnownByItsFoldedNameAndArtist() {
-        XCTAssertEqual(AppleMusicArtworkLoader.key(artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore (Deluxe Edition)"),
-                       AppleMusicArtworkLoader.key(artists: ["tom rogerson & brian eno"], album: "Finding Shore"))
+        XCTAssertEqual(AppleMusicArtworkLoader.key(artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore"),
+                       AppleMusicArtworkLoader.key(artists: ["tom rogerson & brian eno"], album: "finding shore"))
+        // A cover kept for an edition is not handed out for the album
+        XCTAssertNotEqual(AppleMusicArtworkLoader.key(artists: ["Roger Eno & Brian Eno"], album: "Mixing Colours (Expanded)"),
+                          AppleMusicArtworkLoader.key(artists: ["Roger Eno & Brian Eno"], album: "Mixing Colours"))
         XCTAssertNotEqual(AppleMusicArtworkLoader.key(artists: ["Brian Eno"], album: "Finding Shore"),
                           AppleMusicArtworkLoader.key(artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore"))
         XCTAssertNil(AppleMusicArtworkLoader.key(artists: [], album: "Finding Shore"))
         XCTAssertNil(AppleMusicArtworkLoader.key(artists: ["Brian Eno"], album: ""))
+    }
+
+    func testATitleIsSearchedForWithoutItsBracketsWhenInFullItFindsNothing() {
+        XCTAssertEqual(AppleMusicArtworkLoader.searchTitles("Life On Mars? (Original Ending Version)"), ["Life On Mars? (Original Ending Version)", "Life On Mars?"])
+        XCTAssertEqual(AppleMusicArtworkLoader.searchTitles("Exit Music (For a Film) [Remastered]"), ["Exit Music (For a Film) [Remastered]", "Exit Music"])
+        XCTAssertEqual(AppleMusicArtworkLoader.searchTitles("Fake Plastic Trees - Live"), ["Fake Plastic Trees - Live", "Fake Plastic Trees"])
+        XCTAssertEqual(AppleMusicArtworkLoader.searchTitles("Chain Home"), ["Chain Home"])
+        XCTAssertEqual(AppleMusicArtworkLoader.searchTitles("(Untitled)"), ["(Untitled)"])
+        XCTAssertEqual(AppleMusicArtworkLoader.searchTitles("  "), [])
     }
 
     // MARK: - Loading
@@ -221,6 +263,40 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         // and the album's cover then answers for every song of it
         XCTAssertNotNil(load(chainHome))
         XCTAssertEqual(requests.count, 3)
+    }
+
+    func testWhenTheFullTitleFindsNothingTheShortOneIsTried() {
+        // 2026-11-02: the full name found no Bowie song at all; without the brackets, the album
+        let bowie = (title: "Life On Mars? (Original Ending Version)", artists: ["David Bowie"], album: "Divine Symmetry")
+        answersByTerm["David Bowie Life On Mars? (Original Ending Version)"] = answer([("Electric Light Orchestra", "Out of the Blue", "https://is1-ssl.mzstatic.com/otb.jpg/100x100bb.jpg")])
+        answersByTerm["David Bowie Life On Mars?"] = answer([
+            ("David Bowie", "Hunky Dory (2015 Remaster)", "https://is1-ssl.mzstatic.com/hd.jpg/100x100bb.jpg"),
+            ("David Bowie", "Divine Symmetry", "https://is1-ssl.mzstatic.com/ds.jpg/100x100bb.jpg"),
+        ])
+        XCTAssertNotNil(load(bowie))
+        XCTAssertEqual(terms(), ["David Bowie Life On Mars? (Original Ending Version)", "David Bowie Life On Mars?"])
+        XCTAssertEqual(requests.last?.deletingLastPathComponent().lastPathComponent, "ds.jpg")
+    }
+
+    func testTheShortTitleIsNotSearchedForWhenTheFullOneFinds() {
+        searchAnswer = exitMusic
+        XCTAssertNotNil(load((title: "Exit Music (For a Film) [Remastered]", artists: ["Radiohead"], album: "OK Computer OKNOTOK 1997 2017")))
+        XCTAssertEqual(terms(), ["Radiohead Exit Music (For a Film) [Remastered]"])
+    }
+
+    func testASongIsRememberedAsMissingOnlyWhenEverySearchWasAnswered() {
+        let bowie = (title: "Life On Mars? (Original Ending Version)", artists: ["David Bowie"], album: "Divine Symmetry")
+        answersByTerm["David Bowie Life On Mars? (Original Ending Version)"] = .some(nil)
+        XCTAssertNil(load(bowie), "the first search failed and the second found another album")
+        XCTAssertEqual(terms().count, 2)
+        XCTAssertNil(load(bowie))
+        XCTAssertEqual(terms().count, 4, "a failed search is tried again")
+
+        answersByTerm = [:]
+        XCTAssertNil(load(bowie))
+        XCTAssertEqual(terms().count, 6)
+        XCTAssertNil(load(bowie))
+        XCTAssertEqual(terms().count, 6, "both answered without the album, so it isn't asked again")
     }
 
     func testAFailedSearchIsTriedAgainNextTime() {
