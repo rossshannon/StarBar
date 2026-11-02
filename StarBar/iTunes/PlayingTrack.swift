@@ -113,8 +113,8 @@ final class PlayingTrack {
     private(set) lazy var albumArtists: [String] = [track.albumArtist, track.artist].compactMap { $0 }.filter { !$0.isEmpty }
 
     /// The cover Music gives for the playing track, as a fingerprint, read once. Asked only of
-    /// the record of the song before a catalog track whose cover is being checked, for when
-    /// StarBar never showed that song's cover itself: see `sleeve(history:previousSong:covers:)`.
+    /// the record of the song before a catalog track whose cover is being checked: see
+    /// `sleeve(history:previousSong:covers:)`. One artwork read, 44 ms on 2026-11-02.
     private(set) lazy var playedSleeve: SleeveHistory.Sleeve? = {
         guard let image = track.firstArtworkImage(), let fingerprint = SleeveFingerprint(image: image) else { return nil }
         return SleeveHistory.Sleeve(fingerprint: fingerprint, album: album)
@@ -128,8 +128,10 @@ final class PlayingTrack {
     /// `SleeveHistory`), and that is the only answer checked: the one for a catalog track the
     /// user doesn't have, where `artworkTrack` has nothing better to read. It is compared with
     /// the cover StarBar last showed for the previous song and with the one Music gives for
-    /// that song now, the latter read once (`playedSleeve`) for when StarBar never showed it,
-    /// with the strip off and the popover first opened on the new song.
+    /// that song now (`playedSleeve`, read once per song), always both, since they can differ:
+    /// StarBar may have shown the user's copy's cover or Apple's, where what Music leaves over
+    /// is its own answer for that track, and with the strip off and the popover first opened
+    /// on the new song StarBar showed nothing at all.
     ///
     /// A cover refused is asked of Apple (`AppleMusicArtworkLoader`), by album, and when it
     /// arrives `.appleMusicCoverDidLoad` says so: the strip attaches it, the popover reads

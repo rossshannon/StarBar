@@ -200,6 +200,15 @@ A cover refused this way is then fetched from Apple's public iTunes Search servi
 album's artist and name (`AppleMusicArtworkLoader`), and shown when it arrives, in the strip
 while it is still up and in the popover. Only an exact album and artist match is taken.
 
+Checked live the same evening, in Ireland's store: the search for "Tom Rogerson & Brian Eno
+Finding Shore" answered with *Finding Shore* first and a Kenny Rogers album second, and the one
+for "Radiohead The Bends" with *The Bends* first among ten, Rosie Carney's own *The Bends*
+included. The rule takes the first and turns the others down, and the 600 px cover for each
+downloaded (100 KB and 77 KB JPEGs). On the installed build, two catalog songs in turn by
+different artists (David Bowie, then Daniel Lanois) measured 0.193 apart, against both the
+cover shown for the first and Music's answer for it, so the second kept Music's cover and
+Apple was not asked. The refusal itself has not yet been seen live.
+
 ### Open question
 
 How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it
