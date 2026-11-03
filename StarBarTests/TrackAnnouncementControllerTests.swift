@@ -20,7 +20,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var live: TrackAnnouncementController.LiveTrackLoad = .loaded(.init())
     private var liveQueue: [TrackAnnouncementController.LiveTrackLoad] = []
     private var artworkRequests: [String] = []
-    private var wantsArtworkFlags: [Bool] = []
+    private var artworkReads: [TrackAnnouncementController.ArtworkRead] = []
     private var reduceMotion = false
     private var reduceTransparency = false
     /// What Music answers when asked which track it is playing; nil when it can't say
@@ -45,7 +45,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         playerReads = 0
         live = .loaded(.init())
         artworkRequests = []
-        wantsArtworkFlags = []
+        artworkReads = []
         reduceMotion = false
         reduceTransparency = false
         musicsCurrentIdentity = nil
@@ -71,9 +71,9 @@ final class TrackAnnouncementControllerTests: XCTestCase {
                 self.playerReads += 1
                 return self.player
             },
-            loadLiveTrack: { [unowned self] identity, wantsArtwork in
+            loadLiveTrack: { [unowned self] identity, artwork in
                 self.artworkRequests.append(identity)
-                self.wantsArtworkFlags.append(wantsArtwork)
+                self.artworkReads.append(artwork)
                 // A queued result, when a test wants the loads to differ, else the same one
                 return self.liveQueue.isEmpty ? self.live : self.liveQueue.removeFirst()
             },
@@ -643,7 +643,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         update(snapshot(track: "A", hasArtwork: false))
 
         XCTAssertEqual(artworkRequests, ["A"])
-        XCTAssertEqual(wantsArtworkFlags, [false])
+        XCTAssertEqual(artworkReads, [.forNewStrip(listed: false)])
         XCTAssertEqual(presenter.shown.count, 1)
         XCTAssertNil(presenter.shown.first?.artwork)
     }
@@ -679,7 +679,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         XCTAssertEqual(presenter.shown.count, 1, "not a new strip")
         XCTAssertEqual(presenter.refreshed.map { $0.rating }, [60])
         XCTAssertEqual(presenter.refreshed.first?.isFavorited, true)
-        XCTAssertEqual(wantsArtworkFlags, [true, false], "the refresh does not re-read the artwork")
+        XCTAssertEqual(artworkReads, [.forNewStrip(listed: true), .skip], "the refresh does not re-read the artwork")
         XCTAssertTrue(clock.pendingOneShot === timer, "the hold timer is untouched")
     }
 

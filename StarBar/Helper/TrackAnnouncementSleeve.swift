@@ -45,6 +45,12 @@ enum TrackAnnouncementSleeve {
     /// The pale hairline that keeps a dark sleeve's edge from vanishing into a dark backdrop
     static let rimAlpha: CGFloat = 0.22
     static let rimWidth: CGFloat = 0.5
+    /// The placeholder's fill, grey from top to bottom and opaque. The flat strip's 12% white
+    /// square sits on the strip's own background, but the sleeve stands above the strip, so
+    /// in it that square showed the window behind, and a song Apple's cover is coming for
+    /// shows the placeholder first: Ross found it distracting on 2026-11-03.
+    static let placeholderTopWhite: CGFloat = 0.30
+    static let placeholderBottomWhite: CGFloat = 0.19
 
     /// The sleeve's square in the strip before it turns, in the strip's coordinates.
     /// `leadingX` is where the flat artwork would start: the Dock and glass insets plus 12.

@@ -113,10 +113,10 @@ extension AppDelegate {
                 case .music, nil: return AppDelegate.readAnnouncementSnapshot()
                 }
             },
-            loadLiveTrack: { identity, wantsArtwork in
+            loadLiveTrack: { identity, artwork in
                 switch NowPlayingArbiter.shared.active {
                 case .spotify: return AppDelegate.loadSpotifyLiveTrack(for: identity)
-                case .music, nil: return AppDelegate.loadAnnouncementLiveTrack(for: identity, wantsArtwork: wantsArtwork)
+                case .music, nil: return AppDelegate.loadAnnouncementLiveTrack(for: identity, artwork: artwork)
                 }
             },
             readCurrentIdentity: { announced in
@@ -245,8 +245,9 @@ extension AppDelegate {
         TrackAnnouncementController.shared?.attachArtwork(artwork, identity: identity)
     }
 
-    /// A cover Apple sent for a song whose cover Music got wrong. The strip takes it only
-    /// while it still shows that song with no artwork, under either of its identities.
+    /// A catalog track's cover that came after the strip went up: Apple's, or Music's own once
+    /// Apple had none. The strip takes it only while it still shows that song with no artwork,
+    /// under either of its identities.
     @objc private func appleMusicCoverDidLoad(_ notification: Notification) {
         guard let image = notification.userInfo?[AppleMusicArtworkLoader.imageKey] as? NSImage,
               let identities = notification.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String] else { return }
@@ -361,11 +362,11 @@ extension AppDelegate {
         } ?? nil
     }
 
-    /// The current track's rating, favourite flag and (when asked) artwork, if the current
+    /// The current track's rating, favourite flag and (for a new strip) artwork, if the current
     /// track is still the one being announced. The announcement's text comes from a queued
     /// notification while these come from the live track, so during rapid skips they can
     /// disagree; then a newer notification is on its way and this announcement is dropped.
-    static func loadAnnouncementLiveTrack(for identity: String, wantsArtwork: Bool) -> TrackAnnouncementController.LiveTrackLoad {
+    static func loadAnnouncementLiveTrack(for identity: String, artwork: TrackAnnouncementController.ArtworkRead) -> TrackAnnouncementController.LiveTrackLoad {
         guard !MenuBarRatingControl.isUITesting else { return .loaded(.init()) }
         return MenuBarRatingControl.withShortTimeout { _ -> TrackAnnouncementController.LiveTrackLoad in
             guard let track = iTunesPlayer.shared.currentTrack else { return .loaded(.init()) }
@@ -401,11 +402,15 @@ extension AppDelegate {
                 // back to the playing track rather than refusing, and `sleeve()` for the
                 // one answer it does refuse: the previous song's cover, left over. A song the
                 // user doesn't have is read even when Music's notification says it has no
-                // artwork, because then `sleeve()` asks Apple for the cover.
-                if let playing = playing, wantsArtwork || !playing.canRate {
-                    live.artwork = playing.sleeve()
-                } else if playing == nil, wantsArtwork {
-                    live.artwork = track.firstArtworkImage()
+                // artwork, because then `sleeve()` asks Apple for the cover. A refresh of the
+                // strip on show reads none: it keeps its artwork, and a cover that comes
+                // later is attached by `.appleMusicCoverDidLoad`.
+                if case .forNewStrip(let listed) = artwork {
+                    if let playing = playing, listed || !playing.canRate {
+                        live.artwork = playing.sleeve()
+                    } else if playing == nil, listed {
+                        live.artwork = track.firstArtworkImage()
+                    }
                 }
                 return .loaded(live)
             case .changed:

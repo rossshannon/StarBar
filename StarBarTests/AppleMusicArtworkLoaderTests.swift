@@ -16,6 +16,7 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
     /// Answers by search term, ahead of `searchAnswer`
     private var answersByTerm: [String: Data?] = [:]
     private var coverAnswer: Data?
+    private var clock = Date(timeIntervalSinceReferenceDate: 0)
     private var loader: AppleMusicArtworkLoader!
 
     override func setUp() {
@@ -24,12 +25,13 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         searchAnswer = finding
         answersByTerm = [:]
         coverAnswer = png
+        clock = Date(timeIntervalSinceReferenceDate: 0)
         loader = AppleMusicArtworkLoader(fetch: { [unowned self] url, completion in
             self.requests.append(url)
             guard url.host == "itunes.apple.com" else { return completion(self.coverAnswer) }
             let term = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "term" })?.value ?? ""
             completion(self.answersByTerm[term] ?? self.searchAnswer)
-        }, country: "IE")
+        }, country: "IE", now: { [unowned self] in self.clock })
     }
 
     private func terms() -> [String] {
@@ -290,7 +292,11 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         XCTAssertNil(load(bowie), "the first search failed and the second found another album")
         XCTAssertEqual(terms().count, 2)
         XCTAssertNil(load(bowie))
+        XCTAssertEqual(terms().count, 2, "not straight away")
+        clock += AppleMusicArtworkLoader.retryAfter
+        XCTAssertNil(load(bowie))
         XCTAssertEqual(terms().count, 4, "a failed search is tried again")
+        clock += AppleMusicArtworkLoader.retryAfter
 
         answersByTerm = [:]
         XCTAssertNil(load(bowie))
@@ -299,10 +305,17 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         XCTAssertEqual(terms().count, 6, "both answered without the album, so it isn't asked again")
     }
 
-    func testAFailedSearchIsTriedAgainNextTime() {
+    func testAFailedSearchIsTriedAgainOnceTheWaitIsOver() {
         searchAnswer = nil
         XCTAssertNil(load(chainHome))
         searchAnswer = finding
+        // Music's own cover is shown meanwhile, and the popover reads again on every update
+        XCTAssertNil(load(chainHome))
+        XCTAssertEqual(requests.count, 1, "a failure isn't tried again on every read")
+        clock += AppleMusicArtworkLoader.retryAfter - 1
+        XCTAssertNil(load(chainHome))
+        XCTAssertEqual(requests.count, 1)
+        clock += 1
         XCTAssertNotNil(load(chainHome))
         XCTAssertEqual(requests.count, 3)
     }
@@ -311,9 +324,83 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         coverAnswer = nil
         XCTAssertNil(load(chainHome))
         XCTAssertTrue(loader.isEmpty)
+        clock += AppleMusicArtworkLoader.retryAfter
         coverAnswer = Data("not an image".utf8)
         XCTAssertNil(load(chainHome))
         XCTAssertTrue(loader.isEmpty)
+        XCTAssertEqual(requests.count, 4)
+        XCTAssertNil(load(chainHome))
+        XCTAssertEqual(requests.count, 4, "a failed download waits like a failed search")
+    }
+
+    // MARK: - Whether to wait for Apple
+
+    func testASongIsUnansweredUntilAppleHasSaidSomething() {
+        // Nils Frahm's "Some", 2026-11-03: Music gave Coda's cover, and Apple had Solo's first
+        let some = (title: "Some", artists: ["Nils Frahm"], album: "Solo")
+        XCTAssertFalse(loader.hasAnswered(title: some.title, artists: some.artists, album: some.album))
+        searchAnswer = answer([("Nils Frahm", "Solo", "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/96/solo.jpg/100x100bb.jpg")])
+        XCTAssertNotNil(load(some))
+        XCTAssertNotNil(loader.cachedCover(artists: some.artists, album: some.album), "a found cover answers through the cache")
+        XCTAssertEqual(requests.count, 2)
+    }
+
+    func testASongAppleHasNotIsAnswered() {
+        searchAnswer = answer([("Brian Eno", "Another Green World", "https://is1-ssl.mzstatic.com/agw.jpg/100x100bb.jpg")])
+        XCTAssertNil(load(chainHome))
+        XCTAssertTrue(loader.hasAnswered(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        clock += AppleMusicArtworkLoader.retryAfter * 10
+        XCTAssertTrue(loader.hasAnswered(title: chainHome.title, artists: chainHome.artists, album: chainHome.album),
+                      "for the rest of the session")
+        XCTAssertFalse(loader.hasAnswered(title: "Marble Hill", artists: chainHome.artists, album: chainHome.album),
+                       "another song of the album is another search")
+    }
+
+    func testASongAFailedSearchWasForIsAnsweredForAWhile() {
+        searchAnswer = nil
+        XCTAssertFalse(loader.hasFailedBefore(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertNil(load(chainHome))
+        XCTAssertTrue(loader.hasAnswered(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        clock += AppleMusicArtworkLoader.retryAfter
+        XCTAssertFalse(loader.hasAnswered(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertTrue(loader.hasFailedBefore(title: chainHome.title, artists: chainHome.artists, album: chainHome.album),
+                      "so Music's cover can stay on show while it is asked again")
+    }
+
+    func testASongAppleHasNotHasNotFailed() {
+        searchAnswer = answer([("Brian Eno", "Another Green World", "https://is1-ssl.mzstatic.com/agw.jpg/100x100bb.jpg")])
+        XCTAssertNil(load(chainHome))
+        XCTAssertFalse(loader.hasFailedBefore(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+    }
+
+    func testASongIsBeingAskedForUntilItsCoverComes() {
+        // The answers come on the main queue, so the ask is still out when `load` returns
+        let marbleHill = (title: "Marble Hill", artists: chainHome.artists, album: chainHome.album)
+        XCTAssertFalse(loader.isAsking(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        let both = expectation(description: "both answered")
+        both.expectedFulfillmentCount = 2
+        loader.load(title: chainHome.title, artists: chainHome.artists, album: chainHome.album) { _ in both.fulfill() }
+        XCTAssertTrue(loader.isAsking(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertFalse(loader.isAsking(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album),
+                       "another song of the album hasn't asked, so nothing would say when its cover comes")
+        loader.load(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album) { _ in both.fulfill() }
+        XCTAssertTrue(loader.isAsking(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album))
+        wait(for: [both], timeout: 1)
+        XCTAssertFalse(loader.isAsking(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertFalse(loader.isAsking(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album))
+        XCTAssertEqual(requests.count, 2, "one search and one download for the album")
+    }
+
+    func testASongThatCantBeAskedAboutIsNeverBeingAskedFor() {
+        XCTAssertFalse(loader.isAsking(title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: ""))
+    }
+
+    func testASongThatCantBeAskedAboutIsAnswered() {
+        // Music's own cover stands at once, with nothing to wait for
+        XCTAssertTrue(loader.hasAnswered(title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: ""))
+        XCTAssertTrue(loader.hasAnswered(title: "Chain Home", artists: [], album: "Finding Shore"))
+        XCTAssertTrue(loader.hasAnswered(title: "", artists: ["Tom Rogerson & Brian Eno"], album: "Finding Shore"))
+        XCTAssertTrue(requests.isEmpty)
     }
 
     func testASongWithNoAlbumArtistOrTitleAsksNothing() {

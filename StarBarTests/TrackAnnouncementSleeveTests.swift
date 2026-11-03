@@ -304,14 +304,28 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
     func testTheViewDrawsTheCoverOverThePlaceholderAsItFades() {
         let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
         XCTAssertEqual(view.coverOpacity, 0, "no cover yet; the placeholder shows")
+        XCTAssertEqual(view.placeholderOpacity, 1)
 
         view.artwork = cover(width: 600, height: 600)
         view.coverFade = 0
         XCTAssertEqual(view.coverOpacity, 0)
+        XCTAssertEqual(view.placeholderOpacity, 1)
         view.coverFade = 0.4
         XCTAssertEqual(view.coverOpacity, 0.4, accuracy: 0.001)
+        XCTAssertEqual(view.placeholderOpacity, 1, "whole under the cover, or the sleeve is see-through halfway")
         view.coverFade = 1
         XCTAssertEqual(view.coverOpacity, 1)
+        XCTAssertEqual(view.placeholderOpacity, 0, "gone once the cover is all there")
+
+        view.artwork = nil
+        XCTAssertEqual(view.placeholderOpacity, 1, "back when the cover goes")
+    }
+
+    func testThePlaceholderIsOpaque() {
+        // The sleeve stands above the strip, over whatever window is behind the panel
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        XCTAssertEqual(view.placeholderFillAlphas.count, 2)
+        XCTAssertTrue(view.placeholderFillAlphas.allSatisfy { $0 == 1 }, "\(view.placeholderFillAlphas)")
     }
 
     func testTheViewTurnsItsSleeveAndHidesTheGlareWhenAsked() {

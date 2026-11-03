@@ -91,6 +91,17 @@ final class TrackAnnouncementController: NSObject {
         case trackChanged
     }
 
+    /// What a live read is to do about the track's artwork
+    enum ArtworkRead: Equatable {
+        /// Read none: the strip on show keeps the artwork it has, and a cover that comes later
+        /// reaches it through `attachArtwork(_:identity:)`
+        case skip
+        /// Read it for a new strip. `listed` is whether Music's notification says the track
+        /// has any; Music's loader reads a song the user doesn't have either way, because
+        /// `PlayingTrack.sleeve()` can find its cover with Apple when Music has none.
+        case forNewStrip(listed: Bool)
+    }
+
     /// The one controller, created by `AppDelegate`, for Preferences and the menus
     static var shared: TrackAnnouncementController?
 
@@ -124,7 +135,7 @@ final class TrackAnnouncementController: NSObject {
     private let readPlayer: () -> PlayerSnapshot?
     /// Reads the live track's rating, favourite flag and, when asked, artwork, for the track
     /// with this identity
-    private let loadLiveTrack: (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad
+    private let loadLiveTrack: (_ identity: String, _ artwork: ArtworkRead) -> LiveTrackLoad
     /// Reads the identity of the track Music has now, or nil when it can't say. One Apple
     /// Event, so a rating can be matched to its track without a full live read.
     /// Reads the identity of the track Music has now, **in the same shape** as the identity
@@ -194,7 +205,7 @@ final class TrackAnnouncementController: NSObject {
 
     init(
         readPlayer: @escaping () -> PlayerSnapshot?,
-        loadLiveTrack: @escaping (_ identity: String, _ wantsArtwork: Bool) -> LiveTrackLoad,
+        loadLiveTrack: @escaping (_ identity: String, _ artwork: ArtworkRead) -> LiveTrackLoad,
         readCurrentIdentity: @escaping (_ matching: String) -> String?,
         readPosition: @escaping () -> TimeInterval?,
         isBusy: @escaping () -> Bool = { false },
@@ -579,7 +590,7 @@ extension TrackAnnouncementController {
     /// Returns false when the announcement was dropped because the track changed under it
     @discardableResult
     private func announce(_ snapshot: PlayerSnapshot, identity: String) -> Bool {
-        guard let live = loadLive(identity: identity, wantsArtwork: snapshot.hasArtwork) else { return false }
+        guard let live = loadLive(identity: identity, artwork: .forNewStrip(listed: snapshot.hasArtwork)) else { return false }
         let announcement = TrackAnnouncement(
             identity: identity,
             title: snapshot.title,
@@ -602,7 +613,7 @@ extension TrackAnnouncementController {
     /// The song on the strip changed while the strip is up: redraw its rating and heart,
     /// keeping the artwork and the hold timer
     private func refresh(_ current: TrackAnnouncement, from snapshot: PlayerSnapshot, identity: String) {
-        guard let live = loadLive(identity: identity, wantsArtwork: false) else { return }
+        guard let live = loadLive(identity: identity, artwork: .skip) else { return }
         let updated = TrackAnnouncement(
             identity: identity,
             title: snapshot.title.isEmpty ? current.title : snapshot.title,
@@ -625,7 +636,7 @@ extension TrackAnnouncementController {
     /// that says nothing dependable about the track it is for, or a Spotify song whose Music
     /// copy was found or lost
     private func refreshFromMusic(_ current: TrackAnnouncement) {
-        guard let live = loadLive(identity: current.identity, wantsArtwork: false) else { return }
+        guard let live = loadLive(identity: current.identity, artwork: .skip) else { return }
         let updated = TrackAnnouncement(
             copying: current,
             rating: rating(for: current.identity, live: live.rating, payload: nil) ?? live.lastKnownRating ?? current.rating,
@@ -639,8 +650,8 @@ extension TrackAnnouncementController {
     }
 
     /// Music's live view of the track, or nil when Music has moved on to another track
-    private func loadLive(identity: String, wantsArtwork: Bool) -> LiveTrack? {
-        switch loadLiveTrack(identity, wantsArtwork) {
+    private func loadLive(identity: String, artwork: ArtworkRead) -> LiveTrack? {
+        switch loadLiveTrack(identity, artwork) {
         case .loaded(let live):
             return live
         case .trackChanged:
