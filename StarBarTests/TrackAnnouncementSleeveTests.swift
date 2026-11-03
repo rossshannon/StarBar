@@ -270,6 +270,34 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         XCTAssertLessThan(Sleeve.riseDrop(1.05), 0, "the overshoot lifts it above its place")
     }
 
+    func testARiseFromPartWayStartsWhereTheSleeveIsAndLands() {
+        XCTAssertEqual(Sleeve.rise(elapsed: 0, from: 0.4), 0.4, accuracy: 0.0001, "no jump when the strip turns round")
+        XCTAssertEqual(Sleeve.rise(elapsed: Sleeve.riseDelay, from: 0.4), 0.4, accuracy: 0.0001)
+        XCTAssertEqual(Sleeve.rise(elapsed: Sleeve.riseDelay + Sleeve.riseDuration, from: 0.4), 1, accuracy: 0.0001)
+        XCTAssertEqual(Sleeve.rise(elapsed: 0.4, from: 0), Sleeve.rise(elapsed: 0.4), "from sunk, the same rise as ever")
+    }
+
+    func testTheSinkFollowsTheSlideOut() {
+        XCTAssertEqual(Sleeve.sink(from: 1, eased: 0), 1)
+        XCTAssertEqual(Sleeve.sink(from: 1, eased: 0.5), 0.5)
+        XCTAssertEqual(Sleeve.sink(from: 1, eased: 1), 0, "sunk all the way when the strip is out of sight")
+        XCTAssertEqual(Sleeve.sink(from: 0.6, eased: 0.5), 0.3, accuracy: 0.0001, "from part way through a rise")
+        XCTAssertEqual(Sleeve.sink(from: 1, eased: 1.2), 0)
+    }
+
+    /// The sleeve stands taller than the strip, so it has to sink into it on the way out:
+    /// riding down with the strip alone left its top 27 points up the screen when the strip
+    /// had gone, about 80% of the way down, until the panel was taken away
+    func testASunkSleeveIsOutOfSightOnceTheStripIs() {
+        for scale in scales {
+            let strip = TrackAnnouncementLayout.stripHeight(scale: scale)
+            for tilt in extremeTilts {
+                XCTAssertLessThan(Sleeve.top(rise: 0, tilt: tilt, scale: scale), strip, "\(tilt) at scale \(scale)")
+                XCTAssertGreaterThan(Sleeve.top(rise: 1, tilt: tilt, scale: scale), strip + 16 * scale, "it breaks out when up: \(tilt) at scale \(scale)")
+            }
+        }
+    }
+
     // MARK: - The view
 
     /// A cover that draws, as one read from Music or downloaded does

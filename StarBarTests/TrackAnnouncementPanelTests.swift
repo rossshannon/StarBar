@@ -1087,6 +1087,75 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(repeatingTimers(clock), 1, "the slide done, the sleeve still follows the pointer while the strip is up")
     }
 
+    /// How far above the bottom of the panel, and so of the screen, the sleeve and its shadow
+    /// reach as drawn now
+    private func sleeveTop(_ panel: TrackAnnouncementPanel) -> CGFloat {
+        return panel.stripView.frame.minY + TrackAnnouncementSleeve.top(rise: panel.stripView.sleeve.rise, tilt: panel.sleeveTilt, scale: panel.scale)
+    }
+
+    /// Ross saw the strip stutter about 80% of the way down and not always reach the bottom:
+    /// the sleeve stands 20 points taller than the strip and rode down with it, so its top was
+    /// still showing when the strip had gone, until the panel was taken away
+    func testTheSleeveSinksOutOfSightWithTheStripAsItSlidesOut() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1)
+        XCTAssertGreaterThan(sleeveTop(animated), animated.stripView.frame.maxY)
+
+        animated.hide()
+        var last = sleeveTop(animated)
+        for _ in 0..<17 {
+            tick(clock)
+            XCTAssertEqual(animated.phase, .slidingOut)
+            let top = sleeveTop(animated)
+            XCTAssertLessThan(top, last, "down on every step, never held")
+            last = top
+        }
+        XCTAssertLessThan(animated.stripView.sleeve.rise, 0.01, "sunk into the strip")
+        XCTAssertLessThanOrEqual(last, 0, "out of sight on the last frame before the panel goes")
+
+        tick(clock, 0.1)
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1, "ready to rise again for the next song")
+    }
+
+    func testTurningRoundOnTheWayOutBringsTheSleeveBackUpFromWhereItSank() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+        animated.hide()
+        tick(clock, 0.15)
+        let sunk = animated.stripView.sleeve.rise
+        XCTAssertEqual(sunk, 0.5, accuracy: 0.01, "half way down at half time")
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.sleeve.rise, sunk, "no jump")
+        tick(clock, 0.1)
+        XCTAssertEqual(animated.stripView.sleeve.rise, sunk, accuracy: 0.001, "it waits for the strip, as on a new appearance")
+        tick(clock, 0.6)
+        XCTAssertEqual(animated.phase, .shown)
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1)
+    }
+
+    func testUnderReduceMotionTheSleeveFadesOutInPlace() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: true, reduceTransparency: false)
+        tick(clock, 1)
+
+        animated.hide()
+        tick(clock, 0.15)
+
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1, "no sinking")
+        XCTAssertEqual(animated.stripView.sleeve.alphaValue, 0.5, accuracy: 0.01, "it fades with the strip")
+    }
+
     func testASongArrivingWhileUpSwapsTheCoverWithoutRisingAgain() {
         let clock = FakeClock()
         let animated = sleevePanel(clock, slideDuration: 0)

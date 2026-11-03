@@ -61,6 +61,9 @@ final class TrackAnnouncementPanel: NSPanel {
     private var sleeveKnobs = TrackAnnouncementSleeveKnobs()
     /// When the sleeve's rise started; nil once it is in place, or when there is none
     private var sleeveRiseStart: Date?
+    /// Where the rise started from: 0, sunk into the strip, or part of the way down when the
+    /// strip turned round on its way out
+    private var sleeveRiseFrom: CGFloat = 0
     private var lastSleeveTick: Date?
     /// The tilt as drawn, following the pointer's
     private(set) var sleeveTilt = TrackAnnouncementSleeve.Tilt.rest
@@ -219,14 +222,12 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
                 stripView.alphaValue = 0
                 stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
             }
-            // The sleeve comes up out of the strip as it slides in; a fade, which is what
-            // Reduce Motion asks for, brings it in already in place
-            sleeveRiseStart = transition == .slide ? clock.now() : nil
+            // The sleeve starts sunk into the strip and rises out of it as the strip slides
+            // in; a fade, which is what Reduce Motion asks for, brings it in already in place
             stripView.sleeve.rise = transition == .slide ? 0 : 1
             layoutSleeve()
             // Before the first frame is drawn, so a pointer already over the strip has its hole
             startSeeThrough()
-            startSleeve()
             // Draw the first frame before the window shows, so the slide starts clean
             stripView.needsDisplay = true
             stripView.displayIfNeeded()
@@ -319,6 +320,16 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         case .fade: stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
         }
         layoutSleeve()
+        // The sleeve rises out of the strip as it comes up, and sinks back into it on the way
+        // down, on the slide's own steps below
+        let sinkFrom = stripView.sleeve.rise
+        if stripView.breakout {
+            if shown {
+                beginSleeveRise(transition: transition)
+            } else {
+                sleeveRiseStart = nil
+            }
+        }
 
         let startY = stripView.frame.origin.y
         let targetY = TrackAnnouncementPlacement.stripOrigin(shown: shown, scale: scale).y
@@ -344,6 +355,10 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             case .slide:
                 self.stripView.setFrameOrigin(CGPoint(x: 0, y: startY + (targetY - startY) * eased))
                 self.updatePeephole()
+                if !shown && self.stripView.breakout {
+                    // Down into the strip, so it is out of sight when the strip is
+                    self.stripView.sleeve.rise = TrackAnnouncementSleeve.sink(from: sinkFrom, eased: eased)
+                }
             case .fade:
                 self.stripView.alphaValue = startAlpha + (targetAlpha - startAlpha) * eased
             }
@@ -426,6 +441,21 @@ extension TrackAnnouncementPanel {
         sleeve.alphaValue = stripView.alphaValue
     }
 
+    /// Start the sleeve rising out of the strip from wherever it is, as the strip slides in:
+    /// sunk on a new appearance, or part of the way down when the strip turns round on its way
+    /// out. A fade brings it in already in place.
+    fileprivate func beginSleeveRise(transition: TrackAnnouncementPlacement.Transition) {
+        let sleeve = stripView.sleeve
+        if transition == .slide && sleeve.rise < 1 {
+            sleeveRiseFrom = sleeve.rise
+            sleeveRiseStart = clock.now()
+        } else {
+            sleeveRiseStart = nil
+            sleeve.rise = 1
+        }
+        startSleeve()
+    }
+
     /// Step the sleeve's rise and its tilt towards the pointer on each display refresh, from
     /// the start of the slide in until the strip has gone. A real frame interval, never 0:
     /// before macOS 14 this is a Timer, and Foundation clamps a non-positive interval to 0.1 ms.
@@ -449,6 +479,7 @@ extension TrackAnnouncementPanel {
         sleeveTimer = nil
         lastSleeveTick = nil
         sleeveRiseStart = nil
+        sleeveRiseFrom = 0
         sleeveFollowsPointer = false
         sleeveTilt = .rest
         stripView.sleeve.tilt = .rest
@@ -472,7 +503,7 @@ extension TrackAnnouncementPanel {
                 sleeveRiseStart = nil
                 stripView.sleeve.rise = 1
             } else {
-                stripView.sleeve.rise = TrackAnnouncementSleeve.rise(elapsed: since)
+                stripView.sleeve.rise = TrackAnnouncementSleeve.rise(elapsed: since, from: sleeveRiseFrom)
             }
         }
 

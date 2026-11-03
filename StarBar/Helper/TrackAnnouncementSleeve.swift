@@ -194,6 +194,37 @@ enum TrackAnnouncementSleeve {
         return CGFloat(1 + (overshoot + 1) * u * u * u + overshoot * u * u)
     }
 
+    /// The rise `elapsed` seconds after the strip starts to slide in, from `start` rather than
+    /// sunk: a strip that turns round on its way out brings the sleeve back up from where it
+    /// had sunk to, without a jump
+    static func rise(elapsed: TimeInterval, from start: CGFloat) -> CGFloat {
+        return start + (1 - start) * rise(elapsed: elapsed)
+    }
+
+    /// The rise as the strip slides out: the sleeve sinks back into the strip from `start`, the
+    /// rise it had when the slide out began, on the slide's own `eased` progress (0 to 1), so it
+    /// is out of sight when the strip is. It stands taller than the strip, so riding down with
+    /// the strip alone left its top showing at the bottom of the screen until the panel went.
+    static func sink(from start: CGFloat, eased: CGFloat) -> CGFloat {
+        return start * (1 - min(1, max(0, eased)))
+    }
+
+    /// How far a shadow can reach above the sleeve's top edge, at scale 1: its offset is
+    /// downwards, and twice its radius is a generous bound on the blur
+    static var shadowReach: CGFloat {
+        return max(0, shadowOffset.height + 2 * shadowRadius)
+    }
+
+    /// How far above the strip's bottom edge the sleeve and its shadow reach, for a rise of
+    /// `progress` and the pointer's `tilt`, at `scale`. Above the strip's height, it breaks out
+    /// of the strip; below it, a strip that has slid out of sight takes all of the sleeve with it.
+    static func top(rise progress: CGFloat, tilt: Tilt = .rest, scale: CGFloat = 1) -> CGFloat {
+        let side = size * scale
+        let turned = projectedBounds(of: CGSize(width: side, height: side), tilt: tilt, scale: scale, riseScale: riseScale(progress))
+        let centre = (bottomInset + size / 2) * scale - riseDrop(progress, scale: scale)
+        return centre + turned.maxY + shadowReach * scale
+    }
+
     /// The scale for a rise of `progress`: `riseStartScale` sunk, 1 in place
     static func riseScale(_ progress: CGFloat) -> CGFloat {
         return riseStartScale + (1 - riseStartScale) * progress
