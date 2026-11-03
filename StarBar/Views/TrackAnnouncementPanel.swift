@@ -149,6 +149,7 @@ final class TrackAnnouncementPanel: NSPanel {
     deinit {
         slideTimer?.invalidate()
         seeThroughTimer?.invalidate()
+        sleeveTimer?.invalidate()
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -201,9 +202,13 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
 
         switch phase {
         case .shown, .slidingIn:
-            // Already on its way up or up: the new content is enough
+            // Already on its way up or up: the new content is enough, but a sleeve that stopped
+            // ticking under Reduce Motion follows the pointer again once the setting is off
             if isNewAnnouncement {
                 speak(announcement)
+            }
+            if sleeveTilts {
+                startSleeve()
             }
             return
         case .slidingOut:
