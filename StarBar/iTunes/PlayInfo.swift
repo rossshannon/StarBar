@@ -88,6 +88,25 @@ extension PlayInfo {
         return [name, artist ?? "", album ?? ""].joined(separator: "|")
     }
 
+    /// Whether this payload says nothing `previous` didn't about what the player is doing:
+    /// the same song, playing or paused as before, with the same rating. Music often sends
+    /// one of these a moment after a song's first (`RepeatedUpdateHold`).
+    ///
+    /// The same song is the same persistent ID when both carry one, and otherwise the same
+    /// name, artist and album, since Music sends some Apple Music songs with no ID at all and
+    /// could send it in one of the two only. A stop, an unknown state or a payload that names
+    /// no song is never a repeat, and nor is a changed rating, which may be the user's, made
+    /// in Music. Anything else may differ, such as the artwork count.
+    func repeats(_ previous: PlayInfo) -> Bool {
+        guard let state = playerState, state == .playing || state == .paused, state == previous.playerState else { return false }
+        guard rating == previous.rating, ratingComputed == previous.ratingComputed else { return false }
+        if let id = persistentID, let previousID = previous.persistentID {
+            return id == previousID
+        }
+        guard let name = name, !name.isEmpty else { return false }
+        return name == previous.name && artist == previous.artist && album == previous.album
+    }
+
 }
 
 extension PlayInfo {

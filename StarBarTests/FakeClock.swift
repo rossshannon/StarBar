@@ -80,4 +80,18 @@ final class FakeClock: RatingReminderClock {
         pendingRepeating.forEach { $0.action() }
     }
 
+    /// Advance by `seconds` one display frame at a time, firing the repeating timers after
+    /// each, as a display link would. The strip's animations count a late frame only in part
+    /// (`SteppedTimeline`), so for them one long `advance` is a stalled main thread, not time
+    /// passing; this is time passing.
+    func runFrames(for seconds: TimeInterval, frame: TimeInterval = 1.0 / 60.0) {
+        var left = seconds
+        while left > 1e-9 {
+            let step = min(frame, left)
+            advance(by: step)
+            fireRepeating()
+            left -= step
+        }
+    }
+
 }

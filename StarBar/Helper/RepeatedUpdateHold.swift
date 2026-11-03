@@ -1,0 +1,98 @@
+//
+//  RepeatedUpdateHold.swift
+//  StarBar
+//
+
+import Foundation
+import os.log
+
+/// Holds back an update that repeats the last one while something on screen is moving, and
+/// passes it on once the motion is over.
+///
+/// Music often follows a song's `playerInfo` notification with a second for the same song a
+/// moment later. Each one replaces the player record, so the menu bar, the strip and the
+/// popover all read Music again, over Apple Events on the main thread. Measured on 2026-11-03,
+/// for an Apple Music song, the second came 15 ms after the strip was announced and its reads
+/// took about 26 Apple Events and 440 ms, during which the strip's slide could not be drawn.
+/// A repeat says nothing that can't wait a few hundred milliseconds, so it waits for the strip
+/// to stop moving; it is not dropped, because it may still carry something the first didn't
+/// (a cover, or a track Music had not switched to yet).
+///
+/// Only the latest repeat is kept. Anything that is not a repeat goes on at once and drops the
+/// one held, which it supersedes. The wait is checked every `checkInterval` and never runs past
+/// `limit`, so motion that doesn't end can't hold Music's news back for long.
+final class RepeatedUpdateHold<Update> {
+
+    /// How often a held update checks whether the motion has ended
+    static var checkInterval: TimeInterval { return 0.05 }
+    /// The longest an update is held: the slide in and the sleeve's rise take 0.65 s
+    static var limit: TimeInterval { return 1.5 }
+
+    /// Where the timers come from; the station swaps its clock for a fake one in tests
+    private let clock: () -> RatingReminderClock
+    /// Whether anything is moving that a held-up main thread would stall
+    private let isBusy: () -> Bool
+    /// Passes an update on
+    private let apply: (Update) -> Void
+
+    private var held: Update?
+    private var heldSince: Date?
+    private var timer: RatingReminderTimer?
+
+    init(clock: @escaping () -> RatingReminderClock, isBusy: @escaping () -> Bool, apply: @escaping (Update) -> Void) {
+        self.clock = clock
+        self.isBusy = isBusy
+        self.apply = apply
+    }
+
+    /// Whether an update is waiting
+    var isHolding: Bool {
+        return held != nil
+    }
+
+    /// Pass `update` on now, or hold it while something is moving if it repeats the last one
+    /// passed on. Returns true when it was held.
+    @discardableResult
+    func receive(_ update: Update, repeatsLast: Bool) -> Bool {
+        guard repeatsLast, isBusy() else {
+            cancel()
+            apply(update)
+            return false
+        }
+        held = update
+        if heldSince == nil {
+            heldSince = clock().now()
+            scheduleCheck()
+        }
+        return true
+    }
+
+    /// Drop a held update without passing it on
+    func cancel() {
+        timer?.invalidate()
+        timer = nil
+        held = nil
+        heldSince = nil
+    }
+
+    private func scheduleCheck() {
+        timer?.invalidate()
+        timer = clock().schedule(after: RepeatedUpdateHold.checkInterval, repeats: false) { [weak self] in
+            self?.check()
+        }
+    }
+
+    private func check() {
+        timer = nil
+        guard let update = held, let since = heldSince else { return }
+        if isBusy(), clock().now().timeIntervalSince(since) < RepeatedUpdateHold.limit {
+            scheduleCheck()
+            return
+        }
+        held = nil
+        heldSince = nil
+        os_log("%{public}s[%{public}ld], %{public}s: passing on a repeated update held for %.2f s", ((#file as NSString).lastPathComponent), #line, #function, clock().now().timeIntervalSince(since))
+        apply(update)
+    }
+
+}

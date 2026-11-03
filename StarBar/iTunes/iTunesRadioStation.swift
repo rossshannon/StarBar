@@ -122,7 +122,22 @@ final class iTunesRadioStation {
         libraryChangedTimer = nil
         refusedWriteReread?.invalidate()
         refusedWriteReread = nil
+        repeatHold.cancel()
     }
+
+    /// Whether the track strip is moving on screen (`TrackAnnouncementPanel.isMoving`), set
+    /// where the strip is made. While it is, a notification that repeats Music's last one
+    /// waits (`repeatHold`).
+    var stripIsMoving: () -> Bool = { false }
+
+    /// Holds a `playerInfo` that repeats the last one, and the Apple Events everything reads on
+    /// a player update, until the strip has stopped moving: see `RepeatedUpdateHold`.
+    /// Timed on `rereadClock`, so the tests can fire it by hand like the re-reads.
+    private lazy var repeatHold = RepeatedUpdateHold<PlayInfo>(
+        clock: { [unowned self] in self.rereadClock },
+        isBusy: { [unowned self] in self.stripIsMoving() },
+        apply: { [unowned self] playInfo in self.latestPlayInfo = playInfo }
+    )
 
     /// How long to wait after a library change before re-reading the player.
     ///
@@ -303,7 +318,10 @@ extension iTunesRadioStation {
             }
             #endif
 
-            self.latestPlayInfo = playInfo
+            let repeatsLast = latestPlayInfo.map { playInfo.repeats($0) } ?? false
+            if repeatHold.receive(playInfo, repeatsLast: repeatsLast) {
+                os_log("%{public}s[%{public}ld], %{public}s: holding a repeat of the last notification until the strip stops moving", ((#file as NSString).lastPathComponent), #line, #function)
+            }
 
         } catch {
             // A payload this app can't decode is Music's business, not a bug to stop on:
@@ -691,6 +709,8 @@ extension iTunesRadioStation {
         // A rating still held has nowhere to go, and its timer would send an Apple Event to a
         // track whose app has quit
         ratingWriter.discard()
+        // A repeat held for the strip describes a player that has gone
+        repeatHold.cancel()
         // The observer runs iTunesPlayer.shared.update(), which finds Music not running
         latestPlayInfo = nil
     }
