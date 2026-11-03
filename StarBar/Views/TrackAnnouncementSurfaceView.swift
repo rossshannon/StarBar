@@ -247,16 +247,20 @@ final class TrackAnnouncementWashView: NSView {
 /// redraws nothing, so it can follow the pointer on every display refresh.
 ///
 /// It can also keep part of the background inside the hole, behind the artwork and text: a
-/// translucent rectangle from the leading edge, with a soft edge after it. A mask is the union
-/// of its layers, so where the hole would clear everything, that part keeps the rectangle's
-/// opacity, and where the hole's own edge is already partly solid, a little more.
+/// rectangle from the leading edge, with a soft edge after it, translucent for the pointer's
+/// hole and solid for the typing window. A mask is the union of its layers, so where the hole
+/// would clear everything, that part keeps the rectangle's opacity, and where the hole's own
+/// edge is already partly solid, a little more.
 final class TrackAnnouncementPeepholeMask: CALayer {
 
     private let hole = CALayer()
     private let tiles: [CALayer] = (0..<4).map { _ in CALayer() }
-    /// The kept background and its soft edge, made the first time one is asked for, so that a
-    /// mask with no kept part is the five layers it always was
-    private var kept: (solid: CALayer, edge: CAGradientLayer)?
+    /// The kept background and its soft edge, hidden while none is kept
+    private let keptSolid = CALayer()
+    private let keptEdge = CAGradientLayer()
+    /// What they were last placed for, to place them only when that changes: the pointer's
+    /// hole moves on every display refresh, the kept part only with the layout
+    private var placedKeep: (keep: TrackAnnouncementKeptBackground?, bounds: CGRect, scale: CGFloat)?
     /// The size the hole's image was drawn at, to redraw it only when that changes
     private var drawn: (radius: CGFloat, feather: CGFloat)?
 
@@ -276,6 +280,14 @@ final class TrackAnnouncementPeepholeMask: CALayer {
             addSublayer(tile)
         }
         addSublayer(hole)
+        keptSolid.backgroundColor = CGColor(gray: 0, alpha: 1)
+        keptEdge.colors = [CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0)]
+        keptEdge.startPoint = CGPoint(x: 0, y: 0.5)
+        keptEdge.endPoint = CGPoint(x: 1, y: 0.5)
+        for layer in [keptSolid, keptEdge] as [CALayer] {
+            layer.isHidden = true
+            addSublayer(layer)
+        }
     }
 
     override init(layer: Any) {
@@ -319,40 +331,28 @@ final class TrackAnnouncementPeepholeMask: CALayer {
 
     /// The kept background, for tests: the solid part and its soft edge, nil when none is kept
     var keptLayers: (solid: CALayer, edge: CAGradientLayer)? {
-        guard let kept = kept, !kept.solid.isHidden else { return nil }
-        return kept
+        return keptSolid.isHidden ? nil : (keptSolid, keptEdge)
     }
 
     private func placeKept(_ keep: TrackAnnouncementKeptBackground?, in bounds: CGRect, scale: CGFloat) {
-        guard let keep = keep else {
-            kept?.solid.isHidden = true
-            kept?.edge.isHidden = true
+        if let placed = placedKeep, placed.keep == keep, placed.bounds == bounds, placed.scale == scale {
             return
         }
-        let layers: (solid: CALayer, edge: CAGradientLayer)
-        if let existing = kept {
-            layers = existing
-        } else {
-            let solid = CALayer()
-            solid.backgroundColor = CGColor(gray: 0, alpha: 1)
-            let edge = CAGradientLayer()
-            edge.colors = [CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0)]
-            edge.startPoint = CGPoint(x: 0, y: 0.5)
-            edge.endPoint = CGPoint(x: 1, y: 0.5)
-            addSublayer(solid)
-            addSublayer(edge)
-            layers = (solid, edge)
-            kept = layers
+        placedKeep = (keep, bounds, scale)
+        guard let keep = keep else {
+            keptSolid.isHidden = true
+            keptEdge.isHidden = true
+            return
         }
         // On a whole pixel, so the solid part and its soft edge don't leave a seam between them
         let pixels = max(1, scale)
         let width = max(0, ((keep.untilX - bounds.minX) * pixels).rounded() / pixels)
-        layers.solid.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)
-        layers.edge.frame = CGRect(x: width, y: 0, width: keep.feather, height: bounds.height)
-        for layer in [layers.solid, layers.edge] as [CALayer] {
-            layer.opacity = Float(keep.opacity)
-            layer.isHidden = false
-        }
+        keptSolid.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)
+        keptEdge.frame = CGRect(x: width, y: 0, width: keep.feather, height: bounds.height)
+        keptSolid.opacity = Float(keep.opacity)
+        keptEdge.opacity = Float(keep.opacity)
+        keptSolid.isHidden = false
+        keptEdge.isHidden = false
     }
 
     /// Solid, with a clear disc in the middle whose edge fades back to solid over `feather`
@@ -388,32 +388,22 @@ final class TrackAnnouncementPeepholeMask: CALayer {
 
 }
 
-/// The typing window's mask: a large soft hole (a `TrackAnnouncementPeepholeMask`), solid over
-/// the part of the strip the artwork and text use with a soft edge after it, and a solid fill
-/// over everything at `1 - progress`. A mask is the union of its layers, so the fill closes the
-/// hole as progress falls, and the window opens and closes by changing one opacity rather than
-/// redrawing anything.
+/// The typing window's mask: a large soft hole (a `TrackAnnouncementPeepholeMask`), which keeps
+/// all of the background over the part of the strip the artwork and text use with a soft edge
+/// after it, and a solid fill over everything at `1 - progress`. A mask is the union of its
+/// layers, so the fill closes the hole as progress falls, and the window opens and closes by
+/// changing one opacity rather than redrawing anything.
 final class TrackAnnouncementTypingMask: CALayer {
 
     private let hole = TrackAnnouncementPeepholeMask()
-    /// Solid over the artwork and text
-    private let keep = CALayer()
-    /// Solid to clear, after `keep`, so the window's edge there is soft rather than a cut
-    private let keepEdge = CAGradientLayer()
     /// Solid everywhere at `1 - progress`
     private let fill = CALayer()
 
     override init() {
         super.init()
-        let solid = CGColor(gray: 0, alpha: 1)
-        keep.backgroundColor = solid
-        keepEdge.colors = [solid, CGColor(gray: 0, alpha: 0)]
-        keepEdge.startPoint = CGPoint(x: 0, y: 0.5)
-        keepEdge.endPoint = CGPoint(x: 1, y: 0.5)
-        fill.backgroundColor = solid
-        for layer in [hole, keep, keepEdge, fill] {
-            addSublayer(layer)
-        }
+        fill.backgroundColor = CGColor(gray: 0, alpha: 1)
+        addSublayer(hole)
+        addSublayer(fill)
     }
 
     override init(layer: Any) {
@@ -435,13 +425,9 @@ final class TrackAnnouncementTypingMask: CALayer {
         let local = CGRect(origin: .zero, size: bounds.size)
         var hole = window.hole
         hole.centre = CGPoint(x: hole.centre.x - bounds.minX, y: hole.centre.y - bounds.minY)
-        self.hole.place(hole, in: local, scale: scale)
-
-        // On a whole pixel, so the solid part and its soft edge don't leave a seam between them
-        let pixels = max(1, scale)
-        let keepWidth = max(0, ((window.keepUntilX - bounds.minX) * pixels).rounded() / pixels)
-        keep.frame = CGRect(x: 0, y: 0, width: keepWidth, height: local.height)
-        keepEdge.frame = CGRect(x: keepWidth, y: 0, width: window.keepFeather, height: local.height)
+        var kept = window.kept
+        kept.untilX -= bounds.minX
+        self.hole.place(hole, keeping: kept, in: local, scale: scale)
 
         fill.frame = local
         fill.opacity = Float(1 - min(1, max(0, window.progress)))

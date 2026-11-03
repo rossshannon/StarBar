@@ -106,8 +106,13 @@ enum TrackAnnouncementSeeThrough {
     static func typingWindow(in bounds: CGRect, occupied: CGRect, radius: CGFloat, feather: CGFloat, centreHeight: CGFloat, margin: CGFloat, keepFeather: CGFloat, progress: CGFloat) -> TrackAnnouncementTypingWindow? {
         guard radius > 0, progress > 0 else { return nil }
         let hole = TrackAnnouncementPeephole(centre: CGPoint(x: bounds.midX, y: bounds.maxY + centreHeight), radius: radius, feather: min(max(0, feather), radius))
-        let keepUntilX = TrackAnnouncementSeeThrough.keepUntilX(in: bounds, occupied: occupied, margin: margin)
-        return TrackAnnouncementTypingWindow(hole: hole, keepUntilX: keepUntilX, keepFeather: max(0, keepFeather), progress: min(1, progress))
+        // All of the background, where the pointer's hole keeps `peepholeKeepOpacity` of it
+        let kept = TrackAnnouncementKeptBackground(
+            untilX: keepUntilX(in: bounds, occupied: occupied, margin: margin),
+            feather: max(0, keepFeather),
+            opacity: 1
+        )
+        return TrackAnnouncementTypingWindow(hole: hole, kept: kept, progress: min(1, progress))
     }
 
     /// What the pointer's hole leaves of the background behind the artwork and text: `opacity`
@@ -138,9 +143,9 @@ struct TrackAnnouncementPeephole: Equatable {
     var feather: CGFloat
 }
 
-/// The part of the background the pointer's hole keeps behind the artwork and text, in the
-/// strip's coordinates: `opacity` of it from the leading edge to `untilX`, fading to none over
-/// `feather` after it
+/// The part of the background a hole keeps behind the artwork and text, in the strip's
+/// coordinates: `opacity` of it from the leading edge to `untilX`, fading to none over
+/// `feather` after it. Some of it for the pointer's hole, all of it for the typing window.
 struct TrackAnnouncementKeptBackground: Equatable {
     var untilX: CGFloat
     var feather: CGFloat
@@ -151,10 +156,8 @@ struct TrackAnnouncementKeptBackground: Equatable {
 /// the background kept under the artwork and text whatever the hole covers
 struct TrackAnnouncementTypingWindow: Equatable {
     var hole: TrackAnnouncementPeephole
-    /// The background stays solid from the strip's leading edge to here
-    var keepUntilX: CGFloat
-    /// And fades out over this much after it
-    var keepFeather: CGFloat
+    /// Solid behind the artwork and text, whatever the hole covers
+    var kept: TrackAnnouncementKeptBackground
     /// How far open, 0 to 1
     var progress: CGFloat
 }

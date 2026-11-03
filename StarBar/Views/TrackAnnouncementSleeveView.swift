@@ -63,7 +63,7 @@ final class TrackAnnouncementSleeveView: NSView {
     var rise: CGFloat = 1 {
         didSet {
             guard rise != oldValue else { return }
-            layoutLayers()
+            applyRise()
         }
     }
 
@@ -129,7 +129,7 @@ final class TrackAnnouncementSleeveView: NSView {
         clipLayer.cornerCurve = .continuous
         clipLayer.borderColor = NSColor.white.withAlphaComponent(TrackAnnouncementSleeve.rimAlpha).cgColor
 
-        placeholderLayer.backgroundColor = NSColor.white.withAlphaComponent(0.12).cgColor
+        placeholderLayer.backgroundColor = NSColor.white.withAlphaComponent(TrackAnnouncementContentView.placeholderFillAlpha).cgColor
         noteLayer.contentsGravity = .resizeAspect
         placeholderLayer.addSublayer(noteLayer)
 
@@ -214,7 +214,7 @@ final class TrackAnnouncementSleeveView: NSView {
         let factor = TrackAnnouncementSleeve.size / TrackAnnouncementLayout.artworkSize * scale
         let size = CGSize(width: note.size.width * factor, height: note.size.height * factor)
         let image = NSImage(size: size, flipped: false) { rect in
-            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.9)
+            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: TrackAnnouncementContentView.placeholderNoteAlpha)
             return true
         }
         withoutAnimation {
@@ -244,7 +244,6 @@ final class TrackAnnouncementSleeveView: NSView {
         let bounds = CGRect(origin: .zero, size: sleeve.size)
         withoutAnimation {
             turnLayer.bounds = bounds
-            turnLayer.position = CGPoint(x: sleeve.midX, y: sleeve.midY - TrackAnnouncementSleeve.riseDrop(rise, scale: scale))
             turnLayer.shadowPath = CGPath(roundedRect: bounds, cornerWidth: min(radius, bounds.width / 2), cornerHeight: min(radius, bounds.height / 2), transform: nil)
             turnLayer.shadowRadius = TrackAnnouncementSleeve.shadowRadius * scale
             turnLayer.shadowOffset = CGSize(
@@ -258,6 +257,16 @@ final class TrackAnnouncementSleeveView: NSView {
             noteLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
             coverLayer.frame = bounds
             glareLayer.frame = bounds
+        }
+        applyRise()
+    }
+
+    /// Where the rise puts the sleeve, and how big: all that changes on each step of the rise
+    /// and the sink, so the rest of the layout isn't redone at the display's rate
+    private func applyRise() {
+        let sleeve = sleeveRect
+        withoutAnimation {
+            turnLayer.position = CGPoint(x: sleeve.midX, y: sleeve.midY - TrackAnnouncementSleeve.riseDrop(rise, scale: scale))
         }
         applyTransform()
     }
