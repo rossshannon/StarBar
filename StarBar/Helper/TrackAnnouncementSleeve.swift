@@ -42,7 +42,7 @@ enum TrackAnnouncementSleeve {
     static let shadowRadius: CGFloat = 5
     /// Down and a little to the left, away from the text the sleeve faces
     static let shadowOffset = CGSize(width: -3, height: -6)
-    /// The hairline that keeps a pale sleeve's edge against a pale backdrop
+    /// The pale hairline that keeps a dark sleeve's edge from vanishing into a dark backdrop
     static let rimAlpha: CGFloat = 0.22
     static let rimWidth: CGFloat = 0.5
 
@@ -87,9 +87,9 @@ enum TrackAnnouncementSleeve {
 
     /// The tilt for a pointer `offset` from the sleeve's centre, in points at scale 1 with y
     /// up, as AppKit's screen coordinates have it. The sleeve turns to face the pointer: all
-    /// the way once the pointer is `tiltSpan` off in either direction, fading out between a
-    /// third of the way to `tiltReach` and `tiltReach` itself, so it settles before the pointer
-    /// leaves.
+    /// the way once the pointer is `tiltSpan` off in either direction, at full strength out to
+    /// two thirds of `tiltReach` and fading out over the last third, so it settles before the
+    /// pointer leaves.
     static func tilt(pointerOffset offset: CGVector) -> Tilt {
         let distance = hypot(offset.dx, offset.dy)
         let near = min(1, max(0, (1 - distance / tiltReach) * 3))

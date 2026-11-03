@@ -329,6 +329,23 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         assertTransform(view.turnedLayer.transform, Sleeve.transform(tilt), "but it still turns")
     }
 
+    func testTheViewsSleeveRisesAndShrinksWithTheRise() {
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        XCTAssertEqual(view.turnedLayer.position, CGPoint(x: view.slot.midX, y: view.slot.midY), "in place")
+
+        view.rise = 0
+        XCTAssertEqual(view.turnedLayer.position.x, view.slot.midX)
+        XCTAssertEqual(view.turnedLayer.position.y, view.slot.midY - Sleeve.riseDistance, accuracy: 0.001, "sunk")
+        assertTransform(view.turnedLayer.transform, Sleeve.transform(.rest, riseScale: Sleeve.riseStartScale), "and smaller")
+
+        view.scale = 2
+        XCTAssertEqual(view.turnedLayer.position.y, view.sleeveRect.midY - Sleeve.riseDistance * 2, accuracy: 0.001, "by twice as much at twice the scale")
+
+        view.rise = 1
+        XCTAssertEqual(view.turnedLayer.position.y, view.sleeveRect.midY, accuracy: 0.001)
+        assertTransform(view.turnedLayer.transform, Sleeve.transform(.rest, scale: 2), "and full size")
+    }
+
     func testTheViewKeepsAWideCoverInsideTheSquare() {
         let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
         XCTAssertEqual(view.slot, CGRect(x: 28, y: 28, width: 112, height: 112))
@@ -338,6 +355,31 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         XCTAssertEqual(view.sleeveRect.width, 112, accuracy: 0.5)
         XCTAssertEqual(view.sleeveRect.height, 56, accuracy: 0.5)
         XCTAssertEqual(view.sleeveRect.midY, view.slot.midY, accuracy: 0.5)
+    }
+
+    /// AppKit hands the view's alpha, visibility and frame straight to its own root layer, which
+    /// has no delegate, so once that layer is in a window's layer tree each change ran Core
+    /// Animation's 0.25 s implicit animation: measured on macOS 27.2, a fade stepped at 60 Hz was
+    /// drawn at 34% when it should have been fully in. A layer that has never been committed to a
+    /// tree answers no action on any macOS, which is why asking a lone view, or one in the panel
+    /// without turning the run loop, passed without the fix. So the view goes into a window and the
+    /// transaction is committed first.
+    func testTheSleevesOwnLayerRunsNoImplicitAnimations() {
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        let content = NSView(frame: window.contentLayoutRect)
+        content.wantsLayer = true
+        window.contentView = content
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        content.addSubview(view)
+        CATransaction.flush()
+
+        XCTAssertNotNil(view.layer?.superlayer, "the layer is in the window's tree, or the check below proves nothing")
+        for key in ["opacity", "hidden", "position", "bounds"] {
+            XCTAssertNil(view.layer?.action(forKey: key), "\(key) is stepped on the panel's clock, never animated by Core Animation")
+        }
     }
 
     func testTheSleeveTakesNoClicks() {
