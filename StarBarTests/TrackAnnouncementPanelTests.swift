@@ -18,6 +18,10 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     private var readKnobs: (() -> TrackAnnouncementGlassKnobs)!
     private var readSeeThroughKnobs: (() -> TrackAnnouncementSeeThroughKnobs)!
     private var seeThroughKnobs = TrackAnnouncementSeeThroughKnobs()
+    private var readSleeveKnobs: (() -> TrackAnnouncementSleeveKnobs)!
+    /// The flat artwork, unless a test says otherwise: several tests count the repeating
+    /// timers, and the sleeve steps on one of its own
+    private var sleeveKnobs = TrackAnnouncementSleeveKnobs(breakout: false, tilt: false)
     /// No key pressed for a long while, unless a test says otherwise
     private var keys = KeyboardActivity(secondsSinceKeyDown: 600, commandKeysHeld: false)
 
@@ -30,6 +34,9 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         readSeeThroughKnobs = TrackAnnouncementSeeThroughKnobs.read
         seeThroughKnobs = TrackAnnouncementSeeThroughKnobs()
         TrackAnnouncementSeeThroughKnobs.read = { [unowned self] in self.seeThroughKnobs }
+        readSleeveKnobs = TrackAnnouncementSleeveKnobs.read
+        sleeveKnobs = TrackAnnouncementSleeveKnobs(breakout: false, tilt: false)
+        TrackAnnouncementSleeveKnobs.read = { [unowned self] in self.sleeveKnobs }
         mouse = NSScreen.main.map { NSPoint(x: $0.frame.midX, y: $0.frame.midY) } ?? .zero
         panel = TrackAnnouncementPanel(
             slideDuration: 0,
@@ -44,6 +51,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         panel = nil
         TrackAnnouncementGlassKnobs.read = readKnobs
         TrackAnnouncementSeeThroughKnobs.read = readSeeThroughKnobs
+        TrackAnnouncementSleeveKnobs.read = readSleeveKnobs
         super.tearDown()
     }
 
@@ -996,6 +1004,256 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         }
         view.announcement = TrackAnnouncement(identity: "2", title: "T", artist: "", album: "", rating: 70, isFavorited: true, artwork: image)
         XCTAssertFalse(view.dataWithPDF(inside: view.bounds).isEmpty)
+    }
+
+    // MARK: - The break-out sleeve
+
+    /// A panel with the break-out sleeve on, stepped by a fake clock, and nothing to see
+    /// through, so once the slide is done the sleeve's is the one repeating timer. The
+    /// pointer starts well clear of every screen, so nothing tilts until a test moves it.
+    private func sleevePanel(_ clock: FakeClock, slideDuration: TimeInterval = 0.3) -> TrackAnnouncementPanel {
+        sleeveKnobs = TrackAnnouncementSleeveKnobs()
+        seeThroughKnobs.peephole = false
+        seeThroughKnobs.typingWindow = false
+        mouse = NSPoint(x: 0, y: 100_000)
+        return TrackAnnouncementPanel(slideDuration: slideDuration, artworkFadeDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+    }
+
+    /// The middle of the sleeve's square on screen, wherever the strip has got to
+    private func sleeveCentre(of panel: TrackAnnouncementPanel) -> NSPoint {
+        let slot = panel.stripView.artworkFrame.offsetBy(dx: panel.frame.minX + panel.stripView.frame.minX, dy: panel.frame.minY + panel.stripView.frame.minY)
+        return NSPoint(x: slot.midX, y: slot.midY)
+    }
+
+    /// Where the sleeve's view belongs in the panel, given where the strip is
+    private func expectedSleeveFrame(_ panel: TrackAnnouncementPanel) -> NSRect {
+        return panel.stripView.sleeveFrame.offsetBy(dx: panel.stripView.frame.minX, dy: panel.stripView.frame.minY)
+    }
+
+    private func repeatingTimers(_ clock: FakeClock) -> Int {
+        return clock.timers.filter { $0.repeats && $0.isValid }.count
+    }
+
+    private let drawnCover = NSImage(size: NSSize(width: 600, height: 600), flipped: false) { rect in
+        NSColor.systemOrange.setFill()
+        rect.fill()
+        return true
+    }
+
+    func testTheSleeveStandsAboveTheStripAndRidesWithItAsItSlides() throws {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        let sleeve = animated.stripView.sleeve
+        XCTAssertTrue(animated.stripView.breakout)
+        XCTAssertFalse(sleeve.isHidden)
+        XCTAssertTrue(sleeve.superview === animated.contentView, "beside the strip, not inside it, so the strip can't clip it")
+        XCTAssertEqual(animated.stripView.artworkFrame.width, TrackAnnouncementSleeve.size * animated.scale)
+        XCTAssertEqual(sleeve.frame, expectedSleeveFrame(animated))
+
+        for _ in 0..<3 {
+            tick(clock, 0.1)
+            XCTAssertEqual(sleeve.frame, expectedSleeveFrame(animated), "moved on the same step as the strip")
+        }
+        tick(clock, 0.5)
+        XCTAssertEqual(animated.phase, .shown)
+        XCTAssertEqual(sleeve.frame, expectedSleeveFrame(animated))
+
+        // In place: its top 124 points (scaled) above the strip's bottom, past the strip's
+        // top edge, and the view inside the panel
+        let scale = animated.scale
+        let top = sleeve.frame.maxY - TrackAnnouncementSleeve.margin * scale
+        XCTAssertEqual(top, animated.stripView.frame.minY + 124 * scale, accuracy: 0.001)
+        XCTAssertGreaterThan(top, animated.stripView.frame.maxY + 16 * scale)
+        XCTAssertLessThanOrEqual(sleeve.frame.maxY, try XCTUnwrap(animated.contentView).bounds.maxY + 0.001)
+    }
+
+    func testTheSleeveRisesOutOfTheStripAfterItStartsToSlide() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        let sleeve = animated.stripView.sleeve
+        XCTAssertEqual(sleeve.rise, 0, "sunk into the strip")
+
+        tick(clock, 0.1)
+        XCTAssertEqual(sleeve.rise, 0, "waiting for the strip to get going")
+        tick(clock, 0.25)
+        XCTAssertGreaterThan(sleeve.rise, 0.5, "on its way up")
+        tick(clock, 0.4)
+        XCTAssertEqual(sleeve.rise, 1, "in place, the overshoot done")
+        XCTAssertEqual(repeatingTimers(clock), 1, "the slide done, the sleeve still follows the pointer while the strip is up")
+    }
+
+    func testASongArrivingWhileUpSwapsTheCoverWithoutRisingAgain() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+
+        animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album", artwork: drawnCover), reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1)
+        XCTAssertTrue(animated.stripView.sleeve.artwork === drawnCover)
+        XCTAssertEqual(animated.stripView.sleeve.coverOpacity, 1, "a song's own cover shows at once")
+    }
+
+    func testThePointerTipsTheSleeveTowardsItAndLetsGoWhenItLeaves() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+        let sleeve = animated.stripView.sleeve
+        XCTAssertEqual(animated.sleeveTilt, .rest)
+        XCTAssertEqual(sleeve.glareOpacity, 0)
+
+        // Level with the sleeve and to its right, by the span that gives the whole turn
+        let centre = sleeveCentre(of: animated)
+        mouse = NSPoint(x: centre.x + TrackAnnouncementSleeve.tiltSpan * animated.scale, y: centre.y)
+        tick(clock)
+        XCTAssertGreaterThan(animated.sleeveTilt.y, 0, "it starts to turn on the next frame")
+        XCTAssertLessThan(animated.sleeveTilt.y, TrackAnnouncementSleeve.maxTilt, "and eases over")
+        for _ in 0..<60 { tick(clock) }
+        XCTAssertEqual(animated.sleeveTilt.y, TrackAnnouncementSleeve.maxTilt, accuracy: 0.001, "turned further towards the pointer")
+        XCTAssertEqual(animated.sleeveTilt.x, 0, accuracy: 0.001)
+        XCTAssertEqual(sleeve.tilt, animated.sleeveTilt, "and drawn so")
+        XCTAssertGreaterThan(sleeve.glareOpacity, 0.9)
+
+        mouse = NSPoint(x: 0, y: 100_000)
+        for _ in 0..<60 { tick(clock) }
+        XCTAssertEqual(animated.sleeveTilt, .rest)
+        XCTAssertEqual(sleeve.glareOpacity, 0)
+    }
+
+    func testThePointerOnAnotherDisplayTipsNothing() throws {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+        let screen = try XCTUnwrap(animated.screen ?? NSScreen.main)
+
+        // Just below the strip's screen: within reach of the sleeve, but on another display
+        mouse = NSPoint(x: sleeveCentre(of: animated).x, y: screen.frame.minY - 10)
+        for _ in 0..<10 { tick(clock) }
+
+        XCTAssertEqual(animated.sleeveTilt, .rest)
+    }
+
+    func testReduceMotionBringsTheSleeveInStillAndInPlace() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: true, reduceTransparency: false)
+        let sleeve = animated.stripView.sleeve
+        XCTAssertEqual(sleeve.rise, 1, "no rise")
+        XCTAssertEqual(sleeve.alphaValue, 0, "it fades in with the strip")
+        tick(clock, 0.15)
+        XCTAssertEqual(sleeve.alphaValue, 0.5, accuracy: 0.01)
+
+        let centre = sleeveCentre(of: animated)
+        mouse = NSPoint(x: centre.x + 60, y: centre.y + 60)
+        tick(clock, 0.5)
+        XCTAssertEqual(sleeve.alphaValue, 1)
+        XCTAssertEqual(animated.sleeveTilt, .rest, "no tilt")
+        XCTAssertEqual(repeatingTimers(clock), 0, "and nothing left ticking once the fade is done")
+    }
+
+    func testWithTheTiltOffTheSleeveRisesThenStopsTicking() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        sleeveKnobs.tilt = false
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+
+        tick(clock, 1)
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1)
+        XCTAssertEqual(repeatingTimers(clock), 0, "nothing to step once it has risen")
+
+        let centre = sleeveCentre(of: animated)
+        mouse = NSPoint(x: centre.x + 60, y: centre.y + 60)
+        tick(clock)
+        XCTAssertEqual(animated.sleeveTilt, .rest)
+    }
+
+    func testWithTheBreakoutOffTheStripKeepsItsFlatArtwork() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        sleeveKnobs.breakout = false
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(animated.stripView.breakout)
+        XCTAssertTrue(animated.stripView.sleeve.isHidden)
+        XCTAssertEqual(animated.stripView.artworkFrame.width, TrackAnnouncementLayout.artworkSize * animated.scale)
+        XCTAssertEqual(repeatingTimers(clock), 0, "no sleeve to step")
+
+        // A changed default applies from the next appearance
+        animated.hide()
+        sleeveKnobs.breakout = true
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertTrue(animated.stripView.breakout)
+        XCTAssertFalse(animated.stripView.sleeve.isHidden)
+    }
+
+    /// A cover that comes after the strip went up cross-fades from the placeholder on the
+    /// sleeve as it does in the flat strip, on the same clock
+    func testALateCoverCrossFadesOnTheSleeve() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+        let sleeve = animated.stripView.sleeve
+        XCTAssertEqual(sleeve.coverOpacity, 0, "the placeholder")
+
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: drawnCover))
+        XCTAssertEqual(sleeve.coverOpacity, 0, "still the placeholder on the first frame")
+        tick(clock, 0.15)
+        XCTAssertEqual(sleeve.coverOpacity, 0.5, accuracy: 0.01)
+        tick(clock, 0.2)
+        XCTAssertEqual(sleeve.coverOpacity, 1)
+    }
+
+    func testReduceTransparencyTipsTheSleeveWithoutTheGlare() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: true)
+        tick(clock, 1)
+
+        let centre = sleeveCentre(of: animated)
+        mouse = NSPoint(x: centre.x, y: centre.y + TrackAnnouncementSleeve.tiltSpan * animated.scale)
+        for _ in 0..<60 { tick(clock) }
+
+        XCTAssertEqual(animated.sleeveTilt.x, -TrackAnnouncementSleeve.maxTilt, accuracy: 0.001, "it still faces the pointer above it")
+        XCTAssertEqual(animated.stripView.sleeve.glareOpacity, 0, "but with no translucent wash over the cover")
+    }
+
+    func testHidingStopsTheSleeveAndPutsItAtRest() throws {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock, slideDuration: 0)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        tick(clock, 1)
+        let centre = sleeveCentre(of: animated)
+        mouse = NSPoint(x: centre.x + 50, y: centre.y + 50)
+        tick(clock)
+        XCTAssertNotEqual(animated.sleeveTilt, .rest)
+        let ticker = try XCTUnwrap(clock.timers.last { $0.repeats && $0.isValid })
+
+        animated.hide()
+
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertFalse(ticker.isValid)
+        XCTAssertEqual(animated.sleeveTilt, .rest)
+        XCTAssertEqual(animated.stripView.sleeve.tilt, .rest, "the next song starts straight")
+        ticker.action()
+        XCTAssertEqual(animated.sleeveTilt, .rest, "a stale tick does nothing")
     }
 
 }

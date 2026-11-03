@@ -70,6 +70,7 @@ final class TrackAnnouncementView: NSView {
     var announcement: TrackAnnouncement {
         didSet {
             content.announcement = announcement
+            sleeve.artwork = announcement.artwork
             setAccessibilityLabel(announcement.accessibilityLabel)
             // A longer title covers more of the strip, and keeps more of its background
             applyTypingWindow()
@@ -80,19 +81,57 @@ final class TrackAnnouncementView: NSView {
     /// a cover arrives after the strip went up, so the cover fades in rather than jumping
     var artworkFade: CGFloat {
         get { return content.artworkFade }
-        set { content.artworkFade = newValue }
+        set {
+            content.artworkFade = newValue
+            sleeve.coverFade = newValue
+        }
+    }
+
+    /// The break-out sleeve, which draws the cover bigger, leaning and standing above the
+    /// strip's top edge. Not a subview: the panel hosts it beside the strip, since the strip
+    /// clips what hangs outside it before macOS 14, and moves it with the strip.
+    let sleeve = TrackAnnouncementSleeveView(frame: .zero)
+
+    /// The cover is drawn by `sleeve` rather than in the strip, and the text starts further
+    /// right to clear it. Off by default; the panel sets it from `TrackAnnouncementSleeveKnobs`.
+    var breakout = false {
+        didSet {
+            guard breakout != oldValue else { return }
+            content.breakout = breakout
+            sleeve.isHidden = !breakout
+            // The sleeve covers more, and the text moves right
+            applyTypingWindow()
+        }
+    }
+
+    /// Where the artwork goes, in this view's coordinates: the flat slot, or the break-out
+    /// sleeve's square, which stands above the top edge
+    var artworkFrame: NSRect {
+        return content.artworkFrame
+    }
+
+    /// The frame for `sleeve` in this view's coordinates: the sleeve's square with room
+    /// around it for the turn, the tilt and the shadow
+    var sleeveFrame: NSRect {
+        let margin = TrackAnnouncementSleeve.margin * scale
+        return artworkFrame.insetBy(dx: -margin, dy: -margin)
     }
 
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
-        didSet { surface.wash.tintAlpha = tintAlpha }
+        didSet {
+            surface.wash.tintAlpha = tintAlpha
+            // The glare is a translucent wash; Reduce Transparency asks for none
+            sleeve.showsGlare = backgroundAlpha < 1
+        }
     }
 
     /// How much bigger than Growl's 1280 by 800 design to draw, set from the screen
     var scale: CGFloat = 1 {
         didSet {
             content.scale = scale
+            sleeve.scale = scale
             surface.wash.scale = scale
             applyInsets()
             layoutBackdrop()
@@ -198,6 +237,8 @@ final class TrackAnnouncementView: NSView {
         addSubview(surface)
         content.autoresizingMask = [.width, .height]
         addSubview(content)
+        sleeve.artwork = announcement.artwork
+        sleeve.isHidden = true
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(announcement.accessibilityLabel)
@@ -384,6 +425,22 @@ final class TrackAnnouncementContentView: NSView {
         }
     }
 
+    /// The cover is the break-out sleeve's, drawn on its own layers above the strip; this view
+    /// leaves its slot empty and starts the text further right
+    var breakout = false {
+        didSet {
+            if breakout != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
+    /// Where the artwork goes, in this view's coordinates: the flat slot, or the break-out
+    /// sleeve's square, which stands above the top edge
+    var artworkFrame: NSRect {
+        return frames.artwork
+    }
+
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
         self.announcement = announcement
         super.init(frame: frame)
@@ -408,7 +465,8 @@ final class TrackAnnouncementContentView: NSView {
             leadingInset: leadingInset,
             trailingInset: trailingInset,
             hasArtist: !announcement.artist.isEmpty,
-            hasAlbum: !announcement.album.isEmpty
+            hasAlbum: !announcement.album.isEmpty,
+            breakout: breakout
         )
     }
 
@@ -426,7 +484,9 @@ final class TrackAnnouncementContentView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let frames = self.frames
-        drawArtwork(in: frames.artwork)
+        if !breakout {
+            drawArtwork(in: frames.artwork)
+        }
         draw(announcement.title, in: frames.title, font: titleFont)
         if let artistRect = frames.artist {
             draw(announcement.artist, in: artistRect, font: detailFont)
@@ -514,7 +574,8 @@ final class TrackAnnouncementContentView: NSView {
         }
     }
 
-    private static let placeholderImage: NSImage? = {
+    /// The music note in the empty slot, white, 36 points; the break-out sleeve draws it too
+    static let placeholderImage: NSImage? = {
         let configuration = NSImage.SymbolConfiguration(pointSize: 36, weight: .regular)
         guard let symbol = NSImage(systemSymbolName: "music.note", accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else { return nil }
