@@ -75,6 +75,12 @@ extension iTunesPlayer {
         recentSongs.musicAnnounced(identity, playing: _playing)
     }
 
+    /// The record read at launch is the song playing then, which Music never announces, so
+    /// that the first song after it has a song before it to be checked against
+    func musicWasPlayingAtLaunch() {
+        recentSongs.playingAtLaunch(_playing)
+    }
+
     /// Music quit, so the songs it played are gone with it, and a read of one would only
     /// open it again
     func forgetRecentSongs() {

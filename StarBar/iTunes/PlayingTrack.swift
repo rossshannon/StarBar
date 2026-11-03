@@ -193,7 +193,10 @@ final class PlayingTrack {
     /// both of the strip's shapes: its persistent ID, and `name|artist|album`, which is what
     /// the strip goes by when Music's notification carried no ID
     private func askAppleForTheCover(_ covers: AppleMusicArtworkLoader, song: String) {
-        guard let album = album, !album.isEmpty, !artists.isEmpty, let title = name, !title.isEmpty else { return }
+        guard let album = album, !album.isEmpty, !artists.isEmpty, let title = name, !title.isEmpty else {
+            os_log("%{public}s[%{public}ld], %{public}s: can't ask Apple for the cover of %{public}s: Music named no album, artist or title (%{public}s, %{public}ld artists, %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil", artists.count, name ?? "nil")
+            return
+        }
         let identities = [
             song.uppercased(),
             TrackAnnouncementController.PlayerSnapshot.identity(name: title, artist: artist, album: album),
