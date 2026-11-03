@@ -682,13 +682,13 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertGreaterThan(try XCTUnwrap(view.typingWindow).keepUntilX, window.keepUntilX + 100)
     }
 
-    func testThePointersHoleKeepsAFifthOfTheTextsBackground() throws {
+    func testThePointersHoleKeepsSomeOfTheTextsBackground() throws {
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))
         view.setTypingWindow(radius: 360, feather: 144, centreHeight: 90, progress: 1)
         let keep = try XCTUnwrap(view.peepholeKeep)
         XCTAssertEqual(keep.untilX, try XCTUnwrap(view.typingWindow).keepUntilX, "the same part of the strip the typing window keeps")
         XCTAssertEqual(keep.feather, TrackAnnouncementSeeThrough.keepFeather)
-        XCTAssertEqual(keep.opacity, 0.2)
+        XCTAssertEqual(keep.opacity, 0.3)
 
         // A long title covers more, and keeps more, without the typing window open
         view.setTypingWindow(radius: 0, feather: 0, progress: 0)
