@@ -289,7 +289,14 @@ check caught one, "The Maker" with *The Bends*. The other eight were not the pre
 | "Here Comes the Flood" | a Jon Hassell album |
 
 "Wenn der Südwind weht" showed *Mixing Colours*, the previous song's cover, but it was the first
-song after a relaunch, so there was no previous cover to compare it with. With over half of
+song after a relaunch, so there was no previous cover to compare it with. Later the same evening "Space
+Oddity (2015 Remaster)" showed *OK Computer OKNOTOK 1997 2017*, and Music went on answering with
+that cover (an 800×800 PNG) when asked again. OKNOTOK had last played the day before, so a wrong
+cover can come from a day back, far beyond anything StarBar remembers; the left-over check
+compared it with the previous song's, "Evensong", found a difference of 0.345 and let it
+through. Apple's song search had the right album first, *David Bowie (aka Space Oddity) [2015
+Remaster]*, and the same search had the right album for each of the nine wrong covers above;
+whether the loader's album and artist rules take those results was not checked. With over half of
 these songs wrong, the earlier audit's finding that catalog artwork is usually correct no longer
 holds, and asking Apple for every such song is what the evidence calls for.
 
