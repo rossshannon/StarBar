@@ -1251,12 +1251,6 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(sleeve.alphaValue, 0, "it fades in with the strip")
         tick(clock, 0.15)
         XCTAssertEqual(sleeve.alphaValue, 0.5, accuracy: 0.01)
-        // AppKit hands the alpha, visibility and frame straight to the sleeve's own layer, and an
-        // implicit animation there drew it a third of the way in when the strip was fully in.
-        // The animation is only added once the layer has been drawn, so ask for the action.
-        for key in ["opacity", "hidden", "position", "bounds"] {
-            XCTAssertNil(sleeve.layer?.action(forKey: key), "\(key) is stepped on the clock, never animated by Core Animation")
-        }
 
         let centre = sleeveCentre(of: animated)
         mouse = NSPoint(x: centre.x + 60, y: centre.y + 60)
