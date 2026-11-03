@@ -31,6 +31,8 @@ final class TrackAnnouncementPanel: NSPanel {
     let stripView: TrackAnnouncementView
 
     private let slideDuration: TimeInterval
+    private let artworkFadeDuration: TimeInterval
+    private var artworkFadeTimer: RatingReminderTimer?
     private let screens: () -> [NSScreen]
     private let mouseLocation: () -> NSPoint
     private let keyboard: () -> KeyboardActivity
@@ -56,6 +58,8 @@ final class TrackAnnouncementPanel: NSPanel {
 
     /// - Parameters:
     ///   - slideDuration: 0 applies the final state at once, for tests
+    ///   - artworkFadeDuration: how long a cover that arrives after the strip went up takes to
+    ///     fade in over the placeholder; 0 draws it at once
     ///   - screens: the screens to choose from
     ///   - mouseLocation: where the pointer is, to pick the screen the user is looking at and
     ///     to put the see-through hole under it
@@ -64,12 +68,14 @@ final class TrackAnnouncementPanel: NSPanel {
     ///     panel's screen, so each step lands on a refresh, with a timer before macOS 14.
     init(
         slideDuration: TimeInterval = TrackAnnouncementLayout.slideDuration,
+        artworkFadeDuration: TimeInterval = TrackAnnouncementLayout.artworkFadeDuration,
         screens: @escaping () -> [NSScreen] = { NSScreen.screens },
         mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
         keyboard: @escaping () -> KeyboardActivity = KeyboardActivity.system,
         clock: RatingReminderClock? = nil
     ) {
         self.slideDuration = slideDuration
+        self.artworkFadeDuration = artworkFadeDuration
         self.screens = screens
         self.mouseLocation = mouseLocation
         self.keyboard = keyboard
@@ -161,6 +167,10 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             startSeeThrough()
         }
         let isNewAnnouncement = stripView.announcement != announcement
+        // A new song's artwork, or the placeholder, shows at once; only a cover that comes
+        // later fades in
+        stopArtworkFade()
+        stripView.artworkFade = 1
         stripView.announcement = announcement
         let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
 
@@ -213,7 +223,41 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
 
     func refresh(_ announcement: TrackAnnouncement) {
         guard phase != .hidden, stripView.announcement != announcement else { return }
+        let coverArrived = stripView.announcement.identity == announcement.identity
+            && stripView.announcement.artwork == nil && announcement.artwork != nil
         stripView.announcement = announcement
+        if coverArrived {
+            fadeInArtwork()
+        }
+    }
+
+    /// Cross-fade from the placeholder to a cover that arrived after the strip went up
+    /// (Spotify's, or Apple's for a song Music had none for), over `artworkFadeDuration`.
+    ///
+    /// Stepped on the slide's clock, as the slide and the fade are, rather than with a
+    /// `CATransition`: on macOS 27 a Core Animation animation on this panel ran to completion
+    /// without ever being drawn.
+    private func fadeInArtwork() {
+        stopArtworkFade()
+        guard artworkFadeDuration > 0 else {
+            stripView.artworkFade = 1
+            return
+        }
+        stripView.artworkFade = 0
+        let start = clock.now()
+        artworkFadeTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            guard let self = self else { return }
+            let progress = min(1, self.clock.now().timeIntervalSince(start) / self.artworkFadeDuration)
+            self.stripView.artworkFade = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
+            if progress >= 1 {
+                self.stopArtworkFade()
+            }
+        }
+    }
+
+    private func stopArtworkFade() {
+        artworkFadeTimer?.invalidate()
+        artworkFadeTimer = nil
     }
 
     func hide() {

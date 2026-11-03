@@ -43,6 +43,9 @@ final class iTunesPlayer {
     var isPlaying: Bool {
         return iTunesRadioStation.shared.iTunes?.playerState == .playing
     }
+
+    /// The songs Music announced last, for `previousSong(before:)`
+    private var recentSongs = RecentSongs<PlayingTrack>()
     
     private init() {
         
@@ -65,6 +68,31 @@ extension iTunesPlayer {
             NotificationCenter.default.post(name: .iTunesPlayerDidUpdated, object: nil)
         }
     }
-    
+
+    /// Music's notification named `identity` (`PlayInfo.songIdentity`) as the song playing.
+    /// Called once the notification's own `update()` has run, so the record is the new one.
+    func musicAnnounced(_ identity: String) {
+        recentSongs.musicAnnounced(identity, playing: _playing)
+    }
+
+    /// The record read at launch is the song playing then, which Music never announces, so
+    /// that the first song after it has a song before it to be checked against
+    func musicWasPlayingAtLaunch() {
+        recentSongs.playingAtLaunch(_playing)
+    }
+
+    /// Music quit, so the songs it played are gone with it, and a read of one would only
+    /// open it again
+    func forgetRecentSongs() {
+        recentSongs.forget()
+    }
+
+    /// The record of the song Music played before `song`, a persistent ID, if StarBar heard of
+    /// it. For catching Music answering for a catalog track with that song's cover: see
+    /// `PlayingTrack.sleeve()`.
+    func previousSong(before song: String) -> PlayingTrack? {
+        return recentSongs.previous(before: song) { $0.persistentID }
+    }
+
 }
 

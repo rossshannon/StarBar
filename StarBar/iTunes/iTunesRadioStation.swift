@@ -49,6 +49,11 @@ final class iTunesRadioStation {
     private(set) var latestPlayInfo: PlayInfo? {
         didSet {
             iTunesPlayer.shared.update()
+            if latestPlayInfo == nil {
+                iTunesPlayer.shared.forgetRecentSongs()
+            } else if let identity = latestPlayInfo?.songIdentity {
+                iTunesPlayer.shared.musicAnnounced(identity)
+            }
             // os_log("%{public}s[%{public}ld], %{public}s: latestPlayInfo %s", ((#file as NSString).lastPathComponent), #line, #function, latestPlayInfo?.description ?? "nil")
         }
     }
@@ -150,6 +155,7 @@ final class iTunesRadioStation {
 
         // Due to iTunes may already playing before app launch,update player when app start
         iTunesPlayer.shared.update(iTunes?.currentTrackCopy)
+        iTunesPlayer.shared.musicWasPlayingAtLaunch()
         // The same guard as above, split only to keep the lifecycle observers after this read
         if !iTunesRadioStation.isRunningTests {
             observeMusicLifecycle()

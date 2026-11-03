@@ -149,6 +149,7 @@ extension AppDelegate {
         controller.playerDidUpdate(seedOnly: true)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.playerDidUpdateForAnnouncement(_:)), name: .nowPlayingDidUpdate, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyArtworkDidLoad(_:)), name: .spotifyArtworkDidLoad, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.appleMusicCoverDidLoad(_:)), name: .appleMusicCoverDidLoad, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyLikeDidChange, object: SpotifyAccount.shared)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.spotifyLikeDidChange(_:)), name: .spotifyAccountDidChange, object: SpotifyAccount.shared)
         NotificationCenter.default.addObserver(self, selector: #selector(AppDelegate.libraryMatchDidChange(_:)), name: .libraryMatchDidChange, object: LibraryMatchFinder.shared)
@@ -215,6 +216,16 @@ extension AppDelegate {
         guard let identity = notification.userInfo?[SpotifyPlayer.identityKey] as? String,
               let artwork = SpotifyPlayer.shared.artwork(for: identity) else { return }
         TrackAnnouncementController.shared?.attachArtwork(artwork, identity: identity)
+    }
+
+    /// A cover Apple sent for a song whose cover Music got wrong. The strip takes it only
+    /// while it still shows that song with no artwork, under either of its identities.
+    @objc private func appleMusicCoverDidLoad(_ notification: Notification) {
+        guard let image = notification.userInfo?[AppleMusicArtworkLoader.imageKey] as? NSImage,
+              let identities = notification.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String] else { return }
+        for identity in identities {
+            TrackAnnouncementController.shared?.attachArtwork(image, identity: identity)
+        }
     }
 
     @objc private func spotifyLikeDidChange(_ notification: Notification) {
@@ -357,12 +368,17 @@ extension AppDelegate {
                     playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
                 }
                 live.canRate = playing?.canRate ?? true
-                if wantsArtwork {
-                    // The user's own copy first: a catalog track's artwork read can come back
-                    // empty and raise even when the same song sits in the library with its
-                    // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
-                    // back to the playing track rather than refusing.
-                    live.artwork = (playing?.artworkTrack ?? track).firstArtworkImage()
+                // The user's own copy first: a catalog track's artwork read can come back
+                // empty and raise even when the same song sits in the library with its
+                // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
+                // back to the playing track rather than refusing, and `sleeve()` for the
+                // one answer it does refuse: the previous song's cover, left over. A song the
+                // user doesn't have is read even when Music's notification says it has no
+                // artwork, because then `sleeve()` asks Apple for the cover.
+                if let playing = playing, wantsArtwork || !playing.canRate {
+                    live.artwork = playing.sleeve()
+                } else if playing == nil, wantsArtwork {
+                    live.artwork = track.firstArtworkImage()
                 }
                 return .loaded(live)
             case .changed:

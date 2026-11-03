@@ -105,6 +105,8 @@ enum TrackAnnouncementLayout {
     }
     /// Slide in and slide out, each
     static let slideDuration: TimeInterval = 0.3
+    /// A cover that arrives after the strip went up cross-fades from the placeholder over this
+    static let artworkFadeDuration: TimeInterval = 0.3
     /// Time fully on screen between the slides
     static let holdDuration: TimeInterval = 5.0
 

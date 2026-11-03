@@ -341,7 +341,8 @@ extension TrackAnnouncementController {
         seen[snapshot.source] = identity
     }
 
-    /// Artwork that arrived after its strip went up (Spotify's comes over the network).
+    /// Artwork that arrived after its strip went up: Spotify's comes over the network, and so
+    /// does a cover Apple sends in place of a wrong one from Music (`AppleMusicArtworkLoader`).
     /// Drawn only while the strip still shows that song and has no artwork of its own.
     func attachArtwork(_ artwork: NSImage, identity: String) {
         guard let current = currentAnnouncement, hideTimer != nil, current.identity == identity, current.artwork == nil else { return }

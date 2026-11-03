@@ -76,6 +76,13 @@ final class TrackAnnouncementView: NSView {
         }
     }
 
+    /// How much of the artwork is drawn over its placeholder, 0 to 1: the panel steps it when
+    /// a cover arrives after the strip went up, so the cover fades in rather than jumping
+    var artworkFade: CGFloat {
+        get { return content.artworkFade }
+        set { content.artworkFade = newValue }
+    }
+
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
@@ -367,6 +374,16 @@ final class TrackAnnouncementContentView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// How much of the artwork is drawn, 0 to 1, over the placeholder, which is drawn the rest
+    /// of the way: a cross-fade from one to the other. 1 unless a cover is fading in.
+    var artworkFade: CGFloat = 1 {
+        didSet {
+            if artworkFade != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
         self.announcement = announcement
         super.init(frame: frame)
@@ -464,25 +481,36 @@ final class TrackAnnouncementContentView: NSView {
     }
 
     private func drawArtwork(in slot: NSRect) {
+        guard let artwork = announcement.artwork, artwork.size.width > 0, artwork.size.height > 0 else {
+            drawPlaceholder(in: slot, opacity: 1)
+            return
+        }
+        let fade = min(1, max(0, artworkFade))
+        // Fading in: the placeholder fades out under it, since a cover that doesn't fill the
+        // square would otherwise show the placeholder's edges beside it
+        if fade < 1 {
+            drawPlaceholder(in: slot, opacity: 1 - fade)
+        }
+        guard fade > 0 else { return }
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
-        if let artwork = announcement.artwork, artwork.size.width > 0, artwork.size.height > 0 {
-            let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: artwork.size, in: slot)
-            if artworkCornerRadius > 0 {
-                NSBezierPath(roundedRect: rect, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).addClip()
-            }
-            NSGraphicsContext.current?.imageInterpolation = .high
-            artwork.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-        } else {
-            // No artwork: a quiet square with a music note, so the slot never looks broken
-            NSColor.white.withAlphaComponent(0.12).setFill()
-            NSBezierPath(roundedRect: slot, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).fill()
-            if let note = TrackAnnouncementContentView.placeholderImage {
-                // Drawn at 36 points in an 80 point slot at scale 1, and in proportion above
-                let noteSize = CGSize(width: note.size.width * scale, height: note.size.height * scale)
-                let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: noteSize, in: slot)
-                note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.9)
-            }
+        let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: artwork.size, in: slot)
+        if artworkCornerRadius > 0 {
+            NSBezierPath(roundedRect: rect, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).addClip()
+        }
+        NSGraphicsContext.current?.imageInterpolation = .high
+        artwork.draw(in: rect, from: .zero, operation: .sourceOver, fraction: fade)
+    }
+
+    /// No artwork: a quiet square with a music note, so the slot never looks broken
+    private func drawPlaceholder(in slot: NSRect, opacity: CGFloat) {
+        NSColor.white.withAlphaComponent(0.12 * opacity).setFill()
+        NSBezierPath(roundedRect: slot, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).fill()
+        if let note = TrackAnnouncementContentView.placeholderImage {
+            // Drawn at 36 points in an 80 point slot at scale 1, and in proportion above
+            let noteSize = CGSize(width: note.size.width * scale, height: note.size.height * scale)
+            let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: noteSize, in: slot)
+            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.9 * opacity)
         }
     }
 

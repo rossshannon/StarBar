@@ -178,9 +178,85 @@ was tried and reverted within minutes: the sampling above shows catalog artwork 
 correct, so the strict rule blanked every Apple Music song's artwork to avoid an occasional
 wrong one.
 
+### The previous song's cover, left over
+
+Seen again on 2026-11-02: "Chain Home" by Tom Rogerson and Brian Eno, played from the catalog
+and not in the library, came back with the sleeve of *The Bends*, straight after "Fake Plastic
+Trees". The strip and the popover both showed it until the song was added to the library,
+when StarBar switched to the new copy's artwork, which was right. The sleeve on screen looked
+like the library file's own low-resolution scan rather than Apple's catalog artwork, which
+suggests Music handed back the previous track's artwork as it held it. That is a reading of a
+screenshot, not a measurement.
+
+Both wrong sleeves seen so far were **the previous song's**. That much can be caught without
+knowing which song a sleeve belongs to: `PlayingTrack.sleeve()` compares Music's answer for a
+catalog track the user doesn't have with the previous song's cover, and when they are the same
+cover for songs on different albums, shows the placeholder instead. The two are compared as
+16 by 16 grids of colours (`SleeveFingerprint`), since the bytes differ with size and
+encoding, and the albums as releases (`SongName.releaseName`), since consecutive tracks of one
+album share a cover. The tolerance is a guess; StarBar logs every difference it measures.
+
+A cover refused this way is then fetched from Apple's public iTunes Search service, by the
+song's artist and title (`AppleMusicArtworkLoader`, below), and shown when it arrives, in the strip
+while it is still up and in the popover. Only an exact album and artist match is taken.
+
+Checked live the same evening, in Ireland's store: the search for "Tom Rogerson & Brian Eno
+Finding Shore" answered with *Finding Shore* first and a Kenny Rogers album second, and the one
+for "Radiohead The Bends" with *The Bends* first among ten, Rosie Carney's own *The Bends*
+included. The rule takes the first and turns the others down, and the 600 px cover for each
+downloaded (100 KB and 77 KB JPEGs). On the installed build, two catalog songs in turn by
+different artists (David Bowie, then Daniel Lanois) measured 0.193 apart, against both the
+cover shown for the first and Music's answer for it, so the second kept Music's cover and
+Apple was not asked. The refusal itself has not yet been seen live.
+
+### No cover at all
+
+Minutes later, two catalog songs in a row came with no artwork: "Exit Music (For a Film)
+[Remastered]" on *OK Computer OKNOTOK 1997 2017*, then "Obsidian" on *Mixing Colours
+(Expanded)*. Music reported `count of artworks` 0, and reading artwork 1 failed with a
+parameter error, for as long as the songs were looked at. This is the "absent at first" row of
+the table above, but it did not fill in. Such a song's cover is asked of Apple too.
+
+Apple's **album** search does not know every edition by Music's name for it: "Radiohead OK
+Computer OKNOTOK 1997 2017" answered with the plain *OK Computer* and seven unrelated albums,
+and the album rule rightly refused *OK Computer*, whose cover is another. The **song** search
+for "Radiohead Exit Music For a Film" answered with the track on *OK Computer OKNOTOK 1997
+2017* first, with its own cover, and the plain album's second. So the loader searches for the
+song and keeps the cover for its album.
+
+The song search, checked live for five songs as the app sends it (artist and title as Music
+gives them, 25 results, Ireland's store):
+
+| Song | Album wanted | Found |
+|---|---|---|
+| Exit Music (For a Film) [Remastered] | OK Computer OKNOTOK 1997 2017 | 1st |
+| Obsidian | Mixing Colours (Expanded) | 1st; 2nd was the plain *Mixing Colours*, another cover |
+| Chain Home | Finding Shore | 1st |
+| Falling At Your Feet (with Bono) | Shine | 1st, the only result |
+| Life On Mars? (Original Ending Version) | Divine Symmetry | **not at all**: no Bowie song among 16 |
+
+Without "(Original Ending Version)", the Bowie search found *Divine Symmetry* 17th, through
+other tracks of it, so a title that finds nothing is searched for again without its bracketed
+parts. And because an expanded edition and the album can have different covers, the album is
+matched letter for letter (case, accents and punctuation aside), not as a release.
+
+### What the search can't find
+
+"Germination (Coda)" by Ryuichi Sakamoto, on *Coda*, came with no cover from Music, and neither
+song search found that album: they answered with "Germination" on *Merry Christmas, Mr.
+Lawrence*, on the *Call Me By Your Name* soundtrack and in covers by other artists, which the
+album rule refused. An album search for "Ryuichi Sakamoto Coda" found no album of that name in
+the Irish, US, British or Japanese stores. The iTunes Search service lists what the iTunes Store
+sells, so an album that is only streamed on Apple Music is, by this reading, out of its reach;
+that it is streaming-only is an inference, not checked. Such a song keeps the placeholder. The
+Apple Music API would find it, but needs a developer token signed with a MusicKit key.
+
 ### Open question
 
-How to tell a wrong sleeve from a right one. Nothing on an artwork says which song it belongs
-to, and the catalog object and the library copy hold different resolutions (800×800 against
-600×600 for the same album), so the bytes cannot be compared either. Eliminating this would
-mean fetching artwork by song identifier rather than through the Scripting Bridge.
+How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it
+belongs to, and the catalog object and the library copy hold different resolutions (800×800
+against 600×600 for the same album), so the bytes cannot be compared either. Fetching the right
+sleeve for those too would mean fetching every catalog track's artwork from Apple, or doing it
+by song identifier rather than through the Scripting Bridge. Whether Music's `playerInfo` notification carries the catalog ID
+for a catalog track (`PlayInfo` has a `storeURL` field for its `Store URL` key) has not been
+checked.

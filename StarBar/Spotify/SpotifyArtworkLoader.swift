@@ -10,7 +10,7 @@ import os
 
 /// Downloads a Spotify song's sleeve from the `artwork url` Spotify's AppleScript reports.
 ///
-/// The only network request StarBar makes. The URL comes from another app's Apple Event
+/// One of the few network requests StarBar makes. The URL comes from another app's Apple Event
 /// reply, so only `https` on Spotify's image host is fetched, the download is capped, and the
 /// image is decoded off the main thread. Answers on the main thread. A few sleeves are kept,
 /// keyed by URL, so an album played through costs one download.
