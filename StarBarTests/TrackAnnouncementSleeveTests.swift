@@ -357,11 +357,11 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         XCTAssertEqual(view.sleeveRect.midY, view.slot.midY, accuracy: 0.5)
     }
 
-    /// AppKit hands the view's alpha, visibility and frame straight to its own root layer,
-    /// which has no delegate, so each change ran Core Animation's 0.25 s implicit animation:
-    /// measured on macOS 27.2, a fade stepped at 60 Hz was drawn at 34% when the strip was fully
-    /// in. Inside the panel under test the layer answers no action even without the fix, so the
-    /// view is asked on its own, as the measurement was made.
+    /// AppKit hands the view's alpha, visibility and frame straight to its own root layer.
+    /// Measured on macOS 27.2, that layer has no delegate, so each change ran Core Animation's
+    /// 0.25 s implicit animation, and a fade stepped at 60 Hz was drawn at 34% when the strip
+    /// was fully in. CI's macOS 15, 26 and 27.0 answer no action here even without the fix, so
+    /// only a newer macOS can fail this.
     func testTheSleevesOwnLayerRunsNoImplicitAnimations() {
         let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
         for key in ["opacity", "hidden", "position", "bounds"] {
