@@ -33,6 +33,12 @@ enum TrackAnnouncementSeeThrough {
     /// Room kept around the artwork and text, and the soft edge after it, at scale 1
     static let keepMargin: CGFloat = 24
     static let keepFeather: CGFloat = 48
+    /// How much of the background the pointer's hole leaves behind the artwork and text. The
+    /// hole cleared it all at first, and the white text then stood over whatever was behind;
+    /// Ross asked on 2026-11-03 for it to fade only to 20% there, to keep the contrast, and on
+    /// seeing that, for 10% more. The typing window keeps all of it, since that one opens on
+    /// its own while the user types.
+    static let peepholeKeepOpacity: CGFloat = 0.3
     /// A key pressed within this long ago means the user is typing
     static let typingPause: TimeInterval = 1.5
     /// The window opens quickly when typing starts, and closes gently
@@ -100,8 +106,31 @@ enum TrackAnnouncementSeeThrough {
     static func typingWindow(in bounds: CGRect, occupied: CGRect, radius: CGFloat, feather: CGFloat, centreHeight: CGFloat, margin: CGFloat, keepFeather: CGFloat, progress: CGFloat) -> TrackAnnouncementTypingWindow? {
         guard radius > 0, progress > 0 else { return nil }
         let hole = TrackAnnouncementPeephole(centre: CGPoint(x: bounds.midX, y: bounds.maxY + centreHeight), radius: radius, feather: min(max(0, feather), radius))
-        let keepUntilX = occupied.isNull || occupied.isEmpty ? bounds.minX : min(bounds.maxX, occupied.maxX + margin)
-        return TrackAnnouncementTypingWindow(hole: hole, keepUntilX: keepUntilX, keepFeather: max(0, keepFeather), progress: min(1, progress))
+        // All of the background, where the pointer's hole keeps `peepholeKeepOpacity` of it
+        let kept = TrackAnnouncementKeptBackground(
+            untilX: keepUntilX(in: bounds, occupied: occupied, margin: margin),
+            feather: max(0, keepFeather),
+            opacity: 1
+        )
+        return TrackAnnouncementTypingWindow(hole: hole, kept: kept, progress: min(1, progress))
+    }
+
+    /// What the pointer's hole leaves of the background behind the artwork and text: `opacity`
+    /// of it from the strip's leading edge to `margin` past what they cover, fading out over
+    /// `feather` after that. Nil when there is nothing to keep, so the hole clears everything.
+    static func keptBackground(in bounds: CGRect, occupied: CGRect, margin: CGFloat, feather: CGFloat, opacity: CGFloat) -> TrackAnnouncementKeptBackground? {
+        guard opacity > 0, !occupied.isNull, !occupied.isEmpty else { return nil }
+        return TrackAnnouncementKeptBackground(
+            untilX: keepUntilX(in: bounds, occupied: occupied, margin: margin),
+            feather: max(0, feather),
+            opacity: min(1, opacity)
+        )
+    }
+
+    /// Where the background kept for the artwork and text ends: `margin` past what they cover,
+    /// within the strip, or the leading edge when they cover nothing
+    static func keepUntilX(in bounds: CGRect, occupied: CGRect, margin: CGFloat) -> CGFloat {
+        return occupied.isNull || occupied.isEmpty ? bounds.minX : min(bounds.maxX, occupied.maxX + margin)
     }
 
 }
@@ -114,14 +143,21 @@ struct TrackAnnouncementPeephole: Equatable {
     var feather: CGFloat
 }
 
+/// The part of the background a hole keeps behind the artwork and text, in the strip's
+/// coordinates: `opacity` of it from the leading edge to `untilX`, fading to none over
+/// `feather` after it. Some of it for the pointer's hole, all of it for the typing window.
+struct TrackAnnouncementKeptBackground: Equatable {
+    var untilX: CGFloat
+    var feather: CGFloat
+    var opacity: CGFloat
+}
+
 /// The window through the strip's background while the user types: a large soft hole, with
 /// the background kept under the artwork and text whatever the hole covers
 struct TrackAnnouncementTypingWindow: Equatable {
     var hole: TrackAnnouncementPeephole
-    /// The background stays solid from the strip's leading edge to here
-    var keepUntilX: CGFloat
-    /// And fades out over this much after it
-    var keepFeather: CGFloat
+    /// Solid behind the artwork and text, whatever the hole covers
+    var kept: TrackAnnouncementKeptBackground
     /// How far open, 0 to 1
     var progress: CGFloat
 }
@@ -204,7 +240,8 @@ struct TrackAnnouncementTyping {
 /// Knobs for trying the see-through behaviour without a rebuild, read from defaults each time
 /// the strip appears. `announcementPeephole` (bool; true by default: the hole that follows the
 /// pointer), `announcementPeepholeRadius` and `announcementPeepholeFeather` (points at scale 1;
-/// 270 and 108 by default), `announcementTypingWindow` (bool; true by default: the window in
+/// 270 and 108 by default), `announcementPeepholeKeep` (0 to 1; 0.3 by default: how much of the
+/// background the hole leaves behind the artwork and text), `announcementTypingWindow` (bool; true by default: the window in
 /// the middle of the strip while the user types), `announcementTypingRadius`,
 /// `announcementTypingFeather` and `announcementTypingCentreHeight` (points at scale 1; 360,
 /// 144 and 90 by default; the last is how far above the strip's top edge the window's centre
@@ -214,6 +251,7 @@ struct TrackAnnouncementSeeThroughKnobs: Equatable {
     var peephole = true
     var radius = TrackAnnouncementSeeThrough.peepholeRadius
     var feather = TrackAnnouncementSeeThrough.peepholeFeather
+    var peepholeKeep = TrackAnnouncementSeeThrough.peepholeKeepOpacity
     var typingWindow = true
     var typingRadius = TrackAnnouncementSeeThrough.typingRadius
     var typingFeather = TrackAnnouncementSeeThrough.typingFeather
@@ -237,6 +275,9 @@ struct TrackAnnouncementSeeThroughKnobs: Equatable {
         }
         knobs.radius = length("announcementPeepholeRadius") ?? knobs.radius
         knobs.feather = length("announcementPeepholeFeather") ?? knobs.feather
+        if defaults.object(forKey: "announcementPeepholeKeep") != nil {
+            knobs.peepholeKeep = min(1, max(0, CGFloat(defaults.double(forKey: "announcementPeepholeKeep"))))
+        }
         if defaults.object(forKey: "announcementTypingWindow") != nil {
             knobs.typingWindow = defaults.bool(forKey: "announcementTypingWindow")
         }

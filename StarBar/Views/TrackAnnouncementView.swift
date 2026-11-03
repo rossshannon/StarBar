@@ -70,9 +70,10 @@ final class TrackAnnouncementView: NSView {
     var announcement: TrackAnnouncement {
         didSet {
             content.announcement = announcement
+            sleeve.artwork = sleeveArtwork
             setAccessibilityLabel(announcement.accessibilityLabel)
             // A longer title covers more of the strip, and keeps more of its background
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
@@ -80,31 +81,82 @@ final class TrackAnnouncementView: NSView {
     /// a cover arrives after the strip went up, so the cover fades in rather than jumping
     var artworkFade: CGFloat {
         get { return content.artworkFade }
-        set { content.artworkFade = newValue }
+        set {
+            content.artworkFade = newValue
+            sleeve.coverFade = newValue
+        }
+    }
+
+    /// The break-out sleeve, which draws the cover bigger, leaning and standing above the
+    /// strip's top edge. Not a subview: the panel hosts it beside the strip, since the strip
+    /// clips what hangs outside it before macOS 14, and moves it with the strip.
+    let sleeve = TrackAnnouncementSleeveView(frame: .zero)
+
+    /// The cover is drawn by `sleeve` rather than in the strip, and the text starts further
+    /// right to clear it. Off by default; the panel sets it from `TrackAnnouncementSleeveKnobs`.
+    var breakout = false {
+        didSet {
+            guard breakout != oldValue else { return }
+            content.breakout = breakout
+            sleeve.isHidden = !breakout
+            sleeve.artwork = sleeveArtwork
+            // The sleeve covers more, and the text moves right
+            applySeeThrough()
+        }
+    }
+
+    /// The sleeve's cover: none while the sleeve is off, so a hidden layer never holds one
+    private var sleeveArtwork: NSImage? {
+        return breakout ? announcement.artwork : nil
+    }
+
+    /// Where the artwork goes, in this view's coordinates: the flat slot, or the break-out
+    /// sleeve's square, which stands above the top edge
+    var artworkFrame: NSRect {
+        return content.artworkFrame
+    }
+
+    /// The frame for `sleeve` in this view's coordinates: the sleeve's square with room
+    /// around it for the turn, the tilt and the shadow
+    var sleeveFrame: NSRect {
+        let margin = TrackAnnouncementSleeve.margin * scale
+        return artworkFrame.insetBy(dx: -margin, dy: -margin)
     }
 
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
-        didSet { surface.wash.tintAlpha = tintAlpha }
+        didSet {
+            surface.wash.tintAlpha = tintAlpha
+            // The glare is a translucent wash; Reduce Transparency asks for none
+            sleeve.showsGlare = backgroundAlpha < 1
+        }
     }
 
     /// How much bigger than Growl's 1280 by 800 design to draw, set from the screen
     var scale: CGFloat = 1 {
         didSet {
             content.scale = scale
+            sleeve.scale = scale
             surface.wash.scale = scale
             applyInsets()
             layoutBackdrop()
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
     /// The hole through the background that follows the pointer, in this view's coordinates;
-    /// nil for none. The text, artwork and stars stay drawn over it.
+    /// nil for none. The text, artwork and stars stay drawn over it, and `peepholeKeepOpacity`
+    /// of the background stays behind them.
     var peephole: TrackAnnouncementPeephole? {
         get { return surface.peephole }
         set { surface.peephole = newValue }
+    }
+
+    /// What the pointer's hole keeps of the background behind the artwork and text, as laid
+    /// out; nil when it keeps none
+    var peepholeKeep: TrackAnnouncementKeptBackground? {
+        return surface.peepholeKeep
     }
 
     /// Open the window through the middle of the background that shows while the user types,
@@ -115,7 +167,7 @@ final class TrackAnnouncementView: NSView {
     func setTypingWindow(radius: CGFloat, feather: CGFloat, centreHeight: CGFloat = 0, progress: CGFloat) {
         typingWindowSize = (radius, feather, centreHeight)
         typingWindowProgress = progress
-        applyTypingWindow()
+        applyTypingWindow(occupied: nil)
     }
 
     /// The typing window as laid out, in this view's coordinates; nil while it is closed
@@ -126,15 +178,40 @@ final class TrackAnnouncementView: NSView {
     private var typingWindowSize: (radius: CGFloat, feather: CGFloat, centreHeight: CGFloat) = (0, 0, 0)
     private var typingWindowProgress: CGFloat = 0
 
-    private func applyTypingWindow() {
-        // Closed: nothing to lay out, and no text to measure
+    /// How much of the background the pointer's hole leaves behind the artwork and text, 0 to
+    /// 1: the panel sets it from `TrackAnnouncementSeeThroughKnobs` each time the strip appears
+    var peepholeKeepOpacity: CGFloat = TrackAnnouncementSeeThrough.peepholeKeepOpacity {
+        didSet {
+            guard peepholeKeepOpacity != oldValue else { return }
+            applySeeThrough()
+        }
+    }
+
+    /// Lay out what the pointer's hole and the typing window keep of the background, after
+    /// anything that moves the artwork and text or changes what they cover. The hole itself
+    /// moves on every display refresh, so the text is measured here rather than with it.
+    private func applySeeThrough() {
+        let occupied = content.occupiedRect
+        surface.peepholeKeep = TrackAnnouncementSeeThrough.keptBackground(
+            in: bounds,
+            occupied: occupied,
+            margin: TrackAnnouncementSeeThrough.keepMargin * scale,
+            feather: TrackAnnouncementSeeThrough.keepFeather * scale,
+            opacity: peepholeKeepOpacity
+        )
+        applyTypingWindow(occupied: occupied)
+    }
+
+    /// `occupied` is what the artwork and text cover, nil to measure it
+    private func applyTypingWindow(occupied: CGRect?) {
+        // Closed: nothing to lay out
         guard typingWindowSize.radius > 0, typingWindowProgress > 0 else {
             surface.typingWindow = nil
             return
         }
         surface.typingWindow = TrackAnnouncementSeeThrough.typingWindow(
             in: bounds,
-            occupied: content.occupiedRect,
+            occupied: occupied ?? content.occupiedRect,
             radius: typingWindowSize.radius,
             feather: typingWindowSize.feather,
             centreHeight: typingWindowSize.centreHeight,
@@ -150,14 +227,14 @@ final class TrackAnnouncementView: NSView {
         didSet {
             applyInsets()
             layoutBackdrop()
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
     var trailingInset: CGFloat = 0 {
         didSet {
             applyInsets()
             layoutBackdrop()
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
@@ -168,7 +245,7 @@ final class TrackAnnouncementView: NSView {
             rebuildBackdrop()
             applyInsets()
             // The glass's side insets move the content, and so the part that keeps its background
-            applyTypingWindow()
+            applySeeThrough()
             surface.wash.tintAlpha = tintAlpha
             surface.wash.tintColor = tintColor
         }
@@ -198,6 +275,8 @@ final class TrackAnnouncementView: NSView {
         addSubview(surface)
         content.autoresizingMask = [.width, .height]
         addSubview(content)
+        sleeve.isHidden = true
+        applySeeThrough()
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(announcement.accessibilityLabel)
@@ -206,7 +285,7 @@ final class TrackAnnouncementView: NSView {
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
         layoutBackdrop()
-        applyTypingWindow()
+        applySeeThrough()
     }
 
     /// The frame the backdrop takes for the current style: the whole strip for a blur, and
@@ -378,10 +457,27 @@ final class TrackAnnouncementContentView: NSView {
     /// of the way: a cross-fade from one to the other. 1 unless a cover is fading in.
     var artworkFade: CGFloat = 1 {
         didSet {
-            if artworkFade != oldValue {
+            // With the break-out sleeve the cover is the sleeve's, and nothing here changes
+            if artworkFade != oldValue && !breakout {
                 needsDisplay = true
             }
         }
+    }
+
+    /// The cover is the break-out sleeve's, drawn on its own layers above the strip; this view
+    /// leaves its slot empty and starts the text further right
+    var breakout = false {
+        didSet {
+            if breakout != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
+    /// Where the artwork goes, in this view's coordinates: the flat slot, or the break-out
+    /// sleeve's square, which stands above the top edge
+    var artworkFrame: NSRect {
+        return frames.artwork
     }
 
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
@@ -408,7 +504,8 @@ final class TrackAnnouncementContentView: NSView {
             leadingInset: leadingInset,
             trailingInset: trailingInset,
             hasArtist: !announcement.artist.isEmpty,
-            hasAlbum: !announcement.album.isEmpty
+            hasAlbum: !announcement.album.isEmpty,
+            breakout: breakout
         )
     }
 
@@ -426,7 +523,9 @@ final class TrackAnnouncementContentView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let frames = self.frames
-        drawArtwork(in: frames.artwork)
+        if !breakout {
+            drawArtwork(in: frames.artwork)
+        }
         draw(announcement.title, in: frames.title, font: titleFont)
         if let artistRect = frames.artist {
             draw(announcement.artist, in: artistRect, font: detailFont)
@@ -504,17 +603,23 @@ final class TrackAnnouncementContentView: NSView {
 
     /// No artwork: a quiet square with a music note, so the slot never looks broken
     private func drawPlaceholder(in slot: NSRect, opacity: CGFloat) {
-        NSColor.white.withAlphaComponent(0.12 * opacity).setFill()
+        NSColor.white.withAlphaComponent(TrackAnnouncementContentView.placeholderFillAlpha * opacity).setFill()
         NSBezierPath(roundedRect: slot, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).fill()
         if let note = TrackAnnouncementContentView.placeholderImage {
             // Drawn at 36 points in an 80 point slot at scale 1, and in proportion above
             let noteSize = CGSize(width: note.size.width * scale, height: note.size.height * scale)
             let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: noteSize, in: slot)
-            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.9 * opacity)
+            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: TrackAnnouncementContentView.placeholderNoteAlpha * opacity)
         }
     }
 
-    private static let placeholderImage: NSImage? = {
+    /// The placeholder's square, white at this alpha, and the note on it; the break-out sleeve
+    /// draws them the same
+    static let placeholderFillAlpha: CGFloat = 0.12
+    static let placeholderNoteAlpha: CGFloat = 0.9
+
+    /// The music note in the empty slot, white, 36 points; the break-out sleeve draws it too
+    static let placeholderImage: NSImage? = {
         let configuration = NSImage.SymbolConfiguration(pointSize: 36, weight: .regular)
         guard let symbol = NSImage(systemSymbolName: "music.note", accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else { return nil }

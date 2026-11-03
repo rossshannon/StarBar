@@ -71,8 +71,13 @@ final class FakeClock: RatingReminderClock {
         }
     }
 
+    /// All repeating timers still valid, oldest first
+    var pendingRepeating: [FakeTimer] {
+        return timers.filter { $0.isValid && $0.repeats }
+    }
+
     func fireRepeating() {
-        timers.filter { $0.isValid && $0.repeats }.forEach { $0.action() }
+        pendingRepeating.forEach { $0.action() }
     }
 
 }

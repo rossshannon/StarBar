@@ -118,8 +118,8 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         mask.place(TrackAnnouncementPeephole(centre: CGPoint(x: 300, y: 70), radius: 50, feather: 20), in: bounds, scale: 2)
 
         XCTAssertEqual(mask.frame, bounds)
-        let layers = mask.sublayers ?? []
-        XCTAssertEqual(layers.count, 5)
+        let layers = (mask.sublayers ?? []).filter { !$0.isHidden }
+        XCTAssertEqual(layers.count, 5, "the hole and four tiles; nothing kept")
         let hole = layers.last { $0.contents != nil }
         XCTAssertEqual(hole?.frame, CGRect(x: 250, y: 32, width: 100, height: 100), "centred on the pointer, in the mask's own coordinates")
         // The frame is in screen pixels; the image under it is coarse, and stretched
@@ -137,6 +137,65 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         let image = try XCTUnwrap(sprite.contents.map { $0 as! CGImage })
         XCTAssertLessThanOrEqual(image.width, 512, "a soft gradient needs no more")
         XCTAssertEqual(sprite.frame.width, 1440, "still stretched over the whole hole")
+    }
+
+    // MARK: - What the pointer's hole keeps
+
+    func testThePointersHoleKeepsSomeOfTheBackgroundBehindTheText() throws {
+        let keep = try XCTUnwrap(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 400, height: 110), margin: 24, feather: 48, opacity: TrackAnnouncementSeeThrough.peepholeKeepOpacity))
+        XCTAssertEqual(keep.untilX, 441, "the text's end plus the margin, as the typing window keeps")
+        XCTAssertEqual(keep.feather, 48)
+        XCTAssertEqual(keep.opacity, 0.3, "Ross asked for 20%, to keep the white text readable, then 10% more")
+
+        let long = try XCTUnwrap(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 1990, height: 110), margin: 24, feather: -5, opacity: 3))
+        XCTAssertEqual(long.untilX, 2000, "inside the strip")
+        XCTAssertEqual(long.feather, 0)
+        XCTAssertEqual(long.opacity, 1)
+
+        XCTAssertNil(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: .null, margin: 24, feather: 48, opacity: 0.2), "nothing drawn, nothing kept")
+        XCTAssertNil(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 400, height: 110), margin: 24, feather: 48, opacity: 0), "a knob at 0 clears it all, as before")
+    }
+
+    func testTheMaskKeepsTheBackgroundBehindTheTextInsideTheHole() throws {
+        let mask = TrackAnnouncementPeepholeMask()
+        let bounds = CGRect(x: 0, y: -12, width: 2000, height: 162)
+        let hole = TrackAnnouncementPeephole(centre: CGPoint(x: 400, y: 70), radius: 270, feather: 108)
+        mask.place(hole, keeping: TrackAnnouncementKeptBackground(untilX: 441.3, feather: 48, opacity: 0.2), in: bounds, scale: 2)
+
+        let kept = try XCTUnwrap(mask.keptLayers)
+        XCTAssertEqual(kept.solid.frame, CGRect(x: 0, y: 0, width: 441.5, height: 162), "from the leading edge, to a whole pixel")
+        XCTAssertEqual(kept.edge.frame, CGRect(x: 441.5, y: 0, width: 48, height: 162), "then fading out")
+        XCTAssertEqual(kept.solid.opacity, 0.2, accuracy: 1e-6)
+        XCTAssertEqual(kept.edge.opacity, 0.2, accuracy: 1e-6)
+
+        mask.place(hole, in: bounds, scale: 2)
+        XCTAssertNil(mask.keptLayers, "none asked for, none kept")
+    }
+
+    func testThroughTheHoleTheTextKeepsAFifthOfItsBackgroundAndTheRestClears() throws {
+        let mask = TrackAnnouncementPeepholeMask()
+        let bounds = CGRect(x: 0, y: 0, width: 1000, height: 150)
+        // Clear from 220 to 780 across the middle; the text's background is kept to 441
+        mask.place(TrackAnnouncementPeephole(centre: CGPoint(x: 500, y: 75), radius: 300, feather: 20),
+                   keeping: TrackAnnouncementKeptBackground(untilX: 441, feather: 48, opacity: 0.2),
+                   in: bounds, scale: 1)
+
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 1000, height: 150, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        mask.render(in: context)
+        let data = try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)
+        // The middle row, so it doesn't matter which way up the bitmap is
+        func alpha(_ x: Int) -> CGFloat {
+            return CGFloat(data[75 * context.bytesPerRow + x * 4 + 3]) / 255
+        }
+
+        XCTAssertEqual(alpha(300), 0.2, accuracy: 0.02, "behind the text: a fifth of the background")
+        XCTAssertEqual(alpha(600), 0, accuracy: 0.02, "past the text: all clear")
+        XCTAssertEqual(alpha(950), 1, accuracy: 0.02, "outside the hole: all of it")
+        XCTAssertLessThan(alpha(465), alpha(300), "the kept part fades out rather than stopping at a cut")
+        XCTAssertGreaterThan(alpha(465), alpha(600))
     }
 
     // MARK: - The fade
@@ -160,8 +219,7 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertEqual(window.hole.centre, CGPoint(x: 1000, y: 240), "across the middle, and 90 above the top edge")
         XCTAssertEqual(window.hole.radius, 360)
         XCTAssertEqual(window.hole.feather, 144)
-        XCTAssertEqual(window.keepUntilX, 441, "the text's end plus the margin")
-        XCTAssertEqual(window.keepFeather, 48)
+        XCTAssertEqual(window.kept, TrackAnnouncementKeptBackground(untilX: 441, feather: 48, opacity: 1), "all of it, to the text's end plus the margin")
         XCTAssertEqual(window.progress, 0.25)
     }
 
@@ -177,12 +235,12 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
 
     func testTheKeptBackgroundStaysInsideTheStrip() throws {
         let long = try XCTUnwrap(TrackAnnouncementSeeThrough.typingWindow(in: wide, occupied: CGRect(x: 17, y: 20, width: 1990, height: 110), radius: 360, feather: 500, centreHeight: 90, margin: 24, keepFeather: 48, progress: 2))
-        XCTAssertEqual(long.keepUntilX, 2000)
+        XCTAssertEqual(long.kept.untilX, 2000)
         XCTAssertEqual(long.hole.feather, 360, "the soft edge is never wider than the hole")
         XCTAssertEqual(long.progress, 1)
 
         let nothing = try XCTUnwrap(TrackAnnouncementSeeThrough.typingWindow(in: wide, occupied: .null, radius: 360, feather: 144, centreHeight: 90, margin: 24, keepFeather: 48, progress: 1))
-        XCTAssertEqual(nothing.keepUntilX, 0, "nothing drawn, nothing kept")
+        XCTAssertEqual(nothing.kept.untilX, 0, "nothing drawn, nothing kept")
     }
 
     func testTheTypingMaskClosesWithOneOpacity() throws {
@@ -190,28 +248,31 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         let bounds = CGRect(x: 0, y: -12, width: 2000, height: 162)
         let window = TrackAnnouncementTypingWindow(
             hole: TrackAnnouncementPeephole(centre: CGPoint(x: 1000, y: 75), radius: 360, feather: 144),
-            keepUntilX: 441.3, keepFeather: 48, progress: 0.25
+            kept: TrackAnnouncementKeptBackground(untilX: 441.3, feather: 48, opacity: 1), progress: 0.25
         )
 
         mask.place(window, in: bounds, scale: 2)
 
         XCTAssertEqual(mask.frame, bounds)
         let layers = try XCTUnwrap(mask.sublayers)
-        XCTAssertEqual(layers.count, 4)
-        XCTAssertTrue(layers[0] is TrackAnnouncementPeepholeMask, "the hole")
-        XCTAssertEqual(layers[0].frame, CGRect(origin: .zero, size: bounds.size))
+        XCTAssertEqual(layers.count, 2)
+        let hole = try XCTUnwrap(layers[0] as? TrackAnnouncementPeepholeMask, "the hole")
+        XCTAssertEqual(hole.frame, CGRect(origin: .zero, size: bounds.size))
         // The hole's image, centred on (1000, 75) in the strip: 12 higher in the mask's own
         // coordinates, which start at the glass's overhang below the strip
-        let sprite = try XCTUnwrap(layers[0].sublayers?.first { $0.contents != nil })
+        let sprite = try XCTUnwrap(hole.sublayers?.first { $0.contents != nil })
         XCTAssertEqual(sprite.frame, CGRect(x: 640, y: 87 - 360, width: 720, height: 720))
-        XCTAssertEqual(layers[1].frame, CGRect(x: 0, y: 0, width: 441.5, height: 162), "solid over the text, to a whole pixel")
-        XCTAssertTrue(layers[2] is CAGradientLayer)
-        XCTAssertEqual(layers[2].frame, CGRect(x: 441.5, y: 0, width: 48, height: 162), "then fading out")
-        XCTAssertEqual(layers[3].frame, CGRect(origin: .zero, size: bounds.size))
-        XCTAssertEqual(layers[3].opacity, 0.75, accuracy: 1e-6, "a quarter open: the fill is at three quarters")
+        let kept = try XCTUnwrap(hole.keptLayers, "the hole keeps the background behind the text")
+        XCTAssertEqual(kept.solid.frame, CGRect(x: 0, y: 0, width: 441.5, height: 162), "solid over the text, to a whole pixel")
+        XCTAssertEqual(kept.edge.frame, CGRect(x: 441.5, y: 0, width: 48, height: 162), "then fading out")
+        XCTAssertEqual(kept.solid.opacity, 1, "all of it")
+        XCTAssertEqual(kept.edge.opacity, 1)
+        let fill = layers[1]
+        XCTAssertEqual(fill.frame, CGRect(origin: .zero, size: bounds.size))
+        XCTAssertEqual(fill.opacity, 0.75, accuracy: 1e-6, "a quarter open: the fill is at three quarters")
 
-        mask.place(TrackAnnouncementTypingWindow(hole: window.hole, keepUntilX: window.keepUntilX, keepFeather: 48, progress: 1), in: bounds, scale: 2)
-        XCTAssertEqual(layers[3].opacity, 0, "fully open: no fill")
+        mask.place(TrackAnnouncementTypingWindow(hole: window.hole, kept: window.kept, progress: 1), in: bounds, scale: 2)
+        XCTAssertEqual(fill.opacity, 0, "fully open: no fill")
     }
 
     // MARK: - Typing
@@ -328,6 +389,7 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertTrue(knobs.peephole)
         XCTAssertEqual(knobs.radius, 270, "three times the first try, then half as big again, at Ross's request")
         XCTAssertEqual(knobs.feather, 108)
+        XCTAssertEqual(knobs.peepholeKeep, 0.3, "30% of the background behind the text, at Ross's request")
         XCTAssertTrue(knobs.typingWindow)
         XCTAssertEqual(knobs.typingRadius, 360, "bigger than the pointer's hole")
         XCTAssertEqual(knobs.typingFeather, 144)

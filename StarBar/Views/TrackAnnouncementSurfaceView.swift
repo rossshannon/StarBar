@@ -47,6 +47,16 @@ final class TrackAnnouncementSurfaceView: NSView {
         }
     }
 
+    /// How much of the background the pointer's hole keeps behind the artwork and text, in
+    /// this view's coordinates; nil clears everything under the hole. Only the pointer's hole
+    /// uses it: the typing window keeps all of that background.
+    var peepholeKeep: TrackAnnouncementKeptBackground? {
+        didSet {
+            guard peepholeKeep != oldValue, peephole != nil else { return }
+            applyMasks()
+        }
+    }
+
     /// The window opened while the user types, in this view's coordinates; nil for none
     var typingWindow: TrackAnnouncementTypingWindow? {
         didSet {
@@ -113,7 +123,7 @@ final class TrackAnnouncementSurfaceView: NSView {
         if let peephole = peephole {
             let mask = peepholeMask ?? TrackAnnouncementPeepholeMask()
             peepholeMask = mask
-            mask.place(peephole, in: maskBounds, scale: scale)
+            mask.place(peephole, keeping: peepholeKeep, in: maskBounds, scale: scale)
             if layer.mask !== mask {
                 layer.mask = mask
             }
@@ -235,10 +245,22 @@ final class TrackAnnouncementWashView: NSView {
 /// A layer mask with one soft round hole in it: an image of the hole, drawn once for each
 /// size, and four solid rectangles filling the rest. Moving the hole moves five layers and
 /// redraws nothing, so it can follow the pointer on every display refresh.
+///
+/// It can also keep part of the background inside the hole, behind the artwork and text: a
+/// rectangle from the leading edge, with a soft edge after it, translucent for the pointer's
+/// hole and solid for the typing window. A mask is the union of its layers, so where the hole
+/// would clear everything, that part keeps the rectangle's opacity, and where the hole's own
+/// edge is already partly solid, a little more.
 final class TrackAnnouncementPeepholeMask: CALayer {
 
     private let hole = CALayer()
     private let tiles: [CALayer] = (0..<4).map { _ in CALayer() }
+    /// The kept background and its soft edge, hidden while none is kept
+    private let keptSolid = CALayer()
+    private let keptEdge = CAGradientLayer()
+    /// What they were last placed for, to place them only when that changes: the pointer's
+    /// hole moves on every display refresh, the kept part only with the layout
+    private var placedKeep: (keep: TrackAnnouncementKeptBackground?, bounds: CGRect, scale: CGFloat)?
     /// The size the hole's image was drawn at, to redraw it only when that changes
     private var drawn: (radius: CGFloat, feather: CGFloat)?
 
@@ -258,6 +280,14 @@ final class TrackAnnouncementPeepholeMask: CALayer {
             addSublayer(tile)
         }
         addSublayer(hole)
+        keptSolid.backgroundColor = CGColor(gray: 0, alpha: 1)
+        keptEdge.colors = [CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0)]
+        keptEdge.startPoint = CGPoint(x: 0, y: 0.5)
+        keptEdge.endPoint = CGPoint(x: 1, y: 0.5)
+        for layer in [keptSolid, keptEdge] as [CALayer] {
+            layer.isHidden = true
+            addSublayer(layer)
+        }
     }
 
     override init(layer: Any) {
@@ -269,8 +299,8 @@ final class TrackAnnouncementPeepholeMask: CALayer {
     }
 
     /// Put the hole at `peephole`'s centre, in the coordinates of the layer being masked,
-    /// covering `bounds` everywhere else
-    func place(_ peephole: TrackAnnouncementPeephole, in bounds: CGRect, scale: CGFloat) {
+    /// covering `bounds` everywhere else, and keep `keep`'s part of the background inside it
+    func place(_ peephole: TrackAnnouncementPeephole, keeping keep: TrackAnnouncementKeptBackground? = nil, in bounds: CGRect, scale: CGFloat) {
         CATransaction.begin()
         // Plain layers animate every change by default; the hole must track the pointer exactly
         CATransaction.setDisableActions(true)
@@ -296,6 +326,33 @@ final class TrackAnnouncementPeepholeMask: CALayer {
         for (tile, rect) in zip(tiles, rects) {
             tile.frame = rect
         }
+        placeKept(keep, in: bounds, scale: scale)
+    }
+
+    /// The kept background, for tests: the solid part and its soft edge, nil when none is kept
+    var keptLayers: (solid: CALayer, edge: CAGradientLayer)? {
+        return keptSolid.isHidden ? nil : (keptSolid, keptEdge)
+    }
+
+    private func placeKept(_ keep: TrackAnnouncementKeptBackground?, in bounds: CGRect, scale: CGFloat) {
+        if let placed = placedKeep, placed.keep == keep, placed.bounds == bounds, placed.scale == scale {
+            return
+        }
+        placedKeep = (keep, bounds, scale)
+        guard let keep = keep else {
+            keptSolid.isHidden = true
+            keptEdge.isHidden = true
+            return
+        }
+        // On a whole pixel, so the solid part and its soft edge don't leave a seam between them
+        let pixels = max(1, scale)
+        let width = max(0, ((keep.untilX - bounds.minX) * pixels).rounded() / pixels)
+        keptSolid.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)
+        keptEdge.frame = CGRect(x: width, y: 0, width: keep.feather, height: bounds.height)
+        keptSolid.opacity = Float(keep.opacity)
+        keptEdge.opacity = Float(keep.opacity)
+        keptSolid.isHidden = false
+        keptEdge.isHidden = false
     }
 
     /// Solid, with a clear disc in the middle whose edge fades back to solid over `feather`
@@ -331,32 +388,22 @@ final class TrackAnnouncementPeepholeMask: CALayer {
 
 }
 
-/// The typing window's mask: a large soft hole (a `TrackAnnouncementPeepholeMask`), solid over
-/// the part of the strip the artwork and text use with a soft edge after it, and a solid fill
-/// over everything at `1 - progress`. A mask is the union of its layers, so the fill closes the
-/// hole as progress falls, and the window opens and closes by changing one opacity rather than
-/// redrawing anything.
+/// The typing window's mask: a large soft hole (a `TrackAnnouncementPeepholeMask`), which keeps
+/// all of the background over the part of the strip the artwork and text use with a soft edge
+/// after it, and a solid fill over everything at `1 - progress`. A mask is the union of its
+/// layers, so the fill closes the hole as progress falls, and the window opens and closes by
+/// changing one opacity rather than redrawing anything.
 final class TrackAnnouncementTypingMask: CALayer {
 
     private let hole = TrackAnnouncementPeepholeMask()
-    /// Solid over the artwork and text
-    private let keep = CALayer()
-    /// Solid to clear, after `keep`, so the window's edge there is soft rather than a cut
-    private let keepEdge = CAGradientLayer()
     /// Solid everywhere at `1 - progress`
     private let fill = CALayer()
 
     override init() {
         super.init()
-        let solid = CGColor(gray: 0, alpha: 1)
-        keep.backgroundColor = solid
-        keepEdge.colors = [solid, CGColor(gray: 0, alpha: 0)]
-        keepEdge.startPoint = CGPoint(x: 0, y: 0.5)
-        keepEdge.endPoint = CGPoint(x: 1, y: 0.5)
-        fill.backgroundColor = solid
-        for layer in [hole, keep, keepEdge, fill] {
-            addSublayer(layer)
-        }
+        fill.backgroundColor = CGColor(gray: 0, alpha: 1)
+        addSublayer(hole)
+        addSublayer(fill)
     }
 
     override init(layer: Any) {
@@ -378,13 +425,9 @@ final class TrackAnnouncementTypingMask: CALayer {
         let local = CGRect(origin: .zero, size: bounds.size)
         var hole = window.hole
         hole.centre = CGPoint(x: hole.centre.x - bounds.minX, y: hole.centre.y - bounds.minY)
-        self.hole.place(hole, in: local, scale: scale)
-
-        // On a whole pixel, so the solid part and its soft edge don't leave a seam between them
-        let pixels = max(1, scale)
-        let keepWidth = max(0, ((window.keepUntilX - bounds.minX) * pixels).rounded() / pixels)
-        keep.frame = CGRect(x: 0, y: 0, width: keepWidth, height: local.height)
-        keepEdge.frame = CGRect(x: keepWidth, y: 0, width: window.keepFeather, height: local.height)
+        var kept = window.kept
+        kept.untilX -= bounds.minX
+        self.hole.place(hole, keeping: kept, in: local, scale: scale)
 
         fill.frame = local
         fill.opacity = Float(1 - min(1, max(0, window.progress)))

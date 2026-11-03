@@ -144,17 +144,23 @@ enum TrackAnnouncementLayout {
     ///   - leadingInset: space at the left the content must keep clear, such as a Dock the
     ///     strip runs behind
     ///   - trailingInset: the same at the right
-    static func frames(in size: CGSize, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0, hasArtist: Bool = true, hasAlbum: Bool = true) -> Frames {
+    ///   - breakout: the artwork is `TrackAnnouncementSleeve`'s bigger leaning sleeve, which
+    ///     stands above the strip's top edge, and the text starts further right to clear it
+    static func frames(in size: CGSize, scale: CGFloat = 1, leadingInset: CGFloat = 0, trailingInset: CGFloat = 0, hasArtist: Bool = true, hasAlbum: Bool = true, breakout: Bool = false) -> Frames {
         let artworkSize = TrackAnnouncementLayout.artworkSize * scale
         let inset = leadingInset + artworkInset * scale
-        let textX = inset + artworkSize + textGap * scale
+        let textX = breakout
+            ? inset + TrackAnnouncementSleeve.textOffset * scale
+            : inset + artworkSize + textGap * scale
         let textWidth = max(0, size.width - trailingInset - textX - textTrailingPad * scale)
         let titleHeight = TrackAnnouncementLayout.titleHeight * scale
         let detailHeight = TrackAnnouncementLayout.detailHeight * scale
         let ratingHeight = TrackAnnouncementLayout.ratingHeight * scale
         let lineGap = TrackAnnouncementLayout.lineGap * scale
 
-        let artwork = CGRect(x: inset, y: (size.height - artworkSize) / 2, width: artworkSize, height: artworkSize)
+        let artwork = breakout
+            ? TrackAnnouncementSleeve.slot(leadingX: inset, scale: scale)
+            : CGRect(x: inset, y: (size.height - artworkSize) / 2, width: artworkSize, height: artworkSize)
 
         let detailLines = (hasArtist ? 1 : 0) + (hasAlbum ? 1 : 0)
         let blockHeight = titleHeight + CGFloat(detailLines) * (detailHeight + lineGap) + ratingHeight + lineGap
