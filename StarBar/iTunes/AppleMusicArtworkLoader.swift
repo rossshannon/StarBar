@@ -81,7 +81,9 @@ final class AppleMusicArtworkLoader {
     private var notFound: Set<String> = []
     /// Songs, as `notFound` names them, a search or download failed for, and when
     private var failedAt: [String: Date] = [:]
-    private var inFlight: [String: [(NSImage?) -> Void]] = [:]
+    /// What waits on each album's search, by album key: the song each ask was for, as
+    /// `notFound` names it, and its completion
+    private var inFlight: [String: [(song: String, completion: (NSImage?) -> Void)]] = [:]
 
     /// `country` picks the store searched, the Mac's region by default, since an album can be
     /// in one country's catalog and not another's
@@ -115,15 +117,15 @@ final class AppleMusicArtworkLoader {
         return cache.isEmpty
     }
 
-    /// The searches for a song, in turn, and the name it is remembered by, or nil when it can't
-    /// be asked about: no album, artist or title
-    private func query(title: String, artists: [String], album: String) -> (urls: [URL], song: String)? {
+    /// The searches for a song, in turn, its album's key and the name the song is remembered
+    /// by, or nil when it can't be asked about: no album, artist or title
+    private func query(title: String, artists: [String], album: String) -> (urls: [URL], album: String, song: String)? {
         let artist = artists.first(where: { !$0.isEmpty }) ?? ""
         let urls = AppleMusicArtworkLoader.searchTitles(title).compactMap {
             AppleMusicArtworkLoader.searchURL(artist: artist, title: $0, country: country)
         }
         guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album), !urls.isEmpty else { return nil }
-        return (urls, key + "|" + SongName.fold(title))
+        return (urls, key, key + "|" + SongName.fold(title))
     }
 
     /// Whether there is nothing to ask Apple about this song for now: it can't be asked (no
@@ -133,6 +135,22 @@ final class AppleMusicArtworkLoader {
     func hasAnswered(title: String, artists: [String], album: String) -> Bool {
         guard let song = query(title: title, artists: artists, album: album)?.song else { return true }
         return hasAnswered(song)
+    }
+
+    /// Whether this song's cover is being asked for now, so that another read of the song can
+    /// leave it to the ask already made, which says when the cover comes. Another song of the
+    /// same album shares the search but not this, since only its own ask says when its cover
+    /// comes. No network.
+    func isAsking(title: String, artists: [String], album: String) -> Bool {
+        guard let asked = query(title: title, artists: artists, album: album) else { return false }
+        return inFlight[asked.album]?.contains(where: { $0.song == asked.song }) ?? false
+    }
+
+    /// Whether a search or download for this song has failed this session, however long ago.
+    /// No network.
+    func hasFailedBefore(title: String, artists: [String], album: String) -> Bool {
+        guard let song = query(title: title, artists: artists, album: album)?.song else { return false }
+        return failedAt[song] != nil
     }
 
     private func hasAnswered(_ song: String) -> Bool {
@@ -153,12 +171,11 @@ final class AppleMusicArtworkLoader {
     /// track's artist first, then the album artist. `completion` runs on the main thread, with
     /// nil when there's no match or the network failed.
     func load(title: String, artists: [String], album: String, completion: @escaping (NSImage?) -> Void) {
-        guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album),
-              let asked = self.query(title: title, artists: artists, album: album) else {
+        guard let asked = self.query(title: title, artists: artists, album: album) else {
             completion(nil)
             return
         }
-        let searches = asked.urls, song = asked.song
+        let searches = asked.urls, key = asked.album, song = asked.song
         if let image = cache.last(where: { $0.album == key })?.image {
             completion(image)
             return
@@ -168,10 +185,10 @@ final class AppleMusicArtworkLoader {
             return
         }
         if inFlight[key] != nil {
-            inFlight[key]?.append(completion)
+            inFlight[key]?.append((song: song, completion: completion))
             return
         }
-        inFlight[key] = [completion]
+        inFlight[key] = [(song: song, completion: completion)]
         os_log("%{public}s[%{public}ld], %{public}s: asking Apple for the cover of %{public}s by %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, title, artists.first ?? "nil", album)
 
         find(searches[...], artists: artists, album: album) { [weak self] found, allAnswered in
@@ -235,7 +252,7 @@ final class AppleMusicArtworkLoader {
 
     private func finish(_ key: String, with image: NSImage?) {
         let waiting = inFlight.removeValue(forKey: key) ?? []
-        waiting.forEach { $0(image) }
+        waiting.forEach { $0.completion(image) }
     }
 
     // MARK: - The search, pure

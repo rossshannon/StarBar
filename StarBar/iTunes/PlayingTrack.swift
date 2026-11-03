@@ -140,7 +140,8 @@ final class PlayingTrack {
     /// for which Music had had no cover at all. It can also have none ("Exit Music (For a
     /// Film)" on *OK Computer OKNOTOK 1997 2017*, 2026-11-02, for minutes).
     ///
-    /// So the first read for such a song's album answers nil and asks Apple. When the cover
+    /// So the first read for such a song's album answers nil and asks Apple (a read after a
+    /// failed ask answers with Music's cover while it asks again). When the cover
     /// comes, `.appleMusicCoverDidLoad` says so: the strip attaches it and the popover reads
     /// again, each fading it in from the placeholder, and from then on this answers with it at
     /// once, for every catalog track of the album the user doesn't have. When Apple has no
@@ -168,6 +169,10 @@ final class PlayingTrack {
             history.record(cover, for: song, album: { album })
             return cover
         }
+        // An earlier read of this song asked already, and that ask says when the cover comes:
+        // the popover reads on every update, and each read once read Music's cover and waited
+        // on the ask again, so the cover arrived once for every read made meanwhile
+        guard !covers.isAsking(title: title, artists: artists, album: album) else { return nil }
         let musics = musicsOwnCover(for: song, history: history, previousSong: previousSong)
         guard !covers.hasAnswered(title: title, artists: artists, album: album) else {
             if title.isEmpty || album.isEmpty || artists.isEmpty {
@@ -178,8 +183,11 @@ final class PlayingTrack {
             }
             return musics
         }
+        // Asking again after a failure, Music's cover stays on show meanwhile: with the
+        // network down, the placeholder would otherwise flash up once every `retryAfter`
+        let isRetry = covers.hasFailedBefore(title: title, artists: artists, album: album)
         askAppleForTheCover(covers, song: song, title: title, album: album, otherwise: musics, history: history)
-        return nil
+        return isRetry ? musics : nil
     }
 
     /// Music's cover for this catalog track, or nil when it gave none or **gave the previous
