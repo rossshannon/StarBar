@@ -116,10 +116,10 @@ final class TrackAnnouncementSleeveView: NSView {
         // The layer first, then wantsLayer: a layer-hosting view, whose layers AppKit leaves alone
         let root = CALayer()
         root.masksToBounds = false
-        // AppKit sets the view's alpha, visibility and frame on this layer. On macOS 27.2 the
-        // layer has no delegate, so each change started a 0.25 s implicit animation, and a fade
-        // stepped at 60 Hz was drawn at a third of the strip's opacity when the strip was fully
-        // in. The panel steps all of them on its own clock.
+        // AppKit sets the view's alpha, visibility and frame on this layer, which has no delegate,
+        // so each change started a 0.25 s implicit animation: a fade stepped at 60 Hz was drawn
+        // at a third of the strip's opacity when the strip was fully in (macOS 27.2). The panel
+        // steps all of them on its own clock.
         root.actions = ["opacity": NSNull(), "hidden": NSNull(), "position": NSNull(), "bounds": NSNull()]
         layer = root
         wantsLayer = true
