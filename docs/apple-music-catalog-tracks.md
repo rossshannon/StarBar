@@ -248,15 +248,37 @@ Lawrence*, on the *Call Me By Your Name* soundtrack and in covers by other artis
 album rule refused. An album search for "Ryuichi Sakamoto Coda" found no album of that name in
 the Irish, US, British or Japanese stores. The iTunes Search service lists what the iTunes Store
 sells, so an album that is only streamed on Apple Music is, by this reading, out of its reach;
-that it is streaming-only is an inference, not checked. Such a song keeps the placeholder. The
-Apple Music API would find it, but needs a developer token signed with a MusicKit key.
+that it is streaming-only is an inference, not checked. Such a song keeps Music's cover, or the
+placeholder when Music has none. The Apple Music API would find it, but needs a developer token signed with a MusicKit key.
+
+### Another song's cover, not the previous one's
+
+On 2026-11-03 the strip showed Nils Frahm's "Some", on *Solo*, with the cover of Ryuichi
+Sakamoto's *Coda*. StarBar's log shows it was Music's own answer for the catalog track: the
+cover differed from the previous song's ("I Am Sky", Laraaji) by 0.437 against both the cover
+shown and Music's own for it, so the check passed it. *Coda* had last played 45 minutes and
+twelve songs earlier, and Music had then had **no** cover for the *Coda* song itself. Nothing in
+StarBar held that image: the Apple cover cache is keyed by artist and album, and Apple's search
+has no *Coda*. Where Music got it is not known; one untested guess is that it answers with the
+last artwork it loaded anywhere, such as an album page open in its window. "Some" had played
+twice before that morning on another build, and which cover showed then is not recorded.
+
+Nothing in what StarBar remembers could catch that, so since that day **Apple's cover is asked
+for every catalog track the user doesn't have**, once per album, and wins whenever the search
+finds the album. For "Some", the search for "Nils Frahm Some" had *Solo* first among 25, ahead of
+*Solo Remains*, *Paris* and nineteen Johannes Bornlöf compilations. Music's own cover is shown
+only when Apple has no match or can't be reached. The cost is the placeholder for about half a
+second on the first song of each album, fading to the cover when it comes.
+
+The same log showed the first song after a launch going unchecked: "I Am Sky" showed *Insen*,
+the cover of "Aurora", which was playing when StarBar started. Music announces nothing at
+launch, so that song had never joined the recent songs; the launch read now adds it.
 
 ### Open question
 
-How to tell any other wrong sleeve from a right one. Nothing on an artwork says which song it
-belongs to, and the catalog object and the library copy hold different resolutions (800×800
-against 600×600 for the same album), so the bytes cannot be compared either. Fetching the right
-sleeve for those too would mean fetching every catalog track's artwork from Apple, or doing it
-by song identifier rather than through the Scripting Bridge. Whether Music's `playerInfo` notification carries the catalog ID
-for a catalog track (`PlayInfo` has a `storeURL` field for its `Store URL` key) has not been
-checked.
+How to tell a wrong sleeve from a right one for an album Apple's search doesn't have, such as
+*Coda*. Nothing on an artwork says which song it belongs to, and the catalog object and the
+library copy hold different resolutions (800×800 against 600×600 for the same album), so the
+bytes cannot be compared either. The Apple Music API would answer by song identifier, but
+needs a developer token. Whether Music's `playerInfo` notification carries the catalog ID for a
+catalog track (`PlayInfo` has a `storeURL` field for its `Store URL` key) has not been checked.

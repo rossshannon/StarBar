@@ -99,8 +99,9 @@ final class PlayingTrack {
     /// within minutes: two other catalog tracks measured right after returned their own
     /// covers correctly, so the rule blanked the artwork for every Apple Music song to avoid
     /// an occasional wrong one. Don't reinstate it without evidence that being wrong is the
-    /// common case rather than the exception. Read the cover through `sleeve()`, which
-    /// refuses the one wrong answer that can be caught: the previous song's cover.
+    /// common case rather than the exception. Read the cover through `sleeve()`, which takes
+    /// Apple's cover over Music's for a catalog track the user doesn't have, whenever Apple's
+    /// search finds the song's album.
     var artworkTrack: iTunesTrack? {
         return ratingTrack ?? track
     }
@@ -125,86 +126,109 @@ final class PlayingTrack {
         return SleeveHistory.Sleeve(fingerprint: fingerprint, album: album)
     }()
 
-    /// The cover to show for this song, for the strip and the popover alike: the artwork of
-    /// `artworkTrack`, or nil, for the placeholder, when there is none or **it is the previous
-    /// song's cover left over**, until Apple sends the right one.
+    /// The cover to show for this song, for the strip and the popover alike, or nil for the
+    /// placeholder.
     ///
-    /// Music can answer for a catalog track with the cover of the song played before it (see
-    /// `SleeveHistory`), and that is the only answer checked: the one for a catalog track the
-    /// user doesn't have, where `artworkTrack` has nothing better to read. It is compared with
-    /// the cover StarBar last showed for the previous song and with the one Music gives for
-    /// that song now (`playedSleeve`, read once per song), always both, since they can differ:
-    /// StarBar may have shown the user's copy's cover or Apple's, where what Music leaves over
-    /// is its own answer for that track, and with the strip off and the popover first opened
-    /// on the new song StarBar showed nothing at all.
+    /// The user's copy, or a library track, answers with its own artwork as it is.
     ///
-    /// A cover refused is asked of Apple (`AppleMusicArtworkLoader`), and so is one Music has
-    /// none of for such a track, which happens too: measured 2026-11-02, Music gave no artwork
-    /// at all for "Exit Music (For a Film)" on *OK Computer OKNOTOK 1997 2017*, for minutes.
-    /// When the cover arrives `.appleMusicCoverDidLoad` says so: the strip attaches it, the
-    /// popover reads again, and this answers with it, ahead of Music's, for any catalog track
-    /// of that album the user doesn't have. Until then, and when Apple has no match, the
-    /// answer is nil.
+    /// **A catalog track the user doesn't have answers with Apple's cover** whenever Apple's
+    /// search finds the song on its album (`AppleMusicArtworkLoader`), because Music's own
+    /// answer can be another song's cover and nothing on an image says whose it is. Measured:
+    /// Music answered with the previous song's cover on 2026-09-18 and 2026-11-02 ("Strawberry
+    /// Blonde" with *Another Green World*, "Chain Home" with *The Bends*), and on 2026-11-03
+    /// with *Coda* for Nils Frahm's "Some", 45 minutes and twelve songs after the *Coda* song,
+    /// for which Music had had no cover at all. It can also have none ("Exit Music (For a
+    /// Film)" on *OK Computer OKNOTOK 1997 2017*, 2026-11-02, for minutes).
     ///
-    /// Each call reads the artwork afresh, so a cover Music puts right later shows the next
+    /// So the first read for such a song's album answers nil and asks Apple. When the cover
+    /// comes, `.appleMusicCoverDidLoad` says so: the strip attaches it and the popover reads
+    /// again, each fading it in from the placeholder, and from then on this answers with it at
+    /// once, for every catalog track of the album the user doesn't have. When Apple has no
+    /// match, or can't be reached, Music's own cover is posted the same way and stands
+    /// (`AppleMusicArtworkLoader.hasAnswered`), so long as it isn't the previous song's
+    /// (`musicsOwnCover`).
+    ///
+    /// Each call reads Music's artwork afresh, so a cover Music puts right later shows the next
     /// time the popover reads it. A cover shown is kept in `history`, and one refused is not.
     func sleeve(history: SleeveHistory = .shared,
                 previousSong: (String) -> PlayingTrack? = { iTunesPlayer.shared.previousSong(before: $0) },
                 covers: AppleMusicArtworkLoader = .shared) -> NSImage? {
-        // No copy of the song to read from, so this is Music's answer for the catalog track
-        let isMusicsOwnAnswer = ratingTrack == nil
-        if isMusicsOwnAnswer, !covers.isEmpty, let cover = covers.cachedCover(artists: artists, album: album ?? "") {
-            if let song = persistentID, let fingerprint = SleeveFingerprint(image: cover) {
-                history.record(fingerprint, for: song, album: { self.album })
+        // With a copy of the song to read from, or no ID to keep a cover under, the artwork
+        // read is the answer
+        guard ratingTrack == nil, let song = persistentID else {
+            let image = artworkTrack?.firstArtworkImage()
+            if let image = image, let song = persistentID {
+                history.record(image, for: song, album: { self.album })
             }
+            return image
+        }
+
+        let title = name ?? "", album = self.album ?? ""
+        if let cover = covers.cachedCover(artists: artists, album: album) {
+            history.record(cover, for: song, album: { album })
             return cover
         }
-
-        guard let image = artworkTrack?.firstArtworkImage() else {
-            if isMusicsOwnAnswer, let song = persistentID {
-                os_log("%{public}s[%{public}ld], %{public}s: Music gave no cover for %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil")
-                askAppleForTheCover(covers, song: song)
+        let musics = musicsOwnCover(for: song, history: history, previousSong: previousSong)
+        guard !covers.hasAnswered(title: title, artists: artists, album: album) else {
+            if title.isEmpty || album.isEmpty || artists.isEmpty {
+                os_log("%{public}s[%{public}ld], %{public}s: can't ask Apple for the cover of %{public}s: Music named no album, artist or title (%{public}s, %{public}ld artists, %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, song, album, artists.count, title)
             }
+            if let musics = musics {
+                history.record(musics, for: song, album: { album })
+            }
+            return musics
+        }
+        askAppleForTheCover(covers, song: song, title: title, album: album, otherwise: musics, history: history)
+        return nil
+    }
+
+    /// Music's cover for this catalog track, or nil when it gave none or **gave the previous
+    /// song's cover**, which is what both wrong covers seen before 2026-11-03 were. Compared
+    /// with the cover StarBar showed for the previous song and with what Music gives for that
+    /// song now (`playedSleeve`), always both, since they can differ: StarBar may have shown
+    /// Apple's cover, where what Music leaves over is its own answer for that track, and with
+    /// the strip off and the popover first opened on the new song StarBar showed nothing.
+    private func musicsOwnCover(for song: String, history: SleeveHistory, previousSong: (String) -> PlayingTrack?) -> NSImage? {
+        guard let image = track.firstArtworkImage() else {
+            os_log("%{public}s[%{public}ld], %{public}s: Music gave no cover for %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil")
             return nil
         }
-        guard let song = persistentID, let fingerprint = SleeveFingerprint(image: image) else { return image }
-
-        if isMusicsOwnAnswer, let previous = previousSong(song), let previousID = previous.persistentID {
-            let earlier: [(source: String, read: () -> SleeveHistory.Sleeve?)] = [
-                ("shown", { history.sleeve(for: previousID) }),
-                ("in Music", { previous.playedSleeve }),
-            ]
-            for (source, read) in earlier {
-                guard let before = read() else { continue }
-                let isLeftOver = SleeveHistory.isLeftOver(fingerprint, onAlbum: { self.album }, from: before)
-                os_log("%{public}s[%{public}ld], %{public}s: the cover Music gave for %{public}s differs by %.3f from the one %{public}s for the song before it, %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, fingerprint.difference(from: before.fingerprint), source, previousID)
-                if isLeftOver {
-                    os_log("%{public}s[%{public}ld], %{public}s: %{public}s on %{public}s came with the cover of %{public}s on %{public}s; showing none rather than the wrong one", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil", previousID, before.album ?? "nil")
-                    askAppleForTheCover(covers, song: song)
-                    return nil
-                }
+        guard let fingerprint = SleeveFingerprint(image: image),
+              let previous = previousSong(song), let previousID = previous.persistentID else { return image }
+        let earlier: [(source: String, read: () -> SleeveHistory.Sleeve?)] = [
+            ("shown", { history.sleeve(for: previousID) }),
+            ("in Music", { previous.playedSleeve }),
+        ]
+        for (source, read) in earlier {
+            guard let before = read() else { continue }
+            let isLeftOver = SleeveHistory.isLeftOver(fingerprint, onAlbum: { self.album }, from: before)
+            os_log("%{public}s[%{public}ld], %{public}s: the cover Music gave for %{public}s differs by %.3f from the one %{public}s for the song before it, %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, fingerprint.difference(from: before.fingerprint), source, previousID)
+            if isLeftOver {
+                os_log("%{public}s[%{public}ld], %{public}s: %{public}s on %{public}s came with the cover of %{public}s on %{public}s; refusing it", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil", previousID, before.album ?? "nil")
+                return nil
             }
         }
-        history.record(fingerprint, for: song, album: { self.album })
         return image
     }
 
-    /// Ask Apple for the song's cover, and say when it has come, with the song's identity in
-    /// both of the strip's shapes: its persistent ID, and `name|artist|album`, which is what
-    /// the strip goes by when Music's notification carried no ID
-    private func askAppleForTheCover(_ covers: AppleMusicArtworkLoader, song: String) {
-        guard let album = album, !album.isEmpty, !artists.isEmpty, let title = name, !title.isEmpty else {
-            os_log("%{public}s[%{public}ld], %{public}s: can't ask Apple for the cover of %{public}s: Music named no album, artist or title (%{public}s, %{public}ld artists, %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil", artists.count, name ?? "nil")
-            return
-        }
+    /// Ask Apple for the song's cover, and say when a cover has come, Apple's or, when Apple
+    /// has none, `otherwise`, Music's own, with the song's identity in both of the strip's
+    /// shapes: its persistent ID, and `name|artist|album`, which is what the strip goes by
+    /// when Music's notification carried no ID
+    private func askAppleForTheCover(_ covers: AppleMusicArtworkLoader, song: String, title: String, album: String,
+                                     otherwise: NSImage?, history: SleeveHistory) {
         let identities = [
             song.uppercased(),
             TrackAnnouncementController.PlayerSnapshot.identity(name: title, artist: artist, album: album),
         ].compactMap { $0 }
         covers.load(title: title, artists: artists, album: album) { image in
-            guard let image = image else { return }
+            if image == nil {
+                os_log("%{public}s[%{public}ld], %{public}s: Apple has no cover for %{public}s, so Music's own stands: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, otherwise == nil ? "none" : "a cover")
+            }
+            guard let cover = image ?? otherwise else { return }
+            history.record(cover, for: song, album: { album })
             NotificationCenter.default.post(name: .appleMusicCoverDidLoad, object: nil, userInfo: [
-                AppleMusicArtworkLoader.imageKey: image,
+                AppleMusicArtworkLoader.imageKey: cover,
                 AppleMusicArtworkLoader.identitiesKey: identities,
             ])
         }

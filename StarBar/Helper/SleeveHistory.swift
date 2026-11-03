@@ -16,8 +16,8 @@ import AppKit
 /// Eno's "Chain Home" came back with *The Bends*, straight after "Fake Plastic Trees", and the
 /// strip and the popover both showed it until the song was added to the library. Nothing on
 /// an image says which song it belongs to, but a cover that is the previous song's, for a song
-/// from another album, is not this song's own. `PlayingTrack.sleeve()` shows none instead,
-/// and the strip and popover draw their placeholder.
+/// from another album, is not this song's own. `PlayingTrack.sleeve()` refuses it, and shows
+/// Apple's cover when Apple's search has the album, and the placeholder when it hasn't.
 ///
 /// Only Music's answer for a catalog track the user doesn't have is checked. A library
 /// track's artwork has never been seen wrong, and two library songs from different albums can
@@ -54,6 +54,13 @@ final class SleeveHistory {
         if sleeves.count > capacity {
             sleeves.removeFirst(sleeves.count - capacity)
         }
+    }
+
+    /// `image` was shown for `song`, kept as its fingerprint. An image that can't be drawn
+    /// isn't kept.
+    func record(_ image: NSImage, for song: String, album: () -> String?) {
+        guard let fingerprint = SleeveFingerprint(image: image) else { return }
+        record(fingerprint, for: song, album: album)
     }
 
     /// Whether `fingerprint`, Music's cover for a song the user doesn't have, on `album`, is

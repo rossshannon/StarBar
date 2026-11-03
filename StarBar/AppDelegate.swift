@@ -245,8 +245,9 @@ extension AppDelegate {
         TrackAnnouncementController.shared?.attachArtwork(artwork, identity: identity)
     }
 
-    /// A cover Apple sent for a song whose cover Music got wrong. The strip takes it only
-    /// while it still shows that song with no artwork, under either of its identities.
+    /// A catalog track's cover that came after the strip went up: Apple's, or Music's own once
+    /// Apple had none. The strip takes it only while it still shows that song with no artwork,
+    /// under either of its identities.
     @objc private func appleMusicCoverDidLoad(_ notification: Notification) {
         guard let image = notification.userInfo?[AppleMusicArtworkLoader.imageKey] as? NSImage,
               let identities = notification.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String] else { return }

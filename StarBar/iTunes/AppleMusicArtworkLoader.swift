@@ -2,8 +2,8 @@
 //  AppleMusicArtworkLoader.swift
 //  StarBar
 //
-//  An Apple Music song's cover, from Apple's public iTunes Search service, for when Music hands
-//  back the previous song's cover instead, or none at all. The search's answer is read by pure
+//  An Apple Music song's cover, from Apple's public iTunes Search service, for a catalog track
+//  the user doesn't have, whose cover Music can get wrong. The search's answer is read by pure
 //  rules: see `AppleMusicArtworkLoaderTests`.
 //
 
@@ -11,17 +11,18 @@ import Cocoa
 import os
 
 extension Notification.Name {
-    /// An album's cover arrived from Apple. `userInfo` holds the image under
-    /// `AppleMusicArtworkLoader.imageKey` and the identities of the song it was asked for, in
-    /// both of the strip's shapes, under `AppleMusicArtworkLoader.identitiesKey`.
+    /// A catalog track's cover arrived after it was first read: Apple's, or Music's own once
+    /// Apple had none. `userInfo` holds the image under `AppleMusicArtworkLoader.imageKey` and
+    /// the identities of the song it was asked for, in both of the strip's shapes, under
+    /// `AppleMusicArtworkLoader.identitiesKey`.
     static let appleMusicCoverDidLoad = Notification.Name("StarBarAppleMusicCoverDidLoad")
 }
 
 /// Finds a song's cover on Apple's iTunes Search service and downloads it.
 ///
-/// Asked only for a catalog track the user doesn't have, so there is no copy to read instead,
-/// when Music answered its artwork read with the previous song's cover or with none at all
-/// (`PlayingTrack.sleeve()`). It sends the song's artist and title to `itunes.apple.com`,
+/// Asked for every catalog track the user doesn't have, so there is no copy to read instead,
+/// once per album, since Music can answer its artwork read with another song's cover or with
+/// none at all (`PlayingTrack.sleeve()`). It sends the song's artist and title to `itunes.apple.com`,
 /// which belongs to the company streaming the song, and nothing else about the user. Only
 /// `https` on `itunes.apple.com` is asked and only `https` on `mzstatic.com`, Apple's image
 /// host, is downloaded; each answer is capped, and the image is decoded off the main thread.
@@ -42,9 +43,9 @@ extension Notification.Name {
 /// answered with *Mixing Colours (Expanded)* and the plain *Mixing Colours*, whose covers
 /// differ, and only the first was the song's. A wrong cover is worse than the placeholder,
 /// which is what the strip and popover show when nothing matches. A song the searches
-/// answered with no match isn't asked again this session, so the popover's reads on every
-/// update don't search over and over. A cover found is kept for its album, since every track
-/// of it has that one.
+/// answered with no match isn't asked again this session, and one a search or download failed
+/// for not for `retryAfter`, so the popover's reads on every update don't search over and over
+/// (`hasAnswered`). A cover found is kept for its album, since every track of it has that one.
 final class AppleMusicArtworkLoader {
 
     /// Fetches the bytes at a URL, as Spotify's sleeves are fetched. `URLSession` in the app; a
@@ -68,18 +69,26 @@ final class AppleMusicArtworkLoader {
     /// library copy's 600, and the strip draws at most 160 points, so 600 is plenty
     static let coverSide = 600
 
+    /// How long a song a search or download failed for goes unasked. A failure is usually the
+    /// network, so the song is tried again, but not on every read the popover makes meanwhile.
+    static let retryAfter: TimeInterval = 60
+
     private let fetch: Fetch
     private let country: String?
+    private let now: () -> Date
     private var cache: [(album: String, image: NSImage)] = []
     /// Songs, by album key and folded title, the search answered without a match
     private var notFound: Set<String> = []
+    /// Songs, as `notFound` names them, a search or download failed for, and when
+    private var failedAt: [String: Date] = [:]
     private var inFlight: [String: [(NSImage?) -> Void]] = [:]
 
     /// `country` picks the store searched, the Mac's region by default, since an album can be
     /// in one country's catalog and not another's
-    init(fetch: @escaping Fetch, country: String? = AppleMusicArtworkLoader.currentCountry) {
+    init(fetch: @escaping Fetch, country: String? = AppleMusicArtworkLoader.currentCountry, now: @escaping () -> Date = Date.init) {
         self.fetch = fetch
         self.country = country
+        self.now = now
     }
 
     static var currentCountry: String? {
@@ -101,10 +110,37 @@ final class AppleMusicArtworkLoader {
         return SongName.squash(SongName.fold(album))
     }
 
-    /// True while nothing has been downloaded, so a caller can skip the Apple Events it would
-    /// take to name the album
+    /// True while nothing has been downloaded
     var isEmpty: Bool {
         return cache.isEmpty
+    }
+
+    /// The searches for a song, in turn, and the name it is remembered by, or nil when it can't
+    /// be asked about: no album, artist or title
+    private func query(title: String, artists: [String], album: String) -> (urls: [URL], song: String)? {
+        let artist = artists.first(where: { !$0.isEmpty }) ?? ""
+        let urls = AppleMusicArtworkLoader.searchTitles(title).compactMap {
+            AppleMusicArtworkLoader.searchURL(artist: artist, title: $0, country: country)
+        }
+        guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album), !urls.isEmpty else { return nil }
+        return (urls, key + "|" + SongName.fold(title))
+    }
+
+    /// Whether there is nothing to ask Apple about this song for now: it can't be asked (no
+    /// album, artist or title), Apple answered this session without its album, or a search or
+    /// download for it failed in the last `retryAfter`. A song with a cover found answers
+    /// through `cachedCover` instead. No network.
+    func hasAnswered(title: String, artists: [String], album: String) -> Bool {
+        guard let song = query(title: title, artists: artists, album: album)?.song else { return true }
+        return hasAnswered(song)
+    }
+
+    private func hasAnswered(_ song: String) -> Bool {
+        if notFound.contains(song) {
+            return true
+        }
+        guard let failed = failedAt[song] else { return false }
+        return now().timeIntervalSince(failed) < AppleMusicArtworkLoader.retryAfter
     }
 
     /// A cover already downloaded for the album, or nil. No network.
@@ -117,20 +153,17 @@ final class AppleMusicArtworkLoader {
     /// track's artist first, then the album artist. `completion` runs on the main thread, with
     /// nil when there's no match or the network failed.
     func load(title: String, artists: [String], album: String, completion: @escaping (NSImage?) -> Void) {
-        let artist = artists.first(where: { !$0.isEmpty }) ?? ""
-        let searches = AppleMusicArtworkLoader.searchTitles(title).compactMap {
-            AppleMusicArtworkLoader.searchURL(artist: artist, title: $0, country: country)
-        }
-        guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album), !searches.isEmpty else {
+        guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album),
+              let asked = self.query(title: title, artists: artists, album: album) else {
             completion(nil)
             return
         }
+        let searches = asked.urls, song = asked.song
         if let image = cache.last(where: { $0.album == key })?.image {
             completion(image)
             return
         }
-        let song = key + "|" + SongName.fold(title)
-        guard !notFound.contains(song) else {
+        guard !hasAnswered(song) else {
             completion(nil)
             return
         }
@@ -148,6 +181,8 @@ final class AppleMusicArtworkLoader {
                     if allAnswered {
                         // Apple answered, and none of it was this album
                         self.notFound.insert(song)
+                    } else {
+                        self.failedAt[song] = self.now()
                     }
                     os_log("%{public}s[%{public}ld], %{public}s: Apple has no cover for %{public}s by %{public}s on %{public}s%{public}s", ((#file as NSString).lastPathComponent), #line, #function, title, artists.first ?? "nil", album, allAnswered ? "" : " (a search failed)")
                     self.finish(key, with: nil)
@@ -168,6 +203,7 @@ final class AppleMusicArtworkLoader {
                         }
                     } else {
                         os_log("%{public}s[%{public}ld], %{public}s: no image at %{public}s", ((#file as NSString).lastPathComponent), #line, #function, cover.absoluteString)
+                        self.failedAt[song] = self.now()
                     }
                     self.finish(key, with: image)
                 }

@@ -40,8 +40,8 @@ extension PopoverViewController {
         ])
 
         NotificationCenter.default.addObserver(self, selector: #selector(PopoverViewController.iTunesPlayerDidUpdated(_:)), name: .iTunesPlayerDidUpdated, object: nil)
-        // A cover Apple sent in place of a wrong one from Music: read again, and the song's
-        // cover now comes from Apple (`PlayingTrack.sleeve()`)
+        // A catalog track's cover came late, Apple's or Music's own once Apple had none: read
+        // again, and `PlayingTrack.sleeve()` now answers with it
         NotificationCenter.default.addObserver(self, selector: #selector(PopoverViewController.iTunesPlayerDidUpdated(_:)), name: .appleMusicCoverDidLoad, object: nil)
     }
 
@@ -58,8 +58,8 @@ extension PopoverViewController {
         showCurrentTrack()
     }
 
-    /// The artwork comes the same way as the strip's, the user's own copy first and never
-    /// the previous song's cover left over, so the two can't disagree. See
+    /// The artwork comes the same way as the strip's, the user's own copy first, then Apple's
+    /// cover, and never the previous song's cover left over, so the two can't disagree. See
     /// `PlayingTrack.sleeve()`.
     private func showCurrentTrack() {
         let player = iTunesPlayer.shared
