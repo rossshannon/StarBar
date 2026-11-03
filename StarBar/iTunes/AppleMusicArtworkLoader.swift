@@ -47,9 +47,10 @@ extension Notification.Name {
 /// of it has that one.
 final class AppleMusicArtworkLoader {
 
-    /// Fetches the bytes at a URL. `URLSession` in the app; a fake in tests, and nothing at all
-    /// for `shared` under tests, which must not reach the network.
-    typealias Fetch = (_ url: URL, _ completion: @escaping (Data?) -> Void) -> Void
+    /// Fetches the bytes at a URL, as Spotify's sleeves are fetched. `URLSession` in the app; a
+    /// fake in tests, and nothing at all for `shared` under tests, which must not reach the
+    /// network.
+    typealias Fetch = SpotifyArtworkLoader.Fetch
 
     static let shared: AppleMusicArtworkLoader = {
         let isTesting = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
@@ -124,7 +125,7 @@ final class AppleMusicArtworkLoader {
             completion(nil)
             return
         }
-        if let image = cachedCover(artists: artists, album: album) {
+        if let image = cache.last(where: { $0.album == key })?.image {
             completion(image)
             return
         }

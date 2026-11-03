@@ -59,15 +59,16 @@ final class TrackAnnouncementPanel: NSPanel {
     /// Steps the break-out sleeve's rise and its tilt towards the pointer while the strip is up
     private var sleeveTimer: RatingReminderTimer?
     private var sleeveKnobs = TrackAnnouncementSleeveKnobs()
-    /// How long the sleeve has been rising, stepped with the slide so a stall pauses both
-    /// alike; nil once it is in place, or when there is none
-    private var sleeveRise: SteppedTimeline?
-    /// Where the rise started from: 0, sunk into the strip, or part of the way down when the
-    /// strip turned round on its way out
-    private var sleeveRiseFrom: CGFloat = 0
+    /// The rise under way: how long it has run, stepped with the slide so a stall pauses both
+    /// alike, and where it started from (0, sunk into the strip, or part of the way down when
+    /// the strip turned round on its way out). Nil once the sleeve is in place, or when there
+    /// is none.
+    private var sleeveRise: (time: SteppedTimeline, from: CGFloat)?
     private var lastSleeveTick: Date?
     /// The tilt as drawn, following the pointer's
-    private(set) var sleeveTilt = TrackAnnouncementSleeve.Tilt.rest
+    var sleeveTilt: TrackAnnouncementSleeve.Tilt {
+        return stripView.sleeve.tilt
+    }
     /// From the last show: no rise and no tilt under Reduce Motion
     private var reduceMotion = false
     /// Whether the last tick found the pointer near the sleeve, to log only the changes
@@ -427,7 +428,6 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             origin: TrackAnnouncementPlacement.stripOrigin(shown: false, scale: scale),
             size: TrackAnnouncementPlacement.stripSize(panelFrame: panelFrame, scale: scale)
         )
-        layoutSleeve()
     }
 
     /// The screen under the pointer, else the main screen
@@ -575,8 +575,7 @@ extension TrackAnnouncementPanel {
     fileprivate func beginSleeveRise(transition: TrackAnnouncementPlacement.Transition) {
         let sleeve = stripView.sleeve
         if transition == .slide && sleeve.rise < 1 {
-            sleeveRiseFrom = sleeve.rise
-            sleeveRise = SteppedTimeline(start: clock.now())
+            sleeveRise = (SteppedTimeline(start: clock.now()), sleeve.rise)
         } else {
             sleeveRise = nil
             sleeve.rise = 1
@@ -607,9 +606,7 @@ extension TrackAnnouncementPanel {
         sleeveTimer = nil
         lastSleeveTick = nil
         sleeveRise = nil
-        sleeveRiseFrom = 0
         sleeveFollowsPointer = false
-        sleeveTilt = .rest
         stripView.sleeve.tilt = .rest
         stripView.sleeve.rise = 1
     }
@@ -626,13 +623,13 @@ extension TrackAnnouncementPanel {
         lastSleeveTick = now
 
         if var rise = sleeveRise {
-            let since = rise.step(at: now)
+            let since = rise.time.step(at: now)
             if since >= TrackAnnouncementSleeve.riseDelay + TrackAnnouncementSleeve.riseDuration {
                 sleeveRise = nil
                 stripView.sleeve.rise = 1
             } else {
                 sleeveRise = rise
-                stripView.sleeve.rise = TrackAnnouncementSleeve.rise(elapsed: since, from: sleeveRiseFrom)
+                stripView.sleeve.rise = TrackAnnouncementSleeve.rise(elapsed: since, from: rise.from)
             }
         }
 
@@ -642,11 +639,8 @@ extension TrackAnnouncementPanel {
             sleeveFollowsPointer = following
             os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, following ? String(format: "pointer near: tipping the sleeve to %.1f°, %.1f°", Double(target.x), Double(target.y)) : "pointer gone: the sleeve settles back")
         }
-        let next = TrackAnnouncementSleeve.approach(sleeveTilt, toward: target, elapsed: elapsed)
-        if next != sleeveTilt {
-            sleeveTilt = next
-            stripView.sleeve.tilt = next
-        }
+        // The view ignores a tilt that hasn't changed
+        stripView.sleeve.tilt = TrackAnnouncementSleeve.approach(sleeveTilt, toward: target, elapsed: elapsed)
 
         // Risen, still, and with no pointer to follow: nothing more to step this appearance
         if !sleeveTilts && sleeveRise == nil && sleeveTilt == .rest {
@@ -658,13 +652,10 @@ extension TrackAnnouncementPanel {
     /// The tilt for where the pointer is now: towards it when it is near the sleeve on the
     /// strip's screen, at rest otherwise
     private func pointerTilt() -> TrackAnnouncementSleeve.Tilt {
-        let pointer = mouseLocation()
-        // A pointer on another display tips nothing, however close it is
-        if let screen = placedScreenFrame, !screen.contains(pointer) {
-            return .rest
-        }
-        // The sleeve's square on screen, where it rests: the strip slides inside the panel
-        let slot = stripView.artworkFrame.offsetBy(dx: frame.minX + stripView.frame.minX, dy: frame.minY + stripView.frame.minY)
+        guard let pointer = pointerOnStripScreen() else { return .rest }
+        // The sleeve's square on screen, where it rests
+        let strip = stripOnScreen
+        let slot = stripView.artworkFrame.offsetBy(dx: strip.minX, dy: strip.minY)
         let offset = CGVector(dx: (pointer.x - slot.midX) / scale, dy: (pointer.y - slot.midY) / scale)
         return TrackAnnouncementSleeve.tilt(pointerOffset: offset)
     }
@@ -751,24 +742,35 @@ extension TrackAnnouncementPanel {
     /// the hole would otherwise trail it by a frame.
     fileprivate func updatePeephole() {
         guard seeThroughTimer != nil, seeThroughKnobs.peephole else { return }
-        // The strip slides inside the panel, so its place on screen moves with it
-        let stripOnScreen = stripView.frame.offsetBy(dx: frame.minX, dy: frame.minY)
         let hadHole = stripView.peephole != nil
-        let pointer = mouseLocation()
-        let onStripScreen = placedScreenFrame.map { $0.contains(pointer) } ?? true
-        stripView.peephole = onStripScreen
-            ? TrackAnnouncementSeeThrough.peephole(
-                pointer: pointer,
+        stripView.peephole = pointerOnStripScreen().flatMap {
+            TrackAnnouncementSeeThrough.peephole(
+                pointer: $0,
                 stripFrame: stripOnScreen,
                 radius: seeThroughKnobs.radius * scale,
                 feather: seeThroughKnobs.feather * scale
             )
-            : nil
+        }
         if let hole = stripView.peephole, !hadHole {
             os_log("%{public}s[%{public}ld], %{public}s: hole opened at %.0f, %.0f in the strip", ((#file as NSString).lastPathComponent), #line, #function, Double(hole.centre.x), Double(hole.centre.y))
         } else if hadHole && stripView.peephole == nil {
             os_log("%{public}s[%{public}ld], %{public}s: hole closed", ((#file as NSString).lastPathComponent), #line, #function)
         }
+    }
+
+    /// The strip's frame on screen: it slides inside the panel, so this moves with it
+    fileprivate var stripOnScreen: NSRect {
+        return stripView.frame.offsetBy(dx: frame.minX, dy: frame.minY)
+    }
+
+    /// Where the pointer is, or nil when it is on another display than the strip's: there it
+    /// opens no hole and tips nothing, however close it is
+    fileprivate func pointerOnStripScreen() -> NSPoint? {
+        let pointer = mouseLocation()
+        if let screen = placedScreenFrame, !screen.contains(pointer) {
+            return nil
+        }
+        return pointer
     }
 
 }

@@ -70,7 +70,7 @@ final class TrackAnnouncementView: NSView {
     var announcement: TrackAnnouncement {
         didSet {
             content.announcement = announcement
-            sleeve.artwork = announcement.artwork
+            sleeve.artwork = sleeveArtwork
             setAccessibilityLabel(announcement.accessibilityLabel)
             // A longer title covers more of the strip, and keeps more of its background
             applySeeThrough()
@@ -99,9 +99,15 @@ final class TrackAnnouncementView: NSView {
             guard breakout != oldValue else { return }
             content.breakout = breakout
             sleeve.isHidden = !breakout
+            sleeve.artwork = sleeveArtwork
             // The sleeve covers more, and the text moves right
             applySeeThrough()
         }
+    }
+
+    /// The sleeve's cover: none while the sleeve is off, so a hidden layer never holds one
+    private var sleeveArtwork: NSImage? {
+        return breakout ? announcement.artwork : nil
     }
 
     /// Where the artwork goes, in this view's coordinates: the flat slot, or the break-out
@@ -269,7 +275,6 @@ final class TrackAnnouncementView: NSView {
         addSubview(surface)
         content.autoresizingMask = [.width, .height]
         addSubview(content)
-        sleeve.artwork = announcement.artwork
         sleeve.isHidden = true
         applySeeThrough()
         setAccessibilityElement(true)
@@ -452,7 +457,8 @@ final class TrackAnnouncementContentView: NSView {
     /// of the way: a cross-fade from one to the other. 1 unless a cover is fading in.
     var artworkFade: CGFloat = 1 {
         didSet {
-            if artworkFade != oldValue {
+            // With the break-out sleeve the cover is the sleeve's, and nothing here changes
+            if artworkFade != oldValue && !breakout {
                 needsDisplay = true
             }
         }
@@ -597,15 +603,20 @@ final class TrackAnnouncementContentView: NSView {
 
     /// No artwork: a quiet square with a music note, so the slot never looks broken
     private func drawPlaceholder(in slot: NSRect, opacity: CGFloat) {
-        NSColor.white.withAlphaComponent(0.12 * opacity).setFill()
+        NSColor.white.withAlphaComponent(TrackAnnouncementContentView.placeholderFillAlpha * opacity).setFill()
         NSBezierPath(roundedRect: slot, xRadius: artworkCornerRadius, yRadius: artworkCornerRadius).fill()
         if let note = TrackAnnouncementContentView.placeholderImage {
             // Drawn at 36 points in an 80 point slot at scale 1, and in proportion above
             let noteSize = CGSize(width: note.size.width * scale, height: note.size.height * scale)
             let rect = TrackAnnouncementLayout.artworkDrawingRect(imageSize: noteSize, in: slot)
-            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.9 * opacity)
+            note.draw(in: rect, from: .zero, operation: .sourceOver, fraction: TrackAnnouncementContentView.placeholderNoteAlpha * opacity)
         }
     }
+
+    /// The placeholder's square, white at this alpha, and the note on it; the break-out sleeve
+    /// draws them the same
+    static let placeholderFillAlpha: CGFloat = 0.12
+    static let placeholderNoteAlpha: CGFloat = 0.9
 
     /// The music note in the empty slot, white, 36 points; the break-out sleeve draws it too
     static let placeholderImage: NSImage? = {

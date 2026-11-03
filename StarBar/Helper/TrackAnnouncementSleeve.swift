@@ -23,7 +23,7 @@ enum TrackAnnouncementSleeve {
     static let size: CGFloat = 112
     /// Gap under the sleeve, the same 12 the flat artwork keeps. With the strip 104 tall, the
     /// sleeve stands 20 points above its top edge.
-    static let bottomInset: CGFloat = 12
+    static let bottomInset = TrackAnnouncementLayout.artworkInset
     /// Where the text starts, measured from the sleeve's left edge: the leaning sleeve's right
     /// edge lands about 107 points in, and the strip's usual 16 point gap follows
     static let textOffset: CGFloat = 124
@@ -61,7 +61,7 @@ enum TrackAnnouncementSleeve {
     /// scale 1
     static let tiltSpan: CGFloat = 140
     /// Beyond this the pointer is ignored: the see-through hole's radius
-    static let tiltReach: CGFloat = 270
+    static let tiltReach = TrackAnnouncementSeeThrough.peepholeRadius
     /// How quickly the sleeve follows the pointer: the time constant of an exponential approach,
     /// so the motion is the same at any display rate
     static let tiltResponse: TimeInterval = 0.08
@@ -153,18 +153,24 @@ enum TrackAnnouncementSleeve {
         return CGPoint(x: x / w, y: y / w)
     }
 
-    /// The smallest rectangle around a sleeve of `size` once turned and projected, relative to
-    /// its centre
-    static func projectedBounds(of size: CGSize, tilt: Tilt, scale: CGFloat = 1, riseScale: CGFloat = 1) -> CGRect {
+    /// The corners of a sleeve of `size` once turned and projected, relative to its centre:
+    /// bottom left, bottom right, top right, top left
+    static func projectedCorners(of size: CGSize, tilt: Tilt, scale: CGFloat = 1, riseScale: CGFloat = 1) -> [CGPoint] {
         let transform = self.transform(tilt, scale: scale, riseScale: riseScale)
         let halfWidth = size.width / 2
         let halfHeight = size.height / 2
-        let corners = [
+        return [
             CGPoint(x: -halfWidth, y: -halfHeight),
             CGPoint(x: halfWidth, y: -halfHeight),
             CGPoint(x: halfWidth, y: halfHeight),
             CGPoint(x: -halfWidth, y: halfHeight),
         ].map { project($0, through: transform) }
+    }
+
+    /// The smallest rectangle around a sleeve of `size` once turned and projected, relative to
+    /// its centre
+    static func projectedBounds(of size: CGSize, tilt: Tilt, scale: CGFloat = 1, riseScale: CGFloat = 1) -> CGRect {
+        let corners = projectedCorners(of: size, tilt: tilt, scale: scale, riseScale: riseScale)
         let xs = corners.map { $0.x }
         let ys = corners.map { $0.y }
         let minX = xs.min() ?? 0
@@ -185,20 +191,15 @@ enum TrackAnnouncementSleeve {
     static let riseOvershoot: Double = 1.4
 
     /// How far through its rise the sleeve is `elapsed` seconds after the strip starts to slide
-    /// in: 0 sunk into the strip until `riseDelay`, then up, a little past its place, and back
-    /// to exactly 1 at the end
-    static func rise(elapsed: TimeInterval) -> CGFloat {
+    /// in: at `start` until `riseDelay`, then up, a little past its place, and back to exactly 1
+    /// at the end. `start` is 0, sunk into the strip, on a new appearance; a strip that turns
+    /// round on its way out brings the sleeve back up from where it had sunk to, without a jump.
+    static func rise(elapsed: TimeInterval, from start: CGFloat = 0) -> CGFloat {
         let t = min(1, max(0, (elapsed - riseDelay) / riseDuration))
         let u = t - 1
         let overshoot = riseOvershoot
-        return CGFloat(1 + (overshoot + 1) * u * u * u + overshoot * u * u)
-    }
-
-    /// The rise `elapsed` seconds after the strip starts to slide in, from `start` rather than
-    /// sunk: a strip that turns round on its way out brings the sleeve back up from where it
-    /// had sunk to, without a jump
-    static func rise(elapsed: TimeInterval, from start: CGFloat) -> CGFloat {
-        return start + (1 - start) * rise(elapsed: elapsed)
+        let eased = CGFloat(1 + (overshoot + 1) * u * u * u + overshoot * u * u)
+        return start + (1 - start) * eased
     }
 
     /// The rise as the strip slides out: the sleeve sinks back into the strip from `start`, the

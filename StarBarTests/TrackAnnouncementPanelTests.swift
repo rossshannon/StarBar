@@ -655,19 +655,19 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         // "Title", "Artist", "Album" and the stars end well short of the middle, and the kept
         // background ends a margin after them
         let text = TrackAnnouncementLayout.frames(in: view.bounds.size).title
-        XCTAssertGreaterThan(window.keepUntilX, text.minX + TrackAnnouncementSeeThrough.keepMargin)
-        XCTAssertLessThan(window.keepUntilX, 400)
+        XCTAssertGreaterThan(window.kept.untilX, text.minX + TrackAnnouncementSeeThrough.keepMargin)
+        XCTAssertLessThan(window.kept.untilX, 400)
 
         // A long title covers more, and keeps more
         view.announcement = TrackAnnouncement(identity: "2", title: "Calling My Name (Live New Orleans '89), Extended Version", artist: "Daniel Lanois", album: "Album")
-        XCTAssertGreaterThan(try XCTUnwrap(view.typingWindow).keepUntilX, window.keepUntilX + 100)
+        XCTAssertGreaterThan(try XCTUnwrap(view.typingWindow).kept.untilX, window.kept.untilX + 100)
     }
 
     func testThePointersHoleKeepsSomeOfTheTextsBackground() throws {
         let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))
         view.setTypingWindow(radius: 360, feather: 144, centreHeight: 90, progress: 1)
         let keep = try XCTUnwrap(view.peepholeKeep)
-        XCTAssertEqual(keep.untilX, try XCTUnwrap(view.typingWindow).keepUntilX, "the same part of the strip the typing window keeps")
+        XCTAssertEqual(keep.untilX, try XCTUnwrap(view.typingWindow).kept.untilX, "the same part of the strip the typing window keeps")
         XCTAssertEqual(keep.feather, TrackAnnouncementSeeThrough.keepFeather)
         XCTAssertEqual(keep.opacity, 0.3)
 
@@ -700,7 +700,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     private func keepUntilX(_ announcement: TrackAnnouncement) throws -> CGFloat {
         let view = TrackAnnouncementView(announcement: announcement, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))
         view.setTypingWindow(radius: 360, feather: 144, centreHeight: 90, progress: 1)
-        return try XCTUnwrap(view.typingWindow).keepUntilX
+        return try XCTUnwrap(view.typingWindow).kept.untilX
     }
 
     func testEveryLineCountsTowardsTheKeptBackground() throws {
@@ -1044,10 +1044,6 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         return panel.stripView.sleeveFrame.offsetBy(dx: panel.stripView.frame.minX, dy: panel.stripView.frame.minY)
     }
 
-    private func repeatingTimers(_ clock: FakeClock) -> Int {
-        return clock.timers.filter { $0.repeats && $0.isValid }.count
-    }
-
     private let drawnCover = NSImage(size: NSSize(width: 600, height: 600), flipped: false) { rect in
         NSColor.systemOrange.setFill()
         rect.fill()
@@ -1098,7 +1094,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertGreaterThan(sleeve.rise, 0.5, "on its way up")
         tick(clock, 0.4)
         XCTAssertEqual(sleeve.rise, 1, "in place, the overshoot done")
-        XCTAssertEqual(repeatingTimers(clock), 1, "the slide done, the sleeve still follows the pointer while the strip is up")
+        XCTAssertEqual(clock.pendingRepeating.count, 1, "the slide done, the sleeve still follows the pointer while the strip is up")
     }
 
     /// How far above the bottom of the panel, and so of the screen, the sleeve and its shadow
@@ -1203,7 +1199,6 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         for _ in 0..<60 { tick(clock) }
         XCTAssertEqual(animated.sleeveTilt.y, TrackAnnouncementSleeve.maxTilt, accuracy: 0.001, "turned further towards the pointer")
         XCTAssertEqual(animated.sleeveTilt.x, 0, accuracy: 0.001)
-        XCTAssertEqual(sleeve.tilt, animated.sleeveTilt, "and drawn so")
         XCTAssertGreaterThan(sleeve.glareOpacity, 0.9)
 
         mouse = NSPoint(x: 0, y: 100_000)
@@ -1243,7 +1238,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         tick(clock, 0.5)
         XCTAssertEqual(sleeve.alphaValue, 1)
         XCTAssertEqual(animated.sleeveTilt, .rest, "no tilt")
-        XCTAssertEqual(repeatingTimers(clock), 0, "and nothing left ticking once the fade is done")
+        XCTAssertEqual(clock.pendingRepeating.count, 0, "and nothing left ticking once the fade is done")
     }
 
     func testWithTheTiltOffTheSleeveRisesThenStopsTicking() {
@@ -1255,7 +1250,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
         tick(clock, 1)
         XCTAssertEqual(animated.stripView.sleeve.rise, 1)
-        XCTAssertEqual(repeatingTimers(clock), 0, "nothing to step once it has risen")
+        XCTAssertEqual(clock.pendingRepeating.count, 0, "nothing to step once it has risen")
 
         let centre = sleeveCentre(of: animated)
         mouse = NSPoint(x: centre.x + 60, y: centre.y + 60)
@@ -1273,7 +1268,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(animated.stripView.breakout)
         XCTAssertTrue(animated.stripView.sleeve.isHidden)
         XCTAssertEqual(animated.stripView.artworkFrame.width, TrackAnnouncementLayout.artworkSize * animated.scale)
-        XCTAssertEqual(repeatingTimers(clock), 0, "no sleeve to step")
+        XCTAssertEqual(clock.pendingRepeating.count, 0, "no sleeve to step")
 
         // A changed default applies from the next appearance
         animated.hide()
@@ -1449,7 +1444,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(animated.isVisible, "taken down at once, with no slide out")
         XCTAssertEqual(animated.phase, .hidden)
         XCTAssertEqual(animated.alphaValue, 1, "ready for the first song")
-        XCTAssertEqual(repeatingTimers(clock), 0, "nothing left ticking")
+        XCTAssertEqual(clock.pendingRepeating.count, 0, "nothing left ticking")
     }
 
     func testASongDuringTheWarmUpStartsItsOwnStripFromTheBeginning() throws {

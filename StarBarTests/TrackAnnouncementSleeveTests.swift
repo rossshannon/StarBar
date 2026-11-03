@@ -117,15 +117,8 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
 
     /// The corners of a turned sleeve, relative to its centre: bottom left, bottom right, top
     /// right, top left
-    private func corners(_ tilt: Tilt, side: CGFloat = Sleeve.size) -> [CGPoint] {
-        let transform = Sleeve.transform(tilt)
-        let half = side / 2
-        return [
-            CGPoint(x: -half, y: -half),
-            CGPoint(x: half, y: -half),
-            CGPoint(x: half, y: half),
-            CGPoint(x: -half, y: half),
-        ].map { Sleeve.project($0, through: transform) }
+    private func corners(_ tilt: Tilt) -> [CGPoint] {
+        return Sleeve.projectedCorners(of: CGSize(width: Sleeve.size, height: Sleeve.size), tilt: tilt)
     }
 
     func testTheLeanFacesTheText() {
@@ -274,7 +267,6 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         XCTAssertEqual(Sleeve.rise(elapsed: 0, from: 0.4), 0.4, accuracy: 0.0001, "no jump when the strip turns round")
         XCTAssertEqual(Sleeve.rise(elapsed: Sleeve.riseDelay, from: 0.4), 0.4, accuracy: 0.0001)
         XCTAssertEqual(Sleeve.rise(elapsed: Sleeve.riseDelay + Sleeve.riseDuration, from: 0.4), 1, accuracy: 0.0001)
-        XCTAssertEqual(Sleeve.rise(elapsed: 0.4, from: 0), Sleeve.rise(elapsed: 0.4), "from sunk, the same rise as ever")
     }
 
     func testTheSinkFollowsTheSlideOut() {
