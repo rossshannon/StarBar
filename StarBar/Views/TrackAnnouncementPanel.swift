@@ -59,8 +59,9 @@ final class TrackAnnouncementPanel: NSPanel {
     /// Steps the break-out sleeve's rise and its tilt towards the pointer while the strip is up
     private var sleeveTimer: RatingReminderTimer?
     private var sleeveKnobs = TrackAnnouncementSleeveKnobs()
-    /// When the sleeve's rise started; nil once it is in place, or when there is none
-    private var sleeveRiseStart: Date?
+    /// How long the sleeve has been rising, stepped with the slide so a stall pauses both
+    /// alike; nil once it is in place, or when there is none
+    private var sleeveRise: SteppedTimeline?
     /// Where the rise started from: 0, sunk into the strip, or part of the way down when the
     /// strip turned round on its way out
     private var sleeveRiseFrom: CGFloat = 0
@@ -71,6 +72,13 @@ final class TrackAnnouncementPanel: NSPanel {
     private var reduceMotion = false
     /// Whether the last tick found the pointer near the sleeve, to log only the changes
     private var sleeveFollowsPointer = false
+
+    /// Whether the panel is making its unseen first appearance (`warmUp`)
+    private(set) var isWarmingUp = false
+    private var warmUpTimer: RatingReminderTimer?
+    /// Whether the strip has appeared since launch, seen or not: the warm-up is only worth
+    /// making before the first
+    private var hasAppeared = false
 
     /// - Parameters:
     ///   - slideDuration: 0 applies the final state at once, for tests
@@ -148,6 +156,7 @@ final class TrackAnnouncementPanel: NSPanel {
     deinit {
         slideTimer?.invalidate()
         seeThroughTimer?.invalidate()
+        warmUpTimer?.invalidate()
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -179,6 +188,11 @@ final class TrackAnnouncementPanel: NSPanel {
 extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
 
     func show(_ announcement: TrackAnnouncement, reduceMotion: Bool, reduceTransparency: Bool) {
+        // A song arriving during the warm-up gets a clean start of its own
+        if isWarmingUp {
+            endWarmUp()
+        }
+        hasAppeared = true
         self.reduceMotion = reduceMotion
         stripView.backgroundAlpha = reduceTransparency ? 1 : TrackAnnouncementLayout.backgroundAlpha
         // Reduce Transparency asks for a solid background under the text; seeing through the
@@ -210,33 +224,39 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             speak(announcement)
             slide(in: true, transition: transition)
         case .hidden:
-            // Read once per appearance, so a changed default applies from the next song
-            sleeveKnobs = TrackAnnouncementSleeveKnobs.read()
-            stripView.breakout = sleeveKnobs.breakout
-            place(on: chooseScreen())
-            switch transition {
-            case .slide:
-                stripView.alphaValue = 1
-                stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: scale))
-            case .fade:
-                stripView.alphaValue = 0
-                stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
-            }
-            // The sleeve starts sunk into the strip and rises out of it as the strip slides
-            // in; a fade, which is what Reduce Motion asks for, brings it in already in place
-            stripView.sleeve.rise = transition == .slide ? 0 : 1
-            layoutSleeve()
-            // Before the first frame is drawn, so a pointer already over the strip has its hole
-            startSeeThrough()
-            // Draw the first frame before the window shows, so the slide starts clean
-            stripView.needsDisplay = true
-            stripView.displayIfNeeded()
-            orderFrontRegardless()
+            appear(transition: transition)
             // Every appearance is spoken, even of the same track again: the panel never takes
             // focus, so VoiceOver has no other way to notice it
             speak(announcement)
             slide(in: true, transition: transition)
         }
+    }
+
+    /// Put the strip at the start of its way in on the screen the user is looking at, draw it,
+    /// and order the panel in, ready for `slide(in:transition:)`
+    private func appear(transition: TrackAnnouncementPlacement.Transition) {
+        // Read once per appearance, so a changed default applies from the next song
+        sleeveKnobs = TrackAnnouncementSleeveKnobs.read()
+        stripView.breakout = sleeveKnobs.breakout
+        place(on: chooseScreen())
+        switch transition {
+        case .slide:
+            stripView.alphaValue = 1
+            stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: false, scale: scale))
+        case .fade:
+            stripView.alphaValue = 0
+            stripView.setFrameOrigin(TrackAnnouncementPlacement.stripOrigin(shown: true, scale: scale))
+        }
+        // The sleeve starts sunk into the strip and rises out of it as the strip slides
+        // in; a fade, which is what Reduce Motion asks for, brings it in already in place
+        stripView.sleeve.rise = transition == .slide ? 0 : 1
+        layoutSleeve()
+        // Before the first frame is drawn, so a pointer already over the strip has its hole
+        startSeeThrough()
+        // Draw the first frame before the window shows, so the slide starts clean
+        stripView.needsDisplay = true
+        stripView.displayIfNeeded()
+        orderFrontRegardless()
     }
 
     /// Ask VoiceOver to read the announcement. Posted with the panel, which is on screen;
@@ -253,7 +273,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     }
 
     func refresh(_ announcement: TrackAnnouncement) {
-        guard phase != .hidden, stripView.announcement != announcement else { return }
+        guard !isWarmingUp, phase != .hidden, stripView.announcement != announcement else { return }
         let coverArrived = stripView.announcement.identity == announcement.identity
             && stripView.announcement.artwork == nil && announcement.artwork != nil
         stripView.announcement = announcement
@@ -275,10 +295,11 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             return
         }
         stripView.artworkFade = 0
-        let start = clock.now()
+        // A stall pauses the fade rather than skipping it, as it does the slide
+        var timeline = SteppedTimeline(start: clock.now())
         artworkFadeTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             guard let self = self else { return }
-            let progress = min(1, self.clock.now().timeIntervalSince(start) / self.artworkFadeDuration)
+            let progress = min(1, timeline.step(at: self.clock.now()) / self.artworkFadeDuration)
             self.stripView.artworkFade = CGFloat(TrackAnnouncementPlacement.easeInOut(progress))
             if progress >= 1 {
                 self.stopArtworkFade()
@@ -292,7 +313,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     }
 
     func hide() {
-        guard phase == .shown || phase == .slidingIn else { return }
+        guard !isWarmingUp, phase == .shown || phase == .slidingIn else { return }
         // Fade back out if the strip faded in; the flag only matters for the way in
         let transition = lastTransition ?? .slide
         slide(in: false, transition: transition)
@@ -305,6 +326,9 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     /// on-screen image follows the view's frame, not the layer's presentation values, so a
     /// Core Animation slide ran to completion without ever being drawn. Stepping also keeps
     /// the motion testable with a fake clock.
+    ///
+    /// The time is a `SteppedTimeline`, so a main thread held up by Apple Events pauses the
+    /// slide where it was drawn instead of finishing it unseen.
     private func slide(in shown: Bool, transition: TrackAnnouncementPlacement.Transition) {
         phase = shown ? .slidingIn : .slidingOut
         lastTransition = transition
@@ -327,7 +351,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             if shown {
                 beginSleeveRise(transition: transition)
             } else {
-                sleeveRiseStart = nil
+                sleeveRise = nil
             }
         }
 
@@ -372,10 +396,10 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             return
         }
 
-        let start = clock.now()
+        var timeline = SteppedTimeline(start: clock.now())
         slideTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             guard let self = self, self.animationGeneration == generation else { return }
-            let progress = min(1, self.clock.now().timeIntervalSince(start) / self.slideDuration)
+            let progress = min(1, timeline.step(at: self.clock.now()) / self.slideDuration)
             apply(progress)
             if progress >= 1 {
                 self.slideTimer?.invalidate()
@@ -417,13 +441,117 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     /// another screen, take it down
     private func screenParametersDidChange() {
         guard phase != .hidden else { return }
+        if isWarmingUp {
+            endWarmUp()
+        } else {
+            takeDown()
+        }
+    }
+
+    /// Take the strip away at once, wherever it has got to
+    private func takeDown() {
         animationGeneration += 1
         slideTimer?.invalidate()
         slideTimer = nil
+        stopArtworkFade()
         orderOut(nil)
         phase = .hidden
         stopSeeThrough()
         stopSleeve()
+    }
+
+    /// Whether anything the user can see is moving: the strip sliding in or out, or the
+    /// sleeve rising. A main thread held up meanwhile stalls the motion where it is, so
+    /// `iTunesRadioStation` holds back a repeated notification from Music, and the reads it
+    /// sets off, until this is false. The pointer's tilt doesn't count: it can run for as
+    /// long as the strip is up, and catches up after a stall by design.
+    var isMoving: Bool {
+        guard !isWarmingUp else { return false }
+        return phase == .slidingIn || phase == .slidingOut || sleeveRise != nil
+    }
+
+}
+
+// MARK: - Warming up
+
+extension TrackAnnouncementPanel {
+
+    /// How long the warm-up keeps the panel in: the slide in, the sleeve's rise, and time over
+    /// for the one-time work it is there to set off, which ended 146 to 167 ms after the first
+    /// strip was announced when it was measured
+    static let warmUpDuration: TimeInterval = 1.0
+
+    /// The panel's alpha while it warms up. Not 0: a window that draws nothing may be left out
+    /// of compositing altogether, and the warm-up needs it drawn as a song's strip is. At 1%
+    /// the brightest pixel of the strip moves what is under it by under three levels in 255.
+    static let warmUpAlpha: CGFloat = 0.01
+
+    /// Make the strip's first appearance now, unseen, so the one-time cost of first drawing
+    /// it is paid before a song needs it.
+    ///
+    /// Measured on macOS 27 on 2026-11-03, the first strip after every launch held for about
+    /// 50 ms, 84 to 100 ms into its slide, with the break-out sleeve on and off alike. The hold
+    /// ended as the main thread logged "IOSurface Compression Enabled" (Core Animation) and
+    /// Metal was set up on a new thread; no later strip held. So the warm-up goes through
+    /// everything a song's strip does, through the same code, with a cover decoded from JPEG
+    /// data as Music's are: placed on the screen, drawn, ordered in, slid up on a display
+    /// link and the sleeve risen, then taken down at once. Only the panel's alpha differs,
+    /// and nothing is spoken.
+    ///
+    /// Only before the strip has first appeared, and only while it is hidden. A song arriving
+    /// meanwhile ends the warm-up and starts its own strip from the beginning.
+    func warmUp(reduceMotion: Bool, reduceTransparency: Bool, duration: TimeInterval = TrackAnnouncementPanel.warmUpDuration) {
+        guard !hasAppeared, phase == .hidden else { return }
+        hasAppeared = true
+        isWarmingUp = true
+        os_log("%{public}s[%{public}ld], %{public}s: warming up the strip unseen, so the first song's doesn't wait for Core Animation's first-use setup", ((#file as NSString).lastPathComponent), #line, #function)
+        alphaValue = TrackAnnouncementPanel.warmUpAlpha
+        self.reduceMotion = reduceMotion
+        stripView.backgroundAlpha = reduceTransparency ? 1 : TrackAnnouncementLayout.backgroundAlpha
+        stopArtworkFade()
+        stripView.artworkFade = 1
+        stripView.announcement = TrackAnnouncementPanel.warmUpAnnouncement
+        let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
+        appear(transition: transition)
+        slide(in: true, transition: transition)
+        warmUpTimer = clock.schedule(after: duration, repeats: false) { [weak self] in
+            self?.endWarmUp()
+        }
+    }
+
+    /// Take the warm-up down, and put the panel's alpha back for the first song
+    private func endWarmUp() {
+        guard isWarmingUp else { return }
+        warmUpTimer?.invalidate()
+        warmUpTimer = nil
+        takeDown()
+        isWarmingUp = false
+        alphaValue = 1
+        os_log("%{public}s[%{public}ld], %{public}s: warm-up done", ((#file as NSString).lastPathComponent), #line, #function)
+    }
+
+    /// The sample strip, with a cover decoded from JPEG data, as a cover read from Music is
+    /// (`iTunesTrack.firstArtworkImage`), at the 600 pixels a cover usually has
+    static var warmUpAnnouncement: TrackAnnouncement {
+        let sample = TrackAnnouncement.preview
+        return TrackAnnouncement(copying: sample, artwork: jpegCover(drawing: sample.artwork) ?? sample.artwork)
+    }
+
+    private static func jpegCover(drawing image: NSImage?, pixels: Int = 600) -> NSImage? {
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: pixels, pixelsHigh: pixels, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        let rect = NSRect(x: 0, y: 0, width: pixels, height: pixels)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSColor.darkGray.setFill()
+        rect.fill()
+        image?.draw(in: rect)
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else { return nil }
+        return NSImage(data: data)
     }
 
 }
@@ -448,9 +576,9 @@ extension TrackAnnouncementPanel {
         let sleeve = stripView.sleeve
         if transition == .slide && sleeve.rise < 1 {
             sleeveRiseFrom = sleeve.rise
-            sleeveRiseStart = clock.now()
+            sleeveRise = SteppedTimeline(start: clock.now())
         } else {
-            sleeveRiseStart = nil
+            sleeveRise = nil
             sleeve.rise = 1
         }
         startSleeve()
@@ -466,7 +594,7 @@ extension TrackAnnouncementPanel {
     fileprivate func startSleeve() {
         guard stripView.breakout, sleeveTimer == nil else { return }
         lastSleeveTick = nil
-        os_log("%{public}s[%{public}ld], %{public}s: break-out sleeve, %{public}s, tilt %{public}s", ((#file as NSString).lastPathComponent), #line, #function, sleeveRiseStart == nil ? "in place" : "rising", sleeveTilts ? "on" : (sleeveKnobs.tilt ? "off under Reduce Motion" : "off"))
+        os_log("%{public}s[%{public}ld], %{public}s: break-out sleeve, %{public}s, tilt %{public}s", ((#file as NSString).lastPathComponent), #line, #function, sleeveRise == nil ? "in place" : "rising", sleeveTilts ? "on" : (sleeveKnobs.tilt ? "off under Reduce Motion" : "off"))
         sleeveTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             self?.tickSleeve()
         }
@@ -478,7 +606,7 @@ extension TrackAnnouncementPanel {
         sleeveTimer?.invalidate()
         sleeveTimer = nil
         lastSleeveTick = nil
-        sleeveRiseStart = nil
+        sleeveRise = nil
         sleeveRiseFrom = 0
         sleeveFollowsPointer = false
         sleeveTilt = .rest
@@ -497,12 +625,13 @@ extension TrackAnnouncementPanel {
         let elapsed = lastSleeveTick.map { now.timeIntervalSince($0) } ?? 0
         lastSleeveTick = now
 
-        if let start = sleeveRiseStart {
-            let since = now.timeIntervalSince(start)
+        if var rise = sleeveRise {
+            let since = rise.step(at: now)
             if since >= TrackAnnouncementSleeve.riseDelay + TrackAnnouncementSleeve.riseDuration {
-                sleeveRiseStart = nil
+                sleeveRise = nil
                 stripView.sleeve.rise = 1
             } else {
+                sleeveRise = rise
                 stripView.sleeve.rise = TrackAnnouncementSleeve.rise(elapsed: since, from: sleeveRiseFrom)
             }
         }
@@ -520,7 +649,7 @@ extension TrackAnnouncementPanel {
         }
 
         // Risen, still, and with no pointer to follow: nothing more to step this appearance
-        if !sleeveTilts && sleeveRiseStart == nil && sleeveTilt == .rest {
+        if !sleeveTilts && sleeveRise == nil && sleeveTilt == .rest {
             sleeveTimer?.invalidate()
             sleeveTimer = nil
         }

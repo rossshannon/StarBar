@@ -175,6 +175,33 @@ extension AppDelegate {
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showCurrentTrack.rawValue, toAction: { [weak controller] in
             controller?.showCurrentTrack()
         })
+
+        // UI tests never touch Music, and the station would connect to it
+        guard !MenuBarRatingControl.isUITesting else { return }
+        // A repeat of Music's last notification waits while the strip moves, rather than
+        // stall the slide with the reads it sets off
+        iTunesRadioStation.shared.stripIsMoving = { [weak panel] in panel?.isMoving ?? false }
+        // The first strip after a launch held for about 50 ms on Core Animation's first-use
+        // setup. Make that appearance unseen, once launch's own work is done. Not under tests,
+        // which are hosted in the app and drive panels of their own.
+        let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+        if !isRunningTests, UserDefaults.standard.announceNewTracks, AppDelegate.warmsUpTheStrip {
+            DispatchQueue.main.asyncAfter(deadline: .now() + AppDelegate.stripWarmUpDelay) { [weak panel] in
+                panel?.warmUp(reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                              reduceTransparency: NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)
+            }
+        }
+    }
+
+    /// How long after launch the strip warms up: after the menu bar's and the strip's first
+    /// reads of Music, so the warm-up neither waits for them nor delays them
+    static let stripWarmUpDelay: TimeInterval = 2.0
+
+    /// The hidden default `announcementWarmUp` (bool, true by default): false skips the
+    /// warm-up, to see whether the first strip after a launch still holds without it
+    static var warmsUpTheStrip: Bool {
+        let defaults = UserDefaults.standard
+        return defaults.object(forKey: "announcementWarmUp") == nil || defaults.bool(forKey: "announcementWarmUp")
     }
 
     @objc private func playerDidUpdateForAnnouncement(_ notification: Notification) {

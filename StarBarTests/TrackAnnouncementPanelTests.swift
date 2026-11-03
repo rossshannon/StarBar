@@ -169,26 +169,22 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         let hiddenScaled = TrackAnnouncementPlacement.stripOrigin(shown: false, scale: animated.scale).y
         XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled)
 
-        clock.advance(by: 0.15)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.15)
         XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled / 2, accuracy: 0.5, "half way at half time on an ease-in-out curve")
         XCTAssertEqual(animated.phase, .slidingIn)
 
-        clock.advance(by: 0.2)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.2)
         XCTAssertEqual(animated.stripView.frame.origin.y, 0)
         XCTAssertEqual(animated.phase, .shown)
 
         animated.hide()
         XCTAssertEqual(animated.phase, .slidingOut)
-        clock.advance(by: 0.1)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.1)
         XCTAssertTrue(animated.isVisible, "the panel stays up while the strip slides down")
         XCTAssertLessThan(animated.stripView.frame.origin.y, 0)
         XCTAssertGreaterThan(animated.stripView.frame.origin.y, hiddenScaled)
 
-        clock.advance(by: 0.3)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.3)
         XCTAssertFalse(animated.isVisible)
         XCTAssertEqual(animated.phase, .hidden)
         XCTAssertEqual(animated.stripView.frame.origin.y, hiddenScaled)
@@ -206,15 +202,12 @@ final class TrackAnnouncementPanelTests: XCTestCase {
 
         animated.refresh(TrackAnnouncement(copying: sample, artwork: NSImage(size: NSSize(width: 10, height: 10))))
         XCTAssertEqual(animated.stripView.artworkFade, 0, "the placeholder still shows on the first frame")
-        clock.advance(by: 0.15)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.15)
         XCTAssertEqual(animated.stripView.artworkFade, 0.5, accuracy: 0.01, "half way at half time on an ease-in-out curve")
-        clock.advance(by: 0.2)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.2)
         XCTAssertEqual(animated.stripView.artworkFade, 1)
         // Done: more frames change nothing
-        clock.advance(by: 1)
-        clock.fireRepeating()
+        clock.runFrames(for: 1)
         XCTAssertEqual(animated.stripView.artworkFade, 1)
     }
 
@@ -237,8 +230,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(animated.stripView.artworkFade, 0)
         animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album", artwork: cover), reduceMotion: false, reduceTransparency: false)
         XCTAssertEqual(animated.stripView.artworkFade, 1)
-        clock.advance(by: 0.1)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.1)
         XCTAssertEqual(animated.stripView.artworkFade, 1, "the old song's fade doesn't carry on over the new one")
     }
 
@@ -247,18 +239,15 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
-        clock.advance(by: 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.5)
         animated.hide()
-        clock.advance(by: 0.1)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.1)
         let midway = animated.stripView.frame.origin.y
 
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
         XCTAssertEqual(animated.phase, .slidingIn)
         XCTAssertEqual(animated.stripView.frame.origin.y, midway, "no jump when turning round")
-        clock.advance(by: 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.5)
         XCTAssertEqual(animated.stripView.frame.origin.y, 0)
         XCTAssertTrue(animated.isVisible)
     }
@@ -268,15 +257,13 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
-        clock.advance(by: 0.1)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.1)
         let midway = animated.stripView.frame.origin.y
 
         animated.hide()
         XCTAssertEqual(animated.phase, .slidingOut)
         XCTAssertEqual(animated.stripView.frame.origin.y, midway)
-        clock.advance(by: 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.5)
         XCTAssertFalse(animated.isVisible)
         XCTAssertEqual(animated.phase, .hidden)
     }
@@ -286,18 +273,15 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         let animated = TrackAnnouncementPanel(slideDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
         defer { animated.orderOut(nil) }
         animated.show(sample, reduceMotion: false, reduceTransparency: false)
-        clock.advance(by: 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.5)
         animated.hide()
-        clock.advance(by: 0.1)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.1)
         XCTAssertLessThan(animated.stripView.frame.origin.y, 0)
 
         // Reduce Motion was turned on meanwhile: the fade must not leave the strip half down
         animated.show(sample, reduceMotion: true, reduceTransparency: false)
         XCTAssertEqual(animated.stripView.frame.origin.y, 0)
-        clock.advance(by: 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.5)
         XCTAssertEqual(animated.stripView.alphaValue, 1)
         XCTAssertEqual(animated.phase, .shown)
     }
@@ -332,11 +316,9 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         animated.show(sample, reduceMotion: true, reduceTransparency: false)
         XCTAssertEqual(animated.stripView.alphaValue, 0)
         XCTAssertEqual(animated.stripView.frame.origin.y, 0)
-        clock.advance(by: 0.15)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.15)
         XCTAssertEqual(animated.stripView.alphaValue, 0.5, accuracy: 0.01)
-        clock.advance(by: 0.2)
-        clock.fireRepeating()
+        clock.runFrames(for: 0.2)
         XCTAssertEqual(animated.stripView.alphaValue, 1)
         XCTAssertEqual(animated.phase, .shown)
     }
@@ -387,8 +369,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     }
 
     private func tick(_ clock: FakeClock, _ seconds: TimeInterval = 1.0 / 60.0) {
-        clock.advance(by: seconds)
-        clock.fireRepeating()
+        clock.runFrames(for: seconds)
     }
 
     func testThePointerOverTheStripCutsAHoleThatFollowsIt() throws {
@@ -1356,6 +1337,183 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(animated.stripView.sleeve.tilt, .rest, "the next song starts straight")
         ticker.action()
         XCTAssertEqual(animated.sleeveTilt, .rest, "a stale tick does nothing")
+    }
+
+
+    // MARK: - Stalls
+
+    /// Measured 2026-11-03: Music's second notification for a song held the main thread for
+    /// about 440 ms as the strip set off, and the next frame drew it already in place. A stall
+    /// now pauses the slide where it was drawn, and the slide carries on from there.
+    func testAStalledMainThreadPausesTheSlideRatherThanSkippingIt() {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.05)
+        let beforeStall = animated.stripView.frame.origin.y
+
+        // 440 ms with no frame, then one late frame
+        clock.advance(by: 0.44)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.phase, .slidingIn, "not finished unseen")
+        let afterStall = animated.stripView.frame.origin.y
+        XCTAssertGreaterThan(afterStall, beforeStall, "it moves on")
+        // The cosine ease moves at most π/2 times its average speed
+        let hidden = TrackAnnouncementPlacement.stripOrigin(shown: false, scale: animated.scale).y
+        let mostAStepMoves = -hidden * CGFloat(SteppedTimeline.maxStep / 0.3) * 2
+        XCTAssertLessThan(afterStall - beforeStall, mostAStepMoves, "but by no more than a step or two's worth")
+
+        // The rest of the slide takes the rest of its time
+        clock.runFrames(for: 0.2)
+        XCTAssertEqual(animated.phase, .slidingIn, "0.05 + 1/30 + 0.2 s drawn is short of 0.3")
+        clock.runFrames(for: 0.05)
+        XCTAssertEqual(animated.phase, .shown)
+        XCTAssertEqual(animated.stripView.frame.origin.y, 0)
+    }
+
+    func testTheSleevesRiseKeepsInStepWithTheSlideThroughAStall() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.1)
+
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+        XCTAssertEqual(animated.stripView.sleeve.rise, 0, "still waiting for the strip to get going, as the strip is")
+        XCTAssertEqual(animated.stripView.sleeve.frame, expectedSleeveFrame(animated), "and riding with it")
+
+        clock.runFrames(for: 0.6)
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1, "and up once the drawn time is past its rise")
+    }
+
+    func testAStallPausesALateCoversFadeToo() {
+        let clock = FakeClock()
+        let animated = TrackAnnouncementPanel(slideDuration: 0, artworkFadeDuration: 0.3, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: NSImage(size: NSSize(width: 10, height: 10))))
+
+        clock.advance(by: 1)
+        clock.fireRepeating()
+
+        XCTAssertLessThan(animated.stripView.artworkFade, 0.2, "the cover doesn't arrive all at once")
+    }
+
+    func testTheStripIsMovingWhileItSlidesAndTheSleeveRises() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        XCTAssertFalse(animated.isMoving)
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertTrue(animated.isMoving)
+        clock.runFrames(for: 0.4)
+        XCTAssertEqual(animated.phase, .shown)
+        XCTAssertTrue(animated.isMoving, "the slide done, the sleeve still rising")
+        clock.runFrames(for: 0.4)
+        XCTAssertFalse(animated.isMoving, "up and still; the pointer's tilt doesn't count")
+
+        animated.hide()
+        XCTAssertTrue(animated.isMoving)
+        clock.runFrames(for: 0.4)
+        XCTAssertFalse(animated.isMoving)
+    }
+
+    // MARK: - Warming up
+
+    func testTheWarmUpIsAnUnseenFirstAppearanceTakenDownAtOnce() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertTrue(animated.isWarmingUp)
+        XCTAssertTrue(animated.isVisible, "ordered in, so it is drawn as a song's strip is")
+        XCTAssertEqual(animated.alphaValue, TrackAnnouncementPanel.warmUpAlpha, accuracy: 0.0001)
+        XCTAssertGreaterThan(animated.alphaValue, 0, "a window that draws nothing may not be drawn at all")
+        XCTAssertEqual(animated.phase, .slidingIn, "through the same slide")
+        XCTAssertFalse(animated.isMoving, "nothing anyone can see, so Music's repeats needn't wait for it")
+        XCTAssertNotNil(animated.stripView.announcement.artwork, "with a cover to draw")
+        XCTAssertTrue(animated.stripView.announcement.artwork?.representations.first is NSBitmapImageRep, "decoded from data, as Music's are")
+
+        clock.runFrames(for: 0.8)
+        XCTAssertEqual(animated.phase, .shown)
+        XCTAssertTrue(animated.isVisible)
+        XCTAssertEqual(animated.stripView.sleeve.rise, 1, "the sleeve rose")
+
+        clock.fireAllOneShots()
+        XCTAssertFalse(animated.isWarmingUp)
+        XCTAssertFalse(animated.isVisible, "taken down at once, with no slide out")
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertEqual(animated.alphaValue, 1, "ready for the first song")
+        XCTAssertEqual(repeatingTimers(clock), 0, "nothing left ticking")
+    }
+
+    func testASongDuringTheWarmUpStartsItsOwnStripFromTheBeginning() throws {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+        let warmUpsEnd = try XCTUnwrap(clock.pendingOneShot)
+        clock.runFrames(for: 0.5)
+        XCTAssertEqual(animated.phase, .shown)
+
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertFalse(animated.isWarmingUp)
+        XCTAssertEqual(animated.alphaValue, 1)
+        XCTAssertEqual(animated.phase, .slidingIn, "slid in, not shown already up")
+        XCTAssertEqual(animated.stripView.frame.origin.y, TrackAnnouncementPlacement.stripOrigin(shown: false, scale: animated.scale).y)
+        XCTAssertEqual(animated.stripView.announcement, sample)
+        XCTAssertTrue(animated.isMoving)
+
+        // The warm-up's own end is called off, and a stale one changes nothing
+        XCTAssertFalse(warmUpsEnd.isValid)
+        warmUpsEnd.action()
+        XCTAssertTrue(animated.isVisible)
+        XCTAssertEqual(animated.phase, .slidingIn)
+        XCTAssertEqual(animated.alphaValue, 1)
+    }
+
+    func testTheWarmUpIgnoresTheControllerAndHappensOnlyBeforeTheFirstStrip() {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+        let shown = animated.stripView.announcement
+
+        animated.hide()
+        animated.refresh(TrackAnnouncement(copying: shown, rating: 100))
+        XCTAssertEqual(animated.phase, .slidingIn, "the controller has nothing up to hide")
+        XCTAssertEqual(animated.stripView.announcement, shown)
+
+        clock.fireAllOneShots()
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(animated.isWarmingUp, "once is enough")
+        XCTAssertFalse(animated.isVisible)
+
+        let later = timedPanel(clock)
+        defer { later.orderOut(nil) }
+        later.show(sample, reduceMotion: false, reduceTransparency: false)
+        later.warmUp(reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(later.isWarmingUp, "a strip has already appeared")
+        XCTAssertEqual(later.alphaValue, 1)
+    }
+
+    func testAScreenChangeEndsTheWarmUp() {
+        let clock = FakeClock()
+        let animated = timedPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
+
+        XCTAssertFalse(animated.isWarmingUp)
+        XCTAssertFalse(animated.isVisible)
+        XCTAssertEqual(animated.alphaValue, 1)
     }
 
 }
