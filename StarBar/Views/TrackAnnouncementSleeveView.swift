@@ -98,6 +98,17 @@ final class TrackAnnouncementSleeveView: NSView {
         return coverLayer.isHidden ? 0 : coverLayer.opacity
     }
 
+    /// How much of the placeholder shows, for tests
+    var placeholderOpacity: Float {
+        return placeholderLayer.isHidden ? 0 : placeholderLayer.opacity
+    }
+
+    /// The placeholder's fill colours' alphas, for tests
+    var placeholderFillAlphas: [CGFloat] {
+        // A gradient layer's colours are CGColors, which Swift can only force-cast from Any
+        return (placeholderLayer.colors ?? []).map { ($0 as! CGColor).alpha }
+    }
+
     var glareOpacity: Float {
         return glareLayer.isHidden ? 0 : glareLayer.opacity
     }
@@ -106,7 +117,7 @@ final class TrackAnnouncementSleeveView: NSView {
     private let turnLayer = CALayer()
     /// Rounds the corners and draws the rim
     private let clipLayer = CALayer()
-    private let placeholderLayer = CALayer()
+    private let placeholderLayer = CAGradientLayer()
     private let noteLayer = CALayer()
     private let coverLayer = CALayer()
     private let glareLayer = CAGradientLayer()
@@ -134,7 +145,14 @@ final class TrackAnnouncementSleeveView: NSView {
         clipLayer.cornerCurve = .continuous
         clipLayer.borderColor = NSColor.white.withAlphaComponent(TrackAnnouncementSleeve.rimAlpha).cgColor
 
-        placeholderLayer.backgroundColor = NSColor.white.withAlphaComponent(TrackAnnouncementContentView.placeholderFillAlpha).cgColor
+        // Opaque, unlike the flat strip's: nothing behind the sleeve should show through it
+        placeholderLayer.colors = [
+            NSColor(white: TrackAnnouncementSleeve.placeholderTopWhite, alpha: 1).cgColor,
+            NSColor(white: TrackAnnouncementSleeve.placeholderBottomWhite, alpha: 1).cgColor,
+        ]
+        // A layer's y runs upwards here, so the first colour goes at the top
+        placeholderLayer.startPoint = CGPoint(x: 0.5, y: 1)
+        placeholderLayer.endPoint = CGPoint(x: 0.5, y: 0)
         noteLayer.contentsGravity = .resizeAspect
         placeholderLayer.addSublayer(noteLayer)
 
@@ -229,17 +247,20 @@ final class TrackAnnouncementSleeveView: NSView {
         }
     }
 
-    /// The cover fades in over the placeholder, which fades out under it, as the flat strip
-    /// draws it; with no cover, the placeholder alone
+    /// The cover fades in over the placeholder, which stays whole under it until the cover is
+    /// all there: the sleeve takes the cover's shape and the cover fills it, so nothing of the
+    /// placeholder shows beside it, and the two fading against each other, as the flat strip
+    /// draws them, left the sleeve half see-through halfway. With no cover, the placeholder alone.
     private func applyFade() {
         let fade = Float(min(1, max(0, coverFade)))
         withoutAnimation {
             if coverLayer.isHidden {
-                placeholderLayer.opacity = 1
+                placeholderLayer.isHidden = false
             } else {
-                placeholderLayer.opacity = 1 - fade
+                placeholderLayer.isHidden = fade >= 1
                 coverLayer.opacity = fade
             }
+            placeholderLayer.opacity = 1
         }
     }
 
