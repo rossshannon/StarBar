@@ -157,6 +157,7 @@ final class iTunesRadioStation {
 
         // Due to iTunes may already playing before app launch,update player when app start
         iTunesPlayer.shared.update(iTunes?.currentTrackCopy)
+        iTunesPlayer.shared.musicWasPlayingAtLaunch()
         // The same guard as above, split only to keep the lifecycle observers after this read
         if !iTunesRadioStation.isRunningTests {
             observeMusicLifecycle()

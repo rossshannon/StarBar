@@ -240,6 +240,34 @@ final class SleeveHistoryTests: XCTestCase {
         XCTAssertTrue(songs.songs.isEmpty)
     }
 
+    func testTheSongPlayingAtLaunchIsTheOneBeforeTheFirstAnnounced() {
+        // Music announces nothing at launch: on 2026-11-03 "I Am Sky" showed the cover of
+        // "Aurora", playing when StarBar started, and nothing checked it
+        var songs = RecentSongs<Record>()
+        let aurora = Record("AUR"), iAmSky = Record("SKY")
+        songs.playingAtLaunch(aurora)
+        XCTAssertTrue(previous(songs, before: "SKY") === aurora)
+        songs.musicAnnounced("5678", playing: iAmSky)
+        XCTAssertTrue(previous(songs, before: "SKY") === aurora)
+    }
+
+    func testTheLaunchSongAnnouncedLaterIsStillTheSongBefore() {
+        // Paused and played again, it is announced under its own ID, a second entry for it
+        var songs = RecentSongs<Record>()
+        songs.playingAtLaunch(Record("AUR"))
+        songs.musicAnnounced("1234", playing: Record("AUR"))
+        songs.musicAnnounced("5678", playing: Record("SKY"))
+        XCTAssertEqual(previous(songs, before: "SKY")?.id, "AUR")
+    }
+
+    func testNothingPlayingAtLaunchIsNoSong() {
+        var songs = RecentSongs<Record>()
+        songs.playingAtLaunch(nil)
+        XCTAssertTrue(songs.songs.isEmpty)
+        songs.musicAnnounced("5678", playing: Record("SKY"))
+        XCTAssertNil(previous(songs, before: "SKY"))
+    }
+
     func testOnlyTheLastFewSongsAreRemembered() {
         var songs = RecentSongs<Record>()
         for song in 0..<(songs.capacity + 3) {

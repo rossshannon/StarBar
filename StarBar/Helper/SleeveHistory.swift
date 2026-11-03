@@ -201,6 +201,20 @@ struct RecentSongs<Record: AnyObject> {
         return nil
     }
 
+    /// `record` was playing when StarBar started. Music announces nothing at launch, so
+    /// without this the first song after a launch had no song before it and its cover went
+    /// unchecked: on 2026-11-03 "I Am Sky" showed *Insen*, the cover of "Aurora", which was
+    /// playing when StarBar started. Nothing changes when nothing was playing.
+    mutating func playingAtLaunch(_ record: Record?) {
+        musicAnnounced(RecentSongs.launchIdentity, playing: record)
+    }
+
+    /// What the song playing at launch goes by. No notification names a song this way, so
+    /// the first one about that song adds it again, which `previous(before:id:)` passes over.
+    static var launchIdentity: String {
+        return "(playing when StarBar started)"
+    }
+
     mutating func forget() {
         songs.removeAll()
     }
