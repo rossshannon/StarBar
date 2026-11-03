@@ -139,6 +139,65 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertEqual(sprite.frame.width, 1440, "still stretched over the whole hole")
     }
 
+    // MARK: - What the pointer's hole keeps
+
+    func testThePointersHoleKeepsAFifthOfTheBackgroundBehindTheText() throws {
+        let keep = try XCTUnwrap(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 400, height: 110), margin: 24, feather: 48, opacity: TrackAnnouncementSeeThrough.peepholeKeepOpacity))
+        XCTAssertEqual(keep.untilX, 441, "the text's end plus the margin, as the typing window keeps")
+        XCTAssertEqual(keep.feather, 48)
+        XCTAssertEqual(keep.opacity, 0.2, "Ross asked for 20%, to keep the white text readable")
+
+        let long = try XCTUnwrap(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 1990, height: 110), margin: 24, feather: -5, opacity: 3))
+        XCTAssertEqual(long.untilX, 2000, "inside the strip")
+        XCTAssertEqual(long.feather, 0)
+        XCTAssertEqual(long.opacity, 1)
+
+        XCTAssertNil(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: .null, margin: 24, feather: 48, opacity: 0.2), "nothing drawn, nothing kept")
+        XCTAssertNil(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 400, height: 110), margin: 24, feather: 48, opacity: 0), "a knob at 0 clears it all, as before")
+    }
+
+    func testTheMaskKeepsTheBackgroundBehindTheTextInsideTheHole() throws {
+        let mask = TrackAnnouncementPeepholeMask()
+        let bounds = CGRect(x: 0, y: -12, width: 2000, height: 162)
+        let hole = TrackAnnouncementPeephole(centre: CGPoint(x: 400, y: 70), radius: 270, feather: 108)
+        mask.place(hole, keeping: TrackAnnouncementKeptBackground(untilX: 441.3, feather: 48, opacity: 0.2), in: bounds, scale: 2)
+
+        let kept = try XCTUnwrap(mask.keptLayers)
+        XCTAssertEqual(kept.solid.frame, CGRect(x: 0, y: 0, width: 441.5, height: 162), "from the leading edge, to a whole pixel")
+        XCTAssertEqual(kept.edge.frame, CGRect(x: 441.5, y: 0, width: 48, height: 162), "then fading out")
+        XCTAssertEqual(kept.solid.opacity, 0.2, accuracy: 1e-6)
+        XCTAssertEqual(kept.edge.opacity, 0.2, accuracy: 1e-6)
+
+        mask.place(hole, in: bounds, scale: 2)
+        XCTAssertNil(mask.keptLayers, "none asked for, none kept")
+    }
+
+    func testThroughTheHoleTheTextKeepsAFifthOfItsBackgroundAndTheRestClears() throws {
+        let mask = TrackAnnouncementPeepholeMask()
+        let bounds = CGRect(x: 0, y: 0, width: 1000, height: 150)
+        // Clear from 220 to 780 across the middle; the text's background is kept to 441
+        mask.place(TrackAnnouncementPeephole(centre: CGPoint(x: 500, y: 75), radius: 300, feather: 20),
+                   keeping: TrackAnnouncementKeptBackground(untilX: 441, feather: 48, opacity: 0.2),
+                   in: bounds, scale: 1)
+
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: 1000, height: 150, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        mask.render(in: context)
+        let data = try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)
+        // The middle row, so it doesn't matter which way up the bitmap is
+        func alpha(_ x: Int) -> CGFloat {
+            return CGFloat(data[75 * context.bytesPerRow + x * 4 + 3]) / 255
+        }
+
+        XCTAssertEqual(alpha(300), 0.2, accuracy: 0.02, "behind the text: a fifth of the background")
+        XCTAssertEqual(alpha(600), 0, accuracy: 0.02, "past the text: all clear")
+        XCTAssertEqual(alpha(950), 1, accuracy: 0.02, "outside the hole: all of it")
+        XCTAssertLessThan(alpha(465), alpha(300), "the kept part fades out rather than stopping at a cut")
+        XCTAssertGreaterThan(alpha(465), alpha(600))
+    }
+
     // MARK: - The fade
 
     func testTheBackgroundLeavesQuicklyAndReturnsGently() {
@@ -328,6 +387,7 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertTrue(knobs.peephole)
         XCTAssertEqual(knobs.radius, 270, "three times the first try, then half as big again, at Ross's request")
         XCTAssertEqual(knobs.feather, 108)
+        XCTAssertEqual(knobs.peepholeKeep, 0.2, "a fifth of the background behind the text, at Ross's request")
         XCTAssertTrue(knobs.typingWindow)
         XCTAssertEqual(knobs.typingRadius, 360, "bigger than the pointer's hole")
         XCTAssertEqual(knobs.typingFeather, 144)

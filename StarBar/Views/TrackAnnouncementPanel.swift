@@ -555,7 +555,8 @@ extension TrackAnnouncementPanel {
         guard seeThroughTimer == nil, stripView.backgroundAlpha < 1 else { return }
         seeThroughKnobs = TrackAnnouncementSeeThroughKnobs.read()
         let knobs = seeThroughKnobs
-        os_log("%{public}s[%{public}ld], %{public}s: hole %{public}s (radius %.0f, feather %.0f), typing window %{public}s (radius %.0f, feather %.0f, pause %.1f s), last key %.1f s ago", ((#file as NSString).lastPathComponent), #line, #function, knobs.peephole ? "on" : "off", Double(knobs.radius), Double(knobs.feather), knobs.typingWindow ? "on" : "off", Double(knobs.typingRadius), Double(knobs.typingFeather), knobs.typingPause, keyboard().secondsSinceKeyDown)
+        stripView.peepholeKeepOpacity = knobs.peepholeKeep
+        os_log("%{public}s[%{public}ld], %{public}s: hole %{public}s (radius %.0f, feather %.0f, keeps %.0f%% behind the text), typing window %{public}s (radius %.0f, feather %.0f, pause %.1f s), last key %.1f s ago", ((#file as NSString).lastPathComponent), #line, #function, knobs.peephole ? "on" : "off", Double(knobs.radius), Double(knobs.feather), Double(knobs.peepholeKeep * 100), knobs.typingWindow ? "on" : "off", Double(knobs.typingRadius), Double(knobs.typingFeather), knobs.typingPause, keyboard().secondsSinceKeyDown)
         // Nothing to watch for: don't tick at the display's rate for nothing
         guard knobs.peephole || knobs.typingWindow else { return }
         typing = TrackAnnouncementTyping()

@@ -47,6 +47,16 @@ final class TrackAnnouncementSurfaceView: NSView {
         }
     }
 
+    /// How much of the background the pointer's hole keeps behind the artwork and text, in
+    /// this view's coordinates; nil clears everything under the hole. Only the pointer's hole
+    /// uses it: the typing window keeps all of that background.
+    var peepholeKeep: TrackAnnouncementKeptBackground? {
+        didSet {
+            guard peepholeKeep != oldValue, peephole != nil else { return }
+            applyMasks()
+        }
+    }
+
     /// The window opened while the user types, in this view's coordinates; nil for none
     var typingWindow: TrackAnnouncementTypingWindow? {
         didSet {
@@ -113,7 +123,7 @@ final class TrackAnnouncementSurfaceView: NSView {
         if let peephole = peephole {
             let mask = peepholeMask ?? TrackAnnouncementPeepholeMask()
             peepholeMask = mask
-            mask.place(peephole, in: maskBounds, scale: scale)
+            mask.place(peephole, keeping: peepholeKeep, in: maskBounds, scale: scale)
             if layer.mask !== mask {
                 layer.mask = mask
             }
@@ -235,10 +245,18 @@ final class TrackAnnouncementWashView: NSView {
 /// A layer mask with one soft round hole in it: an image of the hole, drawn once for each
 /// size, and four solid rectangles filling the rest. Moving the hole moves five layers and
 /// redraws nothing, so it can follow the pointer on every display refresh.
+///
+/// It can also keep part of the background inside the hole, behind the artwork and text: a
+/// translucent rectangle from the leading edge, with a soft edge after it. A mask is the union
+/// of its layers, so where the hole would clear everything, that part keeps the rectangle's
+/// opacity, and where the hole's own edge is already partly solid, a little more.
 final class TrackAnnouncementPeepholeMask: CALayer {
 
     private let hole = CALayer()
     private let tiles: [CALayer] = (0..<4).map { _ in CALayer() }
+    /// The kept background and its soft edge, made the first time one is asked for, so that a
+    /// mask with no kept part is the five layers it always was
+    private var kept: (solid: CALayer, edge: CAGradientLayer)?
     /// The size the hole's image was drawn at, to redraw it only when that changes
     private var drawn: (radius: CGFloat, feather: CGFloat)?
 
@@ -269,8 +287,8 @@ final class TrackAnnouncementPeepholeMask: CALayer {
     }
 
     /// Put the hole at `peephole`'s centre, in the coordinates of the layer being masked,
-    /// covering `bounds` everywhere else
-    func place(_ peephole: TrackAnnouncementPeephole, in bounds: CGRect, scale: CGFloat) {
+    /// covering `bounds` everywhere else, and keep `keep`'s part of the background inside it
+    func place(_ peephole: TrackAnnouncementPeephole, keeping keep: TrackAnnouncementKeptBackground? = nil, in bounds: CGRect, scale: CGFloat) {
         CATransaction.begin()
         // Plain layers animate every change by default; the hole must track the pointer exactly
         CATransaction.setDisableActions(true)
@@ -295,6 +313,45 @@ final class TrackAnnouncementPeepholeMask: CALayer {
         let rects = TrackAnnouncementSeeThrough.maskTiles(around: holeRect, in: CGRect(origin: .zero, size: bounds.size))
         for (tile, rect) in zip(tiles, rects) {
             tile.frame = rect
+        }
+        placeKept(keep, in: bounds, scale: scale)
+    }
+
+    /// The kept background, for tests: the solid part and its soft edge, nil when none is kept
+    var keptLayers: (solid: CALayer, edge: CAGradientLayer)? {
+        guard let kept = kept, !kept.solid.isHidden else { return nil }
+        return kept
+    }
+
+    private func placeKept(_ keep: TrackAnnouncementKeptBackground?, in bounds: CGRect, scale: CGFloat) {
+        guard let keep = keep else {
+            kept?.solid.isHidden = true
+            kept?.edge.isHidden = true
+            return
+        }
+        let layers: (solid: CALayer, edge: CAGradientLayer)
+        if let existing = kept {
+            layers = existing
+        } else {
+            let solid = CALayer()
+            solid.backgroundColor = CGColor(gray: 0, alpha: 1)
+            let edge = CAGradientLayer()
+            edge.colors = [CGColor(gray: 0, alpha: 1), CGColor(gray: 0, alpha: 0)]
+            edge.startPoint = CGPoint(x: 0, y: 0.5)
+            edge.endPoint = CGPoint(x: 1, y: 0.5)
+            addSublayer(solid)
+            addSublayer(edge)
+            layers = (solid, edge)
+            kept = layers
+        }
+        // On a whole pixel, so the solid part and its soft edge don't leave a seam between them
+        let pixels = max(1, scale)
+        let width = max(0, ((keep.untilX - bounds.minX) * pixels).rounded() / pixels)
+        layers.solid.frame = CGRect(x: 0, y: 0, width: width, height: bounds.height)
+        layers.edge.frame = CGRect(x: width, y: 0, width: keep.feather, height: bounds.height)
+        for layer in [layers.solid, layers.edge] as [CALayer] {
+            layer.opacity = Float(keep.opacity)
+            layer.isHidden = false
         }
     }
 

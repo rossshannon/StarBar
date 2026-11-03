@@ -682,6 +682,39 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertGreaterThan(try XCTUnwrap(view.typingWindow).keepUntilX, window.keepUntilX + 100)
     }
 
+    func testThePointersHoleKeepsAFifthOfTheTextsBackground() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))
+        view.setTypingWindow(radius: 360, feather: 144, centreHeight: 90, progress: 1)
+        let keep = try XCTUnwrap(view.peepholeKeep)
+        XCTAssertEqual(keep.untilX, try XCTUnwrap(view.typingWindow).keepUntilX, "the same part of the strip the typing window keeps")
+        XCTAssertEqual(keep.feather, TrackAnnouncementSeeThrough.keepFeather)
+        XCTAssertEqual(keep.opacity, 0.2)
+
+        // A long title covers more, and keeps more, without the typing window open
+        view.setTypingWindow(radius: 0, feather: 0, progress: 0)
+        view.announcement = TrackAnnouncement(identity: "2", title: "Calling My Name (Live New Orleans '89), Extended Version", artist: "Daniel Lanois", album: "Album")
+        XCTAssertGreaterThan(try XCTUnwrap(view.peepholeKeep).untilX, keep.untilX + 100)
+
+        view.peepholeKeepOpacity = 0
+        XCTAssertNil(view.peepholeKeep, "at 0 the hole clears everything")
+    }
+
+    func testThePanelGivesTheStripTheKnobsKeptBackground() throws {
+        seeThroughKnobs.peepholeKeep = 0.35
+        mouse = NSPoint(x: 0, y: 100_000)
+        let clock = FakeClock()
+        let seeThrough = seeThroughPanel(clock)
+        defer { seeThrough.orderOut(nil) }
+
+        mouse = stripCentre(of: seeThrough)
+        tick(clock)
+        XCTAssertNotNil(seeThrough.stripView.peephole)
+        XCTAssertEqual(try XCTUnwrap(seeThrough.stripView.peepholeKeep).opacity, 0.35, accuracy: 1e-6)
+        let surface = try XCTUnwrap(seeThrough.stripView.subviews.first as? TrackAnnouncementSurfaceView)
+        let mask = try XCTUnwrap(surface.layer?.mask as? TrackAnnouncementPeepholeMask)
+        XCTAssertEqual(try XCTUnwrap(mask.keptLayers).solid.opacity, 0.35, accuracy: 1e-6, "in the mask the hole cuts")
+    }
+
     /// Where the kept background ends for `announcement` on a wide strip at scale 1
     private func keepUntilX(_ announcement: TrackAnnouncement) throws -> CGFloat {
         let view = TrackAnnouncementView(announcement: announcement, frame: NSRect(x: 0, y: 0, width: 2000, height: 104))

@@ -73,7 +73,7 @@ final class TrackAnnouncementView: NSView {
             sleeve.artwork = announcement.artwork
             setAccessibilityLabel(announcement.accessibilityLabel)
             // A longer title covers more of the strip, and keeps more of its background
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
@@ -100,7 +100,7 @@ final class TrackAnnouncementView: NSView {
             content.breakout = breakout
             sleeve.isHidden = !breakout
             // The sleeve covers more, and the text moves right
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
@@ -135,15 +135,22 @@ final class TrackAnnouncementView: NSView {
             surface.wash.scale = scale
             applyInsets()
             layoutBackdrop()
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
     /// The hole through the background that follows the pointer, in this view's coordinates;
-    /// nil for none. The text, artwork and stars stay drawn over it.
+    /// nil for none. The text, artwork and stars stay drawn over it, and `peepholeKeepOpacity`
+    /// of the background stays behind them.
     var peephole: TrackAnnouncementPeephole? {
         get { return surface.peephole }
         set { surface.peephole = newValue }
+    }
+
+    /// What the pointer's hole keeps of the background behind the artwork and text, as laid
+    /// out; nil when it keeps none
+    var peepholeKeep: TrackAnnouncementKeptBackground? {
+        return surface.peepholeKeep
     }
 
     /// Open the window through the middle of the background that shows while the user types,
@@ -154,7 +161,7 @@ final class TrackAnnouncementView: NSView {
     func setTypingWindow(radius: CGFloat, feather: CGFloat, centreHeight: CGFloat = 0, progress: CGFloat) {
         typingWindowSize = (radius, feather, centreHeight)
         typingWindowProgress = progress
-        applyTypingWindow()
+        applyTypingWindow(occupied: nil)
     }
 
     /// The typing window as laid out, in this view's coordinates; nil while it is closed
@@ -165,15 +172,40 @@ final class TrackAnnouncementView: NSView {
     private var typingWindowSize: (radius: CGFloat, feather: CGFloat, centreHeight: CGFloat) = (0, 0, 0)
     private var typingWindowProgress: CGFloat = 0
 
-    private func applyTypingWindow() {
-        // Closed: nothing to lay out, and no text to measure
+    /// How much of the background the pointer's hole leaves behind the artwork and text, 0 to
+    /// 1: the panel sets it from `TrackAnnouncementSeeThroughKnobs` each time the strip appears
+    var peepholeKeepOpacity: CGFloat = TrackAnnouncementSeeThrough.peepholeKeepOpacity {
+        didSet {
+            guard peepholeKeepOpacity != oldValue else { return }
+            applySeeThrough()
+        }
+    }
+
+    /// Lay out what the pointer's hole and the typing window keep of the background, after
+    /// anything that moves the artwork and text or changes what they cover. The hole itself
+    /// moves on every display refresh, so the text is measured here rather than with it.
+    private func applySeeThrough() {
+        let occupied = content.occupiedRect
+        surface.peepholeKeep = TrackAnnouncementSeeThrough.keptBackground(
+            in: bounds,
+            occupied: occupied,
+            margin: TrackAnnouncementSeeThrough.keepMargin * scale,
+            feather: TrackAnnouncementSeeThrough.keepFeather * scale,
+            opacity: peepholeKeepOpacity
+        )
+        applyTypingWindow(occupied: occupied)
+    }
+
+    /// `occupied` is what the artwork and text cover, nil to measure it
+    private func applyTypingWindow(occupied: CGRect?) {
+        // Closed: nothing to lay out
         guard typingWindowSize.radius > 0, typingWindowProgress > 0 else {
             surface.typingWindow = nil
             return
         }
         surface.typingWindow = TrackAnnouncementSeeThrough.typingWindow(
             in: bounds,
-            occupied: content.occupiedRect,
+            occupied: occupied ?? content.occupiedRect,
             radius: typingWindowSize.radius,
             feather: typingWindowSize.feather,
             centreHeight: typingWindowSize.centreHeight,
@@ -189,14 +221,14 @@ final class TrackAnnouncementView: NSView {
         didSet {
             applyInsets()
             layoutBackdrop()
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
     var trailingInset: CGFloat = 0 {
         didSet {
             applyInsets()
             layoutBackdrop()
-            applyTypingWindow()
+            applySeeThrough()
         }
     }
 
@@ -207,7 +239,7 @@ final class TrackAnnouncementView: NSView {
             rebuildBackdrop()
             applyInsets()
             // The glass's side insets move the content, and so the part that keeps its background
-            applyTypingWindow()
+            applySeeThrough()
             surface.wash.tintAlpha = tintAlpha
             surface.wash.tintColor = tintColor
         }
@@ -239,6 +271,7 @@ final class TrackAnnouncementView: NSView {
         addSubview(content)
         sleeve.artwork = announcement.artwork
         sleeve.isHidden = true
+        applySeeThrough()
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(announcement.accessibilityLabel)
@@ -247,7 +280,7 @@ final class TrackAnnouncementView: NSView {
     override func resizeSubviews(withOldSize oldSize: NSSize) {
         super.resizeSubviews(withOldSize: oldSize)
         layoutBackdrop()
-        applyTypingWindow()
+        applySeeThrough()
     }
 
     /// The frame the backdrop takes for the current style: the whole strip for a blur, and
