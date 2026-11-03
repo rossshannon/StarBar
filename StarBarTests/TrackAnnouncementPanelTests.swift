@@ -1251,6 +1251,10 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(sleeve.alphaValue, 0, "it fades in with the strip")
         tick(clock, 0.15)
         XCTAssertEqual(sleeve.alphaValue, 0.5, accuracy: 0.01)
+        // Its layer's own opacity, which is what is drawn: an implicit animation left it a third
+        // of the way there when the strip was fully in
+        XCTAssertTrue(sleeve.layer?.animationKeys()?.isEmpty ?? true, "stepped on the clock, not animated by Core Animation: \(sleeve.layer?.animationKeys() ?? [])")
+        XCTAssertEqual(sleeve.layer?.opacity ?? 0, 0.5, accuracy: 0.01)
 
         let centre = sleeveCentre(of: animated)
         mouse = NSPoint(x: centre.x + 60, y: centre.y + 60)
@@ -1258,6 +1262,21 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(sleeve.alphaValue, 1)
         XCTAssertEqual(animated.sleeveTilt, .rest, "no tilt")
         XCTAssertEqual(clock.pendingRepeating.count, 0, "and nothing left ticking once the fade is done")
+    }
+
+    func testTurningReduceMotionOffWhileTheStripIsUpBringsTheTiltBack() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: true, reduceTransparency: false)
+        tick(clock, 0.5)
+        XCTAssertEqual(clock.pendingRepeating.count, 0, "faded in, and nothing to follow")
+
+        animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album"), reduceMotion: false, reduceTransparency: false)
+        let centre = sleeveCentre(of: animated)
+        mouse = NSPoint(x: centre.x + TrackAnnouncementSleeve.tiltSpan * animated.scale, y: centre.y)
+        for _ in 0..<60 { tick(clock) }
+        XCTAssertEqual(animated.sleeveTilt.y, TrackAnnouncementSleeve.maxTilt, accuracy: 0.001, "the next song follows the pointer again")
     }
 
     func testWithTheTiltOffTheSleeveRisesThenStopsTicking() {

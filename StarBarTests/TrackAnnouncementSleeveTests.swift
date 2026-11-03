@@ -329,6 +329,23 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         assertTransform(view.turnedLayer.transform, Sleeve.transform(tilt), "but it still turns")
     }
 
+    func testTheViewsSleeveRisesAndShrinksWithTheRise() {
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        XCTAssertEqual(view.turnedLayer.position, CGPoint(x: view.slot.midX, y: view.slot.midY), "in place")
+
+        view.rise = 0
+        XCTAssertEqual(view.turnedLayer.position.x, view.slot.midX)
+        XCTAssertEqual(view.turnedLayer.position.y, view.slot.midY - Sleeve.riseDistance, accuracy: 0.001, "sunk")
+        assertTransform(view.turnedLayer.transform, Sleeve.transform(.rest, riseScale: Sleeve.riseStartScale), "and smaller")
+
+        view.scale = 2
+        XCTAssertEqual(view.turnedLayer.position.y, view.sleeveRect.midY - Sleeve.riseDistance * 2, accuracy: 0.001, "by twice as much at twice the scale")
+
+        view.rise = 1
+        XCTAssertEqual(view.turnedLayer.position.y, view.sleeveRect.midY, accuracy: 0.001)
+        assertTransform(view.turnedLayer.transform, Sleeve.transform(.rest, scale: 2), "and full size")
+    }
+
     func testTheViewKeepsAWideCoverInsideTheSquare() {
         let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
         XCTAssertEqual(view.slot, CGRect(x: 28, y: 28, width: 112, height: 112))
