@@ -66,6 +66,8 @@ final class TrackAnnouncementPanel: NSPanel {
     private(set) var sleeveTilt = TrackAnnouncementSleeve.Tilt.rest
     /// From the last show: no rise and no tilt under Reduce Motion
     private var reduceMotion = false
+    /// Whether the last tick found the pointer near the sleeve, to log only the changes
+    private var sleeveFollowsPointer = false
 
     /// - Parameters:
     ///   - slideDuration: 0 applies the final state at once, for tests
@@ -434,6 +436,7 @@ extension TrackAnnouncementPanel {
     fileprivate func startSleeve() {
         guard stripView.breakout, sleeveTimer == nil else { return }
         lastSleeveTick = nil
+        os_log("%{public}s[%{public}ld], %{public}s: break-out sleeve, %{public}s, tilt %{public}s", ((#file as NSString).lastPathComponent), #line, #function, sleeveRiseStart == nil ? "in place" : "rising", sleeveTilts ? "on" : (sleeveKnobs.tilt ? "off under Reduce Motion" : "off"))
         sleeveTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             self?.tickSleeve()
         }
@@ -446,6 +449,7 @@ extension TrackAnnouncementPanel {
         sleeveTimer = nil
         lastSleeveTick = nil
         sleeveRiseStart = nil
+        sleeveFollowsPointer = false
         sleeveTilt = .rest
         stripView.sleeve.tilt = .rest
         stripView.sleeve.rise = 1
@@ -473,6 +477,11 @@ extension TrackAnnouncementPanel {
         }
 
         let target = sleeveTilts ? pointerTilt() : .rest
+        let following = target != .rest
+        if following != sleeveFollowsPointer {
+            sleeveFollowsPointer = following
+            os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, following ? String(format: "pointer near: tipping the sleeve to %.1f°, %.1f°", Double(target.x), Double(target.y)) : "pointer gone: the sleeve settles back")
+        }
         let next = TrackAnnouncementSleeve.approach(sleeveTilt, toward: target, elapsed: elapsed)
         if next != sleeveTilt {
             sleeveTilt = next
