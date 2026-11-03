@@ -176,7 +176,8 @@ catalog returns the correct sleeve when the catalog track does not. So artwork i
 **It still falls back to the playing track.** Refusing to read a catalog track's artwork at all
 was tried and reverted within minutes: the sampling above shows catalog artwork is usually
 correct, so the strict rule blanked every Apple Music song's artwork to avoid an occasional
-wrong one.
+wrong one. A larger sample on 2026-11-03 found the opposite, over half wrong (see "Another song's
+cover, not the previous one's" below), and the answer chosen then was Apple's cover first.
 
 ### The previous song's cover, left over
 
@@ -269,6 +270,28 @@ finds the album. For "Some", the search for "Nils Frahm Some" had *Solo* first a
 *Solo Remains*, *Paris* and nineteen Johannes Bornlöf compilations. Music's own cover is shown
 only when Apple has no match or can't be reached. The cost is the placeholder for about half a
 second on the first song of each album, fading to the cover when it comes.
+
+**It is the common case, not the exception.** On the evening of 2026-11-03 a stutter test of
+the strip ran a build of main with the left-over check and the break-out sleeve but without this
+rule, and every cover the strip showed was captured. Of 21 strips, 9 showed the wrong cover:
+9 of the 16 catalog songs not in the library, and none of the 5 library songs. The left-over
+check caught one, "The Maker" with *The Bends*. The other eight were not the previous song's:
+
+| Song | Cover shown |
+|------|-------------|
+| "Windowlicker" | John Foxx, *The Garden* |
+| "Soto Wa Ame" | a Roedelius album played four songs earlier |
+| "Sunson" | Robin Guthrie, *Continental* |
+| "Starman" | Nils Frahm, *Solo* |
+| "Selange" | Steve Roach, *Structures from Silence* |
+| "Falling At Your Feet" | David Bowie, *Divine Symmetry* |
+| "Ziggy Stardust" | Daniel Lanois, *Acadie* |
+| "Here Comes the Flood" | a Jon Hassell album |
+
+"Wenn der Südwind weht" showed *Mixing Colours*, the previous song's cover, but it was the first
+song after a relaunch, so there was no previous cover to compare it with. With over half of
+these songs wrong, the earlier audit's finding that catalog artwork is usually correct no longer
+holds, and asking Apple for every such song is what the evidence calls for.
 
 The same log showed the first song after a launch going unchecked: "I Am Sky" showed *Insen*,
 the cover of "Aurora", which was playing when StarBar started. Music announces nothing at
