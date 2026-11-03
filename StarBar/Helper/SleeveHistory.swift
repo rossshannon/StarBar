@@ -101,10 +101,6 @@ struct SleeveFingerprint: Equatable {
     /// Red, green and blue of each cell, row by row, 0 to 255
     let samples: [UInt8]
 
-    init(samples: [UInt8]) {
-        self.samples = samples
-    }
-
     init?(image: NSImage) {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         self.init(cgImage: cgImage)
@@ -115,8 +111,8 @@ struct SleeveFingerprint: Equatable {
         // counts: drawn straight at 16 pixels, it would be sampled rather than averaged, and
         // two sizes of one cover sampled at different points.
         let side = SleeveFingerprint.side
-        let drawnSide = side * 4
-        let block = drawnSide / side
+        let block = 4
+        let drawnSide = side * block
         var pixels = [UInt8](repeating: 0, count: drawnSide * drawnSide * 4)
         let space = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
         let didDraw = pixels.withUnsafeMutableBytes { buffer -> Bool in
