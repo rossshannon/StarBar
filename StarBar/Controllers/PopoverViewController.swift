@@ -73,7 +73,7 @@ extension PopoverViewController {
         let starting = starter.status
         playerViewController.updateCurrentTrack(
             player.currentTrack, artwork: player.playing?.sleeve(),
-            emptyState: .when(musicIsRunning: MusicStarter.musicIsRunning(), starting: starting, song: starter.song),
+            emptyState: .when(musicIsRunning: MusicStarter.musicIsRunning(), starting: starting, song: starter.nextSong),
             isStarting: starting == .opening || starting == .starting)
     }
 

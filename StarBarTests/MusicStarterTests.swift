@@ -22,6 +22,7 @@ final class MusicStarterTests: XCTestCase {
     private var store: LastMusicSongStore!
     private var isRunning = false
     private var hasTrack = false
+    private var isPlaying = false
     private var launches: [(pid_t?) -> Void] = []
     private var plays: [(pid: pid_t?, song: LastMusicSong, answer: (Bool) -> Void)] = []
     private var activations = 0
@@ -37,12 +38,14 @@ final class MusicStarterTests: XCTestCase {
         store.remember(MusicStarterTests.analogue)
         isRunning = false
         hasTrack = false
+        isPlaying = false
         launches = []
         plays = []
         activations = 0
         starter = MusicStarter(
             isRunning: { [unowned self] in self.isRunning },
             hasTrack: { [unowned self] in self.hasTrack },
+            isPlaying: { [unowned self] in self.isPlaying },
             store: store,
             launch: { [unowned self] completion in self.launches.append(completion) },
             play: { [unowned self] pid, song, answer in self.plays.append((pid, song, answer)) },
@@ -112,6 +115,7 @@ final class MusicStarterTests: XCTestCase {
         starter.start()
         plays[0].answer(true)
         hasTrack = true
+        isPlaying = true
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(starter.status, .idle)
         XCTAssertTrue(clock.pendingOneShots.isEmpty, "the wait for a song is cancelled")
@@ -121,6 +125,7 @@ final class MusicStarterTests: XCTestCase {
         isRunning = true
         starter.start()
         hasTrack = true
+        isPlaying = true
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(starter.status, .idle)
         // Music's late answer schedules nothing
@@ -133,6 +138,7 @@ final class MusicStarterTests: XCTestCase {
         starter.start()
         plays[0].answer(false)
         XCTAssertEqual(starter.status, .couldNotPlay)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty, "a refusal isn't asked again")
         XCTAssertNil(store.song, "a song Music won't play, likely deleted, isn't offered again")
 
         starter.start()
@@ -141,22 +147,71 @@ final class MusicStarterTests: XCTestCase {
         XCTAssertEqual(starter.status, .idle)
     }
 
-    func testNoSongAfterMusicAnswersMeansItCouldNotPlay() {
+    func testASongLoadedButNotPlayingDoesNotEndTheStart() {
+        isRunning = true
+        starter.start()
+        plays[0].answer(true)
+        // Music loads the song asked for stopped, and announces it paused at 0.0, a moment
+        // before it plays
+        hasTrack = true
+        center.post(name: .iTunesPlayerDidUpdated, object: nil)
+        XCTAssertEqual(starter.status, .starting)
+        XCTAssertEqual(plays.count, 1, "not asked again on sight of a paused song")
+    }
+
+    func testNothingPlayingAfterTheFirstWaitAsksOnceMore() {
+        // Measured: once in about seven cold launches, Music took the play and then put back
+        // the song it had been paused on when it quit, paused
+        starter.start()
+        isRunning = true
+        launches[0](4242)
+        plays[0].answer(true)
+        hasTrack = true
+        center.post(name: .iTunesPlayerDidUpdated, object: nil)
+        XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.retryWait)
+        clock.fireOneShot()
+        XCTAssertEqual(plays.count, 2)
+        XCTAssertNil(plays[1].pid, "Music is running by now")
+        XCTAssertEqual(plays[1].song, MusicStarterTests.analogue)
+        XCTAssertEqual(starter.status, .starting)
+
+        isPlaying = true
+        center.post(name: .iTunesPlayerDidUpdated, object: nil)
+        XCTAssertEqual(starter.status, .idle)
+    }
+
+    func testNoSongAfterAskingTwiceMeansItCouldNotPlay() {
         isRunning = true
         starter.start()
         XCTAssertTrue(clock.pendingOneShots.isEmpty, "the wait starts when Music answers, not when asked")
         plays[0].answer(true)
-        XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.songWait)
         // An update with no song in it changes nothing
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(starter.status, .starting)
         clock.fireOneShot()
+        XCTAssertEqual(plays.count, 2)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty, "the second wait starts when Music answers again")
+        plays[1].answer(true)
+        XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.songWait)
+        clock.fireOneShot()
         XCTAssertEqual(starter.status, .couldNotPlay)
+        XCTAssertEqual(plays.count, 2, "asked twice at most")
         XCTAssertEqual(store.song, MusicStarterTests.analogue, "Music took it, so it is still in the library")
 
         starter.start()
         XCTAssertEqual(activations, 1, "asking again would come to the same thing")
-        XCTAssertEqual(plays.count, 1)
+        XCTAssertEqual(plays.count, 2)
+    }
+
+    func testASongLoadedButStillNotPlayingAfterTheSecondAskEndsQuietly() {
+        isRunning = true
+        starter.start()
+        plays[0].answer(true)
+        clock.fireOneShot()
+        plays[1].answer(true)
+        hasTrack = true
+        clock.fireOneShot()
+        XCTAssertEqual(starter.status, .idle, "the popover shows the song, and its Play button plays it")
     }
 
     func testASongThatCameWithoutAnUpdateIsStillSeenWhenTheWaitEnds() {
@@ -164,8 +219,10 @@ final class MusicStarterTests: XCTestCase {
         starter.start()
         plays[0].answer(true)
         hasTrack = true
+        isPlaying = true
         clock.fireOneShot()
         XCTAssertEqual(starter.status, .idle)
+        XCTAssertEqual(plays.count, 1)
     }
 
     func testPressingAgainWhileStartingSendsNothingMore() {
@@ -187,6 +244,9 @@ final class MusicStarterTests: XCTestCase {
         starter.start()
         plays[0].answer(true)
         clock.fireOneShot()
+        plays[1].answer(true)
+        clock.fireOneShot()
+        XCTAssertEqual(starter.status, .couldNotPlay)
         isRunning = false
         starter.start()
         XCTAssertEqual(activations, 0)

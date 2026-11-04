@@ -11,8 +11,8 @@ import os
 /// The last song from the user's library that StarBar saw Music play, kept across launches,
 /// for the player popover's play button to start when Music has nothing loaded.
 ///
-/// Music needs one: measured 2026-11-04, it has no current song after a stop and after every
-/// launch, even one after quitting while paused on a song, and in that state it answers
+/// Music needs one: measured 2026-11-04, it has no current song after a stop and after almost
+/// every launch, even one after quitting while paused on a song, and in that state it answers
 /// `play` and `playpause` without an error and plays nothing.
 ///
 /// Only a song in the library is kept, by persistent ID: a database ID changes every time

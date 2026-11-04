@@ -20,16 +20,26 @@ extension Notification.Name {
 /// so the user can choose one.
 ///
 /// A plain `play` would not do. Measured 2026-11-04: Music has no current song after a stop
-/// and after every launch, even after quitting while paused on a song, and with none it
+/// and after almost every launch, even after quitting while paused on a song, and with none it
 /// answers `play` and `playpause` without an error and plays nothing. That is what the button
 /// used to send, through the station, which also sent nothing at all to a Music that wasn't
 /// running, so as never to open it by accident; and the button flipped to Pause anyway. Here
 /// the user has asked for Music, so opening it is the point.
 ///
 /// Whether it worked is told by Music announcing a song, the notification that puts the song
-/// in the popover, not by reading the player state back: Music answers `play` before a
-/// streamed song has started. Nothing is polled. One timer runs per press, `songWait` after
-/// Music answered, to say so if no song came.
+/// in the popover, and then by the player state, read only while a start is under way:
+/// Music answers `play` before the song has started (a local song was loaded and stopped
+/// about a second later, and playing half a second after that). Nothing is polled. One
+/// timer runs at a time, for when no song comes: `retryWait` after Music answers the first
+/// `play`, and `songWait` after it answers the second.
+///
+/// **A play sent while Music opens can be lost**: in one cold launch of about seven after
+/// quitting while paused (2026-11-04), Music answered the `play` and then put back the song
+/// it had been paused on, paused where it had been, so nothing played. So when nothing is
+/// playing `retryWait` after Music answered, the song is asked for once more (`retried`).
+/// Not on seeing Music paused: a song it does play is announced paused at 0.0 first, a
+/// moment before it plays. A `play` to a Music already running started the song every time
+/// it was tried, but the lost play wasn't caught again to try the second one on.
 final class MusicStarter {
 
     enum Status: Equatable {
@@ -37,14 +47,19 @@ final class MusicStarter {
         case idle
         /// Music wasn't running and is being opened
         case opening
-        /// Music has been asked to play a song and hasn't announced it yet
+        /// Music has been asked to play a song and hasn't been seen playing it yet
         case starting
         /// Music refused the song, or answered and no song came: the next press brings Music
         /// forward to choose something instead
         case couldNotPlay
     }
 
-    /// How long after Music answers `play` the song may take to be announced before the
+    /// How long after Music answers `play` a song may take to start before it is asked for
+    /// once more. Measured 2026-11-04, a library song was playing 1.3 to 1.4 s after Music
+    /// answered, running or just opened.
+    static let retryWait: TimeInterval = 3
+
+    /// How long after Music answers the second `play` the song may take to start before the
     /// popover says Music couldn't play it. A streamed song takes a moment to buffer.
     static let songWait: TimeInterval = 6
 
@@ -62,6 +77,8 @@ final class MusicStarter {
     private let isRunning: () -> Bool
     /// Whether Music's last update had a song in it
     private let hasTrack: () -> Bool
+    /// Whether Music says it is playing. Asked only while a start is under way.
+    private let isPlaying: () -> Bool
     /// The song a press starts, and forgetting it once Music won't play it
     private let store: LastMusicSongStore
     /// Open Music without bringing it forward, then call back on the main thread with its
@@ -74,9 +91,14 @@ final class MusicStarter {
     private let activate: () -> Void
     private let clock: RatingReminderClock
     private var songTimer: RatingReminderTimer?
+    /// The song asked for by the press under way
+    private var song: LastMusicSong?
+    /// Whether this press has asked Music a second time, which it does at most once
+    private var retried = false
 
     init(isRunning: @escaping () -> Bool = MusicStarter.musicIsRunning,
          hasTrack: @escaping () -> Bool = { iTunesPlayer.shared.currentTrack != nil },
+         isPlaying: @escaping () -> Bool = { MusicStarter.playerState() == .playing },
          store: LastMusicSongStore = .shared,
          launch: @escaping (@escaping (pid_t?) -> Void) -> Void = MusicStarter.launchMusic,
          play: @escaping (pid_t?, LastMusicSong, @escaping (Bool) -> Void) -> Void = MusicStarter.askMusicToPlay,
@@ -85,6 +107,7 @@ final class MusicStarter {
          center: NotificationCenter = .default) {
         self.isRunning = isRunning
         self.hasTrack = hasTrack
+        self.isPlaying = isPlaying
         self.store = store
         self.launch = launch
         self.play = play
@@ -95,7 +118,7 @@ final class MusicStarter {
     }
 
     /// The song a press would start, for the popover to name
-    var song: LastMusicSong? {
+    var nextSong: LastMusicSong? {
         return store.song
     }
 
@@ -133,6 +156,14 @@ final class MusicStarter {
         askToPlay(song, in: nil)
     }
 
+    /// Back to nothing under way
+    private func finish(_ next: Status = .idle) {
+        songTimer?.invalidate()
+        songTimer = nil
+        song = nil
+        status = next
+    }
+
     private func bringMusicForward() {
         os_log("%{public}s[%{public}ld], %{public}s: nothing for StarBar to start; bringing Music forward to choose something", ((#file as NSString).lastPathComponent), #line, #function)
         status = .idle
@@ -140,47 +171,78 @@ final class MusicStarter {
     }
 
     private func askToPlay(_ song: LastMusicSong, in pid: pid_t?) {
+        self.song = song
+        retried = false
         status = .starting
+        send(song, to: pid)
+    }
+
+    private func send(_ song: LastMusicSong, to pid: pid_t?) {
+        songTimer?.invalidate()
+        songTimer = nil
         play(pid, song) { [weak self] accepted in
-            guard let self = self, self.status == .starting else { return }
+            guard let self = self, self.status == .starting, self.song == song else { return }
             guard accepted else {
                 // Gone from the library, most likely: it can't be offered again
                 os_log("%{public}s[%{public}ld], %{public}s: Music wouldn't play %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID)
                 self.store.forget(song)
-                self.status = self.isRunning() ? .couldNotPlay : .idle
+                self.finish(self.isRunning() ? .couldNotPlay : .idle)
                 return
             }
-            self.songTimer?.invalidate()
-            self.songTimer = self.clock.schedule(after: MusicStarter.songWait, repeats: false) { [weak self] in
-                guard let self = self else { return }
-                self.songTimer = nil
-                guard self.status == .starting else { return }
-                if self.hasTrack() || !self.isRunning() {
-                    self.status = .idle
-                } else {
-                    os_log("%{public}s[%{public}ld], %{public}s: Music announced no song after being asked to play one", ((#file as NSString).lastPathComponent), #line, #function)
-                    self.status = .couldNotPlay
-                }
+            let wait = self.retried ? MusicStarter.songWait : MusicStarter.retryWait
+            self.songTimer = self.clock.schedule(after: wait, repeats: false) { [weak self] in
+                self?.songWaitEnded()
             }
         }
+    }
+
+    /// Music answered a while ago and hasn't been seen playing
+    private func songWaitEnded() {
+        songTimer = nil
+        guard status == .starting else { return }
+        guard isRunning(), !isPlaying() else { return finish() }
+        if !retried {
+            askAgain(because: "no song is playing")
+        } else if hasTrack() {
+            // A song is loaded, and Play in the popover now plays or pauses it
+            finish()
+        } else {
+            os_log("%{public}s[%{public}ld], %{public}s: Music played nothing after being asked twice", ((#file as NSString).lastPathComponent), #line, #function)
+            finish(.couldNotPlay)
+        }
+    }
+
+    private func askAgain(because reason: String) {
+        guard let song = song else { return finish() }
+        os_log("%{public}s[%{public}ld], %{public}s: asking Music again for %{public}s, because %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, reason)
+        retried = true
+        // Running by now, so by bundle ID
+        send(song, to: nil)
     }
 
     @objc private func iTunesPlayerDidUpdated(_ notification: Notification) {
         playerDidUpdate()
     }
 
-    /// Music announced a player update. A song in it means Music is playing, or has a song
-    /// to play, and whatever this was doing is done; so does Music quitting, once it had
-    /// been opened. Nothing is asked of Music while nothing is under way: this runs on every
-    /// player update.
+    /// Music announced a player update. A song playing means the start is done; Music
+    /// quitting ends it too. Nothing is asked of Music while nothing is under way: this runs
+    /// on every player update.
     func playerDidUpdate() {
-        guard status != .idle else { return }
-        // Music isn't running yet while it opens, and says nothing of a song until then
-        guard status != .opening else { return }
-        guard hasTrack() || !isRunning() else { return }
-        songTimer?.invalidate()
-        songTimer = nil
-        status = .idle
+        switch status {
+        case .idle, .opening:
+            // Music isn't running yet while it opens, and says nothing of a song until then
+            return
+        case .couldNotPlay:
+            if hasTrack() || !isRunning() {
+                finish()
+            }
+        case .starting:
+            guard isRunning() else { return finish() }
+            guard hasTrack() else { return }
+            if isPlaying() {
+                finish()
+            }
+        }
     }
 
 }
@@ -190,6 +252,11 @@ extension MusicStarter {
     /// Music's bundle, for opening it
     static var musicURL: URL? {
         return NSWorkspace.shared.urlForApplication(withBundleIdentifier: OSVersionHelper.bundleIdentifier)
+    }
+
+    /// Music's player state on the station's connection, under the short timeout, or nil
+    static func playerState() -> iTunesEPlS? {
+        return MenuBarRatingControl.withShortTimeoutIfAnswered { $0.playerState }.flatMap { $0 }
     }
 
     static func musicIsRunning() -> Bool {

@@ -22,7 +22,7 @@ struct PopoverEmptyState: Equatable {
     /// - Parameters:
     ///   - musicIsRunning: whether Music is running, with no Apple Event
     ///   - starting: what pressing play has set going (`MusicStarter`)
-    ///   - song: the song a press starts (`MusicStarter.song`), or nil when it would bring
+    ///   - song: the song a press starts (`MusicStarter.nextSong`), or nil when it would bring
     ///     Music forward instead
     static func when(musicIsRunning: Bool, starting: MusicStarter.Status, song: LastMusicSong?) -> PopoverEmptyState {
         let detail: String
