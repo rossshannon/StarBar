@@ -49,6 +49,10 @@
 		5A7E1A000000000000001103 /* RepeatedUpdateHold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */; };
 		5A7E1A000000000000001105 /* SteppedTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001106 /* SteppedTimelineTests.swift */; };
 		5A7E1A000000000000001107 /* RepeatedUpdateHoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */; };
+		5A7E1A000000000000001207 /* MusicStarterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001208 /* MusicStarterTests.swift */; };
+		5A7E1A000000000000001205 /* PopoverEmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001206 /* PopoverEmptyState.swift */; };
+		5A7E1A000000000000001203 /* MusicStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001204 /* MusicStarter.swift */; };
+		5A7E1A000000000000001201 /* PlayerPlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001202 /* PlayerPlaceholderView.swift */; };
 		5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */; };
 		DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106CA722CA45BB00502D7C /* RatingControl.swift */; };
 		DB106CC422CA86A500502D7C /* iTunes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB106C6322C53DAE00502D7C /* iTunes.swift */; };
@@ -203,6 +207,10 @@
 		5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatedUpdateHold.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001106 /* SteppedTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteppedTimelineTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatedUpdateHoldTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001208 /* MusicStarterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicStarterTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001206 /* PopoverEmptyState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverEmptyState.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001204 /* MusicStarter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicStarter.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001202 /* PlayerPlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerPlaceholderView.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddToLibraryBadge.swift; sourceTree = "<group>"; };
 		DB106CA722CA45BB00502D7C /* RatingControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControl.swift; sourceTree = "<group>"; };
 		DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iTunesPlayer.swift; sourceTree = "<group>"; };
@@ -401,6 +409,7 @@
 				5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */,
 				5A7E1A000000000000001106 /* SteppedTimelineTests.swift */,
 				5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */,
+				5A7E1A000000000000001208 /* MusicStarterTests.swift */,
 				5A7E1A000000000000000D08 /* AppleMusicArtworkLoaderTests.swift */,
 				5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */,
 				5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */,
@@ -466,6 +475,7 @@
 				DB27976E2306EA6800DDE3EB /* iTunesPlayer.swift */,
 				5A7E1A00000000000001B1 /* PlayingTrack.swift */,
 				5A7E1A000000000000000D06 /* AppleMusicArtworkLoader.swift */,
+				5A7E1A000000000000001204 /* MusicStarter.swift */,
 				5A7E1A000000000000000B09 /* MusicLibraryIndex.swift */,
 				5A7E1A000000000000000B0D /* LibraryMatchFinder.swift */,
 				DB106C6A22C661F900502D7C /* PlayInfo.swift */,
@@ -495,6 +505,7 @@
 				5A7E1A000000000000000201 /* MenuBarAnimationTiming.swift */,
 				5A7E1A000000000000001102 /* SteppedTimeline.swift */,
 				5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */,
+				5A7E1A000000000000001206 /* PopoverEmptyState.swift */,
 				5A7E1A0000000000000001FB /* StarRatingTransition.swift */,
 				5A7E1A0000000000000001F5 /* MenuBarPlaybackState.swift */,
 				5A7E1A000000000000000500 /* NowPlayingArbiter.swift */,
@@ -545,6 +556,7 @@
 				5A7E1A00000000000001A3 /* AddToLibrarySpinnerView.swift */,
 				DB05F0642353912500CE6DF9 /* PlayerInfoView.swift */,
 				DB05F0892354FC7700CE6DF9 /* PlayerControlView.swift */,
+				5A7E1A000000000000001202 /* PlayerPlaceholderView.swift */,
 				5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */,
 				5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */,
 				5A7E1A000000000000000304 /* TrackAnnouncementSurfaceView.swift */,
@@ -736,6 +748,7 @@
 				DB27976F2306EA6800DDE3EB /* iTunesPlayer.swift in Sources */,
 				5A7E1A00000000000001B2 /* PlayingTrack.swift in Sources */,
 				5A7E1A000000000000000D05 /* AppleMusicArtworkLoader.swift in Sources */,
+				5A7E1A000000000000001203 /* MusicStarter.swift in Sources */,
 				5A7E1A000000000000000B0A /* MusicLibraryIndex.swift in Sources */,
 				5A7E1A000000000000000B0E /* LibraryMatchFinder.swift in Sources */,
 				DB106C6922C65E8E00502D7C /* iTunesRadioStation.swift in Sources */,
@@ -762,6 +775,7 @@
 				5A7E1A000000000000000202 /* MenuBarAnimationTiming.swift in Sources */,
 				5A7E1A000000000000001101 /* SteppedTimeline.swift in Sources */,
 				5A7E1A000000000000001103 /* RepeatedUpdateHold.swift in Sources */,
+				5A7E1A000000000000001205 /* PopoverEmptyState.swift in Sources */,
 				5A7E1A0000000000000001FC /* StarRatingTransition.swift in Sources */,
 				5A7E1A0000000000000001F6 /* MenuBarPlaybackState.swift in Sources */,
 				5A7E1A0000000000000000D2 /* RatingReminder.swift in Sources */,
@@ -771,6 +785,7 @@
 				5A7E1A00000000000001B8 /* NSFont.swift in Sources */,
 				DB2797732306F0EC00DDE3EB /* iTunesApplication.swift in Sources */,
 				DB05F08A2354FC7700CE6DF9 /* PlayerControlView.swift in Sources */,
+				5A7E1A000000000000001201 /* PlayerPlaceholderView.swift in Sources */,
 				DB424A3C230877F400230C7E /* PlayerViewController.swift in Sources */,
 				DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */,
 				DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */,
@@ -833,6 +848,7 @@
 				5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */,
 				5A7E1A000000000000001105 /* SteppedTimelineTests.swift in Sources */,
 				5A7E1A000000000000001107 /* RepeatedUpdateHoldTests.swift in Sources */,
+				5A7E1A000000000000001207 /* MusicStarterTests.swift in Sources */,
 				5A7E1A000000000000000D07 /* AppleMusicArtworkLoaderTests.swift in Sources */,
 				5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */,
 				5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */,

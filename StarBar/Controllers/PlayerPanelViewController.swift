@@ -104,8 +104,11 @@ extension PlayerPanelViewController {
 
 extension PlayerPanelViewController {
     
-    func updateCurrentTrack(_ track: iTunesTrack?) {
+    /// - Parameter isStarting: the play button has set Music going and it hasn't answered,
+    ///   so the button waits rather than send it a second `play`
+    func updateCurrentTrack(_ track: iTunesTrack?, isStarting: Bool = false) {
         isStop = track == nil
+        playerControlView.playPauseButton.isEnabled = !(isStop && isStarting)
         
         guard let track = track else {
             return
@@ -171,6 +174,12 @@ extension PlayerPanelViewController {
     }
     
     @objc private func playPauseButtonToggled(_ sender: NSButton) {
+        if isStop {
+            // A toggle button flips itself when clicked. With nothing loaded there is nothing
+            // to pause, so it stays Play until Music says a song is playing: flipped, it said
+            // something was playing when nothing was.
+            sender.state = .off
+        }
         delegate?.playerPanelViewController(self, playPauseButtonToggled: sender)
     }
 

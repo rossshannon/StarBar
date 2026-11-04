@@ -43,6 +43,8 @@ extension PopoverViewController {
         // A catalog track's cover came late, Apple's or Music's own once Apple had none: read
         // again, and `PlayingTrack.sleeve()` now answers with it
         NotificationCenter.default.addObserver(self, selector: #selector(PopoverViewController.iTunesPlayerDidUpdated(_:)), name: .appleMusicCoverDidLoad, object: nil)
+        // Play was pressed with nothing loaded: say Music is opening, or has nothing to play
+        NotificationCenter.default.addObserver(self, selector: #selector(PopoverViewController.musicStarterDidChange(_:)), name: .musicStarterDidChange, object: nil)
     }
 
     override func viewDidAppear() {
@@ -58,12 +60,20 @@ extension PopoverViewController {
         showCurrentTrack()
     }
 
+    @objc private func musicStarterDidChange(_ notification: Notification) {
+        showCurrentTrack()
+    }
+
     /// The artwork comes the same way as the strip's, the user's own copy first, then Apple's
     /// cover, and never the previous song's cover left over, so the two can't disagree. See
     /// `PlayingTrack.sleeve()`.
     private func showCurrentTrack() {
         let player = iTunesPlayer.shared
-        playerViewController.updateCurrentTrack(player.currentTrack, artwork: player.playing?.sleeve())
+        let starting = MusicStarter.shared.status
+        playerViewController.updateCurrentTrack(
+            player.currentTrack, artwork: player.playing?.sleeve(),
+            emptyState: .when(musicIsRunning: MusicStarter.musicIsRunning(), starting: starting),
+            isStarting: starting == .opening || starting == .starting)
     }
 
 }
