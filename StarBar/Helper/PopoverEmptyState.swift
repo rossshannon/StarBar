@@ -8,7 +8,8 @@
 import Foundation
 
 /// What the player popover says in the artwork's square while Music has no song: that nothing
-/// is playing, and what the play button will do about it.
+/// is playing, and what the play button will do about it, naming the song it would start so
+/// that pressing it is never a surprise.
 ///
 /// "Not Playing" is what macOS's own Now Playing says for the same thing.
 struct PopoverEmptyState: Equatable {
@@ -21,17 +22,25 @@ struct PopoverEmptyState: Equatable {
     /// - Parameters:
     ///   - musicIsRunning: whether Music is running, with no Apple Event
     ///   - starting: what pressing play has set going (`MusicStarter`)
-    static func when(musicIsRunning: Bool, starting: MusicStarter.Status) -> PopoverEmptyState {
+    ///   - song: the song a press starts (`MusicStarter.song`), or nil when it would bring
+    ///     Music forward instead
+    static func when(musicIsRunning: Bool, starting: MusicStarter.Status, song: LastMusicSong?) -> PopoverEmptyState {
+        let detail: String
         switch starting {
         case .opening:
-            return PopoverEmptyState(title: title, detail: "Opening Music…")
+            detail = "Opening Music…"
         case .starting:
-            return PopoverEmptyState(title: title, detail: "Starting Music…")
-        case .nothingToPlay where musicIsRunning:
-            return PopoverEmptyState(title: title, detail: "Music has nothing queued. Press play to choose something in Music.")
-        case .idle, .nothingToPlay:
-            return PopoverEmptyState(title: title, detail: musicIsRunning ? "Press play to start Music." : "Press play to open Music.")
+            detail = song.map { "Starting \($0.displayName)…" } ?? "Starting Music…"
+        case .couldNotPlay where musicIsRunning:
+            detail = "Music couldn\u{2019}t play that song. Press play to choose something in Music."
+        case .idle, .couldNotPlay:
+            if let song = song {
+                detail = "Press play for \(song.displayName)."
+            } else {
+                detail = musicIsRunning ? "Press play to choose something in Music." : "Press play to open Music."
+            }
         }
+        return PopoverEmptyState(title: title, detail: detail)
     }
 
 }

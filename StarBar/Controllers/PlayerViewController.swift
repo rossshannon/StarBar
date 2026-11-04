@@ -169,7 +169,7 @@ extension PlayerViewController {
     ///   - isStarting: whether the play button has set Music going and it hasn't answered
     ///     yet, when the button waits rather than send a second `play`
     func updateCurrentTrack(_ track: iTunesTrack?, artwork: NSImage?,
-                            emptyState: PopoverEmptyState = .when(musicIsRunning: true, starting: .idle),
+                            emptyState: PopoverEmptyState = .when(musicIsRunning: true, starting: .idle, song: nil),
                             isStarting: Bool = false) {
         defer {
             view.needsLayout = true

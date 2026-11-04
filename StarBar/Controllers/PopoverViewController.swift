@@ -69,10 +69,11 @@ extension PopoverViewController {
     /// `PlayingTrack.sleeve()`.
     private func showCurrentTrack() {
         let player = iTunesPlayer.shared
-        let starting = MusicStarter.shared.status
+        let starter = MusicStarter.shared
+        let starting = starter.status
         playerViewController.updateCurrentTrack(
             player.currentTrack, artwork: player.playing?.sleeve(),
-            emptyState: .when(musicIsRunning: MusicStarter.musicIsRunning(), starting: starting),
+            emptyState: .when(musicIsRunning: MusicStarter.musicIsRunning(), starting: starting, song: starter.song),
             isStarting: starting == .opening || starting == .starting)
     }
 

@@ -42,8 +42,10 @@ final class PlayerPlaceholderView: NSView {
         field.font = NSFont.systemFont(ofSize: 12, weight: .regular)
         field.textColor = .tertiaryLabelColor
         field.alignment = .center
-        field.maximumNumberOfLines = 2
+        // A long song name wraps, and past three lines ends in an ellipsis
+        field.maximumNumberOfLines = 3
         field.lineBreakMode = .byWordWrapping
+        field.cell?.truncatesLastVisibleLine = true
         field.preferredMaxLayoutWidth = 240
         return field
     }()
