@@ -301,6 +301,52 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         }
     }
 
+    /// An app icon's shape: a square with corners far rounder than the sleeve's, and nothing
+    /// outside them
+    private func iconShapedCover(side: CGFloat = 600) -> NSImage {
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.white.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: side * 0.225, yRadius: side * 0.225).fill()
+            return true
+        }
+    }
+
+    func testACoverWithSeeThroughCornersCutsTheSleeveToItsShape() {
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        XCTAssertFalse(view.isCutToCoverShape, "the placeholder fills the square")
+        XCTAssertNotNil(view.turnedLayer.shadowPath)
+        XCTAssertEqual(view.rimWidth, Sleeve.rimWidth)
+
+        view.artwork = iconShapedCover()
+        XCTAssertTrue(view.isCutToCoverShape, "or the square's corners show behind the cover's")
+        XCTAssertNil(view.turnedLayer.shadowPath, "the shadow follows the cover, not the square")
+        XCTAssertEqual(view.rimWidth, 0, "and there is no square rim around it")
+
+        view.artwork = cover(width: 600, height: 600)
+        XCTAssertFalse(view.isCutToCoverShape, "an opaque cover fills the square")
+        XCTAssertNotNil(view.turnedLayer.shadowPath, "and casts the square's shadow, which needs no offscreen pass")
+        XCTAssertEqual(view.rimWidth, Sleeve.rimWidth)
+
+        view.artwork = iconShapedCover()
+        view.artwork = nil
+        XCTAssertFalse(view.isCutToCoverShape, "the placeholder is square again")
+        XCTAssertNotNil(view.turnedLayer.shadowPath)
+        XCTAssertEqual(view.rimWidth, Sleeve.rimWidth)
+    }
+
+    func testOnlyACoverWithSeeThroughPartsCountsAsOne() throws {
+        XCTAssertFalse(TrackAnnouncementSleeveView.hasTransparency(cover(width: 600, height: 600)))
+        XCTAssertFalse(TrackAnnouncementSleeveView.hasTransparency(cover(width: 1200, height: 600)), "a wide cover is opaque too; the sleeve takes its shape")
+        let jpeg = try XCTUnwrap(TrackAnnouncementPanel.warmUpAnnouncement.artwork)
+        XCTAssertTrue(jpeg.representations.first is NSBitmapImageRep, "decoded from JPEG data, as Music's covers are")
+        XCTAssertFalse(TrackAnnouncementSleeveView.hasTransparency(jpeg))
+        XCTAssertTrue(TrackAnnouncementSleeveView.hasTransparency(iconShapedCover()))
+        // What Ross saw on 2026-11-04: the Preview's cover is the app icon, whose corners are
+        // far rounder than the sleeve's
+        let icon = try XCTUnwrap(TrackAnnouncement.previewArtwork)
+        XCTAssertTrue(TrackAnnouncementSleeveView.hasTransparency(icon))
+    }
+
     func testTheViewDrawsTheCoverOverThePlaceholderAsItFades() {
         let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
         XCTAssertEqual(view.coverOpacity, 0, "no cover yet; the placeholder shows")

@@ -113,6 +113,16 @@ final class TrackAnnouncementSleeveView: NSView {
         return glareLayer.isHidden ? 0 : glareLayer.opacity
     }
 
+    /// Whether the sleeve is cut to the cover's own shape, for tests
+    var isCutToCoverShape: Bool {
+        return clipLayer.mask != nil
+    }
+
+    /// The rim's width, for tests: 0 while the sleeve is cut to the cover's shape
+    var rimWidth: CGFloat {
+        return clipLayer.borderWidth
+    }
+
     /// Turns, rises and casts the shadow
     private let turnLayer = CALayer()
     /// Rounds the corners and draws the rim
@@ -121,6 +131,11 @@ final class TrackAnnouncementSleeveView: NSView {
     private let noteLayer = CALayer()
     private let coverLayer = CALayer()
     private let glareLayer = CAGradientLayer()
+    /// The cover again, as a mask on the clip, while the cover has see-through parts
+    private let coverShapeLayer = CALayer()
+    /// The cover has see-through parts, such as the Preview's app icon, whose rounded corners
+    /// are transparent: the sleeve, its rim and its shadow then take the cover's shape
+    private var coverHasTransparency = false
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -166,6 +181,8 @@ final class TrackAnnouncementSleeveView: NSView {
             NSColor.white.withAlphaComponent(0).cgColor,
         ]
         glareLayer.opacity = 0
+
+        coverShapeLayer.contentsGravity = .resize
 
         clipLayer.addSublayer(placeholderLayer)
         clipLayer.addSublayer(coverLayer)
@@ -223,12 +240,46 @@ final class TrackAnnouncementSleeveView: NSView {
                     ? nil
                     : artwork.layerContents(forContentsScale: coverLayer.contentsScale)
                 coverLayer.isHidden = false
+                coverHasTransparency = artwork.representations.isEmpty || Self.hasTransparency(artwork)
             } else {
                 coverLayer.contents = nil
                 coverLayer.isHidden = true
+                coverHasTransparency = false
+            }
+            // The rounded square with its 7 point corners, its rim and its shadow suit a
+            // cover that fills it. A cover with see-through parts showed them behind it: the
+            // Preview's app icon, whose corners are far rounder, sat on a grey slab of shadow
+            // with the rim's square around it (Ross, 2026-11-04). So such a cover cuts the
+            // sleeve to its own shape, placeholder and glare included, and the shadow follows
+            // what is left rather than the square's path.
+            if coverHasTransparency {
+                coverShapeLayer.contentsScale = coverLayer.contentsScale
+                coverShapeLayer.contents = coverLayer.contents
+                clipLayer.mask = coverShapeLayer
+            } else {
+                clipLayer.mask = nil
+                coverShapeLayer.contents = nil
             }
         }
         applyFade()
+    }
+
+    /// Whether any of `image` is see-through, judged from a small copy, so once per cover.
+    /// Covers read from Music, Spotify or Apple are opaque; the Preview's app icon is not.
+    static func hasTransparency(_ image: NSImage) -> Bool {
+        let side = 32
+        guard image.size.width > 0, image.size.height > 0, let context = CGContext(
+            data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return false }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
+        image.draw(in: NSRect(x: 0, y: 0, width: side, height: side), from: .zero, operation: .copy, fraction: 1)
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = context.data else { return false }
+        let pixels = data.bindMemory(to: UInt8.self, capacity: side * side * 4)
+        // Under 90% opaque: an edge pixel a resampling filter softened is no see-through part
+        return stride(from: 3, to: side * side * 4, by: 4).contains { pixels[$0] < 230 }
     }
 
     /// The music note, drawn at the strip's 36 points in 80 and in proportion here
@@ -270,7 +321,11 @@ final class TrackAnnouncementSleeveView: NSView {
         let bounds = CGRect(origin: .zero, size: sleeve.size)
         withoutAnimation {
             turnLayer.bounds = bounds
-            turnLayer.shadowPath = CGPath(roundedRect: bounds, cornerWidth: min(radius, bounds.width / 2), cornerHeight: min(radius, bounds.height / 2), transform: nil)
+            // With no path, Core Animation casts the shadow from what the layers draw, which
+            // takes an offscreen pass, so only for a cover cut to its own shape
+            turnLayer.shadowPath = coverHasTransparency
+                ? nil
+                : CGPath(roundedRect: bounds, cornerWidth: min(radius, bounds.width / 2), cornerHeight: min(radius, bounds.height / 2), transform: nil)
             turnLayer.shadowRadius = TrackAnnouncementSleeve.shadowRadius * scale
             turnLayer.shadowOffset = CGSize(
                 width: TrackAnnouncementSleeve.shadowOffset.width * scale,
@@ -278,10 +333,13 @@ final class TrackAnnouncementSleeveView: NSView {
             )
             clipLayer.frame = bounds
             clipLayer.cornerRadius = radius
-            clipLayer.borderWidth = TrackAnnouncementSleeve.rimWidth
+            // The rim keeps a dark cover's edge from vanishing into a dark backdrop; a cover
+            // with a shape of its own draws its own edge, and the rim's square would show
+            clipLayer.borderWidth = coverHasTransparency ? 0 : TrackAnnouncementSleeve.rimWidth
             placeholderLayer.frame = bounds
             noteLayer.position = CGPoint(x: bounds.midX, y: bounds.midY)
             coverLayer.frame = bounds
+            coverShapeLayer.frame = bounds
             glareLayer.frame = bounds
         }
         applyRise()
