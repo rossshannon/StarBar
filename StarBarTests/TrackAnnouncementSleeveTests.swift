@@ -425,7 +425,11 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
             view.scale = scale
             view.setFrameSize(NSSize(width: (Sleeve.size + 2 * Sleeve.margin) * scale, height: (Sleeve.size + 2 * Sleeve.margin) * scale))
             view.artwork = cover(width: 100, height: 100)
-            XCTAssertEqual(view.sleeveRect, view.slot, "a small square cover fills the square at scale \(scale)")
+            // Fitting 100 points to 112 leaves rounding in the last digits
+            XCTAssertEqual(view.sleeveRect.minX, view.slot.minX, accuracy: 0.001, "a small square cover fills the square at scale \(scale)")
+            XCTAssertEqual(view.sleeveRect.minY, view.slot.minY, accuracy: 0.001)
+            XCTAssertEqual(view.sleeveRect.width, view.slot.width, accuracy: 0.001)
+            XCTAssertEqual(view.sleeveRect.height, view.slot.height, accuracy: 0.001)
             view.artwork = cover(width: 100, height: 50)
             XCTAssertEqual(view.sleeveRect.width, view.slot.width, accuracy: 0.5, "and a small wide one its width")
             XCTAssertEqual(view.sleeveRect.height, view.slot.height / 2, accuracy: 0.5)
