@@ -21,6 +21,8 @@ final class MusicStarterTests: XCTestCase {
     private var defaults: UserDefaults!
     private var store: LastMusicSongStore!
     private var isRunning = false
+    /// Whether the process Music was opened as is there, when that differs from `isRunning`
+    private var processAlive: Bool?
     private var hasTrack = false
     private var isPlaying = false
     private var launches: [(pid_t?) -> Void] = []
@@ -37,6 +39,7 @@ final class MusicStarterTests: XCTestCase {
         store = LastMusicSongStore(defaults: defaults)
         store.remember(MusicStarterTests.analogue)
         isRunning = false
+        processAlive = nil
         hasTrack = false
         isPlaying = false
         launches = []
@@ -44,6 +47,7 @@ final class MusicStarterTests: XCTestCase {
         activations = 0
         starter = MusicStarter(
             isRunning: { [unowned self] in self.isRunning },
+            isAlive: { [unowned self] _ in self.processAlive ?? self.isRunning },
             hasTrack: { [unowned self] in self.hasTrack },
             isPlaying: { [unowned self] in self.isPlaying },
             store: store,
@@ -246,6 +250,34 @@ final class MusicStarterTests: XCTestCase {
         isPlaying = true
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(starter.status, .idle)
+    }
+
+    func testAMusicJustOpenedCountsAsRunningBeforeTheRunningAppsListShowsIt() {
+        // Measured 2026-11-05: a play that didn't reach Music came 150 ms after the launch,
+        // and the list of running apps showed Music 2.5 s after it, so the press ended there
+        starter.start()
+        processAlive = true
+        launches[0](4242)
+        XCTAssertFalse(isRunning, "not listed yet")
+        center.post(name: .iTunesPlayerDidUpdated, object: nil)
+        XCTAssertEqual(starter.status, .starting, "an update before Music is listed doesn't end the press")
+        plays[0].answer(.notReady)
+        XCTAssertEqual(starter.status, .starting)
+        XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.notReadyWait)
+        clock.fireOneShot()
+        XCTAssertEqual(plays.count, 2, "sent again to the Music this press opened")
+        XCTAssertEqual(plays[1].pid, 4242)
+    }
+
+    func testTheMusicThisPressOpenedQuittingEndsTheStart() {
+        starter.start()
+        processAlive = true
+        launches[0](4242)
+        processAlive = false
+        isRunning = true  // another Music, say, which this press didn't open
+        plays[0].answer(.notReady)
+        XCTAssertEqual(starter.status, .idle)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
     }
 
     func testAPlayThatNeverReachesMusicGivesUpButKeepsTheSong() {

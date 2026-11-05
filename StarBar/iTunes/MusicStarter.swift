@@ -99,6 +99,8 @@ final class MusicStarter {
 
     /// Whether Music is running. No Apple Event.
     private let isRunning: () -> Bool
+    /// Whether the process with this ID is still there. No Apple Event.
+    private let isAlive: (pid_t) -> Bool
     /// Whether Music's last update had a song in it
     private let hasTrack: () -> Bool
     /// Whether Music says it is playing. Asked only while a start is under way.
@@ -126,6 +128,7 @@ final class MusicStarter {
     private var notReadyCount = 0
 
     init(isRunning: @escaping () -> Bool = MusicStarter.musicIsRunning,
+         isAlive: @escaping (pid_t) -> Bool = MusicStarter.processIsAlive,
          hasTrack: @escaping () -> Bool = { iTunesPlayer.shared.currentTrack != nil },
          isPlaying: @escaping () -> Bool = { MusicStarter.playerState() == .playing },
          store: LastMusicSongStore = .shared,
@@ -135,6 +138,7 @@ final class MusicStarter {
          clock: RatingReminderClock = RunLoopClock(),
          center: NotificationCenter = .default) {
         self.isRunning = isRunning
+        self.isAlive = isAlive
         self.hasTrack = hasTrack
         self.isPlaying = isPlaying
         self.store = store
@@ -185,6 +189,15 @@ final class MusicStarter {
         askToPlay(song, in: nil)
     }
 
+    /// Whether the Music this press is for is running: the one it opened, by process ID, or
+    /// else whichever is. `NSRunningApplication` lists a Music just opened only some seconds
+    /// later (2.5 s on 2026-11-05), which ended a press as though Music had quit in the moment
+    /// its first `play` went unanswered.
+    private func musicRunning() -> Bool {
+        guard let pid = pid else { return isRunning() }
+        return isAlive(pid)
+    }
+
     /// Back to nothing under way
     private func finish(_ next: Status = .idle) {
         songTimer?.invalidate()
@@ -219,7 +232,7 @@ final class MusicStarter {
                 // Gone from the library, most likely: it can't be offered again
                 os_log("%{public}s[%{public}ld], %{public}s: Music has no song %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID)
                 self.store.forget(song)
-                self.finish(self.isRunning() ? .couldNotPlay : .idle)
+                self.finish(self.musicRunning() ? .couldNotPlay : .idle)
             case .notReady:
                 self.notReady(song)
             case .taken:
@@ -235,7 +248,7 @@ final class MusicStarter {
     /// there are tries left. The song is kept whatever happens, since Music never said it
     /// wasn't there.
     private func notReady(_ song: LastMusicSong) {
-        guard isRunning() else { return finish() }
+        guard musicRunning() else { return finish() }
         notReadyCount += 1
         guard notReadyCount < MusicStarter.notReadyTries else {
             os_log("%{public}s[%{public}ld], %{public}s: Music didn't take the play %{public}ld times", ((#file as NSString).lastPathComponent), #line, #function, notReadyCount)
@@ -245,7 +258,7 @@ final class MusicStarter {
             guard let self = self else { return }
             self.songTimer = nil
             guard self.status == .starting, self.song == song else { return }
-            guard self.isRunning() else { return self.finish() }
+            guard self.musicRunning() else { return self.finish() }
             self.send(song)
         }
     }
@@ -254,7 +267,7 @@ final class MusicStarter {
     private func songWaitEnded() {
         songTimer = nil
         guard status == .starting else { return }
-        guard isRunning(), !isPlaying() else { return finish() }
+        guard musicRunning(), !isPlaying() else { return finish() }
         if !retried {
             askAgain(because: "no song is playing")
         } else if hasTrack() {
@@ -286,11 +299,11 @@ final class MusicStarter {
             // Music isn't running yet while it opens, and says nothing of a song until then
             return
         case .couldNotPlay:
-            if hasTrack() || !isRunning() {
+            if hasTrack() || !musicRunning() {
                 finish()
             }
         case .starting:
-            guard isRunning() else { return finish() }
+            guard musicRunning() else { return finish() }
             guard hasTrack() else { return }
             if isPlaying() {
                 finish()
@@ -310,6 +323,12 @@ extension MusicStarter {
     /// Music's player state on the station's connection, under the short timeout, or nil
     static func playerState() -> iTunesEPlS? {
         return MenuBarRatingControl.withShortTimeoutIfAnswered { $0.playerState }.flatMap { $0 }
+    }
+
+    /// Whether the process is there. A signal 0 sends nothing; `EPERM` means it is there and
+    /// StarBar may not signal it, which the sandbox may say.
+    static func processIsAlive(_ pid: pid_t) -> Bool {
+        return kill(pid, 0) == 0 || errno == EPERM
     }
 
     static func musicIsRunning() -> Bool {
