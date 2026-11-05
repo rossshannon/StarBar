@@ -50,6 +50,10 @@ final class iTunesPlayer {
     /// The song last offered to `LastMusicSongStore`, as `PlayInfo.songIdentity`, so that it
     /// is worked out once per song rather than on every notification Music sends for it
     private var rememberedIdentity: String?
+    /// What the store held once that song was offered, so that a song it has forgotten since
+    /// is offered again while it plays: the identity alone kept a forgotten song out until
+    /// another had played (2026-11-05)
+    private var rememberedStoreSong: LastMusicSong?
     
     private init() {
         
@@ -89,8 +93,10 @@ extension iTunesPlayer {
     /// short timeout.
     func rememberPlayedSong(_ playInfo: PlayInfo, in store: LastMusicSongStore = .shared) {
         guard playInfo.playerState == .playing, let identity = playInfo.songIdentity,
-              identity != rememberedIdentity, let playing = _playing else { return }
+              identity != rememberedIdentity || store.song != rememberedStoreSong,
+              let playing = _playing else { return }
         rememberedIdentity = identity
+        defer { rememberedStoreSong = store.song }
         let libraryID: String?
         if playing.isCatalogStream {
             // Already found by the menu bar, which reads it for the stars

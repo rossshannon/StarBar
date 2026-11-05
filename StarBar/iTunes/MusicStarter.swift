@@ -40,7 +40,24 @@ extension Notification.Name {
 /// Not on seeing Music paused: a song it does play is announced paused at 0.0 first, a
 /// moment before it plays. A `play` to a Music already running started the song every time
 /// it was tried, but the lost play wasn't caught again to try the second one on.
+///
+/// **A Music that has just opened may not take an Apple Event at all**: in two cold presses of
+/// seven on 2026-11-05, Scripting Bridge logged "couldn't resolve" about 150 ms after the
+/// launch and the `play` never went out, which the first build took for Music refusing the
+/// song, and so forgot a song that was in the library all along. So only Music saying the song
+/// isn't there (`PlayAnswer.songNotFound`) forgets it; anything else is `notReady`, and the
+/// `play` is sent again every `notReadyWait`, up to `notReadyTries` times.
 final class MusicStarter {
+
+    /// What came of asking Music to play a song
+    enum PlayAnswer: Equatable {
+        /// Music took the `play`
+        case taken
+        /// Music answered that there is no such track: gone from the library, most likely
+        case songNotFound
+        /// The `play` didn't reach Music, or Music failed it for some other reason
+        case notReady
+    }
 
     enum Status: Equatable {
         /// Nothing under way
@@ -49,8 +66,8 @@ final class MusicStarter {
         case opening
         /// Music has been asked to play a song and hasn't been seen playing it yet
         case starting
-        /// Music refused the song, or answered and no song came: the next press brings Music
-        /// forward to choose something instead
+        /// Music has no such song, never took the `play`, or took it and no song came: the next
+        /// press brings Music forward to choose something instead
         case couldNotPlay
     }
 
@@ -62,6 +79,13 @@ final class MusicStarter {
     /// How long after Music answers the second `play` the song may take to start before the
     /// popover says Music couldn't play it. A streamed song takes a moment to buffer.
     static let songWait: TimeInterval = 6
+
+    /// How long to wait before sending a `play` again that didn't reach Music, and how many
+    /// times to send it in all. Measured 2026-11-05, the two that didn't came 130 to 180 ms
+    /// after Music was launched, and every cold `play` that did was answered 2.1 to 2.8 s
+    /// after it was sent, so three seconds of tries covers a Music still opening.
+    static let notReadyWait: TimeInterval = 0.5
+    static let notReadyTries = 6
 
     static let shared = MusicStarter()
 
@@ -85,23 +109,28 @@ final class MusicStarter {
     /// process ID, or nil when it couldn't be opened
     private let launch: (@escaping (pid_t?) -> Void) -> Void
     /// Ask the Music with this process ID, or the one running when nil, to play the song,
-    /// then call back on the main thread with whether it took the command
-    private let play: (pid_t?, LastMusicSong, @escaping (Bool) -> Void) -> Void
+    /// then call back on the main thread with what came of it
+    private let play: (pid_t?, LastMusicSong, @escaping (PlayAnswer) -> Void) -> Void
     /// Open Music and bring it forward, so the user can choose something to play
     private let activate: () -> Void
     private let clock: RatingReminderClock
     private var songTimer: RatingReminderTimer?
     /// The song asked for by the press under way
     private var song: LastMusicSong?
+    /// The Music this press opened, which every `play` for it is sent to, or nil for the one
+    /// that was running
+    private var pid: pid_t?
     /// Whether this press has asked Music a second time, which it does at most once
     private var retried = false
+    /// How many `play`s for this press didn't reach Music
+    private var notReadyCount = 0
 
     init(isRunning: @escaping () -> Bool = MusicStarter.musicIsRunning,
          hasTrack: @escaping () -> Bool = { iTunesPlayer.shared.currentTrack != nil },
          isPlaying: @escaping () -> Bool = { MusicStarter.playerState() == .playing },
          store: LastMusicSongStore = .shared,
          launch: @escaping (@escaping (pid_t?) -> Void) -> Void = MusicStarter.launchMusic,
-         play: @escaping (pid_t?, LastMusicSong, @escaping (Bool) -> Void) -> Void = MusicStarter.askMusicToPlay,
+         play: @escaping (pid_t?, LastMusicSong, @escaping (PlayAnswer) -> Void) -> Void = MusicStarter.askMusicToPlay,
          activate: @escaping () -> Void = MusicStarter.activateMusic,
          clock: RatingReminderClock = RunLoopClock(),
          center: NotificationCenter = .default) {
@@ -161,6 +190,7 @@ final class MusicStarter {
         songTimer?.invalidate()
         songTimer = nil
         song = nil
+        pid = nil
         status = next
     }
 
@@ -172,27 +202,51 @@ final class MusicStarter {
 
     private func askToPlay(_ song: LastMusicSong, in pid: pid_t?) {
         self.song = song
+        self.pid = pid
         retried = false
+        notReadyCount = 0
         status = .starting
-        send(song, to: pid)
+        send(song)
     }
 
-    private func send(_ song: LastMusicSong, to pid: pid_t?) {
+    private func send(_ song: LastMusicSong) {
         songTimer?.invalidate()
         songTimer = nil
-        play(pid, song) { [weak self] accepted in
+        play(pid, song) { [weak self] answer in
             guard let self = self, self.status == .starting, self.song == song else { return }
-            guard accepted else {
+            switch answer {
+            case .songNotFound:
                 // Gone from the library, most likely: it can't be offered again
-                os_log("%{public}s[%{public}ld], %{public}s: Music wouldn't play %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID)
+                os_log("%{public}s[%{public}ld], %{public}s: Music has no song %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID)
                 self.store.forget(song)
                 self.finish(self.isRunning() ? .couldNotPlay : .idle)
-                return
+            case .notReady:
+                self.notReady(song)
+            case .taken:
+                let wait = self.retried ? MusicStarter.songWait : MusicStarter.retryWait
+                self.songTimer = self.clock.schedule(after: wait, repeats: false) { [weak self] in
+                    self?.songWaitEnded()
+                }
             }
-            let wait = self.retried ? MusicStarter.songWait : MusicStarter.retryWait
-            self.songTimer = self.clock.schedule(after: wait, repeats: false) { [weak self] in
-                self?.songWaitEnded()
-            }
+        }
+    }
+
+    /// The `play` didn't reach Music: send it again shortly, as long as Music is running and
+    /// there are tries left. The song is kept whatever happens, since Music never said it
+    /// wasn't there.
+    private func notReady(_ song: LastMusicSong) {
+        guard isRunning() else { return finish() }
+        notReadyCount += 1
+        guard notReadyCount < MusicStarter.notReadyTries else {
+            os_log("%{public}s[%{public}ld], %{public}s: Music didn't take the play %{public}ld times", ((#file as NSString).lastPathComponent), #line, #function, notReadyCount)
+            return finish(.couldNotPlay)
+        }
+        songTimer = clock.schedule(after: MusicStarter.notReadyWait, repeats: false) { [weak self] in
+            guard let self = self else { return }
+            self.songTimer = nil
+            guard self.status == .starting, self.song == song else { return }
+            guard self.isRunning() else { return self.finish() }
+            self.send(song)
         }
     }
 
@@ -216,8 +270,7 @@ final class MusicStarter {
         guard let song = song else { return finish() }
         os_log("%{public}s[%{public}ld], %{public}s: asking Music again for %{public}s, because %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.persistentID, reason)
         retried = true
-        // Running by now, so by bundle ID
-        send(song, to: nil)
+        send(song)
     }
 
     @objc private func iTunesPlayerDidUpdated(_ notification: Notification) {
@@ -292,15 +345,34 @@ extension MusicStarter {
     /// main thread mustn't wait for it
     private static let queue = DispatchQueue(label: "com.rossshannon.starbar.music-starter", qos: .userInitiated)
 
-    /// Counts the Apple Events that failed on one connection
+    /// Counts the Apple Events that failed on one connection, and keeps the last one's code
     private final class FailureCounter: NSObject, SBApplicationDelegate {
         private(set) var failures = 0
+        private(set) var lastCode: Int?
         func eventDidFail(_ event: UnsafePointer<AppleEvent>, withError error: Error) -> Any? {
             failures += 1
+            lastCode = (error as NSError).code
             let (eventClass, eventID) = iTunesRadioStation.classAndID(of: event)
-            os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
+            os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}ld, %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, (error as NSError).code, error.localizedDescription)
             return nil
         }
+    }
+
+    /// The codes Music answers a `play` for a track that isn't there with: errAENoSuchObject
+    /// and errAEIllegalIndex
+    static let noSuchTrackCodes: Set<Int> = [-1728, -1719]
+
+    /// What a `play` came to, from what the connection saw
+    ///
+    /// - Parameters:
+    ///   - sent: whether the `play` went out at all, which it doesn't when Music's library
+    ///     can't be found
+    ///   - failed: whether the `play` itself failed
+    ///   - code: the failure's code
+    static func answer(sent: Bool, failed: Bool, code: Int?) -> PlayAnswer {
+        guard sent else { return .notReady }
+        guard failed else { return .taken }
+        return code.map { MusicStarter.noSuchTrackCodes.contains($0) } == true ? .songNotFound : .notReady
     }
 
     /// Send Music `play` for `song`, found in the library by persistent ID, from a background
@@ -311,7 +383,7 @@ extension MusicStarter {
     /// The track is a reference Music resolves when `play` arrives, so finding it costs no
     /// event of its own beyond finding the library, and a song deleted since fails the
     /// command rather than playing another.
-    static func askMusicToPlay(_ pid: pid_t?, song: LastMusicSong, completion: @escaping (Bool) -> Void) {
+    static func askMusicToPlay(_ pid: pid_t?, song: LastMusicSong, completion: @escaping (PlayAnswer) -> Void) {
         queue.async {
             let application = pid.flatMap { SBApplication(processIdentifier: $0) }
                 ?? SBApplication(bundleIdentifier: OSVersionHelper.bundleIdentifier)
@@ -321,18 +393,22 @@ extension MusicStarter {
             // `open` on 2026-11-04
             application?.timeout = 15 * 60  // ticks: 1/60 s each
             let started = Date()
-            var accepted = false
+            var sent = false
+            var failed = false
             if let iTunes = application as? iTunesApplication,
                let source = iTunesRadioStation.librarySource(of: iTunes),
                let tracks = iTunesRadioStation.libraryPlaylist(of: source)?.tracks?(),
                let found = iTunesRadioStation.tracks(tracks, matching: NSPredicate(format: "persistentID == %@", song.persistentID)),
                let track = found.object(at: 0) as? iTunesTrack {
+                let failuresBefore = counter.failures
                 track.playOnce?(false)
-                accepted = counter.failures == 0
+                sent = true
+                failed = counter.failures > failuresBefore
             }
-            os_log("%{public}s[%{public}ld], %{public}s: asked Music to play %{public}s (%{public}s) in %.0f ms: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.name, song.persistentID, Date().timeIntervalSince(started) * 1000, accepted ? "taken" : "refused")
+            let answer = MusicStarter.answer(sent: sent, failed: failed, code: counter.lastCode)
+            os_log("%{public}s[%{public}ld], %{public}s: asked Music to play %{public}s (%{public}s) in %.0f ms: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song.name, song.persistentID, Date().timeIntervalSince(started) * 1000, String(describing: answer))
             withExtendedLifetime(counter) {}
-            DispatchQueue.main.async { completion(accepted) }
+            DispatchQueue.main.async { completion(answer) }
         }
     }
 

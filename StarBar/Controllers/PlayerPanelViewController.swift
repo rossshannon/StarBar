@@ -104,11 +104,17 @@ extension PlayerPanelViewController {
 
 extension PlayerPanelViewController {
     
+    /// How much of the play button shows while it waits for Music to start a song
+    static let waitingAlpha: CGFloat = 0.35
+
     /// - Parameter isStarting: the play button has set Music going and it hasn't answered,
     ///   so the button waits rather than send it a second `play`
     func updateCurrentTrack(_ track: iTunesTrack?, isStarting: Bool = false) {
         isStop = track == nil
-        playerControlView.playPauseButton.isEnabled = !(isStop && isStarting)
+        let waiting = isStop && isStarting
+        playerControlView.playPauseButton.isEnabled = !waiting
+        // Its images don't dim when it is disabled: on 2026-11-05 it looked the same either way
+        playerControlView.playPauseButton.alphaValue = waiting ? PlayerPanelViewController.waitingAlpha : 1
         
         guard let track = track else {
             return

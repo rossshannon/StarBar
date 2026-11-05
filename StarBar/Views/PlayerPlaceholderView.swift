@@ -106,8 +106,16 @@ final class PlayerPlaceholderView: NSView {
     func show(_ text: PopoverEmptyState?) {
         textStack.isHidden = text == nil
         titleField.stringValue = text?.title ?? ""
-        detailField.stringValue = text?.detail ?? ""
+        detailField.stringValue = PlayerPlaceholderView.keepingLastWordsTogether(text?.detail ?? "")
         detailField.isHidden = text?.detail.isEmpty ?? true
+    }
+
+    /// `text` with its last space made a no-break space, so that a line that wraps never ends
+    /// on one word alone: "Press play for “Veridis Quo” by Daft Punk." left "Punk." on a line
+    /// of its own (2026-11-05)
+    static func keepingLastWordsTogether(_ text: String) -> String {
+        guard let space = text.range(of: " ", options: .backwards) else { return text }
+        return text.replacingCharacters(in: space, with: "\u{00A0}")
     }
 
 }

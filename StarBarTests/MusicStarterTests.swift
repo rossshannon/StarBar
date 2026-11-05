@@ -24,7 +24,7 @@ final class MusicStarterTests: XCTestCase {
     private var hasTrack = false
     private var isPlaying = false
     private var launches: [(pid_t?) -> Void] = []
-    private var plays: [(pid: pid_t?, song: LastMusicSong, answer: (Bool) -> Void)] = []
+    private var plays: [(pid: pid_t?, song: LastMusicSong, answer: (MusicStarter.PlayAnswer) -> Void)] = []
     private var activations = 0
     private var starter: MusicStarter!
 
@@ -113,7 +113,7 @@ final class MusicStarterTests: XCTestCase {
     func testASongAnnouncedEndsTheStart() {
         isRunning = true
         starter.start()
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         hasTrack = true
         isPlaying = true
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
@@ -129,14 +129,14 @@ final class MusicStarterTests: XCTestCase {
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(starter.status, .idle)
         // Music's late answer schedules nothing
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         XCTAssertTrue(clock.pendingOneShots.isEmpty)
     }
 
     func testARefusedSongIsForgottenAndTheNextPressBringsMusicForward() {
         isRunning = true
         starter.start()
-        plays[0].answer(false)
+        plays[0].answer(.songNotFound)
         XCTAssertEqual(starter.status, .couldNotPlay)
         XCTAssertTrue(clock.pendingOneShots.isEmpty, "a refusal isn't asked again")
         XCTAssertNil(store.song, "a song Music won't play, likely deleted, isn't offered again")
@@ -150,7 +150,7 @@ final class MusicStarterTests: XCTestCase {
     func testASongLoadedButNotPlayingDoesNotEndTheStart() {
         isRunning = true
         starter.start()
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         // Music loads the song asked for stopped, and announces it paused at 0.0, a moment
         // before it plays
         hasTrack = true
@@ -165,13 +165,13 @@ final class MusicStarterTests: XCTestCase {
         starter.start()
         isRunning = true
         launches[0](4242)
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         hasTrack = true
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.retryWait)
         clock.fireOneShot()
         XCTAssertEqual(plays.count, 2)
-        XCTAssertNil(plays[1].pid, "Music is running by now")
+        XCTAssertEqual(plays[1].pid, 4242, "the Music this press opened")
         XCTAssertEqual(plays[1].song, MusicStarterTests.analogue)
         XCTAssertEqual(starter.status, .starting)
 
@@ -184,14 +184,14 @@ final class MusicStarterTests: XCTestCase {
         isRunning = true
         starter.start()
         XCTAssertTrue(clock.pendingOneShots.isEmpty, "the wait starts when Music answers, not when asked")
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         // An update with no song in it changes nothing
         center.post(name: .iTunesPlayerDidUpdated, object: nil)
         XCTAssertEqual(starter.status, .starting)
         clock.fireOneShot()
         XCTAssertEqual(plays.count, 2)
         XCTAssertTrue(clock.pendingOneShots.isEmpty, "the second wait starts when Music answers again")
-        plays[1].answer(true)
+        plays[1].answer(.taken)
         XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.songWait)
         clock.fireOneShot()
         XCTAssertEqual(starter.status, .couldNotPlay)
@@ -206,9 +206,9 @@ final class MusicStarterTests: XCTestCase {
     func testASongLoadedButStillNotPlayingAfterTheSecondAskEndsQuietly() {
         isRunning = true
         starter.start()
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         clock.fireOneShot()
-        plays[1].answer(true)
+        plays[1].answer(.taken)
         hasTrack = true
         clock.fireOneShot()
         XCTAssertEqual(starter.status, .idle, "the popover shows the song, and its Play button plays it")
@@ -217,12 +217,73 @@ final class MusicStarterTests: XCTestCase {
     func testASongThatCameWithoutAnUpdateIsStillSeenWhenTheWaitEnds() {
         isRunning = true
         starter.start()
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         hasTrack = true
         isPlaying = true
         clock.fireOneShot()
         XCTAssertEqual(starter.status, .idle)
         XCTAssertEqual(plays.count, 1)
+    }
+
+    // MARK: - A play that doesn't reach Music
+
+    func testAPlayThatDidNotReachMusicIsSentAgainAndTheSongKept() {
+        // Measured 2026-11-05: twice in seven cold presses, Scripting Bridge couldn't resolve a
+        // Music launched 150 ms before, and the play never went out
+        starter.start()
+        isRunning = true
+        launches[0](4242)
+        plays[0].answer(.notReady)
+        XCTAssertEqual(starter.status, .starting, "the popover still says it is starting the song")
+        XCTAssertEqual(store.song, MusicStarterTests.analogue, "Music never said the song wasn't there")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.notReadyWait)
+        clock.fireOneShot()
+        XCTAssertEqual(plays.count, 2)
+        XCTAssertEqual(plays[1].pid, 4242, "to the Music this press opened")
+        plays[1].answer(.taken)
+        XCTAssertEqual(clock.pendingOneShot?.seconds, MusicStarter.retryWait, "then waits for the song as usual")
+        hasTrack = true
+        isPlaying = true
+        center.post(name: .iTunesPlayerDidUpdated, object: nil)
+        XCTAssertEqual(starter.status, .idle)
+    }
+
+    func testAPlayThatNeverReachesMusicGivesUpButKeepsTheSong() {
+        isRunning = true
+        starter.start()
+        for attempt in 1...MusicStarter.notReadyTries {
+            XCTAssertEqual(plays.count, attempt)
+            plays[attempt - 1].answer(.notReady)
+            if attempt < MusicStarter.notReadyTries {
+                clock.fireOneShot()
+            }
+        }
+        XCTAssertEqual(starter.status, .couldNotPlay)
+        XCTAssertEqual(plays.count, MusicStarter.notReadyTries, "no more tries")
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+        XCTAssertEqual(store.song, MusicStarterTests.analogue)
+    }
+
+    func testAPlayThatDidNotReachAMusicThatHasQuitEndsQuietly() {
+        isRunning = true
+        starter.start()
+        isRunning = false
+        plays[0].answer(.notReady)
+        XCTAssertEqual(starter.status, .idle)
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+        XCTAssertEqual(store.song, MusicStarterTests.analogue)
+    }
+
+    func testOnlyMusicSayingThereIsNoSuchTrackCountsAsTheSongGone() {
+        XCTAssertEqual(MusicStarter.answer(sent: false, failed: false, code: nil), .notReady,
+                       "the library couldn't be found, so the play never went out")
+        XCTAssertEqual(MusicStarter.answer(sent: true, failed: false, code: nil), .taken)
+        XCTAssertEqual(MusicStarter.answer(sent: true, failed: false, code: -609), .taken,
+                       "an earlier event's failure isn't the play's")
+        XCTAssertEqual(MusicStarter.answer(sent: true, failed: true, code: -1728), .songNotFound)
+        XCTAssertEqual(MusicStarter.answer(sent: true, failed: true, code: -1719), .songNotFound)
+        XCTAssertEqual(MusicStarter.answer(sent: true, failed: true, code: -609), .notReady, "connection invalid")
+        XCTAssertEqual(MusicStarter.answer(sent: true, failed: true, code: -1712), .notReady, "timed out")
     }
 
     func testPressingAgainWhileStartingSendsNothingMore() {
@@ -242,9 +303,9 @@ final class MusicStarterTests: XCTestCase {
     func testCouldNotPlayThenMusicQuitOpensItAgainOnThePress() {
         isRunning = true
         starter.start()
-        plays[0].answer(true)
+        plays[0].answer(.taken)
         clock.fireOneShot()
-        plays[1].answer(true)
+        plays[1].answer(.taken)
         clock.fireOneShot()
         XCTAssertEqual(starter.status, .couldNotPlay)
         isRunning = false
@@ -323,6 +384,13 @@ final class MusicStarterTests: XCTestCase {
         XCTAssertEqual(PopoverEmptyState.when(musicIsRunning: false, starting: .couldNotPlay, song: nil),
                        PopoverEmptyState.when(musicIsRunning: false, starting: .idle, song: nil),
                        "a press opens Music again, so say that")
+    }
+
+    func testThePlaceholderKeepsTheLastTwoWordsTogether() {
+        XCTAssertEqual(PlayerPlaceholderView.keepingLastWordsTogether("Press play for \u{201C}Veridis Quo\u{201D} by Daft Punk."),
+                       "Press play for \u{201C}Veridis Quo\u{201D} by Daft\u{00A0}Punk.")
+        XCTAssertEqual(PlayerPlaceholderView.keepingLastWordsTogether("Alone"), "Alone")
+        XCTAssertEqual(PlayerPlaceholderView.keepingLastWordsTogether(""), "")
     }
 
     func testDisplayNameUsesTypographicMarks() {
