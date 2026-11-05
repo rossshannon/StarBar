@@ -36,8 +36,8 @@ enum TrackAnnouncementSeeThrough {
     /// How much of the background the pointer's hole leaves behind the artwork and text. The
     /// hole cleared it all at first, and the white text then stood over whatever was behind;
     /// Ross asked on 2026-11-03 for it to fade only to 20% there, to keep the contrast, on
-    /// seeing that, for 10% more, and on 2026-11-05 for another 10%. The typing window keeps all of it, since that one opens on
-    /// its own while the user types.
+    /// seeing that, for 10% more, and on 2026-11-05 for another 10%. The typing window keeps
+    /// all of it, since that one opens on its own while the user types.
     static let peepholeKeepOpacity: CGFloat = 0.4
     /// A key pressed within this long ago means the user is typing
     static let typingPause: TimeInterval = 1.5
