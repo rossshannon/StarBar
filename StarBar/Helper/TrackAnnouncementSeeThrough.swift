@@ -35,10 +35,10 @@ enum TrackAnnouncementSeeThrough {
     static let keepFeather: CGFloat = 48
     /// How much of the background the pointer's hole leaves behind the artwork and text. The
     /// hole cleared it all at first, and the white text then stood over whatever was behind;
-    /// Ross asked on 2026-11-03 for it to fade only to 20% there, to keep the contrast, and on
-    /// seeing that, for 10% more. The typing window keeps all of it, since that one opens on
+    /// Ross asked on 2026-11-03 for it to fade only to 20% there, to keep the contrast, on
+    /// seeing that, for 10% more, and on 2026-11-05 for another 10%. The typing window keeps all of it, since that one opens on
     /// its own while the user types.
-    static let peepholeKeepOpacity: CGFloat = 0.3
+    static let peepholeKeepOpacity: CGFloat = 0.4
     /// A key pressed within this long ago means the user is typing
     static let typingPause: TimeInterval = 1.5
     /// The window opens quickly when typing starts, and closes gently
@@ -240,7 +240,7 @@ struct TrackAnnouncementTyping {
 /// Knobs for trying the see-through behaviour without a rebuild, read from defaults each time
 /// the strip appears. `announcementPeephole` (bool; true by default: the hole that follows the
 /// pointer), `announcementPeepholeRadius` and `announcementPeepholeFeather` (points at scale 1;
-/// 270 and 108 by default), `announcementPeepholeKeep` (0 to 1; 0.3 by default: how much of the
+/// 270 and 108 by default), `announcementPeepholeKeep` (0 to 1; 0.4 by default: how much of the
 /// background the hole leaves behind the artwork and text), `announcementTypingWindow` (bool; true by default: the window in
 /// the middle of the strip while the user types), `announcementTypingRadius`,
 /// `announcementTypingFeather` and `announcementTypingCentreHeight` (points at scale 1; 360,

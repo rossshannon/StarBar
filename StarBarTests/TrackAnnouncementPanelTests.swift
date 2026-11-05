@@ -669,7 +669,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         let keep = try XCTUnwrap(view.peepholeKeep)
         XCTAssertEqual(keep.untilX, try XCTUnwrap(view.typingWindow).kept.untilX, "the same part of the strip the typing window keeps")
         XCTAssertEqual(keep.feather, TrackAnnouncementSeeThrough.keepFeather)
-        XCTAssertEqual(keep.opacity, 0.3)
+        XCTAssertEqual(keep.opacity, 0.4)
 
         // A long title covers more, and keeps more, without the typing window open
         view.setTypingWindow(radius: 0, feather: 0, progress: 0)
