@@ -145,7 +145,7 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         let keep = try XCTUnwrap(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 400, height: 110), margin: 24, feather: 48, opacity: TrackAnnouncementSeeThrough.peepholeKeepOpacity))
         XCTAssertEqual(keep.untilX, 441, "the text's end plus the margin, as the typing window keeps")
         XCTAssertEqual(keep.feather, 48)
-        XCTAssertEqual(keep.opacity, 0.3, "Ross asked for 20%, to keep the white text readable, then 10% more")
+        XCTAssertEqual(keep.opacity, 0.4, "Ross asked for 20%, to keep the white text readable, then 10% more twice")
 
         let long = try XCTUnwrap(TrackAnnouncementSeeThrough.keptBackground(in: wide, occupied: CGRect(x: 17, y: 20, width: 1990, height: 110), margin: 24, feather: -5, opacity: 3))
         XCTAssertEqual(long.untilX, 2000, "inside the strip")
@@ -389,7 +389,7 @@ final class TrackAnnouncementSeeThroughTests: XCTestCase {
         XCTAssertTrue(knobs.peephole)
         XCTAssertEqual(knobs.radius, 270, "three times the first try, then half as big again, at Ross's request")
         XCTAssertEqual(knobs.feather, 108)
-        XCTAssertEqual(knobs.peepholeKeep, 0.3, "30% of the background behind the text, at Ross's request")
+        XCTAssertEqual(knobs.peepholeKeep, 0.4, "40% of the background behind the text, at Ross's request")
         XCTAssertTrue(knobs.typingWindow)
         XCTAssertEqual(knobs.typingRadius, 360, "bigger than the pointer's hole")
         XCTAssertEqual(knobs.typingFeather, 144)

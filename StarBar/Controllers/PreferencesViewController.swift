@@ -177,12 +177,13 @@ final class PreferencesViewController: NSViewController {
             [showOrClosePopoverTextField, showOrClosePopoverShortcutView],
             [showCurrentTrackTextField, showCurrentTrackShortcutView],
             [NSBox.separatorLine],
-            [rating0TextField, rating0ShortcutView],
-            [rating1TextField, rating1ShortcutView],
-            [rating2TextField, rating2ShortcutView],
-            [rating3TextField, rating3ShortcutView],
-            [rating4TextField, rating4ShortcutView],
+            // Most stars first, the way a rating reads from best to worst
             [rating5TextField, rating5ShortcutView],
+            [rating4TextField, rating4ShortcutView],
+            [rating3TextField, rating3ShortcutView],
+            [rating2TextField, rating2ShortcutView],
+            [rating1TextField, rating1ShortcutView],
+            [rating0TextField, rating0ShortcutView],
             [leadingPaddingView, trailingPaddingView]
         ])
 
