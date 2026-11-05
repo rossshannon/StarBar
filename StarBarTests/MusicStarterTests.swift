@@ -394,6 +394,33 @@ final class MusicStarterTests: XCTestCase {
         XCTAssertEqual(store.song, next)
     }
 
+    func testASongKeptIsOfferedOnceWhileItPlays() {
+        var offers = LastMusicSongOffers()
+        XCTAssertTrue(offers.shouldOffer("123", storeHolds: nil))
+        offers.kept("123", storeHolds: MusicStarterTests.analogue)
+        XCTAssertFalse(offers.shouldOffer("123", storeHolds: MusicStarterTests.analogue),
+                       "Music announces a song several times; its copy is read once")
+        XCTAssertTrue(offers.shouldOffer("456", storeHolds: MusicStarterTests.analogue), "a new song is offered")
+    }
+
+    func testASongTheStoreForgotIsOfferedAgain() {
+        var offers = LastMusicSongOffers()
+        offers.kept("123", storeHolds: MusicStarterTests.analogue)
+        XCTAssertTrue(offers.shouldOffer("123", storeHolds: nil),
+                      "Music refused a play of it, and it is playing now, so it is there after all")
+    }
+
+    func testASongNotKeptIsOfferedAgain() {
+        var offers = LastMusicSongOffers()
+        let earlier = LastMusicSong(persistentID: "0123456789ABCDEF", name: "Some", artist: "Nils Frahm")
+        offers.kept("123", storeHolds: earlier)
+        // "456" is offered and not kept: Music didn't answer for its library copy in time,
+        // so `kept` is never called for it
+        XCTAssertTrue(offers.shouldOffer("456", storeHolds: earlier))
+        XCTAssertTrue(offers.shouldOffer("456", storeHolds: earlier),
+                      "the next announcement comes with a new record, which may read the copy")
+    }
+
     // MARK: - What the popover says
 
     func testEmptyStateNamesTheSongPlayWillStart() {
