@@ -46,6 +46,14 @@ final class iTunesPlayer {
 
     /// The songs Music announced last, for `previousSong(before:)`
     private var recentSongs = RecentSongs<PlayingTrack>()
+
+    /// The song last offered to `LastMusicSongStore`, as `PlayInfo.songIdentity`, so that it
+    /// is worked out once per song rather than on every notification Music sends for it
+    private var rememberedIdentity: String?
+    /// What the store held once that song was offered, so that a song it has forgotten since
+    /// is offered again while it plays: the identity alone kept a forgotten song out until
+    /// another had played (2026-11-05)
+    private var rememberedStoreSong: LastMusicSong?
     
     private init() {
         
@@ -73,6 +81,35 @@ extension iTunesPlayer {
     /// Called once the notification's own `update()` has run, so the record is the new one.
     func musicAnnounced(_ identity: String) {
         recentSongs.musicAnnounced(identity, playing: _playing)
+    }
+
+    /// Music announced `playInfo`, and the record is the new one: remember a song it is
+    /// playing from the library, for the popover's play button to start when Music has nothing
+    /// loaded (`LastMusicSong`).
+    ///
+    /// Costs nothing for a song in the library, whose persistent ID the menu bar has already
+    /// read from this record. For an Apple Music catalog track it is the user's copy that is
+    /// kept, which takes one read of the copy's persistent ID, once per song and under the
+    /// short timeout.
+    func rememberPlayedSong(_ playInfo: PlayInfo, in store: LastMusicSongStore = .shared) {
+        guard playInfo.playerState == .playing, let identity = playInfo.songIdentity,
+              identity != rememberedIdentity || store.song != rememberedStoreSong,
+              let playing = _playing else { return }
+        rememberedIdentity = identity
+        defer { rememberedStoreSong = store.song }
+        let libraryID: String?
+        if playing.isCatalogStream {
+            // Already found by the menu bar, which reads it for the stars
+            let copy = playing.ratingTrack
+            libraryID = copy.flatMap { copy in
+                MenuBarRatingControl.withShortTimeoutIfAnswered { _ in copy.persistentID }.flatMap { $0 }
+            }
+        } else {
+            libraryID = playing.persistentID
+        }
+        guard let song = LastMusicSong.remembering(isPlaying: true, libraryPersistentID: libraryID,
+                                                   name: playInfo.name, artist: playInfo.artist) else { return }
+        store.remember(song)
     }
 
     /// The record read at launch is the song playing then, which Music never announces, so

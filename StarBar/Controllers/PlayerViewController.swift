@@ -39,6 +39,14 @@ final class PlayerViewController: NSViewController {
         return imageView
     }()
 
+    /// In the cover's square while there is no cover: a music note, and, with no song at all,
+    /// "Not Playing" and what the play button will do
+    private let placeholderView = PlayerPlaceholderView()
+
+    /// How long the placeholder takes to fade out under a cover that arrives, the same as the
+    /// cover's own fade in
+    static let coverFadeDuration: TimeInterval = 0.33
+
     private static func roundArtworkCorners(of view: NSView) {
         view.layer?.cornerRadius = artworkCornerRadius
         view.layer?.cornerCurve = .continuous
@@ -109,6 +117,16 @@ extension PlayerViewController {
             backCoverImageView.bottomAnchor.constraint(equalTo: coverImageView.bottomAnchor),
         ])
 
+        // Over the blurred backdrop and under the cover, which fades in over it
+        placeholderView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(placeholderView, positioned: .above, relativeTo: backCoverImageView)
+        NSLayoutConstraint.activate([
+            placeholderView.topAnchor.constraint(equalTo: coverImageView.topAnchor),
+            placeholderView.leadingAnchor.constraint(equalTo: coverImageView.leadingAnchor),
+            placeholderView.trailingAnchor.constraint(equalTo: coverImageView.trailingAnchor),
+            placeholderView.bottomAnchor.constraint(equalTo: coverImageView.bottomAnchor),
+        ])
+
         addChild(playerPanelViewController)
         playerPanelViewController.view.translatesAutoresizingMaskIntoConstraints = false
         stackView.addArrangedSubview(playerPanelViewController.view)
@@ -145,18 +163,28 @@ extension PlayerViewController {
     /// Pass `PlayingTrack.sleeve()` there, as the announcement strip does. Reading the
     /// playing track's own artwork left the popover blank for a catalog track whose library
     /// copy has its sleeve, and showed the previous song's cover for one the user doesn't have.
-    func updateCurrentTrack(_ track: iTunesTrack?, artwork: NSImage?) {
+    ///
+    /// - Parameters:
+    ///   - emptyState: what to say in the cover's square when there is no track
+    ///   - isStarting: whether the play button has set Music going and it hasn't answered
+    ///     yet, when the button waits rather than send a second `play`
+    func updateCurrentTrack(_ track: iTunesTrack?, artwork: NSImage?,
+                            emptyState: PopoverEmptyState = .when(musicIsRunning: true, starting: .idle, song: nil),
+                            isStarting: Bool = false) {
         defer {
             view.needsLayout = true
-            playerPanelViewController.updateCurrentTrack(track)
+            playerPanelViewController.updateCurrentTrack(track, isStarting: isStarting)
         }
 
         // update cover image
         guard track != nil else {
             coverImageView.image = nil
             backCoverImageView.layer?.contents = nil
+            placeholderView.show(emptyState)
+            showPlaceholder(true)
             return
         }
+        placeholderView.show(nil)
 
         if let image = artwork {
             // The cover and the blurred backdrop behind it fade together, so a cover that
@@ -164,7 +192,7 @@ extension PlayerViewController {
             // cross-fades from the placeholder rather than the backdrop jumping under it
             for layer in [coverImageView.layer, backCoverImageView.layer] {
                 let transition = CATransition()
-                transition.duration = 0.33
+                transition.duration = PlayerViewController.coverFadeDuration
                 transition.type = .fade
                 transition.timingFunction = CAMediaTimingFunction(name: CAMediaTimingFunctionName.easeInEaseOut)
                 transition.isRemovedOnCompletion = true
@@ -175,10 +203,27 @@ extension PlayerViewController {
             // Rendered once here. A drawing-handler NSImage would run the blur again on
             // every redraw of the popover.
             backCoverImageView.layer?.contents = PlayerViewController.blurredBackdrop(for: image)
+            // Gone once the cover is there, which may not fill the square
+            showPlaceholder(false)
         } else {
             coverImageView.image = nil
             backCoverImageView.layer?.contents = nil
+            showPlaceholder(true)
         }
+    }
+
+    /// Show the placeholder at once, or fade it out under a cover fading in
+    private func showPlaceholder(_ isShown: Bool) {
+        guard isShown else {
+            guard placeholderView.alphaValue > 0 else { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = PlayerViewController.coverFadeDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                placeholderView.animator().alphaValue = 0
+            }
+            return
+        }
+        placeholderView.alphaValue = 1
     }
 
     /// One Core Image context for every blur: creating one is expensive, and it is safe
@@ -233,7 +278,12 @@ extension PlayerViewController: PlayerPanelViewControllerDelegate {
 
     func playerPanelViewController(_ playerPanelViewController: PlayerPanelViewController, playPauseButtonToggled button: NSButton) {
         os_log("%{public}s[%{public}ld], %{public}s: playPauseButtonToggled", ((#file as NSString).lastPathComponent), #line, #function)
-        iTunesRadioStation.shared.playPause()
+        guard playerPanelViewController.isStop else {
+            iTunesRadioStation.shared.playPause()
+            return
+        }
+        // No song loaded, or Music isn't running: `playpause` would do nothing at all
+        MusicStarter.shared.start()
     }
 
 }
