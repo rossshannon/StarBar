@@ -216,7 +216,7 @@ final class iTunesRadioStation {
     }
 
     /// Same test as `LaunchAtLogin`'s
-    private static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    static let isRunningTests = ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
 
 }
 
