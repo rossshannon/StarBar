@@ -49,6 +49,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if !MenuBarRatingControl.isUITesting {
             LaunchAtLogin.migrateLegacyHelperItem()
             _ = iTunesRadioStation.shared
+            // The song Music was playing at launch, which it never announces, for the
+            // popover's Play (`LastMusicSong`). Not from the station's init, whose reads would
+            // ask for the station while it is still being made. Never under tests, which are
+            // hosted in the app and would write its real default.
+            if !iTunesRadioStation.isRunningTests {
+                iTunesPlayer.shared.rememberSongPlayingAtLaunch(isPlaying: { MusicStarter.playerState() == .playing })
+            }
             // Before anything that follows the player: the arbiter decides which player the
             // menu bar and the strip follow, and passes each update on to them
             NowPlayingArbiter.shared.start()

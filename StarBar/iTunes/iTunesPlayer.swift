@@ -47,13 +47,8 @@ final class iTunesPlayer {
     /// The songs Music announced last, for `previousSong(before:)`
     private var recentSongs = RecentSongs<PlayingTrack>()
 
-    /// The song last offered to `LastMusicSongStore`, as `PlayInfo.songIdentity`, so that it
-    /// is worked out once per song rather than on every notification Music sends for it
-    private var rememberedIdentity: String?
-    /// What the store held once that song was offered, so that a song it has forgotten since
-    /// is offered again while it plays: the identity alone kept a forgotten song out until
-    /// another had played (2026-11-05)
-    private var rememberedStoreSong: LastMusicSong?
+    /// Which announcements are offered to `LastMusicSongStore`: each song once while it plays
+    private var lastSongOffers = LastMusicSongOffers()
     
     private init() {
         
@@ -89,14 +84,31 @@ extension iTunesPlayer {
     ///
     /// Costs nothing for a song in the library, whose persistent ID the menu bar has already
     /// read from this record. For an Apple Music catalog track it is the user's copy that is
-    /// kept, which takes one read of the copy's persistent ID, once per song and under the
-    /// short timeout.
+    /// kept, which takes one read of the copy's persistent ID under the short timeout, once per
+    /// song unless Music doesn't answer it (`LastMusicSongOffers`).
     func rememberPlayedSong(_ playInfo: PlayInfo, in store: LastMusicSongStore = .shared) {
         guard playInfo.playerState == .playing, let identity = playInfo.songIdentity,
-              identity != rememberedIdentity || store.song != rememberedStoreSong,
-              let playing = _playing else { return }
-        rememberedIdentity = identity
-        defer { rememberedStoreSong = store.song }
+              lastSongOffers.shouldOffer(identity, storeHolds: store.song),
+              rememberPlaying(name: playInfo.name, artist: playInfo.artist, in: store) else { return }
+        lastSongOffers.kept(identity, storeHolds: store.song)
+    }
+
+    /// Remember the song Music was playing when StarBar started, which Music never announces:
+    /// without it, a song played from before the launch until the user stopped it was never
+    /// kept, and Play then offered an older one (found in review, 2026-11-05).
+    ///
+    /// `isPlaying` is asked only when Music has a song, so a Music with nothing loaded costs
+    /// nothing beyond the launch's own read of the current track.
+    func rememberSongPlayingAtLaunch(isPlaying: () -> Bool, in store: LastMusicSongStore = .shared) {
+        guard let playing = _playing, isPlaying() else { return }
+        rememberPlaying(name: playing.name, artist: playing.artist, in: store)
+    }
+
+    /// Keep the song on the record as the last one played, if it is in the library or the user
+    /// has a copy of it. False when nothing was kept: no copy, or Music didn't answer for it.
+    @discardableResult
+    private func rememberPlaying(name: String?, artist: String?, in store: LastMusicSongStore) -> Bool {
+        guard let playing = _playing else { return false }
         let libraryID: String?
         if playing.isCatalogStream {
             // Already found by the menu bar, which reads it for the stars
@@ -108,8 +120,9 @@ extension iTunesPlayer {
             libraryID = playing.persistentID
         }
         guard let song = LastMusicSong.remembering(isPlaying: true, libraryPersistentID: libraryID,
-                                                   name: playInfo.name, artist: playInfo.artist) else { return }
+                                                   name: name, artist: artist) else { return false }
         store.remember(song)
+        return true
     }
 
     /// The record read at launch is the song playing then, which Music never announces, so

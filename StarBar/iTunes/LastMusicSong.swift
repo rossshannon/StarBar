@@ -49,6 +49,32 @@ struct LastMusicSong: Codable, Equatable {
 
 }
 
+/// Which of Music's announcements `iTunesPlayer` offers `LastMusicSongStore`: each song once
+/// while it plays, since Music announces one several times (play, pause, a repeat) and a
+/// catalog song's offer reads its copy over an Apple Event.
+///
+/// A song is offered again when the store has forgotten it since (Music refused a `play` of
+/// it), and after an offer that kept nothing: a catalog song's copy that Music didn't answer
+/// for in time is not "no copy", and the next announcement of it comes with a new record that
+/// may read it. Marking the song as offered before knowing whether it was kept left such a
+/// song out for the rest of its play (found in review, 2026-11-05).
+struct LastMusicSongOffers {
+    /// The song last kept, as `PlayInfo.songIdentity`
+    private var identity: String?
+    /// What the store held once that song was kept
+    private var storeSong: LastMusicSong?
+
+    func shouldOffer(_ identity: String, storeHolds song: LastMusicSong?) -> Bool {
+        return identity != self.identity || song != storeSong
+    }
+
+    /// The song `identity` was kept, and the store now holds `song`
+    mutating func kept(_ identity: String, storeHolds song: LastMusicSong?) {
+        self.identity = identity
+        storeSong = song
+    }
+}
+
 /// Where `LastMusicSong` is kept: UserDefaults, written only when the song changes
 final class LastMusicSongStore {
 
