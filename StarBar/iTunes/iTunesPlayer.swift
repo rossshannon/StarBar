@@ -98,7 +98,9 @@ extension iTunesPlayer {
     /// kept, and Play then offered an older one (found in review, 2026-11-05).
     ///
     /// `isPlaying` is asked only when Music has a song, so a Music with nothing loaded costs
-    /// nothing beyond the launch's own read of the current track.
+    /// nothing beyond the launch's own read of the current track. `AppDelegate` calls it under
+    /// the short timeout once the status item is up, since it runs on the main thread and
+    /// Music can be slow to answer just after StarBar starts (found in review, 2026-11-05).
     func rememberSongPlayingAtLaunch(isPlaying: () -> Bool, in store: LastMusicSongStore = .shared) {
         guard let playing = _playing, isPlaying() else { return }
         rememberPlaying(name: playing.name, artist: playing.artist, in: store)
