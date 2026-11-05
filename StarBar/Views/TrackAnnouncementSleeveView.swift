@@ -82,10 +82,13 @@ final class TrackAnnouncementSleeveView: NSView {
     }
 
     /// The sleeve itself, in this view's coordinates: the slot, or the cover's shape scaled to
-    /// fit it, as the flat artwork is drawn
+    /// fit it. Unlike the flat artwork, a cover smaller in points than the slot is enlarged:
+    /// the sleeve is a sleeve's size whatever the image's, or it doesn't stand above the strip.
+    /// The Preview's 102 point icon, centred in the 161 point slot of a 1440 point tall screen,
+    /// came up level with the strip's top edge (Ross, 2026-11-05).
     var sleeveRect: CGRect {
         guard let artwork = artwork, artwork.size.width > 0, artwork.size.height > 0 else { return slot }
-        return TrackAnnouncementLayout.artworkDrawingRect(imageSize: artwork.size, in: slot)
+        return TrackAnnouncementLayout.artworkDrawingRect(imageSize: artwork.size, in: slot, enlarging: true)
     }
 
     /// The layer that turns, for tests

@@ -417,6 +417,29 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         XCTAssertEqual(view.sleeveRect.midY, view.slot.midY, accuracy: 0.5)
     }
 
+    /// The Preview's icon was 102 points, and centred in the 161 point square of a 1440 point
+    /// tall screen it came up level with the strip's top edge rather than standing above it
+    func testTheSleeveFillsItsSquareHoweverFewPointsTheCoverHas() {
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        for scale in scales {
+            view.scale = scale
+            view.setFrameSize(NSSize(width: (Sleeve.size + 2 * Sleeve.margin) * scale, height: (Sleeve.size + 2 * Sleeve.margin) * scale))
+            view.artwork = cover(width: 100, height: 100)
+            XCTAssertEqual(view.sleeveRect, view.slot, "a small square cover fills the square at scale \(scale)")
+            view.artwork = cover(width: 100, height: 50)
+            XCTAssertEqual(view.sleeveRect.width, view.slot.width, accuracy: 0.5, "and a small wide one its width")
+            XCTAssertEqual(view.sleeveRect.height, view.slot.height / 2, accuracy: 0.5)
+            view.artwork = nil
+        }
+    }
+
+    func testThePreviewsIconIsAsBigAsTheSleeveGets() throws {
+        let icon = try XCTUnwrap(TrackAnnouncement.previewArtwork)
+        XCTAssertEqual(icon.size.width, icon.size.height)
+        XCTAssertGreaterThanOrEqual(icon.size.width, Sleeve.size * TrackAnnouncementLayout.maximumScale,
+                                    "drawn from the icon's big representations, not enlarged from its 128 point one")
+    }
+
     /// AppKit hands the view's alpha, visibility and frame straight to its own root layer, which
     /// has no delegate, so once that layer is in a window's layer tree each change ran Core
     /// Animation's 0.25 s implicit animation: measured on macOS 27.2, a fade stepped at 60 Hz was

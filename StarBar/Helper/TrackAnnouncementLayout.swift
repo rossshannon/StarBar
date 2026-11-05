@@ -183,10 +183,12 @@ enum TrackAnnouncementLayout {
     }
 
     /// Where to draw an image of `imageSize` inside `slot`: scaled down to fit, never scaled
-    /// up, and centred. Growl's `drawScaledInRect:`.
-    static func artworkDrawingRect(imageSize: CGSize, in slot: CGRect) -> CGRect {
+    /// up, and centred. Growl's `drawScaledInRect:`. With `enlarging`, scaled up to fit as well,
+    /// so only the image's shape counts, never its size in points.
+    static func artworkDrawingRect(imageSize: CGSize, in slot: CGRect, enlarging: Bool = false) -> CGRect {
         guard imageSize.width > 0, imageSize.height > 0 else { return slot }
-        let scale = min(1, min(slot.width / imageSize.width, slot.height / imageSize.height))
+        let fit = min(slot.width / imageSize.width, slot.height / imageSize.height)
+        let scale = enlarging ? fit : min(1, fit)
         let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
         return CGRect(
             x: slot.midX - size.width / 2,

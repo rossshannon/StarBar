@@ -167,6 +167,16 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
         XCTAssertEqual(rect.midY, slot.midY)
     }
 
+    func testSmallArtworkIsScaledUpWhenAsked() {
+        // The break-out sleeve's way: only the image's shape counts
+        let slot = CGRect(x: 8, y: 8, width: 80, height: 80)
+        XCTAssertEqual(TrackAnnouncementLayout.artworkDrawingRect(imageSize: CGSize(width: 40, height: 40), in: slot, enlarging: true), slot)
+
+        let wide = TrackAnnouncementLayout.artworkDrawingRect(imageSize: CGSize(width: 40, height: 20), in: slot, enlarging: true)
+        XCTAssertEqual(wide.size, CGSize(width: 80, height: 40))
+        XCTAssertEqual(wide.midY, slot.midY)
+    }
+
     // MARK: - Panel placement
 
     func testPanelRestsAboveABottomDock() {
