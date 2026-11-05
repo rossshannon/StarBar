@@ -301,6 +301,52 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         }
     }
 
+    /// An app icon's shape: a square with corners far rounder than the sleeve's, and nothing
+    /// outside them
+    private func iconShapedCover(side: CGFloat = 600) -> NSImage {
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSColor.white.setFill()
+            NSBezierPath(roundedRect: rect, xRadius: side * 0.225, yRadius: side * 0.225).fill()
+            return true
+        }
+    }
+
+    func testACoverWithSeeThroughCornersCutsTheSleeveToItsShape() {
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        XCTAssertFalse(view.isCutToCoverShape, "the placeholder fills the square")
+        XCTAssertNotNil(view.turnedLayer.shadowPath)
+        XCTAssertEqual(view.rimWidth, Sleeve.rimWidth)
+
+        view.artwork = iconShapedCover()
+        XCTAssertTrue(view.isCutToCoverShape, "or the square's corners show behind the cover's")
+        XCTAssertNil(view.turnedLayer.shadowPath, "the shadow follows the cover, not the square")
+        XCTAssertEqual(view.rimWidth, 0, "and there is no square rim around it")
+
+        view.artwork = cover(width: 600, height: 600)
+        XCTAssertFalse(view.isCutToCoverShape, "an opaque cover fills the square")
+        XCTAssertNotNil(view.turnedLayer.shadowPath, "and casts the square's shadow, which needs no offscreen pass")
+        XCTAssertEqual(view.rimWidth, Sleeve.rimWidth)
+
+        view.artwork = iconShapedCover()
+        view.artwork = nil
+        XCTAssertFalse(view.isCutToCoverShape, "the placeholder is square again")
+        XCTAssertNotNil(view.turnedLayer.shadowPath)
+        XCTAssertEqual(view.rimWidth, Sleeve.rimWidth)
+    }
+
+    func testOnlyACoverWithSeeThroughPartsCountsAsOne() throws {
+        XCTAssertFalse(TrackAnnouncementSleeveView.hasTransparency(cover(width: 600, height: 600)))
+        XCTAssertFalse(TrackAnnouncementSleeveView.hasTransparency(cover(width: 1200, height: 600)), "a wide cover is opaque too; the sleeve takes its shape")
+        let jpeg = try XCTUnwrap(TrackAnnouncementPanel.warmUpAnnouncement.artwork)
+        XCTAssertTrue(jpeg.representations.first is NSBitmapImageRep, "decoded from JPEG data, as Music's covers are")
+        XCTAssertFalse(TrackAnnouncementSleeveView.hasTransparency(jpeg))
+        XCTAssertTrue(TrackAnnouncementSleeveView.hasTransparency(iconShapedCover()))
+        // What Ross saw on 2026-11-04: the Preview's cover is the app icon, whose corners are
+        // far rounder than the sleeve's
+        let icon = try XCTUnwrap(TrackAnnouncement.previewArtwork)
+        XCTAssertTrue(TrackAnnouncementSleeveView.hasTransparency(icon))
+    }
+
     func testTheViewDrawsTheCoverOverThePlaceholderAsItFades() {
         let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
         XCTAssertEqual(view.coverOpacity, 0, "no cover yet; the placeholder shows")
@@ -369,6 +415,33 @@ final class TrackAnnouncementSleeveTests: XCTestCase {
         XCTAssertEqual(view.sleeveRect.width, 112, accuracy: 0.5)
         XCTAssertEqual(view.sleeveRect.height, 56, accuracy: 0.5)
         XCTAssertEqual(view.sleeveRect.midY, view.slot.midY, accuracy: 0.5)
+    }
+
+    /// The Preview's icon was 102 points, and centred in the 161 point square of a 1440 point
+    /// tall screen it came up level with the strip's top edge rather than standing above it
+    func testTheSleeveFillsItsSquareHoweverFewPointsTheCoverHas() {
+        let view = TrackAnnouncementSleeveView(frame: NSRect(x: 0, y: 0, width: 168, height: 168))
+        for scale in scales {
+            view.scale = scale
+            view.setFrameSize(NSSize(width: (Sleeve.size + 2 * Sleeve.margin) * scale, height: (Sleeve.size + 2 * Sleeve.margin) * scale))
+            view.artwork = cover(width: 100, height: 100)
+            // Fitting 100 points to 112 leaves rounding in the last digits
+            XCTAssertEqual(view.sleeveRect.minX, view.slot.minX, accuracy: 0.001, "a small square cover fills the square at scale \(scale)")
+            XCTAssertEqual(view.sleeveRect.minY, view.slot.minY, accuracy: 0.001)
+            XCTAssertEqual(view.sleeveRect.width, view.slot.width, accuracy: 0.001)
+            XCTAssertEqual(view.sleeveRect.height, view.slot.height, accuracy: 0.001)
+            view.artwork = cover(width: 100, height: 50)
+            XCTAssertEqual(view.sleeveRect.width, view.slot.width, accuracy: 0.5, "and a small wide one its width")
+            XCTAssertEqual(view.sleeveRect.height, view.slot.height / 2, accuracy: 0.5)
+            view.artwork = nil
+        }
+    }
+
+    func testThePreviewsIconIsAsBigAsTheSleeveGets() throws {
+        let icon = try XCTUnwrap(TrackAnnouncement.previewArtwork)
+        XCTAssertEqual(icon.size.width, icon.size.height)
+        XCTAssertGreaterThanOrEqual(icon.size.width, Sleeve.size * TrackAnnouncementLayout.maximumScale,
+                                    "drawn from the icon's big representations, not enlarged from its 128 point one")
     }
 
     /// AppKit hands the view's alpha, visibility and frame straight to its own root layer, which

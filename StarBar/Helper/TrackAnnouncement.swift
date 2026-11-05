@@ -122,6 +122,8 @@ struct TrackAnnouncement: Equatable {
 
     /// The app icon, cropped to its shape. A macOS icon's canvas has transparent margins
     /// around the rounded square, so drawn as it is it looks smaller than album artwork.
+    /// As big as the break-out sleeve gets, at the strip's largest scale, so it is drawn from
+    /// the icon's big representations rather than enlarged from its 128 point one.
     static var previewArtwork: NSImage? {
         guard let icon = NSApp?.applicationIconImage, icon.size.width > 0 else { return nil }
         let margin: CGFloat = 0.1
@@ -131,7 +133,8 @@ struct TrackAnnouncement: Equatable {
             width: icon.size.width * (1 - 2 * margin),
             height: icon.size.height * (1 - 2 * margin)
         )
-        return NSImage(size: source.size, flipped: false) { rect in
+        let side = TrackAnnouncementSleeve.size * TrackAnnouncementLayout.maximumScale
+        return NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
             icon.draw(in: rect, from: source, operation: .sourceOver, fraction: 1)
             return true
         }
