@@ -51,7 +51,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # The build and tests don't need the write token; only gh release create uses it
           persist-credentials: false
