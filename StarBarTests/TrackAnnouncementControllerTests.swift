@@ -1484,6 +1484,112 @@ extension TrackAnnouncementControllerTests {
         XCTAssertEqual(presenter.refreshed.last?.rating, 40)
     }
 
+    // MARK: - The heart changing
+
+    func testSettingTheHeartBurstsItOnTheStripAndClearingItDips() {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidFavorite(true)
+        XCTAssertEqual(presenter.animated, [.burst])
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, true, "drawn with the new heart to change to")
+
+        controller.userDidFavorite(false)
+        XCTAssertEqual(presenter.animated, [.burst, .dip])
+    }
+
+    func testUnderReduceMotionTheStripsHeartCrossFades() {
+        reduceMotion = true
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidFavorite(true)
+
+        XCTAssertEqual(presenter.animated, [.fade])
+    }
+
+    func testAHeartTheStripAlreadyShowsDoesNotAnimate() {
+        live = .loaded(.init(rating: 60, isFavorited: true))
+        update(snapshot(track: "A"))
+
+        controller.userDidFavorite(true)
+
+        XCTAssertTrue(presenter.animated.isEmpty)
+    }
+
+    func testWithTheStripDownNothingAnimates() {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 1)
+
+        controller.userDidFavorite(true)
+
+        XCTAssertTrue(presenter.animated.isEmpty)
+    }
+
+    /// A heart set just before the strip goes keeps it up until the heart has finished
+    /// changing, rather than burst over a strip sliding away
+    func testAHeartSetNearTheEndKeepsTheStripUpUntilItHasChanged() throws {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+        let hold = try XCTUnwrap(clock.pendingOneShot)
+        XCTAssertEqual(hold.seconds, expectedHold, accuracy: 0.001)
+        clock.advance(by: expectedHold - 0.2)
+
+        controller.userDidFavorite(true)
+
+        XCTAssertFalse(hold.isValid)
+        let extended = try XCTUnwrap(clock.pendingOneShot)
+        XCTAssertEqual(extended.seconds, HeartBurst.duration + TrackAnnouncementController.heartChangeMargin, accuracy: 0.001)
+        XCTAssertEqual(presenter.hideCount, 0)
+        clock.advance(by: extended.seconds)
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 1)
+    }
+
+    func testAHeartSetEarlyLeavesTheHoldAlone() throws {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+        let hold = try XCTUnwrap(clock.pendingOneShot)
+
+        controller.userDidFavorite(true)
+
+        XCTAssertTrue(clock.pendingOneShot === hold)
+    }
+
+    func testASpotifyLikeClickedInStarBarBurstsTheStripsHeart() {
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: true))
+        update(spotify())
+
+        controller.userDidLikeOnSpotify(true, identity: "spotify:track:S")
+        XCTAssertEqual(presenter.animated, [.burst])
+        XCTAssertEqual(presenter.refreshed.last?.isFavorited, true)
+
+        controller.userDidLikeOnSpotify(false, identity: "spotify:track:S")
+        XCTAssertEqual(presenter.animated, [.burst, .dip])
+    }
+
+    func testASpotifyLikeAnimatesOnlyTheSongsOwnGreenHeart() {
+        // No sign-in: the strip shows no heart to animate
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: false))
+        update(spotify())
+        controller.userDidLikeOnSpotify(true, identity: "spotify:track:S")
+        XCTAssertTrue(presenter.animated.isEmpty)
+
+        // Another song's like
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: true))
+        update(spotify("spotify:track:T"))
+        controller.userDidLikeOnSpotify(true, identity: "spotify:track:S")
+        XCTAssertTrue(presenter.animated.isEmpty)
+
+        // A song the user has in Music shows that copy's heart, which a Spotify like isn't
+        live = musicCopy
+        update(spotify("spotify:track:U"))
+        controller.userDidLikeOnSpotify(true, identity: "spotify:track:U")
+        XCTAssertTrue(presenter.animated.isEmpty)
+    }
+
 }
 
 // MARK: - Fakes
@@ -1494,6 +1600,7 @@ private final class FakePresenter: TrackAnnouncementPresenter {
     private(set) var reduceMotionFlags: [Bool] = []
     private(set) var reduceTransparencyFlags: [Bool] = []
     private(set) var hideCount = 0
+    private(set) var animated: [HeartChange] = []
 
     func show(_ announcement: TrackAnnouncement, reduceMotion: Bool, reduceTransparency: Bool) {
         shown.append(announcement)
@@ -1507,5 +1614,9 @@ private final class FakePresenter: TrackAnnouncementPresenter {
 
     func hide() {
         hideCount += 1
+    }
+
+    func animateHeart(_ change: HeartChange) {
+        animated.append(change)
     }
 }

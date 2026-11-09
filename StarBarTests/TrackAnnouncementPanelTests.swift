@@ -1526,4 +1526,172 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(animated.alphaValue, 1)
     }
 
+    // MARK: - The heart changing
+
+    private func heartPanel(_ clock: FakeClock, slideDuration: TimeInterval = 0) -> TrackAnnouncementPanel {
+        return TrackAnnouncementPanel(slideDuration: slideDuration, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+    }
+
+    /// The strip's heart in the panel's content view, wherever the strip has slid to
+    private func heartCentre(_ panel: TrackAnnouncementPanel) throws -> NSPoint {
+        let heart = try XCTUnwrap(panel.stripView.heartFrame)
+        return NSPoint(x: panel.stripView.frame.minX + heart.midX, y: panel.stripView.frame.minY + heart.midY)
+    }
+
+    private func drawnCentre(_ panel: TrackAnnouncementPanel) throws -> NSPoint {
+        let centre = try XCTUnwrap(panel.heartView.centre)
+        return NSPoint(x: panel.heartView.frame.minX + centre.x, y: panel.heartView.frame.minY + centre.y)
+    }
+
+    func testASetHeartBurstsOverTheStripsOwnHeartAndPutsItBack() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        animated.refresh(TrackAnnouncement(copying: sample, isFavorited: true))
+
+        animated.animateHeart(.burst)
+
+        XCTAssertTrue(animated.isAnimatingHeart)
+        XCTAssertFalse(animated.heartView.isHidden)
+        XCTAssertTrue(animated.stripView.hidesHeart, "the strip leaves its heart out meanwhile")
+        XCTAssertEqual(animated.heartView.change, .burst)
+        XCTAssertEqual(animated.heartView.palette.ringStart, Stars.favoriteHeartColor)
+        let burst = try XCTUnwrap(animated.heartView.burst)
+        XCTAssertEqual(burst, HeartBurst.strip(heartSize: TrackAnnouncementLayout.ratingStarSize * animated.scale))
+        XCTAssertGreaterThanOrEqual(animated.heartView.frame.width / 2, burst.extent)
+        let drawn = try drawnCentre(animated)
+        let heart = try heartCentre(animated)
+        XCTAssertEqual(drawn.x, heart.x, accuracy: 0.001)
+        XCTAssertEqual(drawn.y, heart.y, accuracy: 0.001)
+        XCTAssertEqual(animated.heartView.hearts?.size, animated.stripView.heartFrame?.size)
+
+        clock.runFrames(for: 0.4)
+        XCTAssertEqual(animated.heartView.elapsed, 0.4, accuracy: 0.001)
+
+        clock.runFrames(for: HeartBurst.duration - 0.4 + 0.02)
+        XCTAssertFalse(animated.isAnimatingHeart)
+        XCTAssertTrue(animated.heartView.isHidden)
+        XCTAssertFalse(animated.stripView.hidesHeart, "the strip draws its own heart again")
+        XCTAssertNil(animated.heartView.change)
+    }
+
+    func testAClearedHeartDipsWithoutABurstAndEndsSooner() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(TrackAnnouncement(copying: sample, isFavorited: true), reduceMotion: false, reduceTransparency: false)
+        animated.refresh(sample)
+
+        animated.animateHeart(.dip)
+        XCTAssertEqual(animated.heartView.change, .dip)
+        clock.runFrames(for: HeartChange.dipDuration + 0.02)
+
+        XCTAssertFalse(animated.isAnimatingHeart)
+        XCTAssertFalse(animated.stripView.hidesHeart)
+    }
+
+    func testTheHeartIsWhereTheStripDrawsIt() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        let afterStars = try XCTUnwrap(animated.stripView.heartFrame)
+
+        animated.show(TrackAnnouncement(copying: sample, canRate: false), reduceMotion: false, reduceTransparency: false)
+        let first = try XCTUnwrap(animated.stripView.heartFrame)
+        XCTAssertLessThan(first.minX, afterStars.minX, "first on the row when there are no stars")
+        XCTAssertEqual(first.midY, afterStars.midY, accuracy: 0.001)
+
+        let spotify = TrackAnnouncement(identity: "spotify:track:S", title: "T", artist: "A", album: "B", canRate: false, source: .spotify, showsSpotifyHeart: true)
+        animated.show(spotify, reduceMotion: false, reduceTransparency: false)
+        XCTAssertEqual(animated.stripView.heartFrame, first)
+
+        let signedOut = TrackAnnouncement(identity: "spotify:track:S", title: "T", artist: "A", album: "B", canRate: false, source: .spotify)
+        animated.show(signedOut, reduceMotion: false, reduceTransparency: false)
+        XCTAssertNil(animated.stripView.heartFrame, "no heart without a sign-in")
+        animated.animateHeart(.burst)
+        XCTAssertFalse(animated.isAnimatingHeart, "so nothing to animate")
+    }
+
+    func testASpotifyLikeBurstsGreen() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        let liked = TrackAnnouncement(identity: "spotify:track:S", title: "T", artist: "A", album: "B", isFavorited: true, canRate: false, source: .spotify, showsSpotifyHeart: true)
+        animated.show(liked, reduceMotion: false, reduceTransparency: false)
+
+        animated.animateHeart(.burst)
+
+        XCTAssertEqual(animated.heartView.palette.ringStart, Stars.spotifyHeartColor)
+    }
+
+    func testNothingAnimatesWhileTheStripIsDownOrWarmingUp() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock, slideDuration: 0.3)
+        defer { animated.orderOut(nil) }
+
+        animated.animateHeart(.burst)
+        XCTAssertFalse(animated.isAnimatingHeart)
+
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+        animated.animateHeart(.burst)
+        XCTAssertFalse(animated.isAnimatingHeart, "the warm-up is never seen")
+        XCTAssertTrue(animated.heartView.isHidden)
+    }
+
+    func testTheHeartRidesWithTheStripWhileItSlidesIn() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock, slideDuration: 0.3)
+        defer { animated.orderOut(nil) }
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.05)
+
+        animated.animateHeart(.burst)
+        XCTAssertTrue(animated.isAnimatingHeart, "a heart set as the strip comes up")
+        clock.runFrames(for: 0.1)
+
+        XCTAssertEqual(animated.phase, .slidingIn)
+        let drawn = try drawnCentre(animated)
+        let heart = try heartCentre(animated)
+        XCTAssertEqual(drawn.x, heart.x, accuracy: 0.001)
+        XCTAssertEqual(drawn.y, heart.y, accuracy: 0.001)
+    }
+
+    func testANewSongOrARefusedHeartEndsTheChange() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        let favourite = TrackAnnouncement(copying: sample, isFavorited: true)
+        animated.show(favourite, reduceMotion: false, reduceTransparency: false)
+
+        animated.animateHeart(.burst)
+        animated.refresh(TrackAnnouncement(copying: favourite, rating: 80))
+        XCTAssertTrue(animated.isAnimatingHeart, "a new rating leaves the heart changing")
+
+        animated.refresh(sample)
+        XCTAssertFalse(animated.isAnimatingHeart, "Music refused it: the old heart is back")
+        XCTAssertFalse(animated.stripView.hidesHeart)
+
+        animated.refresh(favourite)
+        animated.animateHeart(.burst)
+        animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album"), reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(animated.isAnimatingHeart, "the heart belonged to the song before")
+        XCTAssertTrue(animated.heartView.isHidden)
+    }
+
+    func testHidingTakesTheHeartDown() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(TrackAnnouncement(copying: sample, isFavorited: true), reduceMotion: false, reduceTransparency: false)
+        animated.animateHeart(.burst)
+
+        animated.hide()
+
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertFalse(animated.isAnimatingHeart)
+        XCTAssertFalse(animated.stripView.hidesHeart)
+    }
+
 }
