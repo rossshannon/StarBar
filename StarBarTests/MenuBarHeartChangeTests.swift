@@ -34,10 +34,11 @@ final class MenuBarHeartChangeTests: XCTestCase {
         super.tearDown()
     }
 
-    /// Show a song and let the stars roll out, so the heart is at rest in its slot
+    /// Show a song and let the stars roll out, so the heart is at rest in its slot. Under the
+    /// Mac's own Reduce Motion, which CI's runners have on, there is no rollout and the heart is
+    /// at rest at once; the heart's change reads `reduceMotion`, which each test sets, so these
+    /// tests run either way.
     private func showSong(favorited: Bool, id: String = "00000000000000E1") throws -> NSRect {
-        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-                      "the rollout this waits for is skipped under Reduce Motion")
         let song = FakeTrack(name: "Heart \(id)", persistentID: id, rating: 60, favorited: favorited)
         menu.applyTrackDisplay(PlayingTrack(track: song), isStopped: false, musicIsRunning: true)
         clock.fireRepeating()
