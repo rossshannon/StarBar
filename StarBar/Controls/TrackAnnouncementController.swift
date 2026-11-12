@@ -190,6 +190,8 @@ final class TrackAnnouncementController: NSObject {
     /// What the strip is showing while the hold timer runs
     private var currentAnnouncement: TrackAnnouncement?
     private var hideTimer: RatingReminderTimer?
+    /// When `hideTimer` takes the strip down, so a heart set near the end can keep it up
+    private var hideAt: Date?
     /// A rating the user just chose in StarBar. Music usually has it at once, but a rating
     /// that arrives in the shadow of another can wait up to `iTunesRadioStation.ratingSaveDelay`,
     /// so until this expires, or Music refuses it, it wins over Music's reads. `trackID` is the
@@ -473,7 +475,31 @@ extension TrackAnnouncementController {
             ?? showing(identity)?.isFavorited
         pendingFavorite = (identity, isFavorited, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime),
                            trackID, refusedWrites(.favorite, trackID), before)
+        let shownBefore = showing(identity)?.isFavorited
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isFavorited) }
+        if let shownBefore = shownBefore, shownBefore != isFavorited {
+            animateHeart(favorited: isFavorited)
+        }
+    }
+
+    /// The user liked or unliked the Spotify song on show in StarBar. `SpotifyAccount` has
+    /// already shown it, through `spotifyLikeDidChange`; this animates the strip's heart, as
+    /// the menu bar's does, when the strip shows that song's green heart.
+    func userDidLikeOnSpotify(_ isLiked: Bool, identity: String) {
+        guard let current = showing(identity), current.namesSpotify, current.showsSpotifyHeart else { return }
+        updateStrip(identity: identity) { TrackAnnouncement(copying: $0, isFavorited: isLiked) }
+        animateHeart(favorited: isLiked)
+    }
+
+    /// Burst the strip's heart, or dip it, as the menu bar does, and keep the strip up until
+    /// the heart has finished changing
+    private func animateHeart(favorited: Bool) {
+        let change = HeartChange(favorited: favorited, reduceMotion: accessibility().reduceMotion)
+        let until = clock.now().addingTimeInterval(change.duration + TrackAnnouncementController.heartChangeMargin)
+        if let hideAt = hideAt, hideAt < until {
+            scheduleHide(at: until)
+        }
+        presenter.animateHeart(change)
     }
 
     /// A Spotify like was read or changed, or the sign-in came or went. Redraws the heart of
@@ -665,14 +691,47 @@ extension TrackAnnouncementController {
         let preferences = accessibility()
         currentAnnouncement = announcement
         presenter.show(announcement, reduceMotion: preferences.reduceMotion, reduceTransparency: preferences.reduceTransparency)
-        hideTimer?.invalidate()
         let hold = TrackAnnouncementController.holdDuration + TrackAnnouncementController.slideDuration
-        hideTimer = clock.schedule(after: hold, repeats: false) { [weak self] in
-            self?.hideTimer = nil
-            self?.currentAnnouncement = nil
-            self?.presenter.hide()
+        scheduleHide(at: clock.now().addingTimeInterval(hold))
+    }
+
+    /// Take the strip down at `date`, in place of any earlier time
+    private func scheduleHide(at date: Date) {
+        hideTimer?.invalidate()
+        hideAt = date
+        hideTimer = clock.schedule(after: max(0, date.timeIntervalSince(clock.now())), repeats: false) { [weak self] in
+            self?.hideUnlessTheHeartIsChanging()
         }
     }
+
+    /// Take the strip down, unless its heart is still changing: then wait for the change to
+    /// end and keep the strip up `heartChangeMargin` after that. A heart set near the end has
+    /// already moved the deadline past the change, but that deadline is on the wall clock,
+    /// and the change is stepped (`SteppedTimeline`), so a stalled main thread pauses the
+    /// change while the deadline runs on; hiding then would cut the burst short.
+    private func hideUnlessTheHeartIsChanging() {
+        guard presenter.isAnimatingHeart else {
+            hideTimer = nil
+            hideAt = nil
+            currentAnnouncement = nil
+            presenter.hide()
+            return
+        }
+        // Still the hide timer, so the strip still counts as up
+        hideTimer = clock.schedule(after: TrackAnnouncementController.heartCheckInterval, repeats: false) { [weak self] in
+            guard let self = self else { return }
+            if self.presenter.isAnimatingHeart {
+                self.hideUnlessTheHeartIsChanging()
+            } else {
+                self.scheduleHide(at: self.clock.now().addingTimeInterval(TrackAnnouncementController.heartChangeMargin))
+            }
+        }
+    }
+
+    /// How long the strip stays up after a heart has finished changing, at the least
+    static let heartChangeMargin: TimeInterval = 0.4
+    /// How often a strip due to go looks again at a heart still changing on it
+    static let heartCheckInterval: TimeInterval = 0.1
 
 }
 
@@ -810,4 +869,9 @@ protocol TrackAnnouncementPresenter: AnyObject {
     /// Redraw the strip with this announcement if it is up; do nothing if it is hidden
     func refresh(_ announcement: TrackAnnouncement)
     func hide()
+    /// The heart on the strip has just been set or cleared: animate it from the heart it
+    /// showed to the one the announcement now has. Nothing if the strip is down.
+    func animateHeart(_ change: HeartChange)
+    /// Whether the strip's heart is still changing, which keeps the strip up
+    var isAnimatingHeart: Bool { get }
 }

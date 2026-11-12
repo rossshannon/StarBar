@@ -123,6 +123,27 @@ final class TrackAnnouncementView: NSView {
         return artworkFrame.insetBy(dx: -margin, dy: -margin)
     }
 
+    /// Where the heart is drawn, in this view's coordinates; nil when the strip shows none
+    var heartFrame: NSRect? {
+        return content.heartFrame
+    }
+
+    /// The heart as the strip draws it for this song, set or not
+    func heartImage(favorited: Bool) -> NSImage {
+        return content.heartImage(favorited: favorited)
+    }
+
+    /// The shadow the strip's heart and text are drawn with
+    var heartShadow: NSShadow {
+        return content.textShadow
+    }
+
+    /// Leave the heart out, while the panel draws it changing over the strip
+    var hidesHeart: Bool {
+        get { return content.hidesHeart }
+        set { content.hidesHeart = newValue }
+    }
+
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
@@ -480,6 +501,16 @@ final class TrackAnnouncementContentView: NSView {
         return frames.artwork
     }
 
+    /// Leave the heart's slot empty: the panel draws the heart changing over the strip
+    /// (`HeartBurstView`) and puts this back when it is done
+    var hidesHeart = false {
+        didSet {
+            if hidesHeart != oldValue {
+                needsDisplay = true
+            }
+        }
+    }
+
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
         self.announcement = announcement
         super.init(frame: frame)
@@ -643,7 +674,10 @@ final class TrackAnnouncementContentView: NSView {
             return
         }
 
-        let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
+        // A favourite's slot is left empty in the template, which is also how to leave the
+        // heart out altogether
+        let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing,
+                                 isFavorited: announcement.isFavorited || hidesHeart)
         let template = stars.image
         template.isTemplate = true
         let image = template.withTintColor(.white)
@@ -652,11 +686,51 @@ final class TrackAnnouncementContentView: NSView {
         NSGraphicsContext.saveGraphicsState()
         textShadow.set()
         image.draw(at: origin, from: .zero, operation: .sourceOver, fraction: 1)
-        if announcement.isFavorited {
+        if announcement.isFavorited && !hidesHeart {
             let heart = Stars.filledFavoriteHeartImage(size: starSize)
             heart.draw(at: NSPoint(x: rect.minX + stars.starsWidth + spacing, y: origin.y), from: .zero, operation: .sourceOver, fraction: 1)
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private var ratingStarSize: NSSize {
+        return NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
+    }
+
+    /// Where the heart is drawn: after the stars, or first on the row when there are none.
+    /// Nil for a Spotify song shown without its heart.
+    var heartFrame: NSRect? {
+        let rect = frames.rating
+        let starSize = ratingStarSize
+        let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+        var minX = rect.minX
+        if announcement.namesSpotify {
+            guard announcement.showsSpotifyHeart else { return nil }
+        } else if announcement.canRate {
+            let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing, isFavorited: announcement.isFavorited)
+            minX += stars.starsWidth + spacing
+        }
+        return NSRect(x: minX, y: rect.midY - starSize.height / 2, width: starSize.width, height: starSize.height)
+    }
+
+    /// The heart as this strip draws it, set or not: Music's red heart or white outline, or
+    /// Spotify's green heart filled or outlined
+    func heartImage(favorited: Bool) -> NSImage {
+        let starSize = ratingStarSize
+        if announcement.namesSpotify {
+            return favorited ? Stars.spotifyHeartImage(size: starSize) : Stars.spotifyOutlinedHeartImage(size: starSize)
+        }
+        return favorited ? Stars.filledFavoriteHeartImage(size: starSize) : TrackAnnouncementContentView.whiteHeartOutline(size: starSize)
+    }
+
+    /// The heart's outline, white like the text
+    private static func whiteHeartOutline(size: NSSize) -> NSImage {
+        let outline = NSImage(size: size, flipped: false) { bounds in
+            Stars.drawFavoriteHeartOutline(in: bounds)
+            return true
+        }
+        outline.isTemplate = true
+        return outline.withTintColor(.white)
     }
 
     /// The heart on its own, then why there are no stars.
@@ -668,19 +742,12 @@ final class TrackAnnouncementContentView: NSView {
         let heartRect = NSRect(x: rect.minX, y: rect.midY - starSize.height / 2,
                                width: starSize.width, height: starSize.height)
 
-        NSGraphicsContext.saveGraphicsState()
-        textShadow.set()
-        if announcement.isFavorited {
-            Stars.filledFavoriteHeartImage(size: starSize).draw(in: heartRect)
-        } else {
-            let outline = NSImage(size: starSize, flipped: false) { bounds in
-                Stars.drawFavoriteHeartOutline(in: bounds)
-                return true
-            }
-            outline.isTemplate = true
-            outline.withTintColor(.white).draw(in: heartRect)
+        if !hidesHeart {
+            NSGraphicsContext.saveGraphicsState()
+            textShadow.set()
+            heartImage(favorited: announcement.isFavorited).draw(in: heartRect)
+            NSGraphicsContext.restoreGraphicsState()
         }
-        NSGraphicsContext.restoreGraphicsState()
 
         let textMinX = heartRect.maxX + spacing * 2
         let font = cannotRateFont
@@ -699,13 +766,12 @@ final class TrackAnnouncementContentView: NSView {
         if announcement.showsSpotifyHeart {
             let heartRect = NSRect(x: rect.minX, y: rect.midY - starSize.height / 2,
                                    width: starSize.width, height: starSize.height)
-            let heart = announcement.isFavorited
-                ? Stars.spotifyHeartImage(size: starSize)
-                : Stars.spotifyOutlinedHeartImage(size: starSize)
-            NSGraphicsContext.saveGraphicsState()
-            textShadow.set()
-            heart.draw(in: heartRect)
-            NSGraphicsContext.restoreGraphicsState()
+            if !hidesHeart {
+                NSGraphicsContext.saveGraphicsState()
+                textShadow.set()
+                heartImage(favorited: announcement.isFavorited).draw(in: heartRect)
+                NSGraphicsContext.restoreGraphicsState()
+            }
             textMinX = heartRect.maxX + spacing * 2
         }
         let font = cannotRateFont
@@ -716,7 +782,7 @@ final class TrackAnnouncementContentView: NSView {
     }
 
     /// Growl's soft downward shadow, scaled with the strip
-    private var textShadow: NSShadow {
+    var textShadow: NSShadow {
         let shadow = NSShadow()
         shadow.shadowOffset = CGSize(
             width: TrackAnnouncementLayout.shadowOffset.width * scale,

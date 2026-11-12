@@ -132,6 +132,12 @@
 		5A7E1A000000000000000411 /* TrackAnnouncementSleeve.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000412 /* TrackAnnouncementSleeve.swift */; };
 		5A7E1A000000000000000413 /* TrackAnnouncementSleeveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000414 /* TrackAnnouncementSleeveView.swift */; };
 		5A7E1A000000000000000415 /* TrackAnnouncementSleeveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000416 /* TrackAnnouncementSleeveTests.swift */; };
+		5A7E1A000000000000001301 /* HeartBurst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001302 /* HeartBurst.swift */; };
+		5A7E1A000000000000001303 /* HeartBurstView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001304 /* HeartBurstView.swift */; };
+		5A7E1A000000000000001305 /* HeartBurstWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001306 /* HeartBurstWindow.swift */; };
+		5A7E1A000000000000001307 /* HeartBurstTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001308 /* HeartBurstTests.swift */; };
+		5A7E1A000000000000001309 /* HeartBurstWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000000130A /* HeartBurstWindowTests.swift */; };
+		5A7E1A00000000000000130B /* MenuBarHeartChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000000130C /* MenuBarHeartChangeTests.swift */; };
 		5A7E1A0000000000000000E6 /* TrackAnnouncementController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E5 /* TrackAnnouncementController.swift */; };
 		5A7E1A0000000000000000E8 /* TrackAnnouncementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */; };
 		5A7E1A0000000000000000EA /* TrackAnnouncementPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */; };
@@ -294,6 +300,12 @@
 		5A7E1A000000000000000412 /* TrackAnnouncementSleeve.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSleeve.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000414 /* TrackAnnouncementSleeveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSleeveView.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000416 /* TrackAnnouncementSleeveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSleeveTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001302 /* HeartBurst.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurst.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001304 /* HeartBurstView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstView.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001306 /* HeartBurstWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstWindow.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001308 /* HeartBurstTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000000130A /* HeartBurstWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstWindowTests.swift; sourceTree = "<group>"; };
+		5A7E1A00000000000000130C /* MenuBarHeartChangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarHeartChangeTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E5 /* TrackAnnouncementController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementView.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementPanel.swift; sourceTree = "<group>"; };
@@ -436,6 +448,9 @@
 				5A7E1A0000000000000000EF /* TrackAnnouncementPanelTests.swift */,
 				5A7E1A000000000000000306 /* TrackAnnouncementSeeThroughTests.swift */,
 				5A7E1A000000000000000416 /* TrackAnnouncementSleeveTests.swift */,
+				5A7E1A000000000000001308 /* HeartBurstTests.swift */,
+				5A7E1A00000000000000130A /* HeartBurstWindowTests.swift */,
+				5A7E1A00000000000000130C /* MenuBarHeartChangeTests.swift */,
 				5A7E1A0000000000000000F1 /* FakeClock.swift */,
 			);
 			path = "StarBarTests";
@@ -532,6 +547,7 @@
 				5A7E1A0000000000000000E3 /* TrackAnnouncementLayout.swift */,
 				5A7E1A000000000000000302 /* TrackAnnouncementSeeThrough.swift */,
 				5A7E1A000000000000000412 /* TrackAnnouncementSleeve.swift */,
+				5A7E1A000000000000001302 /* HeartBurst.swift */,
 			);
 			path = Helper;
 			sourceTree = "<group>";
@@ -570,6 +586,8 @@
 				5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */,
 				5A7E1A000000000000000304 /* TrackAnnouncementSurfaceView.swift */,
 				5A7E1A000000000000000414 /* TrackAnnouncementSleeveView.swift */,
+				5A7E1A000000000000001304 /* HeartBurstView.swift */,
+				5A7E1A000000000000001306 /* HeartBurstWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -821,6 +839,9 @@
 				5A7E1A0000000000000000E4 /* TrackAnnouncementLayout.swift in Sources */,
 				5A7E1A000000000000000301 /* TrackAnnouncementSeeThrough.swift in Sources */,
 				5A7E1A000000000000000411 /* TrackAnnouncementSleeve.swift in Sources */,
+				5A7E1A000000000000001301 /* HeartBurst.swift in Sources */,
+				5A7E1A000000000000001303 /* HeartBurstView.swift in Sources */,
+				5A7E1A000000000000001305 /* HeartBurstWindow.swift in Sources */,
 				5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */,
 				DB424A3E2308936F00230C7E /* AutoScrollTextField.swift in Sources */,
 				DB424A3823073CB000230C7E /* PopoverViewController.swift in Sources */,
@@ -872,6 +893,9 @@
 				5A7E1A0000000000000000F0 /* TrackAnnouncementPanelTests.swift in Sources */,
 				5A7E1A000000000000000305 /* TrackAnnouncementSeeThroughTests.swift in Sources */,
 				5A7E1A000000000000000415 /* TrackAnnouncementSleeveTests.swift in Sources */,
+				5A7E1A000000000000001307 /* HeartBurstTests.swift in Sources */,
+				5A7E1A000000000000001309 /* HeartBurstWindowTests.swift in Sources */,
+				5A7E1A00000000000000130B /* MenuBarHeartChangeTests.swift in Sources */,
 				5A7E1A0000000000000000EE /* TrackAnnouncementControllerTests.swift in Sources */,
 				5A7E1A0000000000000000EC /* TrackAnnouncementLayoutTests.swift in Sources */,
 				5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */,
