@@ -256,10 +256,12 @@ final class StarRolloutTests: XCTestCase {
     // MARK: - The rollout as the menu bar draws it
 
     /// A menu bar control on a fake clock that has just been given its first song, so the
-    /// stars are about to roll in from the stopped dot
-    private func startRollout() throws -> (clock: FakeClock, menu: MenuBarRatingControl) {
-        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-                      "Reduce Motion intentionally bypasses the animation")
+    /// stars are about to roll in from the stopped dot. Reduce Motion is set off for the test
+    /// rather than read from the machine, since CI's runners have it on and it skips the rollout.
+    private func startRollout() -> (clock: FakeClock, menu: MenuBarRatingControl) {
+        let readReduceMotion = MenuBarRatingControl.reduceMotion
+        MenuBarRatingControl.reduceMotion = { false }
+        addTeardownBlock { MenuBarRatingControl.reduceMotion = readReduceMotion }
         let clock = FakeClock()
         let menu = MenuBarRatingControl(widthClock: clock)
         XCTAssertFalse(menu.isAnimating)
@@ -278,7 +280,7 @@ final class StarRolloutTests: XCTestCase {
     }
 
     func testTheWidenedItemIsLeftEmptyUntilItHasSettledAndThenTheStarsRoll() throws {
-        let (clock, menu) = try startRollout()
+        let (clock, menu) = startRollout()
         defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
         let layout = MenuBarStripLayout(starSize: menu.ratingControl.starSize, spacing: menu.ratingControl.spacing)
         XCTAssertEqual(menu.statusItem.length, layout.statusItemWidth, "the item widens in one step, before anything is drawn in it")
@@ -299,7 +301,7 @@ final class StarRolloutTests: XCTestCase {
     }
 
     func testAFirstFrameHeldUpByMusicReadsStartsTheRollWithoutASecondWait() throws {
-        let (clock, menu) = try startRollout()
+        let (clock, menu) = startRollout()
         defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
         clock.advance(by: 0.25)
         clock.fireRepeating()
@@ -309,7 +311,7 @@ final class StarRolloutTests: XCTestCase {
     }
 
     func testAHeldMainThreadPausesTheRollRatherThanFinishingIt() throws {
-        let (clock, menu) = try startRollout()
+        let (clock, menu) = startRollout()
         defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
         clock.advance(by: 0.25)
         clock.fireRepeating()

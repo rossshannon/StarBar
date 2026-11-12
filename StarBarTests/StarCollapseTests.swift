@@ -206,8 +206,11 @@ final class StarCollapseTests: XCTestCase {
     }
 
     private func assertDeletionCollapses(changesIdentity: Bool, hasMissingTrackUpdate: Bool) throws {
-        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
-                      "Reduce Motion intentionally bypasses the animation")
+        // Reduce Motion is set off rather than read from the machine: CI's runners have it
+        // on, and it skips the rollout and the collapse alike
+        let readReduceMotion = MenuBarRatingControl.reduceMotion
+        MenuBarRatingControl.reduceMotion = { false }
+        defer { MenuBarRatingControl.reduceMotion = readReduceMotion }
         let clock = FakeClock()
         let menu = MenuBarRatingControl(widthClock: clock)
         defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }

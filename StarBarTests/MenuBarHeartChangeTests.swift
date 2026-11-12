@@ -39,16 +39,16 @@ final class MenuBarHeartChangeTests: XCTestCase {
         super.tearDown()
     }
 
-    /// Show a song and let the stars roll out, so the heart is at rest in its slot. Under the
-    /// Mac's own Reduce Motion, which CI's runners have on, there is no rollout and the heart is
-    /// at rest at once; the heart's change reads `reduceMotion`, which each test sets, so these
-    /// tests run either way.
+    /// Show a song and let the stars roll out, so the heart is at rest in its slot. The rollout
+    /// reads `reduceMotion` as the heart's change does, which each test sets, so these tests run
+    /// the same on CI's runners, which have Reduce Motion on. Time passes a frame at a time: one
+    /// long step would be a held main thread, which pauses the rollout rather than finishing it.
     private func showSong(favorited: Bool, id: String = "00000000000000E1") throws -> NSRect {
         let song = FakeTrack(name: "Heart \(id)", persistentID: id, rating: 60, favorited: favorited)
         menu.applyTrackDisplay(PlayingTrack(track: song), isStopped: false, musicIsRunning: true)
         clock.fireRepeating()
-        clock.advance(by: StarRollout.duration + 0.01)
-        clock.fireRepeating()
+        clock.runFrames(for: StarRollout.settleDuration + StarRollout.duration + 0.05)
+        XCTAssertTrue(clock.pendingRepeating.isEmpty, "the rollout has finished")
         XCTAssertEqual(menu.ratingControl.isFavorited, favorited)
         XCTAssertFalse(menu.favoriteHeartView.isHidden)
         XCTAssertTrue(menu.outgoingHeartView.isHidden, "one heart at rest")

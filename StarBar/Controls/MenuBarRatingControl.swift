@@ -70,7 +70,7 @@ final class MenuBarRatingControl {
     /// Stands in for `heartOnScreen` in the tests, since a status item made in a test is never
     /// on screen: where the heart is, or nil for an item that isn't on screen
     var heartOnScreenInTests: (() -> NSRect?)?
-    /// Reduce Motion, read at each click; the tests replace it
+    /// Reduce Motion, read at each click and for each transition; the tests replace it
     static var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
@@ -552,7 +552,7 @@ extension MenuBarRatingControl {
         guard shouldAnimate, (changed || changesRating), !isStop, fromWidth > 0,
               (fromWidth != toWidth || changesRating || rolls),
               !MenuBarRatingControl.isUITesting,
-              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+              !MenuBarRatingControl.reduceMotion() else {
             finishWidthAnimation()
             return
         }
@@ -615,7 +615,7 @@ extension MenuBarRatingControl {
                 progress = rollout.progress(elapsed: timing.elapsed,
                                             sinceWidening: widenedAt.map { now.timeIntervalSince($0) })
             }
-            if progress >= 1 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            if progress >= 1 || MenuBarRatingControl.reduceMotion() {
                 self.logTransition(ended: "completed")
                 self.finishWidthAnimation()
                 return
