@@ -110,6 +110,11 @@ final class iTunesRadioStation {
 
     /// Coalesces a run of `libraryChanged` notifications into one re-read
     private var libraryChangedTimer: RatingReminderTimer?
+    /// When that re-read first found something moving on screen and waited for it, until it
+    /// has run (`motionHoldsBackAReread`)
+    private var libraryRereadWaitingSince: Date?
+    /// A re-read that is waiting for the motion on screen to end (`readPlayerAgainWhenStill`)
+    private var stillnessReread: RatingReminderTimer?
 
     /// Times both re-reads of the player: after a library change and after a refused write.
     /// Not private only so the tests can put a `FakeClock` here and fire it by hand, like
@@ -123,6 +128,9 @@ final class iTunesRadioStation {
     func cancelPendingRereads() {
         libraryChangedTimer?.invalidate()
         libraryChangedTimer = nil
+        libraryRereadWaitingSince = nil
+        stillnessReread?.invalidate()
+        stillnessReread = nil
         refusedWriteReread?.invalidate()
         refusedWriteReread = nil
         repeatHold.cancel()
@@ -131,7 +139,9 @@ final class iTunesRadioStation {
     /// Whether anything StarBar steps by hand is moving on screen: the track strip
     /// (`TrackAnnouncementPanel.isMoving`) or a menu bar transition
     /// (`MenuBarRatingControl.isAnimating`). Set where the two are made. While it is, a
-    /// notification that repeats Music's last one waits (`repeatHold`).
+    /// notification that repeats Music's last one waits (`repeatHold`), and so do the re-reads
+    /// of the player after a library change and after Music has launched
+    /// (`motionHoldsBackAReread`).
     var somethingIsMoving: () -> Bool = { false }
 
     /// Holds a `playerInfo` that repeats the last one, and the Apple Events everything reads on
@@ -278,7 +288,55 @@ extension iTunesRadioStation {
             guard self.ratingWriter.heldRating == nil else {
                 return self.scheduleLibraryReread(after: iTunesRadioStation.ratingSaveDelay)
             }
+            // Nor while the strip or the menu bar is moving: see `motionHoldsBackAReread`
+            if self.motionHoldsBackAReread(waitingSince: self.libraryRereadWaitingSince) {
+                if self.libraryRereadWaitingSince == nil {
+                    self.libraryRereadWaitingSince = self.rereadClock.now()
+                    os_log("%{public}s[%{public}ld], %{public}s: holding the re-read after a library change until the motion on screen is over", ((#file as NSString).lastPathComponent), #line, #function)
+                }
+                return self.scheduleLibraryReread(after: iTunesRadioStation.rereadMotionCheckInterval)
+            }
+            self.libraryRereadWaitingSince = nil
             self.readPlayerAgain(because: "Music's library changed")
+        }
+    }
+
+    /// How often a re-read held back by the motion on screen looks again, and the longest it
+    /// waits: the same as a repeated notification (`RepeatedUpdateHold`)
+    static let rereadMotionCheckInterval = RepeatedUpdateHold<PlayInfo>.checkInterval
+    static let rereadMotionLimit = RepeatedUpdateHold<PlayInfo>.limit
+
+    /// Whether a re-read of the player nobody asked for should wait for the strip and the
+    /// menu bar to stop moving, having waited since `since` (nil when it has not waited yet).
+    ///
+    /// A re-read replaces the player record, so the menu bar and the strip read Music again,
+    /// over Apple Events on the main thread, which is what draws their motion. Measured on
+    /// 2026-11-12, for a library song started just after Music opened: Music announced a
+    /// library change 1.1 s after the play, and the re-read for it, 0.3 s later, took 16 Apple
+    /// Events and 266 ms, about 0.58 s into the stars' one-second rollout. Nothing is waiting
+    /// on such a re-read (the stars on show are refused by the click's own check when their
+    /// track has gone), so it waits like Music's repeat of a notification, and for no longer.
+    private func motionHoldsBackAReread(waitingSince since: Date?) -> Bool {
+        guard somethingIsMoving() else { return false }
+        guard let since = since else { return true }
+        return rereadClock.now().timeIntervalSince(since) < iTunesRadioStation.rereadMotionLimit
+    }
+
+    /// Read the player again once nothing on screen is moving, or after
+    /// `rereadMotionLimit` if the motion goes on. For a re-read nothing is waiting on. Not
+    /// private only so the tests can call it.
+    func readPlayerAgainWhenStill(because reason: String, waitingSince since: Date? = nil) {
+        stillnessReread?.invalidate()
+        stillnessReread = nil
+        guard motionHoldsBackAReread(waitingSince: since) else {
+            return readPlayerAgain(because: reason)
+        }
+        if since == nil {
+            os_log("%{public}s[%{public}ld], %{public}s: holding the re-read because %{public}s until the motion on screen is over", ((#file as NSString).lastPathComponent), #line, #function, reason)
+        }
+        let started = since ?? rereadClock.now()
+        stillnessReread = rereadClock.schedule(after: iTunesRadioStation.rereadMotionCheckInterval, repeats: false) { [weak self] in
+            self?.readPlayerAgainWhenStill(because: reason, waitingSince: started)
         }
     }
 
@@ -703,8 +761,12 @@ extension iTunesRadioStation {
         guard iTunesRadioStation.isMusic(notification) else { return }
         // Music answers Apple Events only once it has finished launching. It will post its
         // own notification when playback starts; this read is for the menu bar's state.
+        // Not while the stars roll in or the strip slides, which is when it can come due for a
+        // song started as Music opens (the popover's play button has one playing 2.3 to 3.4 s
+        // after the press; not itself measured): the song's own notifications have already
+        // said what is playing.
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
-            self?.readPlayerAgain(because: "Music launched")
+            self?.readPlayerAgainWhenStill(because: "Music launched")
         }
     }
 
@@ -714,8 +776,11 @@ extension iTunesRadioStation {
         // A rating still held has nowhere to go, and its timer would send an Apple Event to a
         // track whose app has quit
         ratingWriter.discard()
-        // A repeat held for the motion on screen describes a player that has gone
+        // A repeat held for the motion on screen describes a player that has gone, and so
+        // does a re-read held for it: the observer below reads the player now anyway
         repeatHold.cancel()
+        stillnessReread?.invalidate()
+        stillnessReread = nil
         // The observer runs iTunesPlayer.shared.update(), which finds Music not running
         latestPlayInfo = nil
     }
