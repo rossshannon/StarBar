@@ -700,15 +700,38 @@ extension TrackAnnouncementController {
         hideTimer?.invalidate()
         hideAt = date
         hideTimer = clock.schedule(after: max(0, date.timeIntervalSince(clock.now())), repeats: false) { [weak self] in
-            self?.hideTimer = nil
-            self?.hideAt = nil
-            self?.currentAnnouncement = nil
-            self?.presenter.hide()
+            self?.hideUnlessTheHeartIsChanging()
+        }
+    }
+
+    /// Take the strip down, unless its heart is still changing: then wait for the change to
+    /// end and keep the strip up `heartChangeMargin` after that. A heart set near the end has
+    /// already moved the deadline past the change, but that deadline is on the wall clock,
+    /// and the change is stepped (`SteppedTimeline`), so a stalled main thread pauses the
+    /// change while the deadline runs on; hiding then would cut the burst short.
+    private func hideUnlessTheHeartIsChanging() {
+        guard presenter.isAnimatingHeart else {
+            hideTimer = nil
+            hideAt = nil
+            currentAnnouncement = nil
+            presenter.hide()
+            return
+        }
+        // Still the hide timer, so the strip still counts as up
+        hideTimer = clock.schedule(after: TrackAnnouncementController.heartCheckInterval, repeats: false) { [weak self] in
+            guard let self = self else { return }
+            if self.presenter.isAnimatingHeart {
+                self.hideUnlessTheHeartIsChanging()
+            } else {
+                self.scheduleHide(at: self.clock.now().addingTimeInterval(TrackAnnouncementController.heartChangeMargin))
+            }
         }
     }
 
     /// How long the strip stays up after a heart has finished changing, at the least
     static let heartChangeMargin: TimeInterval = 0.4
+    /// How often a strip due to go looks again at a heart still changing on it
+    static let heartCheckInterval: TimeInterval = 0.1
 
 }
 
@@ -849,4 +872,6 @@ protocol TrackAnnouncementPresenter: AnyObject {
     /// The heart on the strip has just been set or cleared: animate it from the heart it
     /// showed to the one the announcement now has. Nothing if the strip is down.
     func animateHeart(_ change: HeartChange)
+    /// Whether the strip's heart is still changing, which keeps the strip up
+    var isAnimatingHeart: Bool { get }
 }
