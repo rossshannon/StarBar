@@ -7,6 +7,40 @@ struct StarRollout {
     static let travelDuration = 0.78
     static let stagger = 0.055
 
+    /// How long a widened item is left empty before the first star shows.
+    ///
+    /// macOS 27 first draws a status item that has widened a long way over the items to its
+    /// right, and then slides it into place. Measured 2026-10-22, going from the 32 pt dot to
+    /// the 148 pt strip, the first star showed over the neighbouring icon for 3 to 4 frames;
+    /// measured 2026-11-12 on macOS 27.2, going from Spotify's 52 pt heart, for 7 and 8 frames
+    /// at 60 Hz in two recordings (0.12 to 0.13 s, from the frame the item widened, the star
+    /// starting two icons to the right). So the stars wait nine frames for that slide, as the
+    /// add button waits for the slide of a narrowed item (`StarCollapse.settleDuration`). The
+    /// wait is counted from the widening, and a new song's first frame usually comes later
+    /// than this anyway, behind the Music reads the song sets off (0.4 to 0.6 s later in
+    /// eight rollouts from the stopped dot that day), so it is only a wait when the frame
+    /// would have come too soon: after Spotify's heart has faded, which widens the item on a
+    /// frame of the transition itself.
+    static let settleDuration: TimeInterval = 0.15
+
+    /// How far a rollout's stars have rolled: nowhere until the widened item has been left
+    /// `settleDuration` to be put in its place, and then over `duration`.
+    struct Schedule {
+        /// How long the transition had run, as drawn, when the stars started to roll
+        private var rollStart: TimeInterval?
+
+        /// - Parameters:
+        ///   - elapsed: how long the transition has run, as drawn
+        ///   - sinceWidening: time on the clock since the item widened, or nil if it has not yet
+        mutating func progress(elapsed: TimeInterval, sinceWidening: TimeInterval?) -> Double {
+            if rollStart == nil, let sinceWidening = sinceWidening, sinceWidening >= StarRollout.settleDuration {
+                rollStart = elapsed
+            }
+            guard let rollStart = rollStart else { return 0 }
+            return min(1, max(0, (elapsed - rollStart) / StarRollout.duration))
+        }
+    }
+
     static func shouldRoll(wasStopped: Bool, isStopped: Bool,
                            previousMode: RatingControl.Mode, mode: RatingControl.Mode) -> Bool {
         return !isStopped && mode == .rating && (wasStopped || previousMode == .addToLibrary || previousMode == .spotify)

@@ -70,7 +70,7 @@ final class MenuBarRatingControl {
     /// Stands in for `heartOnScreen` in the tests, since a status item made in a test is never
     /// on screen: where the heart is, or nil for an item that isn't on screen
     var heartOnScreenInTests: (() -> NSRect?)?
-    /// Reduce Motion, read at each click; the tests replace it
+    /// Reduce Motion, read at each click and for each transition; the tests replace it
     static var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
@@ -182,6 +182,14 @@ final class MenuBarRatingControl {
 
     /// Steps the current width or in-place glyph transition
     private var widthTimer: RatingReminderTimer?
+    /// What the log will say of the transition under way when it ends
+    private struct TransitionLog {
+        let kind: String
+        /// How long the first frame waited behind whatever else the main thread was doing
+        var firstFrameWait: TimeInterval?
+        var cadence = FrameCadence()
+    }
+    private var transitionLog: TransitionLog?
     private var displayedStopped = true
     private var displayedMode: RatingControl.Mode = .rating
     private var rolloutProgress: Double?
@@ -279,6 +287,13 @@ final class MenuBarRatingControl {
     /// True while the user drags across the stars, when Apple Events would stall the preview
     var isDragging: Bool {
         return clickController.isDragging
+    }
+
+    /// True while a transition is being drawn in the menu bar: the stars rolling in or
+    /// shrinking away, a rating changing. Its frames are drawn on the main thread, so the
+    /// Apple Events a player update sets off would hold them
+    var isAnimating: Bool {
+        return widthTimer != nil
     }
 
     /// Say why a rating shortcut did nothing. Silence here reads as a broken shortcut.
@@ -516,6 +531,7 @@ extension MenuBarRatingControl {
         if widthTimer != nil {
             os_log("Menu bar transition superseded: display changed %{public}d, rating change %{public}d, animate %{public}d",
                    changed, changesRating, shouldAnimate)
+            logTransition(ended: "superseded")
         }
 
         let fromWidth = displayedContentWidth ?? statusItem.length
@@ -536,7 +552,7 @@ extension MenuBarRatingControl {
         guard shouldAnimate, (changed || changesRating), !isStop, fromWidth > 0,
               (fromWidth != toWidth || changesRating || rolls),
               !MenuBarRatingControl.isUITesting,
-              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+              !MenuBarRatingControl.reduceMotion() else {
             finishWidthAnimation()
             return
         }
@@ -565,47 +581,54 @@ extension MenuBarRatingControl {
         } else {
             statusItem.button?.image = padded(ratingControl.starsImage)
         }
-        var drawnFrames = 0
         var timing = MenuBarAnimationTiming(duration: duration)
-        var firstFrameDelay: TimeInterval?
         var narrowedAt: Date?
+        // A rollout's stars wait for the menu bar to put the widened item in its place. The
+        // item has widened already, unless Spotify's heart has to fade out of it first.
+        var widenedAt: Date? = rolls && !rollsFromSpotify ? start : nil
+        var rollout = StarRollout.Schedule()
+        transitionLog = TransitionLog(kind: changesRating ? "rating change" : (rolls ? "rollout" : (collapses ? "collapse" : "width change")))
         widthTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             guard let self = self else { return }
             let now = self.widthClock.now()
-            let elapsed = now.timeIntervalSince(start)
-            if firstFrameDelay == nil {
-                firstFrameDelay = elapsed
-                if collapses { os_log("Menu bar collapse drew its first frame after %{public}.3f s", elapsed) }
+            if self.transitionLog?.firstFrameWait == nil {
+                let wait = now.timeIntervalSince(start)
+                self.transitionLog?.firstFrameWait = wait
+                if collapses { os_log("Menu bar collapse drew its first frame after %{public}.3f s", wait) }
             }
+            // A frame that comes late counts only in part, so a held main thread pauses the
+            // motion where it was drawn rather than jumping it on
             var progress = timing.progress(at: now)
+            self.transitionLog?.cadence.frame(at: now, animationTime: timing.elapsed)
             if collapses {
                 // Time the hidden wait from the narrowing itself, however late that frame was
                 progress = StarCollapse.progress(elapsed: progress * duration,
                                                  sinceNarrowing: narrowedAt.map { now.timeIntervalSince($0) })
-            }
-            if progress >= 1 || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                if changesRating || collapses {
-                    os_log("Completed menu bar transition: %{public}d frames, first-frame wait %{public}.3f s", drawnFrames, firstFrameDelay ?? 0)
+            } else if rolls {
+                if self.spotifyHeartFadeProgress != nil, timing.elapsed >= heartFade {
+                    // The heart has gone, so the widened item is drawn empty
+                    self.spotifyHeartFadeProgress = nil
+                    self.statusItem.length = self.settledAllocation
+                    widenedAt = now
                 }
+                // The stars' own progress: nothing until the widened item has settled
+                progress = rollout.progress(elapsed: timing.elapsed,
+                                            sinceWidening: widenedAt.map { now.timeIntervalSince($0) })
+            }
+            if progress >= 1 || MenuBarRatingControl.reduceMotion() {
+                self.logTransition(ended: "completed")
                 self.finishWidthAnimation()
                 return
             }
-            drawnFrames += 1
             if changesRating {
                 self.drawRatingTransition(from: outgoingStars, progress: progress)
             } else if rolls {
-                let elapsed = progress * duration
-                if elapsed < heartFade {
-                    self.spotifyHeartFadeProgress = elapsed / heartFade
-                    self.drawOutgoingSpotifyIcon(progress: elapsed / heartFade)
+                if self.spotifyHeartFadeProgress != nil {
+                    let fade = timing.elapsed / heartFade
+                    self.spotifyHeartFadeProgress = fade
+                    self.drawOutgoingSpotifyIcon(progress: fade)
                 } else {
-                    if self.spotifyHeartFadeProgress != nil {
-                        // The heart has gone, so the widened item is drawn empty
-                        self.spotifyHeartFadeProgress = nil
-                        self.statusItem.length = self.settledAllocation
-                    }
-                    self.drawRollout(progress: (elapsed - heartFade) / StarRollout.duration,
-                                     fromWidth: fromWidth, toWidth: toWidth)
+                    self.drawRollout(progress: progress, fromWidth: fromWidth, toWidth: toWidth)
                 }
             } else if collapses {
                 self.drawCollapse(stars: outgoingStars, progress: progress, fromWidth: fromWidth, toWidth: toWidth)
@@ -662,7 +685,21 @@ extension MenuBarRatingControl {
         updateFavoriteHeartView()
     }
 
+    /// Say in the log how the transition that has just ended was drawn: how many frames, how
+    /// many came late, the longest wait between two and where in the motion it fell. One line
+    /// a transition, so a hitch seen on screen can be found afterwards (`FrameCadence`).
+    private func logTransition(ended how: String) {
+        guard let log = transitionLog else { return }
+        transitionLog = nil
+        // One that never drew a frame was never seen, so there is nothing to say of it
+        guard log.cadence.frames > 0 else { return }
+        os_log("Menu bar %{public}s %{public}s: %{public}s, first-frame wait %{public}.3f s",
+               log.kind, how, log.cadence.summary, log.firstFrameWait ?? 0)
+    }
+
     private func finishWidthAnimation() {
+        // Still unlogged, so it didn't run to its end: a click finished it, or nothing animates
+        logTransition(ended: "cut short")
         widthTimer?.invalidate()
         widthTimer = nil
         rolloutProgress = nil

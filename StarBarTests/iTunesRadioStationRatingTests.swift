@@ -26,11 +26,16 @@ import iTunesLibrary
 final class iTunesRadioStationRatingTests: XCTestCase {
 
     private let station = iTunesRadioStation.shared
+    private var appsSomethingIsMoving: (() -> Bool)!
 
     override func setUp() {
         super.setUp()
         station.flushHeldRatingWrite()
         station.cancelPendingRereads()
+        // The host app's strip and menu bar are real, and a re-read waits while either moves;
+        // the tests that are about that wait say for themselves what is moving
+        appsSomethingIsMoving = station.somethingIsMoving
+        station.somethingIsMoving = { false }
     }
 
     override func tearDown() {
@@ -38,6 +43,7 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         // A re-read left waiting would otherwise run in the next test, or count as pending there
         station.cancelPendingRereads()
         station.rereadClock = RunLoopClock()
+        station.somethingIsMoving = appsSomethingIsMoving
         // Leave no fake song behind as "what is playing" for the rest of the run
         iTunesPlayer.shared.update(nil, broadcast: false)
         super.tearDown()
@@ -202,6 +208,119 @@ final class iTunesRadioStationRatingTests: XCTestCase {
         clock.fireAllOneShots()
         XCTAssertEqual(track.ratingsWritten.last, 80)
         XCTAssertEqual(updates, 1, "the deferred refresh is not lost")
+    }
+
+    /// The re-read is Apple Events on the main thread, which is what draws the stars' rollout
+    /// and the strip's slide, and Music announces a library change about a second after a song
+    /// starts in a Music just opened
+    func testLibraryRefreshWaitsForTheMotionOnScreenThenRuns() {
+        let center = NotificationCenter()
+        station.observeLibraryChanges(in: center)
+        defer { center.removeObserver(station) }
+        let clock = useFakeRereadClock()
+        var isMoving = true
+        station.somethingIsMoving = { isMoving }
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        center.post(name: .ITLibraryDidChange, object: nil)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 0, "nothing is read while the stars roll")
+        XCTAssertEqual(clock.pendingOneShots.count, 1)
+        XCTAssertEqual(clock.pendingOneShot?.seconds, iTunesRadioStation.rereadMotionCheckInterval, "it looks again shortly")
+
+        clock.advance(by: 0.5)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 0, "still rolling")
+
+        isMoving = false
+        clock.advance(by: iTunesRadioStation.rereadMotionCheckInterval)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 1, "the deferred refresh is not lost")
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+    }
+
+    /// Motion that never ends, as when a transition's frames don't come with the display
+    /// asleep, can't keep a deleted song's stars on show for long
+    func testLibraryRefreshWaitsNoLongerThanTheLimitHoweverManySignalsCome() {
+        let center = NotificationCenter()
+        station.observeLibraryChanges(in: center)
+        defer { center.removeObserver(station) }
+        let clock = useFakeRereadClock()
+        station.somethingIsMoving = { true }
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        let limit = iTunesRadioStation.rereadMotionLimit
+        let step = iTunesRadioStation.rereadMotionCheckInterval
+
+        center.post(name: .ITLibraryDidChange, object: nil)
+        clock.fireAllOneShots()
+        var waited: TimeInterval = 0
+        while waited < limit - 2 * step {
+            clock.advance(by: step)
+            waited += step
+            if abs(waited - limit / 2) < step / 2 {
+                // A second signal part of the way through doesn't start the wait again
+                center.post(name: Notification.Name("com.apple.iTunes.libraryChanged"), object: nil)
+            }
+            clock.fireAllOneShots()
+            XCTAssertEqual(updates, 0, "held at \(waited) s")
+        }
+        clock.advance(by: 3 * step)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 1, "read once the limit has passed, though the motion goes on")
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+
+        // And the next library change starts a wait of its own
+        center.post(name: .ITLibraryDidChange, object: nil)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 1, "held again")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, step)
+    }
+
+    /// The re-read two seconds after Music launches waits the same way
+    func testAReReadNothingWaitsOnWaitsForTheMotionOnScreen() {
+        let clock = useFakeRereadClock()
+        var isMoving = false
+        station.somethingIsMoving = { isMoving }
+        var updates = 0
+        let observer = NotificationCenter.default.addObserver(forName: .iTunesPlayerDidUpdated, object: nil, queue: nil) { _ in updates += 1 }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        station.readPlayerAgainWhenStill(because: "nothing is moving")
+        XCTAssertEqual(updates, 1, "read at once")
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+
+        isMoving = true
+        station.readPlayerAgainWhenStill(because: "the stars are rolling")
+        XCTAssertEqual(updates, 1, "not while they roll")
+        XCTAssertEqual(clock.pendingOneShot?.seconds, iTunesRadioStation.rereadMotionCheckInterval)
+        clock.advance(by: 0.4)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 1)
+        XCTAssertEqual(clock.pendingOneShots.count, 1, "one check waiting, however often it has looked")
+
+        isMoving = false
+        clock.advance(by: iTunesRadioStation.rereadMotionCheckInterval)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 2, "and then it reads")
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+
+        // Motion that goes on holds it only so long
+        isMoving = true
+        station.readPlayerAgainWhenStill(because: "the display is asleep")
+        clock.advance(by: iTunesRadioStation.rereadMotionLimit + 0.1)
+        clock.fireAllOneShots()
+        XCTAssertEqual(updates, 3)
+
+        // And one still waiting is dropped with the others
+        station.readPlayerAgainWhenStill(because: "the test is ending")
+        XCTAssertEqual(clock.pendingOneShots.count, 1)
+        station.cancelPendingRereads()
+        XCTAssertTrue(clock.pendingOneShots.isEmpty)
+        XCTAssertEqual(updates, 3)
     }
 
     func testCommittingStaleStarsRefreshesInsteadOfRatingTheDeletedTrack() throws {

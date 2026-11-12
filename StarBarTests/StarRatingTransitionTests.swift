@@ -2,29 +2,49 @@ import XCTest
 @testable import StarBar
 
 final class StarRatingTransitionTests: XCTestCase {
+    /// Step `timing` a display frame at a time for `seconds`, as the menu bar's display link
+    /// does: one long step would be a held main thread, which counts only in part
+    private func run(_ timing: inout MenuBarAnimationTiming, on clock: FakeClock, for seconds: TimeInterval) -> Double {
+        var progress = 0.0
+        var left = seconds
+        while left > 1e-9 {
+            let step = min(1.0 / 60.0, left)
+            clock.advance(by: step)
+            progress = timing.progress(at: clock.now())
+            left -= step
+        }
+        return progress
+    }
+
     func testSlowMusicReadBeforeFirstFrameDoesNotConsumeTheAnimation() {
         let clock = FakeClock()
         var timing = MenuBarAnimationTiming(duration: StarRatingTransition.duration)
         clock.advance(by: 0.233)
         XCTAssertEqual(timing.progress(at: clock.now()), 0,
                        "The first display callback must start the animation, even after slow Music reads")
-        clock.advance(by: 0.1)
-        XCTAssertEqual(timing.progress(at: clock.now()), 0.5, accuracy: 0.0001)
-        clock.advance(by: 0.1)
-        XCTAssertEqual(timing.progress(at: clock.now()), 1, accuracy: 0.0001)
+        XCTAssertEqual(run(&timing, on: clock, for: 0.1), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(run(&timing, on: clock, for: 0.1), 1, accuracy: 0.0001)
+    }
+
+    func testSlowMusicReadAfterTheFirstFrameDoesNotConsumeItEither() {
+        let clock = FakeClock()
+        var timing = MenuBarAnimationTiming(duration: StarRatingTransition.duration)
+        XCTAssertEqual(timing.progress(at: clock.now()), 0)
+        // The whole 0.2 s passes with no frame drawn
+        clock.advance(by: 0.233)
+        XCTAssertEqual(timing.progress(at: clock.now()), SteppedTimeline.maxStep / StarRatingTransition.duration, accuracy: 0.0001,
+                       "A late frame carries on from the one before it")
     }
 
     func testReplacementAnimationGetsItsOwnFirstFrame() {
         let clock = FakeClock()
         var first = MenuBarAnimationTiming(duration: StarRatingTransition.duration)
         XCTAssertEqual(first.progress(at: clock.now()), 0)
-        clock.advance(by: 0.1)
-        XCTAssertEqual(first.progress(at: clock.now()), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(run(&first, on: clock, for: 0.1), 0.5, accuracy: 0.0001)
         var replacement = MenuBarAnimationTiming(duration: StarRatingTransition.duration)
         clock.advance(by: 1)
         XCTAssertEqual(replacement.progress(at: clock.now()), 0)
-        clock.advance(by: StarRatingTransition.duration)
-        XCTAssertEqual(replacement.progress(at: clock.now()), 1, accuracy: 0.0001)
+        XCTAssertEqual(run(&replacement, on: clock, for: StarRatingTransition.duration), 1, accuracy: 0.0001)
     }
 
     private func stars(_ rating: Int) -> Stars {

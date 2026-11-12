@@ -178,9 +178,11 @@ extension AppDelegate {
 
         // UI tests never touch Music, and the station would connect to it
         guard !MenuBarRatingControl.isUITesting else { return }
-        // A repeat of Music's last notification waits while the strip moves, rather than
-        // stall the slide with the reads it sets off
-        iTunesRadioStation.shared.stripIsMoving = { [weak panel] in panel?.isMoving ?? false }
+        // A repeat of Music's last notification waits while the strip moves or the menu bar
+        // draws a transition, rather than stall either with the reads it sets off
+        iTunesRadioStation.shared.somethingIsMoving = { [weak panel, weak self] in
+            (panel?.isMoving ?? false) || (self?.menuBarRatingControl?.isAnimating ?? false)
+        }
         // The first strip after a launch held for about 50 ms on Core Animation's first-use
         // setup. Make that appearance unseen, once launch's own work is done. Not under tests,
         // which are hosted in the app and drive panels of their own.
