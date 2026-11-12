@@ -14,9 +14,15 @@ import os.log
 /// popover all read Music again, over Apple Events on the main thread. Measured on 2026-11-03,
 /// for an Apple Music song, the second came 15 ms after the strip was announced and its reads
 /// took about 26 Apple Events and 440 ms, during which the strip's slide could not be drawn.
-/// A repeat says nothing that can't wait a few hundred milliseconds, so it waits for the strip
-/// to stop moving; it is not dropped, because it may still carry something the first didn't
-/// (a cover, or a track Music had not switched to yet).
+/// A repeat says nothing that can't wait a second or so, so it waits for the strip to stop
+/// moving; it is not dropped, because it may still carry something the first didn't (a cover,
+/// or a track Music had not switched to yet).
+///
+/// It waits for the menu bar's transitions as well, which are drawn the same way. The strip is
+/// still after 0.65 s, but the stars roll in for a second, so a repeat let go when the strip
+/// stopped was read while they rolled: on 2026-11-12, in the one rollout with a repeat that
+/// the log still held, the repeat was passed on 0.67 s after it came, about 0.46 s into the
+/// roll, and the menu bar's reads for it alone then held the main thread for 124 ms.
 ///
 /// Only the latest repeat is kept. Anything that is not a repeat goes on at once and drops the
 /// one held, which it supersedes. The wait is checked every `checkInterval` and never runs past
@@ -25,8 +31,12 @@ final class RepeatedUpdateHold<Update> {
 
     /// How often a held update checks whether the motion has ended
     static var checkInterval: TimeInterval { return 0.05 }
-    /// The longest an update is held: the slide in and the sleeve's rise take 0.65 s
-    static var limit: TimeInterval { return 1.5 }
+    /// The longest an update is held. The slide in and the sleeve's rise take 0.65 s; the
+    /// menu bar's longest transition, the rollout from Spotify's heart, 1.3 s from its first
+    /// frame (the heart's fade, the wait for the widened item and the roll), and a held main
+    /// thread pauses it. A transition whose frames never come, as with the display asleep,
+    /// is why there is a limit at all.
+    static var limit: TimeInterval { return 2.0 }
 
     /// Where the timers come from; the station swaps its clock for a fake one in tests
     private let clock: () -> RatingReminderClock

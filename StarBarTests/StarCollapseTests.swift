@@ -78,12 +78,33 @@ final class StarCollapseTests: XCTestCase {
     func testSlowFirstFrameDoesNotSkipTheFadeOut() {
         let clock = FakeClock()
         var timing = MenuBarAnimationTiming(duration: StarCollapse.duration)
+        // A frame at a time, as the display link steps it: one long step is a held main thread
+        func run(for seconds: TimeInterval) -> Double {
+            var progress = 0.0
+            var left = seconds
+            while left > 1e-9 {
+                let step = min(1.0 / 60.0, left)
+                clock.advance(by: step)
+                progress = timing.progress(at: clock.now())
+                left -= step
+            }
+            return progress
+        }
         clock.advance(by: 0.3)
         XCTAssertEqual(StarCollapse.scale(progress: timing.progress(at: clock.now())), 1)
-        clock.advance(by: StarCollapse.fadeOutDuration / 2)
-        XCTAssertEqual(StarCollapse.scale(progress: timing.progress(at: clock.now())), 0.5, accuracy: 0.0001)
-        clock.advance(by: StarCollapse.duration)
-        XCTAssertEqual(timing.progress(at: clock.now()), 1, accuracy: 0.0001)
+        XCTAssertEqual(StarCollapse.scale(progress: run(for: StarCollapse.fadeOutDuration / 2)), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(run(for: StarCollapse.duration), 1, accuracy: 0.0001)
+    }
+
+    func testSlowFrameAfterTheFirstDoesNotSkipTheFadeOutEither() {
+        let clock = FakeClock()
+        var timing = MenuBarAnimationTiming(duration: StarCollapse.duration)
+        XCTAssertEqual(timing.progress(at: clock.now()), 0)
+        // Music's reads hold the main thread for longer than the whole fade-out
+        clock.advance(by: 0.3)
+        let late = timing.progress(at: clock.now())
+        XCTAssertGreaterThan(StarCollapse.scale(progress: late), 0.9, "the stars are still shrinking, not gone")
+        XCTAssertFalse(StarCollapse.hasShrunk(progress: late))
     }
 
     func testScaleAndWidthClampAndNeverReverse() {
@@ -199,8 +220,10 @@ final class StarCollapseTests: XCTestCase {
         }
         menu.applyTrackDisplay(record, isStopped: false, musicIsRunning: true)
         clock.fireRepeating()
-        clock.advance(by: StarRollout.duration + 0.01)
-        clock.fireRepeating()
+        // A frame at a time: the transitions count a late frame only in part, so one long
+        // step would be a held main thread rather than time passing
+        clock.runFrames(for: StarRollout.settleDuration + StarRollout.duration + 0.05)
+        XCTAssertTrue(clock.pendingRepeating.isEmpty, "the rollout has finished")
         XCTAssertEqual(menu.ratingControl.mode, .rating)
         let outgoingStars = menu.ratingControl.stars
         let fullWidth = menu.statusItem.length
@@ -227,10 +250,18 @@ final class StarCollapseTests: XCTestCase {
                        "collapse begins with the deleted song's actual stars")
 
         clock.fireRepeating()
-        clock.advance(by: StarCollapse.fadeOutDuration * 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: StarCollapse.fadeOutDuration * 0.5)
         XCTAssertTrue(timer.isValid)
         XCTAssertEqual(menu.statusItem.length, fullWidth, "the item keeps its width while the stars are visible")
+
+        // A frame that comes late, as when Music reads hold the main thread, carries on from
+        // the one before it: the stars are still shrinking, and the item is not narrowed
+        // under them
+        clock.advance(by: StarCollapse.fadeOutDuration)
+        clock.fireRepeating()
+        XCTAssertTrue(timer.isValid)
+        XCTAssertEqual(menu.statusItem.length, fullWidth, "a late frame doesn't skip the rest of the fade-out")
+        XCTAssertFalse(try isBlank(XCTUnwrap(menu.statusItem.button?.image)), "the stars are still on show")
 
         // The later legacy save signal must not restart a collapse already in progress.
         menu.applyTrackDisplay(PlayingTrack(track: stream), isStopped: false, musicIsRunning: true)
@@ -244,17 +275,15 @@ final class StarCollapseTests: XCTestCase {
         XCTAssertTrue(timer.isValid)
         XCTAssertEqual(menu.statusItem.length, fullWidth)
 
-        // Once the stars are gone the item narrows, once, to the add button's own width. This
-        // frame is late, as when Music reads hold the main thread: on the collapse's own clock
-        // the badge would already be fading in, but the wait is timed from the narrowing.
+        // Once the stars are gone the item narrows, once, to the add button's own width
         let compactWidth = menu.ratingControl.starsImage.size.width + 8
         XCTAssertLessThan(compactWidth, fullWidth)
-        clock.advance(by: StarCollapse.fadeOutDuration * 0.5 + StarCollapse.settleDuration
-                      + StarCollapse.fadeInDuration * 0.5)
-        clock.fireRepeating()
+        clock.runFrames(for: StarCollapse.fadeOutDuration * 0.5)
         XCTAssertTrue(timer.isValid)
         XCTAssertEqual(menu.statusItem.length, compactWidth, "narrowed while nothing is showing")
         XCTAssertTrue(try isBlank(XCTUnwrap(menu.statusItem.button?.image)), "nothing shows while the item slides")
+        // The wait for the menu bar's slide is timed from the narrowing, on the wall clock:
+        // however late this frame is, the add button stays away until the slide is over
         clock.advance(by: StarCollapse.settleDuration * 0.9)
         clock.fireRepeating()
         XCTAssertTrue(timer.isValid)

@@ -46,6 +46,8 @@
 		5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C02 /* HeldChoice.swift */; };
 		5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D02 /* SleeveHistory.swift */; };
 		5A7E1A000000000000001101 /* SteppedTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001102 /* SteppedTimeline.swift */; };
+		5A7E1A000000000000001501 /* FrameCadence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001502 /* FrameCadence.swift */; };
+		5A7E1A000000000000001503 /* FrameCadenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001504 /* FrameCadenceTests.swift */; };
 		5A7E1A000000000000001103 /* RepeatedUpdateHold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */; };
 		5A7E1A000000000000001105 /* SteppedTimelineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001106 /* SteppedTimelineTests.swift */; };
 		5A7E1A000000000000001107 /* RepeatedUpdateHoldTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */; };
@@ -205,6 +207,8 @@
 		5A7E1A000000000000000C02 /* HeldChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoice.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D02 /* SleeveHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistory.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001102 /* SteppedTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteppedTimeline.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001502 /* FrameCadence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCadence.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001504 /* FrameCadenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCadenceTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatedUpdateHold.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001106 /* SteppedTimelineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteppedTimelineTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepeatedUpdateHoldTests.swift; sourceTree = "<group>"; };
@@ -410,6 +414,7 @@
 				5A7E1A000000000000000C04 /* HeldChoiceTests.swift */,
 				5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */,
 				5A7E1A000000000000001106 /* SteppedTimelineTests.swift */,
+				5A7E1A000000000000001504 /* FrameCadenceTests.swift */,
 				5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */,
 				5A7E1A000000000000001208 /* MusicStarterTests.swift */,
 				5A7E1A000000000000000D08 /* AppleMusicArtworkLoaderTests.swift */,
@@ -507,6 +512,7 @@
 				5A7E1A000000000000000205 /* MenuBarStripLayout.swift */,
 				5A7E1A000000000000000201 /* MenuBarAnimationTiming.swift */,
 				5A7E1A000000000000001102 /* SteppedTimeline.swift */,
+				5A7E1A000000000000001502 /* FrameCadence.swift */,
 				5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */,
 				5A7E1A000000000000001206 /* PopoverEmptyState.swift */,
 				5A7E1A0000000000000001FB /* StarRatingTransition.swift */,
@@ -778,6 +784,7 @@
 				5A7E1A000000000000000206 /* MenuBarStripLayout.swift in Sources */,
 				5A7E1A000000000000000202 /* MenuBarAnimationTiming.swift in Sources */,
 				5A7E1A000000000000001101 /* SteppedTimeline.swift in Sources */,
+				5A7E1A000000000000001501 /* FrameCadence.swift in Sources */,
 				5A7E1A000000000000001103 /* RepeatedUpdateHold.swift in Sources */,
 				5A7E1A000000000000001205 /* PopoverEmptyState.swift in Sources */,
 				5A7E1A0000000000000001FC /* StarRatingTransition.swift in Sources */,
@@ -851,6 +858,7 @@
 				5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */,
 				5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */,
 				5A7E1A000000000000001105 /* SteppedTimelineTests.swift in Sources */,
+				5A7E1A000000000000001503 /* FrameCadenceTests.swift in Sources */,
 				5A7E1A000000000000001107 /* RepeatedUpdateHoldTests.swift in Sources */,
 				5A7E1A000000000000001207 /* MusicStarterTests.swift in Sources */,
 				5A7E1A000000000000000D07 /* AppleMusicArtworkLoaderTests.swift in Sources */,

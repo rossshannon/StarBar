@@ -2,8 +2,8 @@
 //  RepeatedUpdateHoldTests.swift
 //  StarBarTests
 //
-//  Music's repeat of a song's notification waits while the strip moves, and only a repeat
-//  does. The station's hold is a `RepeatedUpdateHold<PlayInfo>`, so these drive one with a
+//  Music's repeat of a song's notification waits while the strip or the menu bar moves, and
+//  only a repeat does. The station's hold is a `RepeatedUpdateHold<PlayInfo>`, so these drive one with a
 //  fake clock and decide repeats with `PlayInfo.repeats(_:)`.
 //
 

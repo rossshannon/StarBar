@@ -212,4 +212,118 @@ final class StarRolloutTests: XCTestCase {
         XCTAssertFalse(playback.isStopped)
         XCTAssertTrue(playback.isWaitingForTrack)
     }
+
+    // MARK: - The wait for the widened item
+
+    func testStarsWaitForTheMenuBarToPlaceTheWidenedItem() {
+        var schedule = StarRollout.Schedule()
+        XCTAssertEqual(schedule.progress(elapsed: 0, sinceWidening: 0), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.05, sinceWidening: 0.05), 0, "the item is still being slid into place")
+        // The roll starts on the first frame after the wait, and from nothing
+        XCTAssertEqual(schedule.progress(elapsed: 0.1, sinceWidening: 0.1), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.6, sinceWidening: 0.6), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(schedule.progress(elapsed: 1.1, sinceWidening: 1.1), 1, accuracy: 1e-9)
+        XCTAssertEqual(schedule.progress(elapsed: 2, sinceWidening: 2), 1, "and stops at its end")
+    }
+
+    func testAFirstFrameThatWasLateAnywayWaitsNoLonger() {
+        // A new song's first frame comes after the Music reads it sets off, by which time the
+        // menu bar has long since put the item in its place
+        var schedule = StarRollout.Schedule()
+        XCTAssertEqual(schedule.progress(elapsed: 0, sinceWidening: 0.25), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.25, sinceWidening: 0.5), 0.25, accuracy: 1e-9)
+    }
+
+    func testNothingRollsBeforeTheItemHasWidened() {
+        // From Spotify's heart the item widens only once the heart has faded out of it
+        var schedule = StarRollout.Schedule()
+        XCTAssertEqual(schedule.progress(elapsed: 0.1, sinceWidening: nil), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.2, sinceWidening: 0), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.25, sinceWidening: 0.05), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.3, sinceWidening: 0.1), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.8, sinceWidening: 0.6), 0.5, accuracy: 1e-9)
+    }
+
+    func testTheWaitIsTimeOnTheClockHoweverLittleWasDrawn() {
+        // A held main thread counts for little of the transition's own time, but the menu bar
+        // slides the item all the same, so the wait is over when the thread is free again
+        var schedule = StarRollout.Schedule()
+        XCTAssertEqual(schedule.progress(elapsed: 0, sinceWidening: 0), 0)
+        XCTAssertEqual(schedule.progress(elapsed: SteppedTimeline.maxStep, sinceWidening: 0.4), 0)
+        XCTAssertEqual(schedule.progress(elapsed: SteppedTimeline.maxStep + 0.5, sinceWidening: 0.9), 0.5, accuracy: 1e-9)
+    }
+
+    // MARK: - The rollout as the menu bar draws it
+
+    /// A menu bar control on a fake clock that has just been given its first song, so the
+    /// stars are about to roll in from the stopped dot
+    private func startRollout() throws -> (clock: FakeClock, menu: MenuBarRatingControl) {
+        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                      "Reduce Motion intentionally bypasses the animation")
+        let clock = FakeClock()
+        let menu = MenuBarRatingControl(widthClock: clock)
+        XCTAssertFalse(menu.isAnimating)
+        let track = FakeTrack(name: "StarBar rollout \(UUID().uuidString)", rating: 80)
+        menu.applyTrackDisplay(PlayingTrack(track: track), isStopped: false, musicIsRunning: true)
+        XCTAssertEqual(menu.ratingControl.mode, .rating)
+        return (clock, menu)
+    }
+
+    private func isBlank(_ image: NSImage?) throws -> Bool {
+        let data = try XCTUnwrap(XCTUnwrap(image).tiffRepresentation)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: data))
+        return !(0..<bitmap.pixelsWide).contains { x in
+            (0..<bitmap.pixelsHigh).contains { y in (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0 }
+        }
+    }
+
+    func testTheWidenedItemIsLeftEmptyUntilItHasSettledAndThenTheStarsRoll() throws {
+        let (clock, menu) = try startRollout()
+        defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
+        let layout = MenuBarStripLayout(starSize: menu.ratingControl.starSize, spacing: menu.ratingControl.spacing)
+        XCTAssertEqual(menu.statusItem.length, layout.statusItemWidth, "the item widens in one step, before anything is drawn in it")
+        XCTAssertTrue(menu.isAnimating, "Music's repeats wait from here")
+
+        // Frames that come at once, as they do when nothing reads Music first
+        clock.fireRepeating()
+        clock.runFrames(for: StarRollout.settleDuration - 2.0 / 60.0)
+        XCTAssertTrue(try isBlank(menu.statusItem.button?.image), "nothing shows while the menu bar slides the wider item into place")
+
+        clock.runFrames(for: 6.0 / 60.0)
+        XCTAssertFalse(try isBlank(menu.statusItem.button?.image), "the first star is on its way")
+        XCTAssertTrue(menu.isAnimating)
+
+        clock.runFrames(for: StarRollout.duration)
+        XCTAssertFalse(menu.isAnimating, "the roll takes its second and no more")
+        XCTAssertEqual(menu.statusItem.length, layout.statusItemWidth)
+    }
+
+    func testAFirstFrameHeldUpByMusicReadsStartsTheRollWithoutASecondWait() throws {
+        let (clock, menu) = try startRollout()
+        defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
+        clock.advance(by: 0.25)
+        clock.fireRepeating()
+        XCTAssertTrue(try isBlank(menu.statusItem.button?.image), "the roll starts from nothing, at its first frame")
+        clock.runFrames(for: 3.0 / 60.0)
+        XCTAssertFalse(try isBlank(menu.statusItem.button?.image))
+    }
+
+    func testAHeldMainThreadPausesTheRollRatherThanFinishingIt() throws {
+        let (clock, menu) = try startRollout()
+        defer { NSStatusBar.system.removeStatusItem(menu.statusItem) }
+        clock.advance(by: 0.25)
+        clock.fireRepeating()
+        clock.runFrames(for: 0.3)
+
+        // Music reads hold the main thread for longer than the rest of the roll takes. On
+        // the wall clock the stars would now be home, having been seen a third of the way
+        clock.advance(by: StarRollout.duration)
+        clock.fireRepeating()
+        XCTAssertTrue(menu.isAnimating, "the stars carry on from where they were last drawn")
+
+        clock.runFrames(for: StarRollout.duration - 0.3 - SteppedTimeline.maxStep - 0.05)
+        XCTAssertTrue(menu.isAnimating, "and still have a twentieth of the roll to go")
+        clock.runFrames(for: 0.1)
+        XCTAssertFalse(menu.isAnimating)
+    }
 }

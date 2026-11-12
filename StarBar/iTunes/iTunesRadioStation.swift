@@ -128,17 +128,19 @@ final class iTunesRadioStation {
         repeatHold.cancel()
     }
 
-    /// Whether the track strip is moving on screen (`TrackAnnouncementPanel.isMoving`), set
-    /// where the strip is made. While it is, a notification that repeats Music's last one
-    /// waits (`repeatHold`).
-    var stripIsMoving: () -> Bool = { false }
+    /// Whether anything StarBar steps by hand is moving on screen: the track strip
+    /// (`TrackAnnouncementPanel.isMoving`) or a menu bar transition
+    /// (`MenuBarRatingControl.isAnimating`). Set where the two are made. While it is, a
+    /// notification that repeats Music's last one waits (`repeatHold`).
+    var somethingIsMoving: () -> Bool = { false }
 
     /// Holds a `playerInfo` that repeats the last one, and the Apple Events everything reads on
-    /// a player update, until the strip has stopped moving: see `RepeatedUpdateHold`.
-    /// Timed on `rereadClock`, so the tests can fire it by hand like the re-reads.
+    /// a player update, until the strip and the menu bar have stopped moving: see
+    /// `RepeatedUpdateHold`. Timed on `rereadClock`, so the tests can fire it by hand like the
+    /// re-reads.
     private lazy var repeatHold = RepeatedUpdateHold<PlayInfo>(
         clock: { [unowned self] in self.rereadClock },
-        isBusy: { [unowned self] in self.stripIsMoving() },
+        isBusy: { [unowned self] in self.somethingIsMoving() },
         apply: { [unowned self] playInfo in self.latestPlayInfo = playInfo }
     )
 
@@ -323,7 +325,7 @@ extension iTunesRadioStation {
 
             let repeatsLast = latestPlayInfo.map { playInfo.repeats($0) } ?? false
             if repeatHold.receive(playInfo, repeatsLast: repeatsLast) {
-                os_log("%{public}s[%{public}ld], %{public}s: holding a repeat of the last notification until the strip stops moving", ((#file as NSString).lastPathComponent), #line, #function)
+                os_log("%{public}s[%{public}ld], %{public}s: holding a repeat of the last notification until the motion on screen is over", ((#file as NSString).lastPathComponent), #line, #function)
             }
 
         } catch {
@@ -712,7 +714,7 @@ extension iTunesRadioStation {
         // A rating still held has nowhere to go, and its timer would send an Apple Event to a
         // track whose app has quit
         ratingWriter.discard()
-        // A repeat held for the strip describes a player that has gone
+        // A repeat held for the motion on screen describes a player that has gone
         repeatHold.cancel()
         // The observer runs iTunesPlayer.shared.update(), which finds Music not running
         latestPlayInfo = nil

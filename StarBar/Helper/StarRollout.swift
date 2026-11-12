@@ -7,6 +7,35 @@ struct StarRollout {
     static let travelDuration = 0.78
     static let stagger = 0.055
 
+    /// How long a widened item is left empty before the first star shows.
+    ///
+    /// macOS 27 first draws a status item that has widened a long way over the item to its
+    /// right, and then slides it into place: measured 2026-10-22, going from the 32 pt dot to
+    /// the 148 pt strip, the first star showed over the neighbouring icon for 3 to 4 frames.
+    /// So the stars wait for that slide, as the add button waits for the slide of a narrowed
+    /// item (`StarCollapse.settleDuration`). The wait is counted from the widening, and a new
+    /// song's first frame usually comes later than this anyway, behind the Music reads the
+    /// song sets off, so it is only a wait when the frame would have come too soon.
+    static let settleDuration: TimeInterval = 0.1
+
+    /// How far a rollout's stars have rolled: nowhere until the widened item has been left
+    /// `settleDuration` to be put in its place, and then over `duration`.
+    struct Schedule {
+        /// How long the transition had run, as drawn, when the stars started to roll
+        private var rollStart: TimeInterval?
+
+        /// - Parameters:
+        ///   - elapsed: how long the transition has run, as drawn
+        ///   - sinceWidening: time on the clock since the item widened, or nil if it has not yet
+        mutating func progress(elapsed: TimeInterval, sinceWidening: TimeInterval?) -> Double {
+            if rollStart == nil, let sinceWidening = sinceWidening, sinceWidening >= StarRollout.settleDuration {
+                rollStart = elapsed
+            }
+            guard let rollStart = rollStart else { return 0 }
+            return min(1, max(0, (elapsed - rollStart) / StarRollout.duration))
+        }
+    }
+
     static func shouldRoll(wasStopped: Bool, isStopped: Bool,
                            previousMode: RatingControl.Mode, mode: RatingControl.Mode) -> Bool {
         return !isStopped && mode == .rating && (wasStopped || previousMode == .addToLibrary || previousMode == .spotify)

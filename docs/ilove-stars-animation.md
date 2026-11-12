@@ -32,7 +32,7 @@ StarBar uses the current song's actual rating, including half stars and unrated 
 
 | Change | Animation |
 | --- | --- |
-| First library song after launch or Music quitting | Stars roll into place over 1.0 seconds |
+| First library song after launch or Music quitting | The item widens and stays empty for at least 0.1 seconds, then the stars roll into place over 1.0 seconds |
 | Add-to-library button to a rateable song | The same 1.0-second rollout |
 | Different ratings on successive library songs | Changed glyphs retract or grow in place over 0.2 seconds; full/half stars blend |
 | Library song to an Apple Music-only song, including deletion from the library during playback | Stars shrink and the heart fades (0.2 s), the item narrows while empty and waits for the menu bar's slide (0.35 s), then the add button and heart fade in (0.2 s); total 0.75 seconds |
@@ -40,7 +40,7 @@ StarBar uses the current song's actual rating, including half stars and unrated 
 
 Music sends a bare `Player State: Stopped` between some songs. Measured gaps were 50–131 ms, so a stopped notification cannot distinguish a song change from the end of a queue. The display session lasts until Music quits: hold the previous strip over missing-track updates and disable stale rating actions. No stop timer or additional Music polling is used.
 
-Manual rating edits take effect immediately. Animation never writes intermediate values to Music. Reduce Motion bypasses transitions. Each animation starts its clock on the first display callback: synchronous Music reads have delayed that callback by 198–261 ms, which previously consumed the entire 0.2-second rating transition before any frames were drawn.
+Manual rating edits take effect immediately. Animation never writes intermediate values to Music. Reduce Motion bypasses transitions. Each animation starts its clock on the first display callback: synchronous Music reads have delayed that callback by 198–261 ms, which previously consumed the entire 0.2-second rating transition before any frames were drawn. From there each frame counts the time since the one before, but at most two frames' worth, so a held main thread pauses a transition instead of skipping part of it (see the last section).
 
 ## Heart overlay and the first fixed allocation
 
@@ -64,3 +64,20 @@ The approved collapse therefore hides the change. The stars shrink away and the 
 In the first live try, Music sent no track and then the same song again while the collapse was still waiting for its first frame (the first frame waits behind synchronous Music reads; 0.6 s in the next try). That update replaced the display without animation and narrowed the item in one step. A running transition now survives updates that change nothing on display.
 
 Native screen recordings remain the only valid check for menu-bar placement; the browser preview and local view coordinates cannot show the system's slide.
+
+## A hitch in the rollout (2026-11-12)
+
+Ross sometimes saw a hitch as the stars rolled in when he started a song in Music. Read from the system log of his Mac (macOS 27.2, one 60 Hz display, build 447), which keeps StarBar's lines for about 13 hours and so held two rollouts, neither from the stopped dot:
+
+- **Music's repeat of a notification was read in the middle of a rollout.** A library song was started in Music while Spotify was followed. Music sent an empty `playerInfo`, then Playing, then Playing again for the same song 0.79 s later. The repeat was held while the bottom strip moved, as it has been since 2026-11-03, and passed on 0.67 s later, when the strip was still. By then the stars had been rolling for about 0.46 s of their second. The menu bar's reads for the repeat took 124 ms before its next log line, seven frames at 60 Hz, and the strip's refresh came after that. Each transition followed the wall clock after its first frame, so the stars will have moved on by that much in a single frame. This was read from the log, not filmed.
+- The other rollout, from the add button after a library change, had nothing on the main thread during it.
+- A collapse that started while the display was asleep drew its first frame 45,749 s later, in the second the display woke. Frames are only asked for while the display is on.
+
+What changed:
+
+- A repeat now waits for the menu bar's transition as well as the strip (`RepeatedUpdateHold`, at most 2 s).
+- A transition's time is stepped like the strip's (`MenuBarAnimationTiming` on `SteppedTimeline`), so anything else that holds the main thread pauses the stars where they were drawn.
+- The stars wait 0.1 s after the item widens (`StarRollout.settleDuration`), for the menu bar's own slide of the wider item, measured on 2026-10-22 as three to four frames with the first star drawn over the neighbouring icon. A new song's first frame usually comes later than that anyway, behind the strip's reads of Music, so the wait is only seen when it is needed. The 0.1 s has not been checked in a recording.
+- Every transition logs how it was drawn when it ends (`FrameCadence`): frames, late frames, the longest gap and where in the transition it fell, and how long the first frame waited.
+
+Not captured: a rollout from the stopped dot, and what Music sends when a song is started with nothing loaded. If it announces the song paused and then playing, as it does for a `play` sent by Apple Event, the second notification is not a repeat and is still read at once, during the rollout; it would now pause the stars rather than jump them.
