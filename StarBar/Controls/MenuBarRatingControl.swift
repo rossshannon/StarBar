@@ -62,13 +62,14 @@ final class MenuBarRatingControl {
     /// has run (a stall pauses it rather than skipping it), and the song it was for, since a
     /// new song ends it. Nil at rest.
     private var heartChange: (change: HeartChange, time: SteppedTimeline, song: String?)?
-    private var heartChangeElapsed: TimeInterval = 0
     private var heartChangeTimer: RatingReminderTimer?
     /// The window the burst is drawn in, over the menu bar, made the first time a heart is
-    /// set. Not private only so the tests can see whether it played.
+    /// set, and stepped with the heart's change. Not private only so the tests can see whether
+    /// it played.
     private(set) var burstWindow: HeartBurstWindow?
-    /// Steps the burst's window; nil gives it a display link of its own
-    private let burstClock: RatingReminderClock?
+    /// Stands in for `heartOnScreen` in the tests, since a status item made in a test is never
+    /// on screen: where the heart is, or nil for an item that isn't on screen
+    var heartOnScreenInTests: (() -> NSRect?)?
     /// Reduce Motion, read at each click; the tests replace it
     static var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     
@@ -366,13 +367,10 @@ final class MenuBarRatingControl {
         clickGestureRecognizer.delaysPrimaryMouseButtonEvents = playbackState.canInteract
     }
 
-    /// `pointer` and `burstClock` are for the tests; the menu bar reads the real mouse, and
-    /// the heart's burst steps on a display link on its own window's screen
-    init(widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main }), pointer: RatingPointer? = nil,
-         burstClock: RatingReminderClock? = nil) {
+    /// `pointer` is for the tests; the menu bar reads the real mouse
+    init(widthClock: RatingReminderClock = DisplayLinkClock(screen: { NSScreen.main }), pointer: RatingPointer? = nil) {
         self.widthClock = widthClock
         self.pointer = pointer
-        self.burstClock = burstClock
         menuBarIcon = MenuBarIcon(size: ratingControl.starSize)
 
         guard let button = statusItem.button else {
@@ -773,10 +771,11 @@ extension MenuBarRatingControl {
         guard let button = statusItem.button else { return }
         let slot = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
         let change = heartChange?.change
-        let incoming = change?.incoming(at: heartChangeElapsed) ?? .rest
+        let elapsed = heartChange?.time.elapsed ?? 0
+        let incoming = change?.incoming(at: elapsed) ?? .rest
         favoriteHeartView.frame = incoming.frame(for: slot)
         favoriteHeartView.alphaValue = heartBaseOpacity * incoming.opacity
-        guard let outgoing = change?.outgoing(at: heartChangeElapsed), outgoing.isVisible,
+        guard let outgoing = change?.outgoing(at: elapsed), outgoing.isVisible,
               outgoingHeartView.image != nil, !favoriteHeartView.isHidden else {
             outgoingHeartView.isHidden = true
             return
@@ -794,7 +793,6 @@ extension MenuBarRatingControl {
         guard !isStop else { return }
         let change = HeartChange(favorited: favorited, reduceMotion: Self.reduceMotion())
         heartChange = (change, SteppedTimeline(start: widthClock.now()), displayedSongIdentity)
-        heartChangeElapsed = 0
         outgoingHeartView.image = previous
         if change == .burst {
             playBurst(palette: palette)
@@ -806,14 +804,15 @@ extension MenuBarRatingControl {
         placeHeartViews()
     }
 
+    /// One frame of the heart's change, and of its burst over the menu bar
     private func stepHeartChange() {
         guard var running = heartChange else { return endHeartChange() }
         let elapsed = running.time.step(at: widthClock.now())
-        heartChange = running
         guard elapsed < running.change.duration, running.song == displayedSongIdentity else {
             return endHeartChange()
         }
-        heartChangeElapsed = elapsed
+        heartChange = running
+        burstWindow?.step(to: elapsed)
         placeHeartViews()
     }
 
@@ -823,7 +822,6 @@ extension MenuBarRatingControl {
         heartChangeTimer = nil
         guard heartChange != nil else { return }
         heartChange = nil
-        heartChangeElapsed = 0
         outgoingHeartView.image = nil
         burstWindow?.stop()
         placeHeartViews()
@@ -833,6 +831,9 @@ extension MenuBarRatingControl {
     /// full-screen app has hidden the menu bar, or the item is hidden behind the notch. A burst
     /// there would float in mid-air. Not private only for the tests.
     var heartOnScreen: NSRect? {
+        if let inTests = heartOnScreenInTests {
+            return inTests()
+        }
         guard let button = statusItem.button, let window = button.window, window.isVisible,
               window.occlusionState.contains(.visible), let screen = window.screen else { return nil }
         let slot = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
@@ -846,7 +847,7 @@ extension MenuBarRatingControl {
             os_log("%{public}s[%{public}ld], %{public}s: no heart burst: the menu bar item isn't on screen", ((#file as NSString).lastPathComponent), #line, #function)
             return
         }
-        let window = burstWindow ?? HeartBurstWindow(clock: burstClock)
+        let window = burstWindow ?? HeartBurstWindow()
         burstWindow = window
         window.play(around: heart, burst: .menuBar(heartSize: ratingControl.starSize.width), palette: palette)
     }

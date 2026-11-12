@@ -97,7 +97,7 @@ final class HeartBurstTests: XCTestCase {
     }
 
     func testNothingIsDrawnBeyondTheExtentSoAViewCanBeSizedToIt() {
-        for burst in [menuBar, strip, HeartBurst(heartSize: 16, reach: 27)] {
+        for burst in [menuBar, strip] {
             for elapsed in frames(over: HeartBurst.duration) {
                 if let ring = burst.ring(at: elapsed) {
                     XCTAssertLessThanOrEqual(ring.outerRadius, burst.extent)

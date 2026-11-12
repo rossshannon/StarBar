@@ -142,8 +142,8 @@ struct HeartBurst: Equatable {
     let reach: CGFloat
     /// The dots' size, against Twitter's proportions for a 16 point heart
     var dotScale: CGFloat = 1
-    /// Nil sends the dots all the way round
-    var fan: Fan?
+    /// Which way the dots fly
+    var fan: Fan
 
     /// The menu bar's burst, for a heart `heartSize` wide (16 points)
     static func menuBar(heartSize: CGFloat) -> HeartBurst {
@@ -220,11 +220,7 @@ struct HeartBurst: Equatable {
 
     /// The direction pair `pair` flies in
     private func angle(ofPair pair: Int) -> CGFloat {
-        let count = CGFloat(HeartBurst.pairCount)
-        guard let fan = fan else {
-            return .pi / 2 + CGFloat(pair) * 2 * .pi / count
-        }
-        return fan.centre - fan.span / 2 + CGFloat(pair) * fan.span / (count - 1)
+        return fan.centre - fan.span / 2 + CGFloat(pair) * fan.span / CGFloat(HeartBurst.pairCount - 1)
     }
 
     /// The filled heart's size as it pops through the ring: nothing until `popStart`, then up

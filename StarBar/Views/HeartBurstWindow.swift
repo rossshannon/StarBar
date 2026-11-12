@@ -18,23 +18,19 @@ import os.log
 /// reaches the heart underneath, one level above the menu bar's items, and on every Space.
 /// Like the strip's panel it never goes through `WindowManager`, which would activate the app.
 ///
-/// The burst is stepped by hand on a display link, as the strip's slide is, and its time is a
-/// `SteppedTimeline`, so a stalled main thread pauses it rather than skipping it.
+/// It has no clock of its own: `MenuBarRatingControl` steps it with the heart's own change, on
+/// one display link and one `SteppedTimeline`, so the ring and the heart popping through it
+/// can't drift apart, and a stalled main thread pauses both alike. The control takes it down
+/// when the change ends.
 final class HeartBurstWindow: NSPanel {
 
     let burstView = HeartBurstView(frame: .zero)
-
-    private var clock: RatingReminderClock
-    private var timer: RatingReminderTimer?
 
     /// One level above the menu bar's items, so the ring and dots draw over the heart and its
     /// neighbours. Below pop-up menus, so an open menu stays on top.
     static let windowLevel = NSWindow.Level(rawValue: NSWindow.Level.statusBar.rawValue + 1)
 
-    /// - Parameter clock: steps the burst; a fake one in tests. By default a display link on
-    ///   the window's screen, with a timer before macOS 14.
-    init(clock: RatingReminderClock? = nil) {
-        self.clock = clock ?? RunLoopClock()
+    init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 64, height: 64),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -54,14 +50,6 @@ final class HeartBurstWindow: NSPanel {
         isExcludedFromWindowsMenu = true
         setAccessibilityElement(false)
         contentView = burstView
-
-        if clock == nil {
-            self.clock = DisplayLinkClock(screen: { [weak self] in self?.screen })
-        }
-    }
-
-    deinit {
-        timer?.invalidate()
     }
 
     override var canBecomeKey: Bool { return false }
@@ -74,46 +62,33 @@ final class HeartBurstWindow: NSPanel {
     }
 
     var isPlaying: Bool {
-        return timer != nil
+        return burstView.change != nil
     }
 
-    /// Burst around `heart`, the heart's frame in screen coordinates, and put the window away
-    /// when the burst has finished. A burst already playing starts again.
+    /// Put up the burst's first frame around `heart`, the heart's frame in screen coordinates.
+    /// A burst already playing starts again.
     func play(around heart: NSRect, burst: HeartBurst, palette: HeartBurstPalette) {
-        stop()
-        // Whole points for the window; the burst is centred on the heart inside it
-        let side = 2 * (burst.extent + 2).rounded(.up)
-        let frame = NSRect(x: (heart.midX - side / 2).rounded(.down), y: (heart.midY - side / 2).rounded(.down),
-                           width: side, height: side)
-        setFrame(frame, display: false)
-        burstView.frame = NSRect(origin: .zero, size: frame.size)
-        burstView.centre = NSPoint(x: heart.midX - frame.minX, y: heart.midY - frame.minY)
+        let square = HeartBurstView.square(around: NSPoint(x: heart.midX, y: heart.midY), extent: burst.extent)
+        // The burst view is the content view, so it takes the window's size
+        setFrame(square.frame, display: false)
+        burstView.centre = square.centre
         burstView.burst = burst
         burstView.palette = palette
         burstView.elapsed = 0
         burstView.change = .burst
         burstView.displayIfNeeded()
         orderFrontRegardless()
-        os_log("%{public}s[%{public}ld], %{public}s: heart burst over the menu bar at %{public}s", ((#file as NSString).lastPathComponent), #line, #function, NSStringFromRect(frame))
+        os_log("%{public}s[%{public}ld], %{public}s: heart burst over the menu bar at %{public}s", ((#file as NSString).lastPathComponent), #line, #function, NSStringFromRect(square.frame))
+    }
 
-        var timeline = SteppedTimeline(start: clock.now())
-        // A real frame interval, never 0: before macOS 14 this is a Timer, and Foundation
-        // clamps a non-positive interval to 0.1 ms
-        timer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
-            guard let self = self, self.timer != nil else { return }
-            let elapsed = timeline.step(at: self.clock.now())
-            if elapsed >= HeartBurst.duration {
-                self.stop()
-            } else {
-                self.burstView.elapsed = elapsed
-            }
-        }
+    /// Draw the burst `elapsed` seconds in, if it is playing
+    func step(to elapsed: TimeInterval) {
+        guard isPlaying else { return }
+        burstView.elapsed = elapsed
     }
 
     /// Take the burst down at once, wherever it has got to
     func stop() {
-        timer?.invalidate()
-        timer = nil
         burstView.change = nil
         orderOut(nil)
     }

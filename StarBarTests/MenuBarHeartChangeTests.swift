@@ -22,7 +22,12 @@ final class MenuBarHeartChangeTests: XCTestCase {
         readReduceMotion = MenuBarRatingControl.reduceMotion
         MenuBarRatingControl.reduceMotion = { false }
         clock = FakeClock()
-        menu = MenuBarRatingControl(widthClock: clock, burstClock: clock)
+        menu = MenuBarRatingControl(widthClock: clock)
+        // A status item made in a test is never on screen, so say where its heart is: 12
+        // points below the top of the main screen, as on a 24 point menu bar
+        let screen = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let heartOnScreen = NSRect(x: screen.midX.rounded(), y: screen.maxY - 12 - 8, width: 16, height: 16)
+        menu.heartOnScreenInTests = { heartOnScreen }
     }
 
     override func tearDown() {
@@ -80,21 +85,57 @@ final class MenuBarHeartChangeTests: XCTestCase {
         XCTAssertTrue(outgoing.isHidden)
     }
 
-    /// The burst is drawn over the menu bar, in a window of its own, unless the item isn't on
-    /// screen, where it would float in mid-air
+    /// The burst is drawn over the menu bar, in a window of its own, stepped with the heart
     func testSettingTheHeartBurstsOverTheMenuBarWhenTheItemIsOnScreen() throws {
         _ = try showSong(favorited: false)
 
         menu.showChosenFavorite(true)
 
-        XCTAssertEqual(menu.burstWindow?.isPlaying ?? false, menu.heartOnScreen != nil)
-        guard let window = menu.burstWindow, let heart = menu.heartOnScreen else { return }
+        let window = try XCTUnwrap(menu.burstWindow)
+        let heart = try XCTUnwrap(menu.heartOnScreen)
+        XCTAssertTrue(window.isPlaying)
         XCTAssertEqual(window.frame.minX + window.burstView.centre!.x, heart.midX, accuracy: 0.001)
         XCTAssertEqual(window.frame.minY + window.burstView.centre!.y, heart.midY, accuracy: 0.001)
         XCTAssertNil(window.burstView.hearts, "the heart itself stays in the menu bar")
 
-        clock.runFrames(for: HeartBurst.duration + 0.05)
+        clock.runFrames(for: 0.3)
+        XCTAssertEqual(window.burstView.elapsed, 0.3, accuracy: 0.001, "stepped with the heart")
+
+        clock.runFrames(for: HeartBurst.duration)
         XCTAssertFalse(window.isVisible, "and the window goes when the burst is over")
+        XCTAssertFalse(window.isPlaying)
+    }
+
+    /// Where the item isn't on screen, a burst would float in mid-air, so only the heart changes
+    func testNoBurstWhenTheItemIsntOnScreen() throws {
+        menu.heartOnScreenInTests = { nil }
+        let slot = try showSong(favorited: false)
+
+        menu.showChosenFavorite(true)
+
+        XCTAssertFalse(menu.burstWindow?.isPlaying ?? false)
+        clock.runFrames(for: HeartBurst.popStart + 0.16)
+        XCTAssertGreaterThan(heart.frame.width, slot.width * 1.2, "the heart still pops in the menu bar")
+    }
+
+    /// The heart and its burst share one timeline, so a stall pauses both alike rather than
+    /// finishing either unseen
+    func testAStallPausesTheHeartAndItsBurstTogether() throws {
+        let slot = try showSong(favorited: false)
+        menu.showChosenFavorite(true)
+        clock.runFrames(for: 0.1)
+
+        // Half a second with no frame, then one late frame
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+
+        let paused = 0.1 + SteppedTimeline.maxStep
+        XCTAssertLessThan(paused, HeartBurst.popStart, "still before the pop")
+        XCTAssertEqual(heart.frame.width, 0, "not popped: the stall didn't skip ahead")
+        XCTAssertNotEqual(heart.frame, slot)
+        let window = try XCTUnwrap(menu.burstWindow)
+        XCTAssertTrue(window.isPlaying, "not finished unseen")
+        XCTAssertEqual(window.burstView.elapsed, paused, accuracy: 0.001, "where the heart is")
     }
 
     func testClearingTheHeartDipsItWithNoBurst() throws {
@@ -142,6 +183,8 @@ final class MenuBarHeartChangeTests: XCTestCase {
         let slot = try showSong(favorited: false)
         menu.showChosenFavorite(true)
         clock.runFrames(for: 0.05)
+        let window = try XCTUnwrap(menu.burstWindow)
+        XCTAssertTrue(window.isPlaying, "bursting when the song changes")
 
         let next = FakeTrack(name: "Next", persistentID: "00000000000000E2", rating: 20, favorited: true)
         menu.applyTrackDisplay(PlayingTrack(track: next), isStopped: false, musicIsRunning: true)
@@ -150,17 +193,21 @@ final class MenuBarHeartChangeTests: XCTestCase {
         XCTAssertEqual(heart.frame, slot)
         XCTAssertEqual(heart.alphaValue, 1)
         XCTAssertTrue(outgoing.isHidden)
-        XCTAssertFalse(menu.burstWindow?.isPlaying ?? false, "the burst goes with it")
+        XCTAssertFalse(window.isPlaying, "the burst goes with it")
+        XCTAssertFalse(window.isVisible)
     }
 
     func testAHeartChangedAgainBeforeItHasFinishedStartsAfresh() throws {
         let slot = try showSong(favorited: false)
         menu.showChosenFavorite(true)
         clock.runFrames(for: 0.3)
+        let window = try XCTUnwrap(menu.burstWindow)
+        XCTAssertTrue(window.isPlaying, "bursting when the heart is clicked again")
 
         menu.showChosenFavorite(false)
 
-        XCTAssertFalse(menu.burstWindow?.isPlaying ?? false, "the burst is put away")
+        XCTAssertFalse(window.isPlaying, "the burst is put away")
+        XCTAssertFalse(window.isVisible)
         clock.runFrames(for: HeartChange.dipDuration + 0.02)
         XCTAssertEqual(heart.frame, slot)
         XCTAssertTrue(outgoing.isHidden)

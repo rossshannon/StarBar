@@ -54,6 +54,16 @@ final class HeartBurstView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// The square, in whole points, that holds everything drawn up to `extent` from `centre`
+    /// with room to spare, and where `centre` falls inside it: the frame the menu bar's burst
+    /// window and the strip's heart view are given
+    static func square(around centre: NSPoint, extent: CGFloat) -> (frame: NSRect, centre: NSPoint) {
+        let side = 2 * (extent + 2).rounded(.up)
+        let frame = NSRect(x: (centre.x - side / 2).rounded(.down), y: (centre.y - side / 2).rounded(.down),
+                           width: side, height: side)
+        return (frame, NSPoint(x: centre.x - frame.minX, y: centre.y - frame.minY))
+    }
+
     /// Never in the way of a click: the strip's panel and the burst's window ignore the mouse
     /// anyway, and this keeps it so if either is ever reused
     override func hitTest(_ point: NSPoint) -> NSView? {

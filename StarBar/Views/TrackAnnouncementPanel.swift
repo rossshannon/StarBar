@@ -636,12 +636,10 @@ extension TrackAnnouncementPanel {
     /// it with the strip
     fileprivate func layoutHeart() {
         guard heartView.change != nil, let heart = stripView.heartFrame else { return }
-        let extent = heartView.burst?.extent ?? heart.width
-        let side = 2 * (extent + 2).rounded(.up)
-        let centre = NSPoint(x: stripView.frame.minX + heart.midX, y: stripView.frame.minY + heart.midY)
-        heartView.frame = NSRect(x: (centre.x - side / 2).rounded(.down), y: (centre.y - side / 2).rounded(.down),
-                                 width: side, height: side)
-        heartView.centre = NSPoint(x: centre.x - heartView.frame.minX, y: centre.y - heartView.frame.minY)
+        let square = HeartBurstView.square(around: NSPoint(x: stripView.frame.minX + heart.midX, y: stripView.frame.minY + heart.midY),
+                                           extent: heartView.burst?.extent ?? heart.width)
+        heartView.frame = square.frame
+        heartView.centre = square.centre
         heartView.alphaValue = stripView.alphaValue
     }
 
