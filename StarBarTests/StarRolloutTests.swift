@@ -217,12 +217,14 @@ final class StarRolloutTests: XCTestCase {
 
     func testStarsWaitForTheMenuBarToPlaceTheWidenedItem() {
         var schedule = StarRollout.Schedule()
+        let settle = StarRollout.settleDuration
+        XCTAssertGreaterThanOrEqual(settle, 8.0 / 60.0, "the longest slide of a widened item measured, eight frames")
         XCTAssertEqual(schedule.progress(elapsed: 0, sinceWidening: 0), 0)
-        XCTAssertEqual(schedule.progress(elapsed: 0.05, sinceWidening: 0.05), 0, "the item is still being slid into place")
+        XCTAssertEqual(schedule.progress(elapsed: settle / 2, sinceWidening: settle / 2), 0, "the item is still being slid into place")
         // The roll starts on the first frame after the wait, and from nothing
-        XCTAssertEqual(schedule.progress(elapsed: 0.1, sinceWidening: 0.1), 0)
-        XCTAssertEqual(schedule.progress(elapsed: 0.6, sinceWidening: 0.6), 0.5, accuracy: 1e-9)
-        XCTAssertEqual(schedule.progress(elapsed: 1.1, sinceWidening: 1.1), 1, accuracy: 1e-9)
+        XCTAssertEqual(schedule.progress(elapsed: settle, sinceWidening: settle), 0)
+        XCTAssertEqual(schedule.progress(elapsed: settle + 0.5, sinceWidening: settle + 0.5), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(schedule.progress(elapsed: settle + 1, sinceWidening: settle + 1), 1, accuracy: 1e-9)
         XCTAssertEqual(schedule.progress(elapsed: 2, sinceWidening: 2), 1, "and stops at its end")
     }
 
@@ -237,11 +239,12 @@ final class StarRolloutTests: XCTestCase {
     func testNothingRollsBeforeTheItemHasWidened() {
         // From Spotify's heart the item widens only once the heart has faded out of it
         var schedule = StarRollout.Schedule()
+        let settle = StarRollout.settleDuration
         XCTAssertEqual(schedule.progress(elapsed: 0.1, sinceWidening: nil), 0)
         XCTAssertEqual(schedule.progress(elapsed: 0.2, sinceWidening: 0), 0)
-        XCTAssertEqual(schedule.progress(elapsed: 0.25, sinceWidening: 0.05), 0)
-        XCTAssertEqual(schedule.progress(elapsed: 0.3, sinceWidening: 0.1), 0)
-        XCTAssertEqual(schedule.progress(elapsed: 0.8, sinceWidening: 0.6), 0.5, accuracy: 1e-9)
+        XCTAssertEqual(schedule.progress(elapsed: 0.2 + settle / 2, sinceWidening: settle / 2), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.2 + settle, sinceWidening: settle), 0)
+        XCTAssertEqual(schedule.progress(elapsed: 0.2 + settle + 0.5, sinceWidening: settle + 0.5), 0.5, accuracy: 1e-9)
     }
 
     func testTheWaitIsTimeOnTheClockHoweverLittleWasDrawn() {

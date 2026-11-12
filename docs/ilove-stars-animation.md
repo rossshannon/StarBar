@@ -32,7 +32,7 @@ StarBar uses the current song's actual rating, including half stars and unrated 
 
 | Change | Animation |
 | --- | --- |
-| First library song after launch or Music quitting | The item widens and stays empty for at least 0.1 seconds, then the stars roll into place over 1.0 seconds |
+| First library song after launch or Music quitting | The item widens and stays empty for at least 0.15 seconds, then the stars roll into place over 1.0 seconds |
 | Add-to-library button to a rateable song | The same 1.0-second rollout |
 | Different ratings on successive library songs | Changed glyphs retract or grow in place over 0.2 seconds; full/half stars blend |
 | Library song to an Apple Music-only song, including deletion from the library during playback | Stars shrink and the heart fades (0.2 s), the item narrows while empty and waits for the menu bar's slide (0.35 s), then the add button and heart fade in (0.2 s); total 0.75 seconds |
@@ -77,7 +77,7 @@ What changed:
 
 - A repeat now waits for the menu bar's transition as well as the strip (`RepeatedUpdateHold`, at most 2 s).
 - A transition's time is stepped like the strip's (`MenuBarAnimationTiming` on `SteppedTimeline`), so anything else that holds the main thread pauses the stars where they were drawn.
-- The stars wait 0.1 s after the item widens (`StarRollout.settleDuration`), for the menu bar's own slide of the wider item, measured on 2026-10-22 as three to four frames with the first star drawn over the neighbouring icon. A new song's first frame usually comes later than that anyway, behind the strip's reads of Music, so the wait is only seen when it is needed. The 0.1 s has not been checked in a recording.
+- The stars wait 0.15 s after the item widens (`StarRollout.settleDuration`), for the menu bar's own slide of the wider item: three to four frames from the stopped dot on 2026-10-22, and seven and eight frames from Spotify's heart in two recordings of 1.9.0 on 2026-11-12, with the first star drawn over the icons to the right. A new song's first frame usually comes later than that anyway, behind the song's own reads of Music (0.4 to 0.6 s after the widening in eight rollouts from the stopped dot), so the wait is only seen when it is needed, which is after Spotify's heart has faded.
 - Every transition logs how it was drawn when it ends (`FrameCadence`): frames, late frames, the longest gap and where in the transition it fell, and how long the first frame waited.
 
 Not captured: a rollout from the stopped dot, and what Music sends when a song is started with nothing loaded. If it announces the song paused and then playing, as it does for a `play` sent by Apple Event, the second notification is not a repeat and is still read at once, during the rollout; it would now pause the stars rather than jump them.

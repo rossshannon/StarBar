@@ -32,7 +32,7 @@ final class RepeatedUpdateHold<Update> {
     /// How often a held update checks whether the motion has ended
     static var checkInterval: TimeInterval { return 0.05 }
     /// The longest an update is held. The slide in and the sleeve's rise take 0.65 s; the
-    /// menu bar's longest transition, the rollout from Spotify's heart, 1.3 s from its first
+    /// menu bar's longest transition, the rollout from Spotify's heart, 1.35 s from its first
     /// frame (the heart's fade, the wait for the widened item and the roll), and a held main
     /// thread pauses it. A transition whose frames never come, as with the display asleep,
     /// is why there is a limit at all.
