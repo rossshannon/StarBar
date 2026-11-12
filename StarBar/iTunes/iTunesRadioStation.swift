@@ -313,9 +313,11 @@ extension iTunesRadioStation {
     /// over Apple Events on the main thread, which is what draws their motion. Measured on
     /// 2026-11-12, for a library song started just after Music opened: Music announced a
     /// library change 1.1 s after the play, and the re-read for it, 0.3 s later, took 16 Apple
-    /// Events and 266 ms, about 0.58 s into the stars' one-second rollout. Nothing is waiting
-    /// on such a re-read (the stars on show are refused by the click's own check when their
-    /// track has gone), so it waits like Music's repeat of a notification, and for no longer.
+    /// Events and 266 ms, no more than 0.58 s into the stars' one-second rollout. With that
+    /// re-read forced into a roll and recorded, the leading star stood still for 15 frames and
+    /// then moved 51.5 pt in one. Nothing is waiting on such a re-read (the stars on show are
+    /// refused by the click's own check when their track has gone), so it waits like Music's
+    /// repeat of a notification, and for no longer.
     private func motionHoldsBackAReread(waitingSince since: Date?) -> Bool {
         guard somethingIsMoving() else { return false }
         guard let since = since else { return true }
