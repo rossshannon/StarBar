@@ -39,15 +39,39 @@ final class MenuBarRatingControl {
     let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     let ratingControl = RatingControl(rating: 0, drawsFavorite: false)
     let menuBarIcon: MenuBarIcon
-    /// Both heart appearances share a view anchored independently of the centred strip.
-    private let favoriteHeartView: NSImageView = {
+    /// Both heart appearances share a view anchored independently of the centred strip. Not
+    /// private only so the tests can measure the heart as it changes.
+    let favoriteHeartView: NSImageView = MenuBarRatingControl.makeHeartView()
+    /// The heart being replaced, under the new one while the heart changes (`HeartChange`):
+    /// the outline shrinking away before the red heart pops, or the red heart fading as the
+    /// outline comes back. Hidden at rest. Not private only for the tests.
+    let outgoingHeartView: NSImageView = MenuBarRatingControl.makeHeartView()
+
+    private static func makeHeartView() -> NSImageView {
         let imageView = PassthroughImageView()
-        imageView.imageScaling = .scaleNone
+        // The frame sets the heart's size, so it can grow and shrink as it changes; at rest the
+        // frame is the image's own size
+        imageView.imageScaling = .scaleProportionallyUpOrDown
         imageView.isHidden = true
         // Follow the actual button right edge when AppKit applies a pending resize.
         imageView.autoresizingMask = MenuBarRatingControl.favoriteHeartAutoresizingMask
         return imageView
-    }()
+    }
+
+    /// The heart changing after a click, stepped on `widthClock`: which change, how long it
+    /// has run (a stall pauses it rather than skipping it), and the song it was for, since a
+    /// new song ends it. Nil at rest.
+    private var heartChange: (change: HeartChange, time: SteppedTimeline, song: String?)?
+    private var heartChangeTimer: RatingReminderTimer?
+    /// The window the burst is drawn in, over the menu bar, made the first time a heart is
+    /// set, and stepped with the heart's change. Not private only so the tests can see whether
+    /// it played.
+    private(set) var burstWindow: HeartBurstWindow?
+    /// Stands in for `heartOnScreen` in the tests, since a status item made in a test is never
+    /// on screen: where the heart is, or nil for an item that isn't on screen
+    var heartOnScreenInTests: (() -> NSRect?)?
+    /// Reduce Motion, read at each click; the tests replace it
+    static var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
     private lazy var outlinedHeartImage = Stars.outlinedFavoriteHeartImage(size: ratingControl.starSize)
@@ -356,6 +380,7 @@ final class MenuBarRatingControl {
 
         button.image = ratingControl.starsImage
         favoriteHeartView.image = outlinedHeartImage
+        button.addSubview(outgoingHeartView)
         button.addSubview(favoriteHeartView)
         button.addSubview(addToLibrarySpinner)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -699,11 +724,17 @@ extension MenuBarRatingControl {
         WindowManager.shared.updatePopoverAnchor()
         // A rollout from Spotify fades the green heart out, in place, before the stars come in
         let showsOutgoingSpotifyHeart = spotifyHeartFadeProgress != nil
-        favoriteHeartView.alphaValue = spotifyHeartFadeProgress.map { StarRollout.outgoingHeartOpacity(progress: $0) }
-            ?? rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
-            ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
+        // The item's own motion owns the heart while it runs: a heart still changing from a
+        // click just before a song change stops where it is
+        if spotifyHeartFadeProgress != nil || rolloutProgress != nil || collapseProgress != nil || isStop {
+            endHeartChange()
+        }
+        let imageBefore = favoriteHeartView.image
         favoriteHeartView.isHidden = isStop
-        guard !favoriteHeartView.isHidden else { return }
+        guard !favoriteHeartView.isHidden else {
+            outgoingHeartView.isHidden = true
+            return
+        }
 
         // A collapse into Spotify mode keeps Music's heart until it has faded out with the
         // stars: turning green at once made the outgoing Music song look like a favourite
@@ -719,7 +750,115 @@ extension MenuBarRatingControl {
         } else {
             favoriteHeartView.image = ratingControl.isFavorited ? filledHeartImage : outlinedHeartImage
         }
-        favoriteHeartView.frame = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
+        // A heart that changes again before it has finished, say when Music or Spotify refuses
+        // the click, goes straight to what it now shows
+        if favoriteHeartView.image !== imageBefore {
+            endHeartChange()
+        }
+        placeHeartViews()
+    }
+
+    /// How opaque the heart is for the item's own motion: fading with the stars as they roll
+    /// out or collapse, or Spotify's fading ahead of a rollout. 1 otherwise.
+    private var heartBaseOpacity: CGFloat {
+        return spotifyHeartFadeProgress.map { StarRollout.outgoingHeartOpacity(progress: $0) }
+            ?? rolloutProgress.map { StarRollout.heartOpacity(progress: $0) }
+            ?? collapseProgress.map { StarCollapse.heartOpacity(progress: $0) } ?? 1
+    }
+
+    /// Size and fade the heart, and the one it replaces while the heart changes, in its slot
+    private func placeHeartViews() {
+        guard let button = statusItem.button else { return }
+        let slot = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
+        let change = heartChange?.change
+        let elapsed = heartChange?.time.elapsed ?? 0
+        let incoming = change?.incoming(at: elapsed) ?? .rest
+        favoriteHeartView.frame = incoming.frame(for: slot)
+        favoriteHeartView.alphaValue = heartBaseOpacity * incoming.opacity
+        guard let outgoing = change?.outgoing(at: elapsed), outgoing.isVisible,
+              outgoingHeartView.image != nil, !favoriteHeartView.isHidden else {
+            outgoingHeartView.isHidden = true
+            return
+        }
+        outgoingHeartView.frame = outgoing.frame(for: slot)
+        outgoingHeartView.alphaValue = outgoing.opacity
+        outgoingHeartView.isHidden = false
+    }
+
+    /// The heart has changed on screen after the user clicked it: animate it from `previous`,
+    /// the image it showed, to the one it shows now. A burst over the menu bar when it was set,
+    /// a dip when it was cleared, a cross-fade either way under Reduce Motion.
+    private func beginHeartChange(favorited: Bool, from previous: NSImage?, palette: HeartBurstPalette) {
+        endHeartChange()
+        guard !isStop else { return }
+        let change = HeartChange(favorited: favorited, reduceMotion: Self.reduceMotion())
+        heartChange = (change, SteppedTimeline(start: widthClock.now()), displayedSongIdentity)
+        outgoingHeartView.image = previous
+        if change == .burst {
+            playBurst(palette: palette)
+        }
+        // A real frame interval, never 0: before macOS 14 this is a Timer
+        heartChangeTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            self?.stepHeartChange()
+        }
+        placeHeartViews()
+    }
+
+    /// One frame of the heart's change, and of its burst over the menu bar
+    private func stepHeartChange() {
+        guard var running = heartChange else { return endHeartChange() }
+        let elapsed = running.time.step(at: widthClock.now())
+        guard elapsed < running.change.duration, running.song == displayedSongIdentity else {
+            return endHeartChange()
+        }
+        heartChange = running
+        burstWindow?.step(to: elapsed)
+        placeHeartViews()
+    }
+
+    /// Put the heart back at rest, and take its burst down, wherever they have got to
+    private func endHeartChange() {
+        heartChangeTimer?.invalidate()
+        heartChangeTimer = nil
+        guard heartChange != nil else { return }
+        heartChange = nil
+        outgoingHeartView.image = nil
+        burstWindow?.stop()
+        placeHeartViews()
+    }
+
+    /// The heart's frame on screen, or nil when the item isn't where the user can see it: a
+    /// full-screen app has hidden the menu bar, or the item is hidden behind the notch. A burst
+    /// there would float in mid-air. Not private only for the tests.
+    var heartOnScreen: NSRect? {
+        if let inTests = heartOnScreenInTests {
+            return inTests()
+        }
+        guard let button = statusItem.button, let window = button.window, window.isVisible,
+              window.occlusionState.contains(.visible), let screen = window.screen else { return nil }
+        let slot = Self.favoriteHeartFrame(in: button.bounds, size: ratingControl.starSize)
+        let heart = window.convertToScreen(button.convert(slot, to: nil))
+        guard screen.frame.contains(NSPoint(x: heart.midX, y: heart.midY)) else { return nil }
+        return heart
+    }
+
+    private func playBurst(palette: HeartBurstPalette) {
+        guard let heart = heartOnScreen else {
+            os_log("%{public}s[%{public}ld], %{public}s: no heart burst: the menu bar item isn't on screen", ((#file as NSString).lastPathComponent), #line, #function)
+            return
+        }
+        let window = burstWindow ?? HeartBurstWindow()
+        burstWindow = window
+        window.play(around: heart, burst: .menuBar(heartSize: ratingControl.starSize.width), palette: palette)
+    }
+
+    /// Show the heart the user just chose, and animate it there. Not private only so the tests
+    /// can change the heart without Music.
+    func showChosenFavorite(_ isFavorited: Bool) {
+        let previous = favoriteHeartView.image
+        ratingControl.updateFavorited(isFavorited)
+        updateFavoriteHeartView()
+        beginHeartChange(favorited: isFavorited, from: previous, palette: .music)
     }
     
     /// Spin a progress indicator where the plus is while the song is being added.
@@ -766,8 +905,7 @@ extension MenuBarRatingControl {
     /// Toggle the favorite status of the current track
     func toggleFavorite() {
         if MenuBarRatingControl.isUITesting {
-            ratingControl.updateFavorited(!ratingControl.isFavorited)
-            updateFavoriteHeartView()
+            showChosenFavorite(!ratingControl.isFavorited)
             return
         }
         guard awaitingMatch == nil else { return }
@@ -793,8 +931,7 @@ extension MenuBarRatingControl {
         }
 
         // Update our local state immediately
-        ratingControl.updateFavorited(isFavorited)
-        updateFavoriteHeartView()
+        showChosenFavorite(isFavorited)
         statusItem.button?.needsDisplay = true
 
         // Deliberately no forced player update here: it reads Music back before the write has
@@ -815,8 +952,7 @@ extension MenuBarRatingControl {
         writeFavorite(isFavorited, heldFor: trackID) {
             match.track.updateFavorited(isFavorited)
         }
-        ratingControl.updateFavorited(isFavorited)
-        updateFavoriteHeartView()
+        showChosenFavorite(isFavorited)
         statusItem.button?.needsDisplay = true
     }
 
@@ -949,7 +1085,15 @@ extension MenuBarRatingControl {
             let positionX = statusItem.button.flatMap { ratingControl.imagePositionX(in: $0) }
             let isOnIcon = positionX.map { ratingControl.isSpotifyIconHit(positionX: $0) } ?? false
             if !isOnIcon, let uri = displayedSongIdentity, SpotifyAccount.shared.canLike(uri) {
+                let previous = favoriteHeartView.image
+                let wasLiked = spotifyIsLiked == true
+                // Shows the new like at once, through `spotifyLikeDidChange`
                 SpotifyAccount.shared.toggleLike(uri)
+                let isLiked = spotifyIsLiked == true
+                if isLiked != wasLiked {
+                    beginHeartChange(favorited: isLiked, from: previous, palette: .spotify)
+                    TrackAnnouncementController.shared?.userDidLikeOnSpotify(isLiked, identity: uri)
+                }
             } else {
                 SpotifyPlayer.shared.activate()
             }

@@ -74,6 +74,13 @@ final class TrackAnnouncementPanel: NSPanel {
     /// Whether the last tick found the pointer near the sleeve, to log only the changes
     private var sleeveFollowsPointer = false
 
+    /// The heart changing after a click (`HeartChange`): the heart, and for a set heart the
+    /// burst's ring and dots, drawn over the strip's own heart, which leaves its slot empty
+    /// meanwhile. Beside the strip rather than inside it, like the sleeve, so the dots can fly
+    /// above its top edge; it follows the strip as it slides.
+    let heartView = HeartBurstView(frame: .zero)
+    private var heartTimer: RatingReminderTimer?
+
     /// Whether the panel is making its unseen first appearance (`warmUp`)
     private(set) var isWarmingUp = false
     private var warmUpTimer: RatingReminderTimer?
@@ -140,6 +147,9 @@ final class TrackAnnouncementPanel: NSPanel {
         // Above the strip, and beside it rather than inside it, so it can stand above the
         // strip's top edge; it follows the strip as it slides
         container.addSubview(stripView.sleeve)
+        // Over the sleeve too, since a dot can fly across it
+        heartView.isHidden = true
+        container.addSubview(heartView)
 
         if clock == nil {
             self.clock = DisplayLinkClock(screen: { [weak self] in self?.screen })
@@ -156,6 +166,7 @@ final class TrackAnnouncementPanel: NSPanel {
 
     deinit {
         slideTimer?.invalidate()
+        heartTimer?.invalidate()
         seeThroughTimer?.invalidate()
         warmUpTimer?.invalidate()
         sleeveTimer?.invalidate()
@@ -178,8 +189,9 @@ final class TrackAnnouncementPanel: NSPanel {
         get { return stripView.style }
         set {
             stripView.style = newValue
-            // The glass's side insets move the sleeve with the rest of the content
+            // The glass's side insets move the sleeve and the heart with the rest of the content
             layoutSleeve()
+            layoutHeart()
         }
     }
 
@@ -207,6 +219,8 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             startSeeThrough()
         }
         let isNewAnnouncement = stripView.announcement != announcement
+        // A heart still changing belongs to the song before
+        stopHeart()
         // A new song's artwork, or the placeholder, shows at once; only a cover that comes
         // later fades in
         stopArtworkFade()
@@ -280,12 +294,21 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
 
     func refresh(_ announcement: TrackAnnouncement) {
         guard !isWarmingUp, phase != .hidden, stripView.announcement != announcement else { return }
-        let coverArrived = stripView.announcement.identity == announcement.identity
-            && stripView.announcement.artwork == nil && announcement.artwork != nil
+        let before = stripView.announcement
+        let coverArrived = before.identity == announcement.identity
+            && before.artwork == nil && announcement.artwork != nil
+        // A heart changing to what the strip no longer shows, or in another place, stops: a
+        // refusal puts the old heart back, and Music's copy found for a Spotify song swaps
+        // Spotify's heart for Music's
+        if heartTimer != nil, before.identity != announcement.identity || before.isFavorited != announcement.isFavorited
+            || before.namesSpotify != announcement.namesSpotify || before.canRate != announcement.canRate {
+            stopHeart()
+        }
         stripView.announcement = announcement
         if coverArrived {
             fadeInArtwork()
         }
+        layoutHeart()
     }
 
     /// Cross-fade from the placeholder to a cover that arrived after the strip went up
@@ -375,6 +398,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
                 self.phase = .hidden
                 self.stopSeeThrough()
                 self.stopSleeve()
+                self.stopHeart()
             }
         }
 
@@ -392,8 +416,9 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             case .fade:
                 self.stripView.alphaValue = startAlpha + (targetAlpha - startAlpha) * eased
             }
-            // The sleeve rides with the strip on the same step, so the two never part
+            // The sleeve and the heart ride with the strip on the same step, so they never part
             self.layoutSleeve()
+            self.layoutHeart()
         }
 
         guard slideDuration > 0 else {
@@ -463,6 +488,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         phase = .hidden
         stopSeeThrough()
         stopSleeve()
+        stopHeart()
     }
 
     /// Whether anything the user can see is moving: the strip sliding in or out, or the
@@ -557,6 +583,74 @@ extension TrackAnnouncementPanel {
         NSGraphicsContext.restoreGraphicsState()
         guard let data = bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8]) else { return nil }
         return NSImage(data: data)
+    }
+
+}
+
+// MARK: - The heart
+
+extension TrackAnnouncementPanel {
+
+    /// Whether the strip's heart is changing
+    var isAnimatingHeart: Bool {
+        return heartTimer != nil
+    }
+
+    /// Animate the strip's heart from the one it showed to the one its announcement now has,
+    /// over the strip's own heart, which leaves its slot empty until the change is done. A set
+    /// heart bursts as the menu bar's does, bigger for its size, with its dots fanning upwards,
+    /// since the panel ends at the strip's bottom edge.
+    ///
+    /// Stepped on the slide's clock, with a `SteppedTimeline` so a stall pauses it, never with
+    /// Core Animation, which on macOS 27 ran animations on this panel without drawing them.
+    func animateHeart(_ change: HeartChange) {
+        stopHeart()
+        guard !isWarmingUp, phase == .shown || phase == .slidingIn, let heart = stripView.heartFrame else { return }
+        let announcement = stripView.announcement
+        heartView.burst = .strip(heartSize: heart.width)
+        heartView.palette = announcement.namesSpotify ? .spotify : .music
+        heartView.hearts = (stripView.heartImage(favorited: !announcement.isFavorited),
+                            stripView.heartImage(favorited: announcement.isFavorited), heart.size)
+        heartView.heartShadow = stripView.heartShadow
+        heartView.elapsed = 0
+        heartView.change = change
+        heartView.isHidden = false
+        stripView.hidesHeart = true
+        layoutHeart()
+        os_log("%{public}s[%{public}ld], %{public}s: strip heart %{public}s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: change))
+
+        var timeline = SteppedTimeline(start: clock.now())
+        // A real frame interval, never 0: before macOS 14 this is a Timer
+        heartTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            guard let self = self, self.heartTimer != nil else { return }
+            let elapsed = timeline.step(at: self.clock.now())
+            if elapsed >= change.duration {
+                self.stopHeart()
+            } else {
+                self.heartView.elapsed = elapsed
+            }
+        }
+    }
+
+    /// Centre the heart's view on the strip's heart, wherever the strip has slid to, and fade
+    /// it with the strip
+    fileprivate func layoutHeart() {
+        guard heartView.change != nil, let heart = stripView.heartFrame else { return }
+        let square = HeartBurstView.square(around: NSPoint(x: stripView.frame.minX + heart.midX, y: stripView.frame.minY + heart.midY),
+                                           extent: heartView.burst?.extent ?? heart.width)
+        heartView.frame = square.frame
+        heartView.centre = square.centre
+        heartView.alphaValue = stripView.alphaValue
+    }
+
+    /// Put the strip's own heart back, wherever the change has got to
+    fileprivate func stopHeart() {
+        heartTimer?.invalidate()
+        heartTimer = nil
+        heartView.isHidden = true
+        heartView.change = nil
+        heartView.hearts = nil
+        stripView.hidesHeart = false
     }
 
 }
