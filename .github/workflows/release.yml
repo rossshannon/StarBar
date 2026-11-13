@@ -98,6 +98,7 @@ jobs:
       # takes the build number from the commit count
       - name: Build Release
         env:
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
           LASTFM_SHARED_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
         run: ./build.sh --clean --version="${GITHUB_REF_NAME#v}"
 

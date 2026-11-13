@@ -123,15 +123,18 @@ Every build takes its version from the nearest `v*` tag behind it and its build 
 
 The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 
-### The Last.fm secret
+### The Last.fm key and secret
 
-Last.fm signs every request with the app's shared secret, which isn't in this public repository. A build without it works in every other way, but can't connect to Last.fm, and the build script says so. The script looks for the secret in the environment variable `LASTFM_SHARED_SECRET`, and then in `~/.config/starbar/secrets.env` (or the file `STARBAR_SECRETS_FILE` names), which needs one line:
+Last.fm knows an app by its API key and has it sign every request with a shared secret. StarBar's aren't in this public repository. A build without them works in every other way, but can't connect to Last.fm, and the build script says so. The script looks for `LASTFM_API_KEY` and `LASTFM_SHARED_SECRET` in the environment, and then for lines of those names in an env file, trying in turn the file `STARBAR_SECRETS_FILE` names, `.env` in the checkout, `.env` in the main checkout when you are building in a git worktree of it, and `~/.config/starbar/secrets.env`:
 
 ```bash
+LASTFM_API_KEY=your32characterhexadecimalkey
 LASTFM_SHARED_SECRET=your32characterhexadecimalsecret
 ```
 
-The script reads that line rather than running the file, and passes the secret to Xcode in a file under `build/`, never on a command line or in what it prints.
+The script reads those lines rather than running the file, and passes both values to Xcode in a file under `build/`, never on a command line or in what it prints. Git ignores `.env`.
+
+The `.env` can be one that 1Password mounts for an Environment (its "Local .env file" destination), which keeps the values off the disk altogether. Reading such a file waits for 1Password to be unlocked and, the first time, for you to approve the read, so the script waits for up to a minute at a terminal, or ten seconds when nobody is at one, and then builds without them. `STARBAR_ENV_WAIT` sets another number of seconds.
 
 If you have a Last.fm API account of your own, you can use its key and secret instead, with a build made with or without StarBar's:
 
@@ -190,11 +193,12 @@ To ship a signed and notarised build instead, add these [repository secrets](htt
 
 The first three sign the build; all five notarise it and staple the ticket, so it opens without a prompt. `build.sh` signs the same way locally when `STARBAR_CODESIGN_IDENTITY` and `STARBAR_TEAM_ID` are set.
 
-One more secret is separate from signing:
+Two more are separate from signing:
 
 | Secret | Value |
 |---|---|
-| `LASTFM_SHARED_SECRET` | The shared secret of StarBar's Last.fm API account. Without it the release can't connect to Last.fm |
+| `LASTFM_API_KEY` | The API key of StarBar's Last.fm API account |
+| `LASTFM_SHARED_SECRET` | That account's shared secret. Without both, the release can't connect to Last.fm |
 
 Release checklist:
 

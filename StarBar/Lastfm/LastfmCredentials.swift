@@ -10,42 +10,45 @@ import Foundation
 /// StarBar's own key and secret for Last.fm's API, so that nobody using StarBar has to
 /// register an app of their own.
 ///
-/// The API key is public: it goes in the address of the approval page and in every request,
-/// and is committed here. The shared secret signs requests and is **not in the repository**.
-/// `build.sh` reads it from the environment (`LASTFM_SHARED_SECRET`) or from a file on the
-/// Mac that builds, and passes it to the build as the `STARBAR_LASTFM_SECRET` setting, which
-/// `Info.plist` holds under `LastfmSharedSecret`. A build made without it can't connect, and
-/// Preferences says so (`LastfmAccount.canConnect`).
+/// Neither is in the repository. `build.sh` reads `LASTFM_API_KEY` and `LASTFM_SHARED_SECRET`
+/// from the environment or from an env file on the Mac that builds, and passes them to the
+/// build as the `STARBAR_LASTFM_KEY` and `STARBAR_LASTFM_SECRET` settings, which `Info.plist`
+/// holds under `LastfmAPIKey` and `LastfmSharedSecret`. A build made without both can't
+/// connect, and Preferences says so (`LastfmAccount.canConnect`).
 ///
-/// The secret is in every copy of the app all the same, as it is in every desktop scrobbler:
-/// anyone who takes it out of the binary can sign requests as StarBar, which lets them
-/// scrobble to their own account under StarBar's name and nothing else, since acting for a
-/// user also takes that user's session key. So it is only kept out of plain sight: what the
-/// build stores is the secret's bytes XORed with `pad`, in hex (`conceal`), which keeps it
-/// out of `strings` and out of a search of the bundle for the secret itself. The pad is in
-/// this public repository, so the concealed form is as good as the secret to anyone who has
-/// it: neither may ever reach a command line or a log, which is why `build.sh` hands it to
-/// Xcode through a file. Nothing here logs either.
+/// The API key is public all the same: it goes in the address of the approval page and in
+/// every request. It is kept with the secret so that the two come from one place and can't
+/// drift apart, not because it needs hiding. The shared secret signs requests, and is in
+/// every copy of the app too, as it is in every desktop scrobbler: anyone who takes it out of
+/// the binary can sign requests as StarBar, which lets them scrobble to their own account
+/// under StarBar's name and nothing else, since acting for a user also takes that user's
+/// session key. So it is only kept out of plain sight: what the build stores is each value's
+/// bytes XORed with `pad`, in hex (`conceal`), which keeps it out of `strings` and out of a
+/// search of the bundle for the value itself. The pad is in this public repository, so the
+/// concealed form is as good as the secret to anyone who has it: neither may ever reach a
+/// command line or a log, which is why `build.sh` hands them to Xcode through a file. Nothing
+/// here logs either.
 enum LastfmCredentials {
 
-    /// StarBar's API key on Last.fm. Empty until the API account exists.
-    static let builtInAPIKey = ""
+    /// The `Info.plist` key holding the concealed API key
+    static let keyInfoKey = "LastfmAPIKey"
 
     /// The `Info.plist` key holding the concealed secret
     static let secretInfoKey = "LastfmSharedSecret"
 
-    /// What the secret's bytes are XORed with, repeating. `build.sh` has the same bytes.
+    /// What each value's bytes are XORed with, repeating. `build.sh` has the same bytes.
     static let pad: [UInt8] = [0x53, 0x74, 0x61, 0x72, 0x42, 0x61, 0x72, 0x2A, 0x4C, 0x61, 0x73, 0x74, 0x2E, 0x66, 0x6D, 0x21]
 
     /// The key and secret to use, or nil when either is missing.
     ///
     /// The hidden defaults `lastfmAPIKey` and `lastfmSharedSecret` (plain text) replace the
     /// built-in ones, for someone with a Last.fm API account of their own and for testing a
-    /// build made without the secret. Sessions are kept per API key, so changing it means
+    /// build made without StarBar's. Sessions are kept per API key, so changing it means
     /// connecting again.
     static func current() -> LastfmAPI.Credentials? {
         let defaults = UserDefaults.standard
-        return credentials(builtInKey: builtInAPIKey,
+        let concealedKey = Bundle.main.object(forInfoDictionaryKey: keyInfoKey) as? String
+        return credentials(builtInKey: concealedKey.flatMap(reveal) ?? "",
                            concealedSecret: Bundle.main.object(forInfoDictionaryKey: secretInfoKey) as? String,
                            overrideKey: defaults.lastfmAPIKey,
                            overrideSecret: defaults.lastfmSharedSecret)
@@ -73,7 +76,7 @@ enum LastfmCredentials {
         return LastfmAPI.Credentials(apiKey: key, sharedSecret: secret)
     }
 
-    /// The secret as the build stores it: each UTF-8 byte XORed with `pad`, in lowercase hex
+    /// A key or secret as the build stores it: each UTF-8 byte XORed with `pad`, in lowercase hex
     static func conceal(_ secret: String) -> String {
         let hexDigits = Array("0123456789abcdef")
         var hex = ""
@@ -85,7 +88,7 @@ enum LastfmCredentials {
         return hex
     }
 
-    /// The secret from what the build stored, or nil when that is empty, isn't hex, or
+    /// The key or secret from what the build stored, or nil when that is empty, isn't hex, or
     /// doesn't come out as text.
     ///
     /// Whitespace around it is ignored. A value still holding `$(` is a build setting that
