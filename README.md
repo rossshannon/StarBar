@@ -131,17 +131,19 @@ git config core.hooksPath .githooks
 
 ### Releases
 
-Push a version tag to publish a release. For example, for version 1.1.0:
+A release is published by pushing a version tag, such as `v1.1.0`. The Release workflow runs the tests, builds the app with that version number (and the commit count as the build number, so each release's build number is higher than the last), and attaches `StarBar-v1.1.0.zip` and its SHA-256 to a new GitHub release.
+
+The tag isn't pushed by hand. Each release's notes are written first, in [`docs/releases/`](docs/releases/), and merged to `main`. Then one script checks that commit, tags it, waits for the workflow and puts the notes on the release. It is run straight out of the commit being released, with that commit's full SHA:
 
 ```bash
-git tag v1.1.0
+git fetch origin main --tags
 ```
 
 ```bash
-git push origin v1.1.0
+bash <(git show <sha>:.claude/skills/release/scripts/publish.sh) 1.1.0 <sha>
 ```
 
-The Release workflow runs the tests, builds the app with that version number (and the commit count as the build number, so each release's build number is higher than the last), and attaches `StarBar-v1.1.0.zip` and its SHA-256 to a new GitHub release.
+Add `--dry-run` to run its checks without tagging anything.
 
 Without signing secrets the app is signed ad hoc, not notarised, so macOS blocks it the first time it opens. To allow it, open System Settings, go to Privacy & Security, and click "Open Anyway".
 
@@ -159,10 +161,12 @@ The first three sign the build; all five notarise it and staple the ticket, so i
 
 Release checklist:
 
-1. Merge to `main` and wait for the Tests workflow to pass.
-2. Tag the release version and push the tag (above).
-3. Watch the Release workflow; its notes say whether the build was notarised.
+1. Write `docs/releases/vX.Y.Z.md` and check it with `bash .claude/skills/release/scripts/check-notes.sh X.Y.Z`.
+2. Merge it to `main` and wait for the Tests workflow to pass.
+3. Run `publish.sh` (above). It stops, having changed nothing, if `main` has moved, the notes don't pass or the tests failed.
 4. Download the zip from the release, check `shasum -a 256` against the `.sha256` file, and open the app once.
+
+The whole procedure, with what to do when a step fails, is in [`.claude/skills/release/SKILL.md`](.claude/skills/release/SKILL.md).
 
 ## Credits and licence
 
