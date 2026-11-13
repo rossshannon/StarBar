@@ -65,6 +65,8 @@ final class PlayerViewController: NSViewController {
         let showCurrentTrack = NSMenuItem(title: "Show Current Track", action: #selector(TrackAnnouncementController.showCurrentTrackMenuItemPressed(_:)), keyEquivalent: "")
         showCurrentTrack.target = TrackAnnouncementController.shared
         menu.addItem(showCurrentTrack)
+        menu.addItem(LastfmPauseMenuItems.shared.makeItem())
+        menu.delegate = LastfmPauseMenuItems.shared
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit StarBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu

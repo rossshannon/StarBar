@@ -91,6 +91,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if flushed == nil {
                 os_log("%{public}s[%{public}ld], %{public}s: Music isn't running, so no held rating could be flushed", ((#file as NSString).lastPathComponent), #line, #function)
             }
+            // Plays and hearts not yet sent to Last.fm go to disk, for the next launch
+            LastfmScrobbler.shared.prepareToQuit()
         }
     }
 
@@ -164,6 +166,9 @@ extension AppDelegate {
             MusicLibraryIndex.shared.start()
             // After the player, so a restored sign-in can ask about the song already playing
             SpotifyAccount.shared.start()
+            // Both return at once under tests; the scrobbler after the account it sends for
+            LastfmAccount.shared.start()
+            LastfmScrobbler.shared.start()
         }
 
         announceNewTracksObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.new]) { [weak controller] defaults, _ in
@@ -541,7 +546,8 @@ extension AppDelegate {
             ApplicationKey.allowHalfStar.rawValue : false,
             ApplicationKey.remindToRateUnrated.rawValue : true,
             ApplicationKey.announceNewTracks.rawValue : false,
-            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue
+            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue,
+            ApplicationKey.lastfmLoveSync.rawValue : true
         ])
     }
 }

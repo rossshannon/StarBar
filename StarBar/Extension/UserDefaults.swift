@@ -15,6 +15,12 @@ enum ApplicationKey: String {
     case announceNewTracks
     case announcementStyle
     case spotifyClientID
+    case lastfmScrobbleSpotify
+    case lastfmLoveSync
+    case lastfmPaused
+    case lastfmDryRun
+    case lastfmAPIKey
+    case lastfmSharedSecret
 }
 
 extension UserDefaults {
@@ -86,6 +92,72 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.spotifyClientID.rawValue)
+        }
+    }
+
+    /// Scrobble songs played in Spotify to Last.fm as well as Music's. Off by default:
+    /// Last.fm's own Spotify link already scrobbles Spotify, and both together double them.
+    @objc dynamic var lastfmScrobbleSpotify: Bool {
+        get {
+            return bool(forKey: ApplicationKey.lastfmScrobbleSpotify.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.lastfmScrobbleSpotify.rawValue)
+        }
+    }
+
+    /// Love a song on Last.fm when its heart is set in StarBar, unlove it when the heart is
+    /// cleared, and love a song already favourited as it scrobbles. On by default
+    /// (registered in `AppDelegate.setupUserDefaults`).
+    @objc dynamic var lastfmLoveSync: Bool {
+        get {
+            return bool(forKey: ApplicationKey.lastfmLoveSync.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.lastfmLoveSync.rawValue)
+        }
+    }
+
+    /// "Pause Scrobbling": nothing played is kept or sent to Last.fm until it is switched
+    /// off again. Kept between launches, so an update doesn't quietly resume it.
+    @objc dynamic var lastfmPaused: Bool {
+        get {
+            return bool(forKey: ApplicationKey.lastfmPaused.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.lastfmPaused.rawValue)
+        }
+    }
+
+    /// Hidden: log what would be sent to Last.fm and send nothing. Needs no sign-in.
+    @objc dynamic var lastfmDryRun: Bool {
+        get {
+            return bool(forKey: ApplicationKey.lastfmDryRun.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.lastfmDryRun.rawValue)
+        }
+    }
+
+    /// Hidden: the API key of someone's own Last.fm API account, used with
+    /// `lastfmSharedSecret` in place of StarBar's built-in ones. Empty means the built-in.
+    @objc dynamic var lastfmAPIKey: String {
+        get {
+            return string(forKey: ApplicationKey.lastfmAPIKey.rawValue) ?? ""
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.lastfmAPIKey.rawValue)
+        }
+    }
+
+    /// Hidden: the shared secret that goes with `lastfmAPIKey`, or, on its own, one for a
+    /// build made without the built-in secret
+    @objc dynamic var lastfmSharedSecret: String {
+        get {
+            return string(forKey: ApplicationKey.lastfmSharedSecret.rawValue) ?? ""
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.lastfmSharedSecret.rawValue)
         }
     }
 
