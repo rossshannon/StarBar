@@ -18,6 +18,11 @@ import Foundation
 /// It posts on play, pause, resume and a change of song, about a second after the command.
 /// It posts **nothing** on a seek, or when a song goes back to its start (Previous more than
 /// about three seconds in), so it can't tell the strip that a song restarted.
+///
+/// The playback position is kept for the scrobbler, which takes it as where the song was when
+/// the notification was posted. It changes in every payload, so two values for one song
+/// rarely compare equal: compare Track IDs and states, never whole values, to tell whether
+/// anything changed.
 struct SpotifyPlayInfo: Equatable {
 
     enum State: Equatable {
@@ -53,8 +58,10 @@ struct SpotifyPlayInfo: Equatable {
     let duration: Int?
     /// False when Spotify says the song has no artwork. True when it didn't say.
     let hasArtwork: Bool
+    /// Seconds into the song when Spotify posted, or nil when it didn't say
+    let position: TimeInterval?
 
-    init(trackID: String?, name: String?, artist: String?, album: String?, state: State, duration: Int? = nil, hasArtwork: Bool = true) {
+    init(trackID: String?, name: String?, artist: String?, album: String?, state: State, duration: Int? = nil, hasArtwork: Bool = true, position: TimeInterval? = nil) {
         self.trackID = trackID.flatMap { $0.isEmpty ? nil : $0 }
         self.name = name
         self.artist = artist
@@ -62,6 +69,7 @@ struct SpotifyPlayInfo: Equatable {
         self.state = state
         self.duration = duration
         self.hasArtwork = hasArtwork
+        self.position = position
     }
 
     /// From the notification's userInfo. Unknown keys are ignored and a missing one is nil.
@@ -83,7 +91,8 @@ struct SpotifyPlayInfo: Equatable {
             album: string("Album"),
             state: state,
             duration: (userInfo["Duration"] as? NSNumber)?.intValue,
-            hasArtwork: (userInfo["Has Artwork"] as? NSNumber)?.boolValue ?? true
+            hasArtwork: (userInfo["Has Artwork"] as? NSNumber)?.boolValue ?? true,
+            position: (userInfo["Playback Position"] as? NSNumber)?.doubleValue
         )
     }
 

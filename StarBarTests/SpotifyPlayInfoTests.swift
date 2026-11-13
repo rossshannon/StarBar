@@ -115,4 +115,36 @@ final class SpotifyPlayInfoTests: XCTestCase {
         XCTAssertTrue(SpotifyPlayInfo(userInfo: noKey).hasArtwork, "missing means try")
     }
 
+    // MARK: - Position
+
+    func testThePositionIsReadFromThePayload() {
+        // The scrobbler times a play from it; lost, a song joined part-way would be timed
+        // from its start
+        XCTAssertEqual(SpotifyPlayInfo(userInfo: song()).position, 7.938, "Playback Position is seconds, a Double")
+    }
+
+    func testAWholeNumberPositionIsRead() {
+        var payload = song()
+        payload["Playback Position"] = 12
+        XCTAssertEqual(SpotifyPlayInfo(userInfo: payload).position, 12, "an NSNumber holding an Int is still a position")
+    }
+
+    func testNoPositionIsNil() {
+        var payload = song()
+        payload["Playback Position"] = nil
+        XCTAssertNil(SpotifyPlayInfo(userInfo: payload).position, "a missing position is not 0")
+        XCTAssertNil(SpotifyPlayInfo(userInfo: ["Player State": "Stopped"]).position)
+    }
+
+    func testTheMemberwiseInitialiserNeedsNoPosition() {
+        // Every call written before the position was added must still compile and give nil
+        let info = SpotifyPlayInfo(trackID: "spotify:track:4uLU6hMCjMI75M1A2tKUQC", name: "Running Up That Hill", artist: "Kate Bush",
+                                   album: "Hounds of Love", state: .playing, duration: 213560, hasArtwork: false)
+        let bare = SpotifyPlayInfo(trackID: nil, name: nil, artist: nil, album: nil, state: .stopped)
+
+        XCTAssertNil(info.position)
+        XCTAssertNil(bare.position)
+        XCTAssertEqual(SpotifyPlayInfo(trackID: nil, name: nil, artist: nil, album: nil, state: .paused, position: 3.5).position, 3.5)
+    }
+
 }

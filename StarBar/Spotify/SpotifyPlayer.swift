@@ -179,6 +179,10 @@ extension SpotifyPlayer {
         var album: String?
         var artworkURL: String?
         var state: SpotifyPlayInfo.State = .unknown
+        /// The song's length in milliseconds, as the notification gives it
+        var duration: Int?
+        /// Seconds into the song
+        var position: TimeInterval?
     }
 
     /// Read the song already playing at launch, but only when StarBar may already control
@@ -195,7 +199,8 @@ extension SpotifyPlayer {
             guard let reading = SpotifyPlayer.read(pid: pid, includingSong: true) else { return }
             DispatchQueue.main.async {
                 guard let self = self, self.latest == nil, reading.state != .unknown else { return }
-                let info = SpotifyPlayInfo(trackID: reading.trackID, name: reading.name, artist: reading.artist, album: reading.album, state: reading.state)
+                let info = SpotifyPlayInfo(trackID: reading.trackID, name: reading.name, artist: reading.artist, album: reading.album, state: reading.state,
+                                           duration: reading.duration, position: reading.position)
                 os_log("%{public}s[%{public}ld], %{public}s: Spotify has %{public}s at launch", ((#file as NSString).lastPathComponent), #line, #function, info.trackID ?? "nothing")
                 self.latest = info
                 self.didSeed?(info)
@@ -272,6 +277,10 @@ extension SpotifyPlayer {
                     reading.artist = track.value(forKey: "artist") as? String
                     reading.album = track.value(forKey: "album") as? String
                     reading.state = SpotifyPlayer.state(application.value(forKey: "playerState"))
+                    // For the scrobbler: the sdef's `duration` (an integer, milliseconds) on the
+                    // track and `player position` (a real, seconds) on the application
+                    reading.duration = (track.value(forKey: "duration") as? NSNumber)?.intValue
+                    reading.position = (application.value(forKey: "playerPosition") as? NSNumber)?.doubleValue
                 }
                 return reading
             } as? Reading

@@ -439,6 +439,11 @@ extension TrackAnnouncementController {
         // but before its notification arrives. Only the same song back at its start counts.
         guard readCurrentIdentity(identity) == identity else { return }
         os_log("%{public}s[%{public}ld], %{public}s: song restarted (%.1f s to %.1f s)", ((#file as NSString).lastPathComponent), #line, #function, previous.position, position)
+        // Music never announces a restart, and the scrobbler counts it as a new play. The
+        // watch runs only for Music, so the check only makes sure of it.
+        if currentSource == .music {
+            NotificationCenter.default.post(name: .musicSongDidRestart, object: nil)
+        }
         announce(snapshot, identity: identity)
     }
 

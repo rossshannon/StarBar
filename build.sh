@@ -18,6 +18,14 @@
 #
 # Signing: builds are ad hoc unless STARBAR_CODESIGN_IDENTITY (a "Developer ID Application"
 # identity) and STARBAR_TEAM_ID are set, as the release workflow sets them from its secrets.
+#
+# Last.fm: the app's shared secret for Last.fm's API is not in the repository. A build takes
+# it from LASTFM_SHARED_SECRET in the environment (the release workflow sets it from its
+# secrets), else from the line LASTFM_SHARED_SECRET=... in the file named by
+# STARBAR_SECRETS_FILE (default ~/.config/starbar/secrets.env), which is read, never sourced.
+# It reaches Xcode concealed (LastfmCredentials.conceal) in build/StarBarSecrets.xcconfig,
+# never on a command line or in anything printed, because CI logs are public. Without it the
+# build works in every other way and can't connect to Last.fm.
 
 set -e
 set -o pipefail
@@ -116,6 +124,101 @@ verify_install() {
     echo "Verified: /Applications has the new build, and it is running."
 }
 
+# The Last.fm shared secret from the environment, kept in a shell variable that isn't exported,
+# so neither xcodebuild nor anything else this script starts inherits it
+LASTFM_SECRET_FROM_ENV="${LASTFM_SHARED_SECRET:-}"
+unset LASTFM_SHARED_SECRET
+# The same bytes as LastfmCredentials.pad in StarBar/Lastfm/LastfmCredentials.swift
+LASTFM_PAD=(0x53 0x74 0x61 0x72 0x42 0x61 0x72 0x2A 0x4C 0x61 0x73 0x74 0x2E 0x66 0x6D 0x21)
+LASTFM_XCCONFIG="build/StarBarSecrets.xcconfig"
+# Set by prepare_lastfm_secret before each build
+LASTFM_BUILD_ARGS=()
+LASTFM_CONCEALED=""
+
+# Prints the Last.fm shared secret, or nothing when there is none. Shell builtins only, so the
+# secret never appears on a command line, where other processes could read it.
+find_lastfm_secret() {
+    local file="${STARBAR_SECRETS_FILE:-$HOME/.config/starbar/secrets.env}"
+    local value="" line found=false
+    if [ -n "$LASTFM_SECRET_FROM_ENV" ]; then
+        value="$LASTFM_SECRET_FROM_ENV"
+    elif [ -f "$file" ]; then
+        while IFS= read -r line || [ -n "$line" ]; do
+            line="${line#"${line%%[![:space:]]*}"}"
+            line="${line#export }"
+            case "$line" in
+                LASTFM_SHARED_SECRET=*) value="${line#LASTFM_SHARED_SECRET=}"; found=true; break ;;
+            esac
+        done < "$file"
+        [ "$found" = true ] || return 0
+    fi
+    # Trim whitespace, then one pair of matching quotes, then whitespace inside them
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    case "$value" in
+        \"*\") value="${value#\"}"; value="${value%\"}" ;;
+        \'*\') value="${value#\'}"; value="${value%\'}" ;;
+    esac
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    printf '%s' "$value"
+}
+
+# Prints the secret given as LastfmCredentials.conceal stores it: each UTF-8 byte XORed with
+# LASTFM_PAD, repeating, as two lowercase hex digits. Builtins only, as above. Run it in a
+# command substitution, since it sets LC_ALL=C so that the string is walked byte by byte.
+conceal_lastfm_secret() {
+    local secret="$1" out="" i byte
+    export LC_ALL=C
+    for (( i = 0; i < ${#secret}; i++ )); do
+        printf -v byte '%d' "'${secret:i:1}"
+        printf -v byte '%02x' $(( (byte & 0xFF) ^ LASTFM_PAD[i % ${#LASTFM_PAD[@]}] ))
+        out+="$byte"
+    done
+    printf '%s' "$out"
+}
+
+# Writes build/StarBarSecrets.xcconfig and sets LASTFM_BUILD_ARGS to pass it, or removes it
+# when there is no secret. Called before every build, after any clean, so a watch-mode rebuild
+# picks up a secrets file changed meanwhile. Prints nothing of the secret: the pad is in this
+# public repository, so the concealed value is as good as the secret to anyone who reads it.
+prepare_lastfm_secret() {
+    local secret
+    secret=$(find_lastfm_secret)
+    LASTFM_BUILD_ARGS=()
+    LASTFM_CONCEALED=""
+    if [ -z "$secret" ]; then
+        rm -f "$LASTFM_XCCONFIG"
+        echo "Note: no Last.fm shared secret (LASTFM_SHARED_SECRET), so this build can't connect to Last.fm"
+        return 0
+    fi
+    if ! [[ "$secret" =~ ^[0-9a-fA-F]{32}$ ]]; then
+        echo "Warning: the Last.fm shared secret isn't 32 hexadecimal characters, the form Last.fm issues. Building with it anyway."
+    fi
+    LASTFM_CONCEALED=$(conceal_lastfm_secret "$secret")
+    mkdir -p build
+    rm -f "$LASTFM_XCCONFIG"
+    # umask in a subshell, so the file is created 0600 and never readable by anyone else
+    ( umask 077; printf 'STARBAR_LASTFM_SECRET = %s\n' "$LASTFM_CONCEALED" > "$LASTFM_XCCONFIG" )
+    chmod 600 "$LASTFM_XCCONFIG"
+    LASTFM_BUILD_ARGS=(-xcconfig "$LASTFM_XCCONFIG")
+    echo "Last.fm: building with the shared secret"
+}
+
+# xcodebuild echoes the settings it reads from an -xcconfig file at the top of its output, and
+# a failed build prints the whole log, so the concealed secret is taken out of the log before
+# any of it is shown. The value goes to grep through a file descriptor, not as an argument.
+redact_build_log() {
+    local log="$1" redacted line
+    [ -n "$LASTFM_CONCEALED" ] || return 0
+    grep -qF -f <(printf '%s\n' "$LASTFM_CONCEALED") "$log" || return 0
+    redacted=$(mktemp)
+    while IFS= read -r line || [ -n "$line" ]; do
+        printf '%s\n' "${line//"$LASTFM_CONCEALED"/[Last.fm secret]}"
+    done < "$log" > "$redacted"
+    mv "$redacted" "$log"
+}
+
 # xcodebuild settings for the version numbers and signing, appended to BUILD_SETTINGS
 BUILD_SETTINGS=()
 collect_build_settings() {
@@ -155,6 +258,7 @@ build_and_install() {
         actions=(clean build)
     fi
     collect_build_settings
+    prepare_lastfm_secret
 
     # Capture build output so a failure shows the full log
     BUILD_LOG=$(mktemp)
@@ -162,11 +266,14 @@ build_and_install() {
         -scheme "$PROJECT_NAME" \
         -configuration Release \
         -derivedDataPath build \
+        "${LASTFM_BUILD_ARGS[@]}" \
         "${BUILD_SETTINGS[@]}" \
         "${actions[@]}" > "$BUILD_LOG" 2>&1; then
+        redact_build_log "$BUILD_LOG"
         tail -10 "$BUILD_LOG"
         rm -f "$BUILD_LOG"
     else
+        redact_build_log "$BUILD_LOG"
         echo "Build failed! Full output:"
         cat "$BUILD_LOG"
         rm -f "$BUILD_LOG"
