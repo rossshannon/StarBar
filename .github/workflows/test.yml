@@ -65,6 +65,20 @@ jobs:
             build/test/results/
           if-no-files-found: ignore
 
+  # The release skill's scripts, on the bash 3.2 and BSD tools macOS ships and the scripts
+  # have to run under, and the shape of every notes file in docs/releases/
+  release-scripts:
+    name: release scripts
+    runs-on: macos-15
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Test the release scripts
+        run: python3 -m unittest discover -s .claude/skills/release/scripts/tests -v
+
   # Clicks and drags the real menu bar. The app runs with -UITesting YES, so no Music is needed.
   # Two versions, because the menu bar delivers clicks differently: macOS 27 sends one click on
   # mouse down and no drag events; macOS 26 and earlier send real drag events.
