@@ -18,6 +18,18 @@
 #
 # Signing: builds are ad hoc unless STARBAR_CODESIGN_IDENTITY (a "Developer ID Application"
 # identity) and STARBAR_TEAM_ID are set, as the release workflow sets them from its secrets.
+#
+# Last.fm: the app's API key and shared secret for Last.fm's API are not in the repository. A
+# build takes LASTFM_API_KEY and LASTFM_SHARED_SECRET from the environment (the release
+# workflow sets them from its secrets), else from the lines of those names in an env file:
+# the one STARBAR_SECRETS_FILE names, then .env beside this script, then .env in the main
+# checkout when this is a git worktree of it, then ~/.config/starbar/secrets.env. A file is
+# read, never sourced. A .env that 1Password mounts for an Environment is a named pipe that
+# waits for 1Password to be unlocked and the read approved, so it is given up on after
+# STARBAR_ENV_WAIT seconds (60 at a terminal, 10 otherwise). Both values reach Xcode
+# concealed (LastfmCredentials.conceal) in build/StarBarSecrets.xcconfig, never on a command
+# line or in anything printed, because CI logs are public. Without them the build works in
+# every other way and can't connect to Last.fm.
 
 set -e
 set -o pipefail
@@ -116,6 +128,11 @@ verify_install() {
     echo "Verified: /Applications has the new build, and it is running."
 }
 
+# Last.fm's API key and shared secret: find_lastfm_credentials, prepare_lastfm_credentials and
+# redact_build_log, in a file of their own so that Scripts/test-lastfm-credentials.sh can run
+# them with made-up values
+source Scripts/lastfm-credentials.sh
+
 # xcodebuild settings for the version numbers and signing, appended to BUILD_SETTINGS
 BUILD_SETTINGS=()
 collect_build_settings() {
@@ -155,6 +172,7 @@ build_and_install() {
         actions=(clean build)
     fi
     collect_build_settings
+    prepare_lastfm_credentials
 
     # Capture build output so a failure shows the full log
     BUILD_LOG=$(mktemp)
@@ -162,11 +180,14 @@ build_and_install() {
         -scheme "$PROJECT_NAME" \
         -configuration Release \
         -derivedDataPath build \
+        "${LASTFM_BUILD_ARGS[@]}" \
         "${BUILD_SETTINGS[@]}" \
         "${actions[@]}" > "$BUILD_LOG" 2>&1; then
+        redact_build_log "$BUILD_LOG"
         tail -10 "$BUILD_LOG"
         rm -f "$BUILD_LOG"
     else
+        redact_build_log "$BUILD_LOG"
         echo "Build failed! Full output:"
         cat "$BUILD_LOG"
         rm -f "$BUILD_LOG"
@@ -254,6 +275,12 @@ run_tests() {
         extra+=("TEST_RUNNER_STARBAR_LIVE_MUSIC_TESTS=1")
     fi
     local status=0
+
+    # First, since it takes seconds: how a build finds the Last.fm key and secret and keeps them
+    # out of its log, with made-up values, under the bash this script itself runs in
+    echo ""
+    echo "=== Checking the build's Last.fm credentials... ==="
+    /bin/bash Scripts/test-lastfm-credentials.sh || status=1
 
     echo ""
     echo "=== Testing $APP_NAME... ==="
