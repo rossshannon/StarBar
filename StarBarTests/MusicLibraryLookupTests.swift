@@ -314,10 +314,26 @@ final class MusicLibraryLookupTests: XCTestCase {
 
         let playing = PlayingTrack(track: track)
         try XCTSkipUnless(playing.canRate, "this song is not in the library")
+        try XCTSkipUnless(playing.sleeveCopy != nil, "the user's copy is on another album: see the next test")
 
         XCTAssertNotEqual(playing.artworkTrack?.databaseID, track.databaseID,
                           "the catalog track is the object that answers with the wrong cover")
         XCTAssertEqual(playing.artworkTrack?.databaseID, playing.ratingTrack?.databaseID)
+    }
+
+    /// But a copy on another album, which the matcher's rules can find, has that album's
+    /// cover, so the song's own artwork goes the way of a song the user doesn't have
+    func testACopyOnAnotherAlbumGivesNoCover() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        guard let copy = playing.ratingTrack else { throw XCTSkip("this song is not in the library") }
+        try XCTSkipIf(SongName.isSameAlbumName(copy.album ?? "", track.album ?? ""), "the user's copy is on this album")
+
+        XCTAssertNil(playing.sleeveCopy)
+        XCTAssertEqual(playing.artworkTrack?.databaseID, track.databaseID)
     }
 
     /// Only meaningful while a catalog track is playing, so it steps aside otherwise
@@ -437,6 +453,76 @@ final class MusicLibraryLookupTests: XCTestCase {
         XCTAssertEqual((read.first ?? nil)?.persistentID, persistentID, "under its own names")
         XCTAssertNil(read.dropFirst().first ?? nil, "under another name")
         XCTAssertNil(read.dropFirst(2).first ?? nil, "under another artist")
+    }
+
+    // MARK: - A catalog song's copy by the matcher's rules
+
+    /// A song, timed, among the library's first 50 tracks, and its album and length: the only
+    /// track with its name, artist and album, so a lookup can be held to it, and not on a
+    /// soundtrack, where a short title is never trusted
+    private func timedSong() throws -> (track: iTunesTrack, name: String, artist: String, album: String, duration: Double) {
+        let tracks = try XCTUnwrap(try libraryPlaylist().tracks?(), "no tracks")
+        let candidates = (0..<min(tracks.count, 50)).lazy.compactMap { (tracks.object(at: $0) as? SBObject)?.get() as? iTunesTrack }
+        for track in candidates where track.mediaKind == .music {
+            guard let name = track.name, !name.isEmpty, SongName.title(name).shortCore == nil,
+                  let artist = track.artist, !artist.isEmpty,
+                  let album = track.album, !album.isEmpty, !SongName.isSoundtrackAlbum(album),
+                  let duration = track.duration, duration > 0 else { continue }
+            let alike = NSPredicate(format: "name == %@ AND artist == %@", name, artist)
+            guard (tracks.filtered(using: alike) as? [iTunesTrack] ?? []).count == 1 else { continue }
+            return (track, name, artist, album, duration)
+        }
+        throw XCTSkip("no timed song with an artist and album, and no other copy, among the first 50 tracks")
+    }
+
+    /// The search by artist reads the names of that artist's songs a column at a time; if the
+    /// columns came from the whole library instead, or out of step, the song asked for under
+    /// its own names would be missed or another one handed back
+    func testTheMatcherFindsALibrarySongByItsOwnNames() throws {
+        let song = try timedSong()
+        let query = SongQuery(name: song.name, artist: song.artist, album: song.album, duration: song.duration)
+
+        let started = Date()
+        let copy = try XCTUnwrap(iTunesRadioStation.shared.libraryCopy(matching: query), "\(song.name) by \(song.artist) not found")
+        print(String(format: "Matcher lookup for %@ by %@: %.0f ms", song.name, song.artist, Date().timeIntervalSince(started) * 1000))
+
+        XCTAssertEqual(copy.persistentID, song.track.persistentID)
+    }
+
+    /// Most catalog songs on a station are ones the user doesn't have, so the lookup's cost
+    /// when it finds nothing is the one paid most: for an artist with no songs in the library,
+    /// and for one with songs but not this one. Neither is a Music that didn't answer.
+    func testTheMatcherFindsNothingQuicklyWhenThereIsNothing() throws {
+        let song = try timedSong()
+        let failures = iTunesRadioStation.shared.failedEvents
+        let cases = [
+            ("no songs by the artist", SongQuery(name: song.name, artist: "No Such Artist 7F3C", album: song.album, duration: song.duration)),
+            ("no song of that name", SongQuery(name: "No Such Song 7F3C", artist: song.artist, album: song.album, duration: song.duration)),
+        ]
+        for (what, query) in cases {
+            let started = Date()
+            XCTAssertNil(iTunesRadioStation.shared.libraryCopy(matching: query), what)
+            print(String(format: "Matcher lookup, %@: %.0f ms", what, Date().timeIntervalSince(started) * 1000))
+        }
+        XCTAssertEqual(iTunesRadioStation.shared.failedEvents, failures, "finding nothing is not Music failing to answer")
+    }
+
+    /// Apple's catalog gives a song's full title where the user's copy often has the short
+    /// one: "I Wanna Dance with Somebody (Who Loves Me)" against "I Wanna Dance With
+    /// Somebody", which offered to add a song the user had (2026-11-16). The full title finds
+    /// the copy on its album at its length, and not at another length.
+    func testTheMatcherFindsALibrarySongByItsFullTitle() throws {
+        let song = try timedSong()
+        let full = song.name + " (Who Loves Me)"
+
+        let copy = iTunesRadioStation.shared.libraryCopy(matching: SongQuery(name: full, artist: song.artist, album: song.album,
+                                                                             duration: song.duration + 1))
+        XCTAssertEqual(copy?.persistentID, song.track.persistentID)
+
+        let longer = song.duration + SongMatcher.shortTitleLengthGap + 30
+        XCTAssertNil(iTunesRadioStation.shared.libraryCopy(matching: SongQuery(name: full, artist: song.artist, album: song.album,
+                                                                               duration: longer)),
+                     "another length is another piece")
     }
 
     /// `LibraryMatchFinder` leaves out any copy whose media kind doesn't read as a song. If

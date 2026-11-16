@@ -164,6 +164,29 @@ final class MusicLibraryIndexTests: XCTestCase {
         XCTAssertNil(MusicLibraryIndex.songs(from: columns([])))
     }
 
+    // MARK: - One artist's songs, for a catalog song's copy
+
+    func testAnArtistsTwoColumnsPairUp() throws {
+        let songs = try XCTUnwrap(MusicLibraryIndex.songs(ids: ["A1", "B2"], names: ["Saving All My Love for You", "I Wanna Dance With Somebody"],
+                                                          artist: "Whitney Houston"))
+
+        XCTAssertEqual(songs.map { $0.persistentID }, ["A1", "B2"])
+        XCTAssertEqual(songs.map { $0.name }, ["Saving All My Love for You", "I Wanna Dance With Somebody"])
+        XCTAssertEqual(Set(songs.map { $0.artist }), ["Whitney Houston"])
+    }
+
+    func testAnArtistWithNoSongsHasNone() {
+        // Not a failure: most catalog songs on a station are by artists the user has nothing by
+        XCTAssertEqual(MusicLibraryIndex.songs(ids: [], names: [], artist: "Nobody"), [])
+    }
+
+    func testAnArtistsColumnsThatDontPairAreThrownAway() {
+        // A name Music left out would put every later name beside the wrong ID
+        XCTAssertNil(MusicLibraryIndex.songs(ids: ["A1", "B2"], names: ["Only One"], artist: "Someone"))
+        XCTAssertNil(MusicLibraryIndex.songs(ids: nil, names: [], artist: "Someone"))
+        XCTAssertNil(MusicLibraryIndex.songs(ids: ["A1"], names: [NSNull()], artist: "Someone"))
+    }
+
     // MARK: - When Music is read
 
     /// A fake library and Music process, counting reads. `gate`, when set, holds each read
