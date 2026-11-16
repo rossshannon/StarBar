@@ -1,5 +1,7 @@
 # Cross-app matching: a Spotify song in the user's Music library
 
+The library matcher began with Spotify, and most of what follows was measured for it. Since 2026-11-16 it also finds the user's copy of a song Music plays from the Apple Music catalog: see the section on catalog songs below.
+
 Measured 2026-10-28 on macOS 27.2 with Music 1.7.2, against one user's library of 8,092 tracks (8,089 of them songs), read-only. These are the facts the matching in StarBar 1.8 is built on: `SongName`, `SongMatcher`, `MusicLibraryIndex` and `LibraryMatchFinder`. Re-measure before relying on anything here for a different Music version or a very different library.
 
 ## What Spotify gives to match on
@@ -134,13 +136,13 @@ Claude Code's /code-review and a probe of the fifth round's fixes, built against
 
 Measured 2026-11-16 on Music 1.7.2, against a library of 8,104 tracks (7,996 songs), read-only.
 
-The same rules now find the user's copy of a song Music plays from the Apple Music catalog, when the exact search on name, artist and album finds none (`iTunesRadioStation.libraryCopy(matching:)`). In one hour of a station, StarBar had offered to add three songs the user had:
+The library matcher these rules make up (`SongMatcher`) is no longer Spotify's alone: it now also finds the user's copy of a song Music plays from the Apple Music catalog, when the exact search on name, artist and album finds none (`iTunesRadioStation.libraryCopy(matching:)`). In one hour of a station, StarBar had offered to add three songs the user had:
 
 | Catalog | The user's copy | Found by |
 |---|---|---|
 | "I Wanna Dance with Somebody (Who Loves Me)", *Whitney*, 291.4 s | "I Wanna Dance With Somebody", *Whitney*, 289.4 s, matched | the short title, below |
-| "Goodbye Yellow Brick Road (Remastered 2014)", 40th-anniversary super deluxe edition | "Goodbye Yellow Brick Road", *Best Songs Of All Time* | the edition words, as for Spotify |
-| "Just the Way You Are", *The Stranger (30th Anniversary Legacy Edition)* | "Just The Way You Are", *The Stranger* | case and the album, as for Spotify |
+| "Goodbye Yellow Brick Road (Remastered 2014)", 40th-anniversary super deluxe edition | "Goodbye Yellow Brick Road", *Best Songs Of All Time* | the edition words |
+| "Just the Way You Are", *The Stranger (30th Anniversary Legacy Edition)* | "Just The Way You Are", *The Stranger* | folded case, the album only ordering copies |
 
 Music's `whose` already ignores case, so the Whitney miss was the bracket alone: the rules kept "(Who Loves Me)" as part of the name, as they keep "(Fade Out)".
 

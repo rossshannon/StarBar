@@ -2,8 +2,9 @@
 //  SongMatcher.swift
 //  StarBar
 //
-//  Finding a song another player is playing among the user's own Music library. Pure rule,
-//  no Apple Events: see `SongMatcherTests`.
+//  The library matcher: finding a song among the user's own Music library, for a song
+//  another player is playing, such as Spotify, or one Music plays from the Apple Music
+//  catalog. Pure rule, no Apple Events: see `SongMatcherTests`.
 //
 
 import Foundation
@@ -37,18 +38,22 @@ struct LibrarySong: Equatable {
     }
 }
 
-/// What another player says is playing
+/// The song to find a copy of: what another player says is playing
+/// (`SpotifyPlayInfo.songQuery`), or a song Music plays from the Apple Music catalog
+/// (`iTunesRadioStation.libraryCopy(of:)`)
 struct SongQuery: Equatable {
     let name: String
-    /// One name: Spotify's notification carries the main artist only, and anyone featured in
-    /// the title
+    /// From Spotify, one name: its notification carries the main artist only, and anyone
+    /// featured in the title. From the catalog, the artist as Music names it.
     let artist: String
     let album: String
     /// Seconds, or nil
     let duration: Double?
 }
 
-/// The user's Music library, keyed for finding the song another player is playing.
+/// The library matcher: the user's Music library, keyed for finding their copy of a song
+/// another player is playing, or one Music plays from the Apple Music catalog. Much of what
+/// follows was measured against Spotify, which it was first built for.
 ///
 /// Two tracks are the same song when their titles agree once edition words are dropped, the
 /// copy credits Spotify's artist as one of its own, and they mark the same kind of recording:

@@ -625,8 +625,8 @@ extension iTunesRadioStation {
     /// the same song, so the oldest is taken -- deterministic, and the one the user has had
     /// longest.
     ///
-    /// Failing that, by `SongMatcher`'s rules, the ones a Spotify song is found by, over the
-    /// library's songs by the same artist (`libraryCopy(matching:)`). Apple's catalog names a
+    /// Failing that, by the library matcher (`SongMatcher`), over the library's songs by the
+    /// same artist (`libraryCopy(matching:)`). Apple's catalog names a
     /// song and its album its own way, and the user's copy often has another name or is on
     /// another release. Measured on 2026-11-16, in one hour of a station, three songs the
     /// user had showed the add button: "I Wanna Dance with Somebody (Who Loves Me)" where
