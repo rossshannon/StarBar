@@ -29,7 +29,7 @@ final class AboutViewController: NSViewController {
     lazy var iconImageView: NSImageView = {
         let imageView = NSImageView(image: NSApp.applicationIconImage)
         imageView.imageScaling = .scaleProportionallyUpOrDown
-        imageView.setAccessibilityLabel("StarBar app icon")
+        imageView.setAccessibilityLabel("\(BuildInfo.current.name) app icon")
         return imageView
     }()
 
@@ -47,6 +47,21 @@ final class AboutViewController: NSViewController {
         textField.textColor = .secondaryLabelColor
         // Selectable, so the version can be copied into a bug report
         textField.isSelectable = true
+        return textField
+    }()
+
+    /// For a build that isn't a release: the branch, then the commit and when it was built,
+    /// so a pull request's build can be told from main's at a glance. Nil for a release.
+    lazy var sourceTextField: NSTextField? = {
+        let lines = BuildInfo.current.sourceLines()
+        guard !lines.isEmpty else { return nil }
+        let textField = NSTextField(wrappingLabelWithString: lines.joined(separator: "\n"))
+        textField.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        textField.textColor = .secondaryLabelColor
+        textField.alignment = .center
+        textField.preferredMaxLayoutWidth = AboutViewController.contentWidth
+        textField.isSelectable = true
+        textField.setAccessibilityLabel("Built from " + lines.joined(separator: ", "))
         return textField
     }()
 
@@ -198,7 +213,7 @@ extension AboutViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        title = "About StarBar"
+        title = "About \(BuildInfo.current.name)"
 
         visualEffectBackgroundView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(visualEffectBackgroundView)
@@ -218,12 +233,14 @@ extension AboutViewController {
         footerStackView.alignment = .centerX
         footerStackView.spacing = 2
 
-        let stackView = NSStackView(views: [iconImageView, titleTextField, versionTextField, taglineTextField, buttonStackView, footerStackView])
+        let versionViews: [NSView] = [versionTextField] + [sourceTextField].compactMap { $0 }
+        let views: [NSView] = [iconImageView, titleTextField] + versionViews + [taglineTextField, buttonStackView, footerStackView]
+        let stackView = NSStackView(views: views)
         stackView.orientation = .vertical
         stackView.alignment = .centerX
         stackView.spacing = 4
         stackView.setCustomSpacing(10, after: iconImageView)
-        stackView.setCustomSpacing(12, after: versionTextField)
+        stackView.setCustomSpacing(12, after: versionViews.last ?? versionTextField)
         stackView.setCustomSpacing(18, after: taglineTextField)
         stackView.setCustomSpacing(20, after: buttonStackView)
 

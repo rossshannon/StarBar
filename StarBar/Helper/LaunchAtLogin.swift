@@ -29,18 +29,30 @@ enum LaunchAtLogin {
     }
 
     /// Ask the system to open StarBar at login, or to stop. Throws when the system refuses,
-    /// or when this copy of the app is not an installed one.
+    /// when this copy of the app is not an installed one, or when it is StarBar Dev.
     static func setEnabled(_ enabled: Bool) throws {
         if enabled {
-            guard isInstalledLocation(Bundle.main.bundleURL) else {
-                os_log(.error, "%{public}s[%{public}ld], %{public}s: not registering %{public}s at login, it is not in an Applications folder", ((#file as NSString).lastPathComponent), #line, #function, Bundle.main.bundlePath)
-                throw NotInstalledError()
+            if let reason = refusal(for: BuildInfo.current.variant, at: Bundle.main.bundleURL) {
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: not registering %{public}s at login: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, Bundle.main.bundlePath, reason.localizedDescription)
+                throw reason
             }
             try SMAppService.mainApp.register()
         } else {
             try SMAppService.mainApp.unregister()
         }
         os_log("%{public}s[%{public}ld], %{public}s: launch at login %{public}s, status now %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, enabled ? "on" : "off", SMAppService.mainApp.status.rawValue)
+    }
+
+    /// Why a copy of the app may not open at login, or nil when it may: only StarBar, not
+    /// StarBar Dev, and only from an Applications folder
+    static func refusal(for variant: BuildInfo.Variant, at bundleURL: URL, home: URL = realHomeDirectory) -> Error? {
+        if variant == .dev {
+            return DevBuildError()
+        }
+        if !isInstalledLocation(bundleURL, home: home) {
+            return NotInstalledError()
+        }
+        return nil
     }
 
     /// Show the Login Items pane, for when the item needs the user's approval
@@ -65,7 +77,7 @@ enum LaunchAtLogin {
     static func migrateLegacyHelperItem() {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: legacyDefaultsKey) != nil, !isRunningTests,
-              isInstalledLocation(Bundle.main.bundleURL) else { return }
+              refusal(for: BuildInfo.current.variant, at: Bundle.main.bundleURL) == nil else { return }
         let wanted = defaults.bool(forKey: legacyDefaultsKey)
         defaults.removeObject(forKey: legacyDefaultsKey)
 
@@ -110,6 +122,15 @@ enum LaunchAtLogin {
     struct NotInstalledError: LocalizedError {
         var errorDescription: String? {
             return "Only a copy of StarBar in an Applications folder can open at login."
+        }
+    }
+
+    /// StarBar Dev is a build to try out beside StarBar, which is the one that opens at login.
+    /// Both opening at login would leave one of them quitting as soon as the other came up
+    /// (`VariantHandover`), and which one would be up to the order the system opened them in.
+    struct DevBuildError: LocalizedError {
+        var errorDescription: String? {
+            return "StarBar Dev doesn't open at login. StarBar does."
         }
     }
 

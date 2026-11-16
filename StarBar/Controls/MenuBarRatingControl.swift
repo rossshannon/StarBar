@@ -243,7 +243,7 @@ final class MenuBarRatingControl {
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
-        let about = NSMenuItem(title: "About StarBar", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About \(BuildInfo.current.name)", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
         about.target = WindowManager.shared
         menu.addItem(about)
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
@@ -253,7 +253,7 @@ final class MenuBarRatingControl {
         showCurrentTrack.target = TrackAnnouncementController.shared
         menu.addItem(showCurrentTrack)
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit StarBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit \(BuildInfo.current.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
     private(set) var isPlaying = false {

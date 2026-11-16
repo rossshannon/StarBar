@@ -36,6 +36,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Which build this is, so the log says what was running when
+        os_log("%{public}s[%{public}ld], %{public}s: %{public}s launched from %{public}s", ((#file as NSString).lastPathComponent), #line, #function, BuildInfo.current.logDescription, Bundle.main.bundlePath)
+        // StarBar and StarBar Dev take turns: the one opened last runs
+        VariantHandover.shared.start()
+
         // setup shortcut validator
         if let validator = MASShortcutValidator.shared() {
             validator.allowAnyShortcutWithOptionModifier = true

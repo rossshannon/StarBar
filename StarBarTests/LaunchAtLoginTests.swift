@@ -35,6 +35,15 @@ final class LaunchAtLoginTests: XCTestCase {
         XCTAssertFalse(isInstalled("/Users/other/Applications/StarBar.app"))
     }
 
+    /// StarBar Dev never opens at login, wherever it is; StarBar does from an Applications folder
+    func testOnlyStarBarMayOpenAtLogin() {
+        let dev = URL(fileURLWithPath: "/Applications/StarBar Dev.app")
+        XCTAssertTrue(LaunchAtLogin.refusal(for: .dev, at: dev, home: home) is LaunchAtLogin.DevBuildError)
+        XCTAssertNil(LaunchAtLogin.refusal(for: .standard, at: URL(fileURLWithPath: "/Applications/StarBar.app"), home: home))
+        let build = URL(fileURLWithPath: "/Users/someone/Development/StarBar/build/Build/Products/Release/StarBar.app")
+        XCTAssertTrue(LaunchAtLogin.refusal(for: .standard, at: build, home: home) is LaunchAtLogin.NotInstalledError)
+    }
+
     /// The test host itself is a build, so it must not count as installed
     func testTheTestHostIsNotInstalled() {
         XCTAssertFalse(LaunchAtLogin.isInstalledLocation(Bundle.main.bundleURL))
