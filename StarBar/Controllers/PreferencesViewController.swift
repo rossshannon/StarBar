@@ -54,7 +54,10 @@ final class PreferencesViewController: NSViewController {
     }()
 
     let launchAtLoginCheckboxButton: NSButton = {
-        let button = NSButton(checkboxWithTitle: "Launch at login", target: nil, action: nil)
+        let checkbox = LaunchAtLogin.checkbox(for: BuildInfo.current.variant)
+        let button = NSButton(checkboxWithTitle: checkbox.title, target: nil, action: nil)
+        button.isEnabled = checkbox.isEnabled
+        button.toolTip = checkbox.toolTip
         return button
     }()
     let halfStarCheckboxButton: NSButton = {

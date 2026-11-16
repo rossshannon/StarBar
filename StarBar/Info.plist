@@ -38,5 +38,13 @@
 	<string>Main</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>StarBarBuildDate</key>
+	<string>$(STARBAR_BUILD_DATE)</string>
+	<key>StarBarSourceBranch</key>
+	<string>$(STARBAR_SOURCE_BRANCH)</string>
+	<key>StarBarSourceCommit</key>
+	<string>$(STARBAR_SOURCE_COMMIT)</string>
+	<key>StarBarSourceModified</key>
+	<string>$(STARBAR_SOURCE_MODIFIED)</string>
 </dict>
 </plist>
