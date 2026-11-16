@@ -43,13 +43,11 @@ jobs:
           sudo xcode-select -s /Applications/Xcode.app
           xcodebuild -version
 
-      # GITHUB_HEAD_REF names the branch, since the checkout is detached
+      # GITHUB_HEAD_REF names the branch, since the checkout is detached. No Last.fm key or
+      # secret, on purpose: this runs the pull request's own build.sh, which would then decide
+      # what happens to them, and the zip is downloadable. So this build can't connect to
+      # Last.fm; a StarBar Dev built on the Mac with ./build.sh --dev --install can.
       - name: Build StarBar Dev
-        env:
-          # Last.fm's key and secret, for a build.sh that reads them. A pull request from a
-          # fork gets no secrets; its build works but can't connect to Last.fm.
-          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
-          LASTFM_SHARED_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
         run: ./build.sh --dev
 
       # ditto keeps the bundle's symlinks, permissions and signature, which the artifact's own
