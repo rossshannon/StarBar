@@ -95,6 +95,16 @@ struct OKLab: Equatable {
         return 1.05 / (luminance + 0.05)
     }
 
+    /// The contrast of white text on this colour drawn at `alpha` over black. The screen mixes
+    /// a translucent colour in sRGB's encoded values, not in linear light, so that is how it
+    /// is mixed here: half of a colour over black is darker than half its light.
+    func contrastWithWhite(atAlpha alpha: Double) -> Double {
+        let rgb = sRGB
+        let mixed = [rgb.red, rgb.green, rgb.blue].map { OKLab.linear($0 * min(1, max(0, alpha))) }
+        let luminance = 0.2126 * mixed[0] + 0.7152 * mixed[1] + 0.0722 * mixed[2]
+        return 1.05 / (luminance + 0.05)
+    }
+
     func color(alpha: CGFloat) -> NSColor {
         let rgb = sRGB
         return NSColor(srgbRed: CGFloat(rgb.red), green: CGFloat(rgb.green), blue: CGFloat(rgb.blue), alpha: alpha)
@@ -251,30 +261,145 @@ enum AlbumTint {
     /// grey only capped), its chroma capped at `maximumChroma` and then cut further until sRGB
     /// can show it at that lightness, keeping its hue throughout
     static func legible(_ colour: OKLab) -> OKLab {
-        let angle = atan2(colour.b, colour.a)
         let floor = colour.chroma < minimumChroma ? 0 : lightness.lowerBound
         let l = min(lightness.upperBound, max(floor, colour.l))
+        return shown(lightness: l, chroma: min(colour.chroma, maximumChroma), angle: atan2(colour.b, colour.a))
+    }
+
+    /// The glow's light: the tint's hue, made as bright as a light of that colour looks
+    /// (`lightLightness`) and a little more colourful than the tint (`lightChromaBoost`, up to
+    /// `lightChroma`), cut until sRGB can show it. Bright, because the tint's own lightness,
+    /// kept low for the text, glowed like an ember in the mock-up rather than a light.
+    static func light(_ tint: OKLab) -> OKLab {
+        return shown(lightness: lightLightness, chroma: min(tint.chroma * lightChromaBoost, lightChroma), angle: atan2(tint.b, tint.a))
+    }
+
+    static let lightLightness = 0.70
+    static let lightChroma = 0.17
+    static let lightChromaBoost = 1.25
+
+    /// The colour at `lightness` and `angle`, with `chroma` or as much of it as sRGB can show
+    private static func shown(lightness l: Double, chroma: Double, angle: Double) -> OKLab {
         let at = { (chroma: Double) in OKLab(l: l, a: chroma * cos(angle), b: chroma * sin(angle)) }
-        var chroma = min(colour.chroma, maximumChroma)
-        if !at(chroma).isInSRGB {
-            var low = 0.0
-            var high = chroma
-            for _ in 0..<18 {
-                let middle = (low + high) / 2
-                if at(middle).isInSRGB {
-                    low = middle
-                } else {
-                    high = middle
-                }
+        guard !at(chroma).isInSRGB else { return at(chroma) }
+        var low = 0.0
+        var high = chroma
+        for _ in 0..<18 {
+            let middle = (low + high) / 2
+            if at(middle).isInSRGB {
+                low = middle
+            } else {
+                high = middle
             }
-            chroma = low
         }
-        return at(chroma)
+        return at(low)
     }
 
     private static func smoothstep(_ edge0: Double, _ edge1: Double, _ x: Double) -> Double {
         let t = min(1, max(0, (x - edge0) / (edge1 - edge0)))
         return t * t * (3 - 2 * t)
+    }
+
+}
+
+extension AlbumTint {
+
+    /// The glow from behind the cover, the album tint's second form (Ross, 2026-11-16: "tints
+    /// the bar radially from behind the album art so it's like it's a light source"): a light
+    /// of the cover's colour (`AlbumTint.light(_:)`) hidden behind the artwork, over the
+    /// style's own background. It is full strength out to the artwork's edge and falls away in
+    /// two parts, as light round an object does: a tight halo hugging the artwork and a long
+    /// soft spill, gone by `reach` from the light's centre. Drawn as one radial gradient.
+    ///
+    /// Sizes are in points, already scaled with the strip.
+    struct Glow: Equatable {
+
+        /// The light's centre: the artwork's centre, in the glow layer's coordinates
+        var centre: CGPoint
+        /// Half the artwork's side: the light is hidden behind it, so it is full strength
+        /// out to here
+        var core: CGFloat
+        /// How far from the centre the light reaches
+        var reach: CGFloat
+        /// The halo's size: half strength at this far past the artwork's edge
+        var halo: CGFloat
+
+        /// The reach at scale 1, unless `announcementGlowReach` says otherwise: from the
+        /// break-out sleeve's centre, about a third of a 1440 point wide strip
+        static let defaultReach: CGFloat = 480
+        static let defaultHalo: CGFloat = 10
+        /// How much of the light is the halo; the rest is the spill
+        static let haloShare = 0.4
+        /// The spill's curve: 1 would fall away in a straight line, 2 sooner
+        static let spillExponent = 1.6
+        /// The most the light is at the artwork's edge, by the background it is drawn over: all
+        /// of it over the classic strip's black (and Reduce Transparency's), a little less over
+        /// a blur, and less again over Liquid Glass, whose own material should still show
+        static func strongest(for style: TrackAnnouncementStyle, opaque: Bool) -> CGFloat {
+            if opaque { return 1 }
+            switch style {
+            case .classic: return 1
+            case .blur: return 0.9
+            case .glass: return 0.75
+            }
+        }
+
+        /// The break-out sleeve's: its centre 56 points in from its edge, and the title
+        /// starts 12 points past that edge (the flat artwork's text starts 16 past its 40)
+        static func sleeve(reach: CGFloat = defaultReach) -> Glow {
+            return Glow(centre: .zero, core: TrackAnnouncementSleeve.size / 2, reach: reach, halo: defaultHalo)
+        }
+        static let titleGap: CGFloat = 12
+
+        /// How much of the light there is `distance` past the artwork's edge, from 1 there to
+        /// 0 at `reach`
+        func strength(beyondEdge distance: CGFloat) -> CGFloat {
+            guard distance > 0 else { return 1 }
+            let span = Double(max(1, reach - core))
+            let d = Double(distance)
+            guard d < span else { return 0 }
+            let halo = 1 / (1 + pow(d / Double(max(self.halo, 0.01)), 2))
+            let spill = pow(1 - d / span, Glow.spillExponent)
+            return CGFloat(Glow.haloShare * halo + (1 - Glow.haloShare) * spill)
+        }
+
+        /// The gradient's stops, from the centre out: where each is, as a share of `reach`, and
+        /// how much of the light it has. Close together through the halo, wider through the
+        /// spill, and nothing at the end.
+        var stops: [(location: CGFloat, strength: CGFloat)] {
+            let span = max(1, reach - core)
+            let far: [CGFloat] = [0.2, 0.3, 0.42, 0.56, 0.7, 0.85, 1].map { $0 * span }
+            let near: [CGFloat] = [0, 0.3, 0.6, 1, 1.5, 2.2, 3.2].map { $0 * halo }.filter { $0 < far[0] }
+            var stops: [(location: CGFloat, strength: CGFloat)] = [(location: 0, strength: 1)]
+            for distance in near + far {
+                stops.append((location: min(1, (core + distance) / max(reach, 1)), strength: strength(beyondEdge: distance)))
+            }
+            return stops
+        }
+
+        /// The most the light may be at the artwork's edge: `most`, unless that would leave
+        /// white text where the title starts, `titleGap` past the sleeve, under 4.5 : 1 over
+        /// black, the style's background at its darkest. Worked out for the sleeve; the flat
+        /// artwork's title starts further out, where there is less light.
+        static func peak(for light: OKLab, most: CGFloat, reach: CGFloat = defaultReach) -> CGFloat {
+            let atTitle = Double(sleeve(reach: reach).strength(beyondEdge: titleGap))
+            let readable = { (peak: Double) in light.contrastWithWhite(atAlpha: peak * atTitle) >= minimumContrast }
+            guard !readable(Double(most)) else { return most }
+            var low = 0.0
+            var high = Double(most)
+            for _ in 0..<20 {
+                let middle = (low + high) / 2
+                if readable(middle) {
+                    low = middle
+                } else {
+                    high = middle
+                }
+            }
+            return CGFloat(low)
+        }
+
+        static let minimumContrast = 4.5
+
     }
 
 }

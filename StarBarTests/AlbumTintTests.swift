@@ -188,4 +188,81 @@ final class AlbumTintTests: XCTestCase {
         XCTAssertEqual(TrackAnnouncementWash.mix(none, none, progress: 0.5).alpha, 0)
     }
 
+    // MARK: The glow
+
+    func testWhiteOnATranslucentColourIsMixedAsTheScreenMixesIt() {
+        XCTAssertEqual(red.contrastWithWhite(atAlpha: 1), red.contrastWithWhite, accuracy: 1e-9)
+        XCTAssertEqual(red.contrastWithWhite(atAlpha: 0), 21, accuracy: 0.01, "nothing over black")
+        XCTAssertEqual(white.contrastWithWhite(atAlpha: 0.5), 1.05 / (OKLab.linear(0.5) + 0.05), accuracy: 0.001, "half of white over black is sRGB's 50% grey, not half the light")
+        XCTAssertGreaterThan(white.contrastWithWhite(atAlpha: 0.5), 1.05 / (0.5 + 0.05))
+    }
+
+    func testTheLightIsTheTintsHueMadeBright() {
+        let tint = AlbumTint.legible(OKLab(red: 0.1, green: 0.3, blue: 0.9))
+        let light = AlbumTint.light(tint)
+        XCTAssertEqual(light.l, AlbumTint.lightLightness, accuracy: 1e-9)
+        XCTAssertEqual(light.hue, tint.hue, accuracy: 1e-6)
+        XCTAssertGreaterThan(light.chroma, tint.chroma, "a little more colourful than the tint")
+        XCTAssertLessThanOrEqual(light.chroma, AlbumTint.lightChroma + 1e-9)
+        XCTAssertTrue(light.isInSRGB)
+    }
+
+    /// The title starts 12 points past the sleeve: the light there leaves white text at 4.5 : 1
+    /// or more over black, whatever the colour, while the light is as strong as that allows
+    func testTheGlowKeepsTheTitleReadableAtEveryHue() {
+        let atTitle = AlbumTint.Glow.sleeve().strength(beyondEdge: AlbumTint.Glow.titleGap)
+        XCTAssertGreaterThan(atTitle, 0.5, "the title sits in the glow, not past it")
+        for degrees in stride(from: 0.0, to: 360, by: 10) {
+            for chroma in [0.05, 0.1, 0.14] {
+                let hue = degrees * .pi / 180
+                let light = AlbumTint.light(OKLab(l: 0.45, a: chroma * cos(hue), b: chroma * sin(hue)))
+                let context = "hue \(degrees)°, C \(chroma)"
+                XCTAssertTrue(light.isInSRGB, context)
+                XCTAssertEqual(light.l, AlbumTint.lightLightness, accuracy: 1e-9, context)
+                for most: CGFloat in [1, 0.9, 0.75] {
+                    let peak = AlbumTint.Glow.peak(for: light, most: most)
+                    XCTAssertLessThanOrEqual(peak, most, context)
+                    XCTAssertGreaterThan(peak, 0.5, "still a glow: \(context)")
+                    XCTAssertGreaterThanOrEqual(light.contrastWithWhite(atAlpha: Double(peak * atTitle)), 4.5 - 1e-6, context)
+                    if peak < most {
+                        XCTAssertLessThan(light.contrastWithWhite(atAlpha: Double(min(most, peak + 0.01) * atTitle)), 4.5, "no weaker than it need be: \(context)")
+                    }
+                }
+            }
+        }
+    }
+
+    func testTheGlowFallsAwayFromTheSleevesEdge() {
+        let glow = AlbumTint.Glow(centre: CGPoint(x: 68, y: 36), core: 56, reach: 480, halo: 10)
+        XCTAssertEqual(glow.strength(beyondEdge: 0), 1)
+        XCTAssertEqual(glow.strength(beyondEdge: -20), 1, "behind the sleeve: all of it")
+        XCTAssertEqual(glow.strength(beyondEdge: 480 - 56), 0, "gone by the reach")
+        var last: CGFloat = 2
+        for distance in stride(from: CGFloat(0), through: 424, by: 2) {
+            let strength = glow.strength(beyondEdge: distance)
+            XCTAssertLessThan(strength, last, "at \(distance)")
+            last = strength
+        }
+        XCTAssertLessThan(glow.strength(beyondEdge: 20), 0.75, "a halo: it drops quickly near the sleeve")
+        XCTAssertGreaterThan(glow.strength(beyondEdge: 150), 0.2, "and a spill: some is left a long way out")
+
+        let stops = glow.stops
+        XCTAssertEqual(stops.first?.location, 0)
+        XCTAssertEqual(stops.first?.strength, 1)
+        XCTAssertEqual(Double(stops[1].location), 56.0 / 480, accuracy: 1e-9, "full strength out to the sleeve's edge")
+        XCTAssertEqual(stops[1].strength, 1)
+        XCTAssertEqual(stops.last?.location, 1)
+        XCTAssertEqual(stops.last?.strength, 0)
+        XCTAssertEqual(stops.map { $0.location }, stops.map { $0.location }.sorted(), "in order")
+        XCTAssertEqual(Set(stops.map { $0.location }).count, stops.count, "no two stops in one place")
+    }
+
+    func testAnOldCheckboxSettingReadsAsTheWholeStripTint() {
+        XCTAssertEqual(TrackAnnouncementAlbumTint(storedValue: "1"), .strip)
+        XCTAssertEqual(TrackAnnouncementAlbumTint(storedValue: "0"), .off)
+        XCTAssertEqual(TrackAnnouncementAlbumTint(storedValue: nil), .off)
+        XCTAssertEqual(TrackAnnouncementAlbumTint(storedValue: "glow"), .glow)
+        XCTAssertEqual(TrackAnnouncementAlbumTint(storedValue: "sparkles"), .off)
+    }
+
 }

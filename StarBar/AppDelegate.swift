@@ -174,7 +174,7 @@ extension AppDelegate {
             panel?.style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
         }
         announcementAlbumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak panel] defaults, _ in
-            panel?.tintsWithAlbum = defaults.announcementAlbumTint
+            panel?.albumTintMode = TrackAnnouncementAlbumTint(storedValue: defaults.announcementAlbumTint)
         }
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showCurrentTrack.rawValue, toAction: { [weak controller] in
             controller?.showCurrentTrack()
@@ -546,7 +546,7 @@ extension AppDelegate {
             ApplicationKey.remindToRateUnrated.rawValue : true,
             ApplicationKey.announceNewTracks.rawValue : false,
             ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue,
-            ApplicationKey.announcementAlbumTint.rawValue : false,
+            ApplicationKey.announcementAlbumTint.rawValue : TrackAnnouncementAlbumTint.default.rawValue,
         ])
     }
 }

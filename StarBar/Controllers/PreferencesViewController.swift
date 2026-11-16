@@ -22,6 +22,9 @@ final class PreferencesViewController: NSViewController {
     lazy var announcementStyleTextField: NSTextField = {
         return NSTextField(labelWithString: "Strip style: ")
     }()
+    lazy var albumTintTextField: NSTextField = {
+        return NSTextField(labelWithString: "Album colour: ")
+    }()
     lazy var ratingDownTextField: NSTextField = {
         return NSTextField(labelWithString: "Rating down: ")
     }()
@@ -89,8 +92,12 @@ final class PreferencesViewController: NSViewController {
         }
         return button
     }()
-    let albumTintCheckboxButton: NSButton = {
-        let button = NSButton(checkboxWithTitle: "Tint the strip with the album’s colour", target: nil, action: nil)
+    let albumTintPopUpButton: NSPopUpButton = {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        for mode in TrackAnnouncementAlbumTint.allCases {
+            button.addItem(withTitle: mode.title)
+            button.lastItem?.representedObject = mode.rawValue
+        }
         return button
     }()
     let showCurrentTrackShortcutView: MASShortcutView = {
@@ -172,7 +179,7 @@ final class PreferencesViewController: NSViewController {
             [empty, reminderCheckboxButton],
             [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
-            [empty, albumTintCheckboxButton],
+            [albumTintTextField, albumTintPopUpButton],
             [NSBox.separatorLine],
             [spotifyTextField, spotifyConnectButton],
             [empty, spotifyStatusTextField],
@@ -194,7 +201,7 @@ final class PreferencesViewController: NSViewController {
 
         gridView.row(at: 0).rowAlignment = .lastBaseline
         // A label beside a pop-up or a push button sits on the control's text, not its top
-        for label in [announcementStyleTextField, spotifyTextField] {
+        for label in [announcementStyleTextField, albumTintTextField, spotifyTextField] {
             gridView.cell(for: label)?.row?.rowAlignment = .firstBaseline
         }
 
@@ -313,8 +320,9 @@ extension PreferencesViewController {
         UserDefaults.standard.announcementStyle = rawValue
     }
 
-    @objc private func albumTintCheckboxButtonChanged(_ sender: NSButton) {
-        UserDefaults.standard.announcementAlbumTint = sender.state == .on
+    @objc private func albumTintChanged(_ sender: NSPopUpButton) {
+        guard let rawValue = sender.selectedItem?.representedObject as? String else { return }
+        UserDefaults.standard.announcementAlbumTint = rawValue
     }
 
     @objc private func spotifyConnectButtonPressed(_ sender: NSButton) {
@@ -413,10 +421,11 @@ extension PreferencesViewController {
             self?.announcementStylePopUpButton.selectItem(withTitle: style.title)
         }
 
-        albumTintCheckboxButton.target = self
-        albumTintCheckboxButton.action = #selector(PreferencesViewController.albumTintCheckboxButtonChanged(_:))
+        albumTintPopUpButton.target = self
+        albumTintPopUpButton.action = #selector(PreferencesViewController.albumTintChanged(_:))
         albumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak self] defaults, _ in
-            self?.albumTintCheckboxButton.state = defaults.announcementAlbumTint ? .on : .off
+            let mode = TrackAnnouncementAlbumTint(storedValue: defaults.announcementAlbumTint)
+            self?.albumTintPopUpButton.selectItem(withTitle: mode.title)
         }
 
         spotifyConnectButton.target = self

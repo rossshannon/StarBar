@@ -206,17 +206,18 @@ final class TrackAnnouncementPanel: NSPanel {
         }
     }
 
-    /// Tint the strip's background with the colour of the song's cover, from Preferences.
-    /// Turned on while the strip is up, the colour fades in as a late cover's does; turned off,
-    /// the strip goes back to its own black at once.
-    var tintsWithAlbum: Bool {
-        get { return stripView.tintsWithAlbum }
+    /// Whether the strip's background takes the colour of the song's cover, across the strip
+    /// or as a glow from behind it, from Preferences. Turned on or changed while the strip is
+    /// up, the colour fades in as a late cover's does; turned off, the strip goes back to its
+    /// own black at once.
+    var albumTintMode: TrackAnnouncementAlbumTint {
+        get { return stripView.albumTintMode }
         set {
-            guard newValue != stripView.tintsWithAlbum else { return }
+            guard newValue != stripView.albumTintMode else { return }
             stopTintFade()
             stripView.setAlbumTint(nil)
-            stripView.tintsWithAlbum = newValue
-            if newValue {
+            stripView.albumTintMode = newValue
+            if newValue != .off {
                 retint(fading: phase != .hidden && !isWarmingUp, why: "turned on")
             }
         }
@@ -552,8 +553,8 @@ extension TrackAnnouncementPanel {
     /// otherwise it is made at once. A change to the colour already shown, or on its way,
     /// does nothing.
     fileprivate func retint(fading: Bool, why: String) {
-        guard stripView.tintsWithAlbum else { return }
-        let target = albumTint(for: stripView.announcement.artwork)
+        guard stripView.albumTintMode != .off else { return }
+        let target = tint(of: stripView.announcement.artwork)
         guard fading else {
             stopTintFade()
             stripView.setAlbumTint(target)
@@ -607,7 +608,7 @@ extension TrackAnnouncementPanel {
     }
 
     /// `cover`'s tint, read once per cover and logged with how long the reading took
-    private func albumTint(for cover: NSImage?) -> OKLab? {
+    private func tint(of cover: NSImage?) -> OKLab? {
         guard let cover = cover else { return nil }
         if let known = tintCache.first(where: { $0.cover === cover }) {
             return known.tint

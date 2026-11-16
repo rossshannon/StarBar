@@ -79,10 +79,11 @@ extension UserDefaults {
         }
     }
 
-    /// Tint the strip's background with the colour of the song's cover, off by default
-    @objc dynamic var announcementAlbumTint: Bool {
+    /// The colour the strip's background takes from the song's cover: a
+    /// `TrackAnnouncementAlbumTint` raw value, off by default
+    @objc dynamic var announcementAlbumTint: String {
         get {
-            return bool(forKey: ApplicationKey.announcementAlbumTint.rawValue)
+            return string(forKey: ApplicationKey.announcementAlbumTint.rawValue) ?? TrackAnnouncementAlbumTint.default.rawValue
         }
         set {
             set(newValue, forKey: ApplicationKey.announcementAlbumTint.rawValue)
