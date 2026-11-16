@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
+    private var announcementAlbumTintObservation: NSKeyValueObservation?
     /// The strip's wait for the answer about a Spotify song's Music copy. A new song is held
     /// back until the answer comes, for at most `MenuBarRatingControl.libraryMatchWaitNow`,
     /// as the menu bar is, rather than shown as a Spotify song and redrawn with stars a
@@ -171,6 +172,9 @@ extension AppDelegate {
         }
         announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak panel] defaults, _ in
             panel?.style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
+        }
+        announcementAlbumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak panel] defaults, _ in
+            panel?.albumTintMode = TrackAnnouncementAlbumTint(storedValue: defaults.announcementAlbumTint)
         }
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showCurrentTrack.rawValue, toAction: { [weak controller] in
             controller?.showCurrentTrack()
@@ -541,7 +545,8 @@ extension AppDelegate {
             ApplicationKey.allowHalfStar.rawValue : false,
             ApplicationKey.remindToRateUnrated.rawValue : true,
             ApplicationKey.announceNewTracks.rawValue : false,
-            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue
+            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue,
+            ApplicationKey.announcementAlbumTint.rawValue : TrackAnnouncementAlbumTint.default.rawValue,
         ])
     }
 }
