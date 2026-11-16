@@ -108,3 +108,6 @@ Dependencies/**
 
 # Git worktrees (see "Worktrees" in AGENTS.md)
 .worktrees/
+
+# A worktree's working files: recordings, logs, measurements (see "Worktrees" in AGENTS.md)
+/scratch/
