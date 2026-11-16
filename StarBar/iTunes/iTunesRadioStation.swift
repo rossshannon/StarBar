@@ -86,6 +86,11 @@ final class iTunesRadioStation {
     /// read is how to tell "unrated" from "Music didn't answer"
     /// (`MenuBarRatingControl.withShortTimeoutIfAnswered`).
     private(set) var failedEvents = 0
+    /// Those of `failedEvents` that weren't writes. A write Music refuses comes back through
+    /// `eventDidFail` after the fact, so a lookup that reads Music counts only these, and a
+    /// refusal of a rating chosen a moment earlier can't make it give up
+    /// (`libraryCopy(matching:)`).
+    private(set) var failedReads = 0
     /// What a write to Music sets
     enum WriteKind: String {
         case rating, favorite
@@ -646,24 +651,28 @@ extension iTunesRadioStation {
         // Keep the track the search returned. Don't look it up again by database ID:
         // `object(withID:)` matches a track's `id`, which is a different number, and answers
         // with a dead specifier that reads as empty and rates as nothing.
-        let failuresBefore = failedEvents
+        let failuresBefore = failedReads
         if let copy = libraryMatches(name: name, artist: artist, album: album, in: libraryPlaylist)
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) }) {
             return copy
         }
-        // Scripting Bridge gives a number 0 when its Apple Event fails
-        let duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
         // A search Music didn't answer comes back empty, which is no reason to look further
-        guard failedEvents == failuresBefore else {
+        guard failedReads == failuresBefore else {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer the search for \u{201C}%{public}s\u{201D}, so no copy of it is matched", ((#file as NSString).lastPathComponent), #line, #function, name)
             return nil
         }
+        // Scripting Bridge gives a number 0 when its Apple Event fails, which the query takes
+        // as no length, so a copy found by its short title can't be kept
+        let duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
         return libraryCopy(matching: SongQuery(name: name, artist: artist, album: album, duration: duration))
     }
 
     /// The longest `libraryCopy(matching:)` may take in all. It runs on the main thread, while
     /// a song change is on its way to the screen; an answer later than this is given up as one
     /// Music didn't answer, as `MusicLibraryIndex.copiesDeadline` does on the index's queue.
+    ///
+    /// Not a regression for a slow Music: before this lookup existed, such a song showed the
+    /// add button anyway. The exact search before it keeps the caller's timeout.
     static let catalogCopyDeadline: TimeInterval = 2
 
     /// The user's copy of the song `query` names, by `SongMatcher`'s rules, or nil when they
@@ -690,26 +699,34 @@ extension iTunesRadioStation {
     /// artist, since the search is for the artist exactly as Music names the playing song's.
     ///
     /// Main thread, on this connection: about ten Apple Events for one copy. Each is given
-    /// what is left of `catalogCopyDeadline`, and after the first one Music doesn't answer the
-    /// rest get a tick and nothing is matched, as `MusicLibraryIndex.readCopies` does, so a
-    /// Music that has stopped answering holds the menu bar for the deadline, not a default
-    /// timeout of about two minutes an event.
+    /// what is left of `catalogCopyDeadline`, but never more than a caller's own timeout
+    /// (`MenuBarRatingControl.withShortTimeout`), and after the first one Music doesn't answer
+    /// the rest get a tick and nothing is matched, as `MusicLibraryIndex.readCopies` does. So
+    /// a Music that has stopped answering holds the menu bar for the deadline, not a default
+    /// timeout of about two minutes an event. Only reads count (`failedReads`): a rating
+    /// refused a moment before comes back as a failure too.
     func libraryCopy(matching query: SongQuery) -> iTunesTrack? {
+        // `failedReads` counts only the main thread's events
+        dispatchPrecondition(condition: .onQueue(.main))
+        let started = Date()
+        let deadline = started.addingTimeInterval(iTunesRadioStation.catalogCopyDeadline)
+        let failuresBefore = failedReads
+        // Finding the library playlist is a few events the first time in a Music process, under
+        // the short timeout, so it counts towards the deadline too
         guard let application = iTunes as? SBApplication,
               let tracks = libraryPlaylist()?.tracks?(),
               let byArtist = iTunesRadioStation.tracks(tracks, matching: NSPredicate(format: "artist == %@", query.artist)) else { return nil }
-        let started = Date()
-        let deadline = started.addingTimeInterval(iTunesRadioStation.catalogCopyDeadline)
-        let failuresBefore = failedEvents
         let timeout = application.timeout
         defer { application.timeout = timeout }
-        // Before every event: the time left, or a tick once one has failed
+        // Before every event: the time left, or a tick once one has failed. A caller's own
+        // shorter timeout stands; Scripting Bridge's default is negative, and means none.
         func beforeEachEvent() {
-            application.timeout = failedEvents == failuresBefore ? MusicLibraryIndex.timeoutLeft(until: deadline) : 1
+            let left = MusicLibraryIndex.timeoutLeft(until: deadline)
+            application.timeout = failedReads != failuresBefore ? 1 : (timeout > 0 ? min(timeout, left) : left)
         }
         // Whether Music has answered every event so far, in time
         func answered(_ what: @autoclosure () -> String) -> Bool {
-            guard failedEvents == failuresBefore, Date() <= deadline else {
+            guard failedReads == failuresBefore, Date() <= deadline else {
                 os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer %{public}s in time, so no copy of \u{201C}%{public}s\u{201D} by %{public}s is matched (%{public}.0f ms)", ((#file as NSString).lastPathComponent), #line, #function, what(), query.name, query.artist, Date().timeIntervalSince(started) * 1000)
                 return false
             }
@@ -981,6 +998,9 @@ extension iTunesRadioStation: SBApplicationDelegate {
         let (eventClass, eventID) = iTunesRadioStation.classAndID(of: event)
         if Thread.isMainThread {
             failedEvents += 1
+            if !(eventClass == "core" && eventID == "setd") {
+                failedReads += 1
+            }
         }
         os_log("%{public}s[%{public}ld], %{public}s: AppleEvent %{public}s/%{public}s failed with error %{public}s", ((#file as NSString).lastPathComponent), #line, #function, eventClass, eventID, error.localizedDescription)
 

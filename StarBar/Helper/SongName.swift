@@ -170,15 +170,35 @@ enum SongName {
         let core = folded(text)
 
         // "(Who Loves Me)": any bracket left at the end names neither a version nor an
-        // edition, since those have gone, so it is part of the name the short title leaves out
+        // edition the rules know, since those have gone. The short title leaves it out when
+        // it reads as part of the song's name rather than as a description of the recording
         var shortCore: String?
-        if let match = trailingBracket.firstMatch(in: text, range: whole(text)) {
+        if let match = trailingBracket.firstMatch(in: text, range: whole(text)),
+           isPartOfTheName(substring(text, match.range(at: 1))) {
             let short = folded(removing(match.range, from: text))
             if !short.isEmpty, short != core {
                 shortCore = short
             }
         }
         return Title(core: core, versions: versions, featured: featured, withNames: withNames, shortCore: shortCore)
+    }
+
+    /// Whether a bracketed part at the end of a title reads as part of the song's name, "(Who
+    /// Loves Me)", "(Fade Out)", "(I Think It's Going to Be a Long Long Time)", rather than as
+    /// a description of the recording that the rules don't know: "(Backing Track)", "(Early
+    /// Take)", "(Off Vocal Ver.)", "(Minus One)", "(Strings Only)", "(Part One)", "(2)". A
+    /// deluxe edition or a single carries such recordings at the master's length, on the
+    /// master's own album, so neither the album nor the length can tell them from it (the
+    /// second review, 2026-11-16).
+    ///
+    /// Two words at least, so a part of one word ("(Night)", "(Battle)", "(Unreleased)",
+    /// "(Inst.)") is never left out, and none of the words that describe a recording, nor a
+    /// number. A list of words is never complete, so this only narrows what the length and
+    /// the album let through.
+    static func isPartOfTheName(_ part: String) -> Bool {
+        let folded = fold(part)
+        let words = squash(folded).split(separator: " ")
+        return words.count >= 2 && recordingWords.firstMatch(in: folded, range: whole(folded)) == nil
     }
 
     /// What a part of a title in brackets or after " - " says, or nil when it is part of the
@@ -226,19 +246,23 @@ enum SongName {
     /// where a deluxe edition's bonus stems and early takes ("Song (Backing Track)") are the
     /// master's length, so only the album keeps them apart. Never for a track with no album.
     static func isSameAlbumName(_ album: String, _ otherAlbum: String) -> Bool {
-        let one = squash(fold(album))
-        return !one.isEmpty && one == squash(fold(otherAlbum))
+        // Folded but not squashed: squashing makes "÷ (Deluxe)" and "- (Deluxe)" both "deluxe"
+        let one = fold(album)
+        return !squash(one).isEmpty && one == fold(otherAlbum)
     }
 
-    /// Whether an album's name says it is a soundtrack: "Hades: Original Soundtrack", "The
-    /// Last of Us (Video Game Soundtrack)", "Zelda: Breath of the Wild OST". A soundtrack can
-    /// hold one cue in several versions of one length, so a short title is never trusted on
-    /// one: "Good Riddance" and "Good Riddance (Eurydice Solo)" on *Hades* are two
-    /// recordings a second apart.
+    /// Whether an album's name says it is a soundtrack or a cast recording: "Hades: Original
+    /// Soundtrack", "Hades (Original Sound Track)", "Zelda: Breath of the Wild OST",
+    /// "Hamilton (Original Broadway Cast Recording)", "Music from Baldur's Gate 3". A
+    /// soundtrack can hold one cue in several versions of one length, so a short title is
+    /// never trusted on one: "Good Riddance" and "Good Riddance (Eurydice Solo)" on *Hades*
+    /// are two recordings a second apart. Erring towards a soundtrack only loses a match.
     static func isSoundtrackAlbum(_ album: String) -> Bool {
         let folded = fold(album)
         return soundtrackWords.firstMatch(in: folded, range: whole(folded)) != nil
-            || soundtrackAbbreviation.firstMatch(in: folded, range: whole(folded)) != nil
+            || soundtrackAlbumWords.firstMatch(in: folded, range: whole(folded)) != nil
+            // In capitals only: "Ost" is German for east, as in "Berlin Ost"
+            || soundtrackAbbreviation.firstMatch(in: album, range: whole(album)) != nil
     }
 
     // MARK: - Artists and albums
@@ -666,8 +690,10 @@ enum SongName {
 
     /// A soundtrack credit says which film, or that it is one
     private static let soundtrackWords = pattern(#"\bsoundtrack\b|\bmotion picture\b|\bfilm\b|\bmovie\b|\bseries\b|\bmusical\b|\bscore\b"#)
-    /// "OST", "O.S.T."
-    private static let soundtrackAbbreviation = pattern(#"\bo\.?s\.?t\b"#)
+    /// "OST", "O.S.T.", in the album's own case
+    private static let soundtrackAbbreviation = pattern(#"\bO\.?S\.?T\b"#)
+    /// What else names a soundtrack or a cast album, beside `soundtrackWords`
+    private static let soundtrackAlbumWords = pattern(#"\bsound ?tracks?\b|\bsound version\b|\bcast recording\b|\boriginal( [a-z]+)? cast\b|\bmusic from\b"#)
 
     /// The words a soundtrack credit on an album is made of, and nothing that says which
     /// series, volume or part
@@ -710,7 +736,11 @@ enum SongName {
     private static let featuredBare = pattern(#"\s+(feat\.|ft\.|featuring)\s+(.*)$"#)
     private static let bracketed = pattern(#"\s*[\(\[]([^\(\)\[\]]*)[\)\]]"#)
     /// A bracketed part that ends the title: "(Who Loves Me)"
-    private static let trailingBracket = pattern(#"\s*[\(\[][^\(\)\[\]]*[\)\]]\s*$"#)
+    private static let trailingBracket = pattern(#"\s*[\(\[]([^\(\)\[\]]*)[\)\]]\s*$"#)
+    /// Words that describe a recording rather than name a song, for `isPartOfTheName`, any
+    /// number, and the Roman numerals that can't be a word. Not "one" or "I": "(For No One)",
+    /// "(I Think It's Going to Be a Long Long Time)"
+    private static let recordingWords = pattern(#"\d|\b(tracks?|vocals?|inst|instrumentals?|ver|versions?|takes?|stems?|minus|backing|isolated|solo|a ?cappella|acapella|unreleased|outtakes?|rough|guide|run.?through|mix|mixed|edit|dub|atmos|spatial|[ab].?side|capo|reprise|intro|outro|interlude|theme|cue|part|pt|movement|act|scene|chapter|tv|karaoke|demo|live|remix|acoustic|sessions?|rehearsal|alternate|bonus|piano|strings|orchestra|orchestral|choir|ii|iii|iv|vi|vii|viii|ix)\b"#)
     private static let dashSuffix = pattern(#"\s+-\s+(.*)$"#)
     /// "I Might Be Wrong: Live Recordings"
     private static let subtitle = pattern(#"\s*:\s+([^:]+)$"#)

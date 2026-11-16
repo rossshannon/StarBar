@@ -235,18 +235,22 @@ struct SongMatcher {
     /// only on an album of the same name (`SongName.isSameAlbumName`), not a soundtrack, and
     /// within `shortTitleLengthGap` of the query's length; a copy with either length unknown
     /// is left out. **This is the one place a length rules a copy out.** Measured on
-    /// 2026-11-16 across a 7,996-song library, 38 pairs of songs had one title that was the
-    /// other with such a part on the end, among them the studio "The Model" and the live "The
-    /// Model (London)", 0.8 s apart on another album, and soundtrack cues such as "The Last of
-    /// Us" and "The Last of Us (Never Again)". The gate leaves 3, each pair 0.1 s apart or
-    /// less on one album: one song under two titles each, as far as the lengths say.
+    /// 2026-11-16 across a 7,996-song library, 19 pairs of songs had one title that was the
+    /// other with such a part on the end, among them soundtrack cues such as "The Last of Us"
+    /// and "The Last of Us (Never Again)", a live recording, "(london performance)", and a
+    /// cover. The gate leaves 3, each pair 0.1 s apart or less on one album: one song under
+    /// two titles each, as far as the lengths say.
     ///
     /// The album's name has to be the same, not only the release: a deluxe edition's bonus
-    /// stems and early takes ("Song (Backing Track)", "Song (Early Take)") are the master's
-    /// length to within a second, and only the edition's name tells them from it (the review
-    /// of 2026-11-16). And never on a soundtrack, where one cue can come in versions of one
-    /// length: "Good Riddance" and "Good Riddance (Eurydice Solo)" on *Hades* are two
-    /// recordings, 2:58 and 2:57.
+    /// stems and early takes are the master's length to within a second, and only the
+    /// edition's name tells them from it (the review of 2026-11-16). Where the user's master is
+    /// on the deluxe edition too, only the words of the part do (`SongName.isPartOfTheName`).
+    /// And never on a soundtrack, where one cue can come in versions of one length: "Good
+    /// Riddance" and "Good Riddance (Eurydice Solo)" on *Hades* are two recordings, 2:58 and
+    /// 2:57.
+    ///
+    /// Every copy here was found the same way (`copies(of:)` never mixes full-title and
+    /// short-title copies), so the order below doesn't have to put one kind first.
     static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
         let album = SongName.album(query.album)
         let isGeneric = SongName.isGenericTitle(SongName.title(query.name).core)

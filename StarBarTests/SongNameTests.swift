@@ -169,7 +169,24 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(core("I Wanna Dance with Somebody (Who Loves Me)"), "i wanna dance with somebody who loves me")
         XCTAssertEqual(SongName.title("Street Spirit (Fade Out)").shortCore, "street spirit")
         XCTAssertEqual(SongName.title("Rocket Man (I Think It's Going to Be a Long Long Time)").shortCore, "rocket man")
-        XCTAssertEqual(SongName.title("Mantis [Battle]").shortCore, "mantis")
+        XCTAssertEqual(SongName.title("Still Got The Blues [For You]").shortCore, "still got the blues")
+        XCTAssertEqual(SongName.title("The Path (A New Beginning)").shortCore, "the path")
+    }
+
+    func testADescriptionOfTheRecordingGivesNoShortTitle() {
+        // A deluxe edition's or a single's other recordings, the master's length on the
+        // master's album, which the second review found matched to it (2026-11-16)
+        for title in ["Go Your Own Way (Early Take)", "Song (Backing Track)", "Song (Stereo Backing Track)",
+                      "Song (Off Vocal Ver.)", "Song (Inst. Ver.)", "Song (English Ver.)", "Song (Minus One)",
+                      "Song (Vocals Only)", "Song (Isolated Vocals)", "Song (Strings Only)", "Song (TV Track)",
+                      "Song (First Take)", "Song (B-Side)", "Goldberg Variations, BWV 988: Aria (Da Capo)",
+                      "Shine On You Crazy Diamond (Part One)", "Mongrel Meets His Maker (2)", "Suite (Movement II)"] {
+            XCTAssertNil(SongName.title(title).shortCore, title)
+        }
+        // A part of one word is never left out: it names a cue or a recording as often as not
+        for title in ["Mantis (Battle)", "Interlude (Night)", "Song (Unreleased)", "Song (Inst.)", "Vanishing Grace (Childhood)"] {
+            XCTAssertNil(SongName.title(title).shortCore, title)
+        }
     }
 
     func testTheShortTitleIsLeftWhenEditionsAndVersionsHaveGone() {
@@ -187,8 +204,14 @@ final class SongNameTests: XCTestCase {
         XCTAssertTrue(SongName.isSoundtrackAlbum("Hades: Original Soundtrack"))
         XCTAssertTrue(SongName.isSoundtrackAlbum("Zelda: Breath of the Wild OST"))
         XCTAssertTrue(SongName.isSoundtrackAlbum("Black Mirror: San Junipero (Original Score)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Hades (Original Sound Track)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Chrono Trigger Original Sound Version"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Hamilton (Original Broadway Cast Recording)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Les Misérables (Original London Cast)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Music from Baldur's Gate 3"))
         XCTAssertFalse(SongName.isSoundtrackAlbum("The Last of Us"), "a known miss: nothing in the name says so")
         XCTAssertFalse(SongName.isSoundtrackAlbum("Lost Souls"))
+        XCTAssertFalse(SongName.isSoundtrackAlbum("Berlin Ost"), "German for east")
         XCTAssertFalse(SongName.isSoundtrackAlbum("Whitney"))
     }
 
@@ -196,6 +219,8 @@ final class SongNameTests: XCTestCase {
         XCTAssertTrue(SongName.isSameAlbumName("Whitney", "WHITNEY"))
         XCTAssertFalse(SongName.isSameAlbumName("Whitney", "Whitney (Deluxe Edition)"))
         XCTAssertFalse(SongName.isSameAlbumName("", ""))
+        // Names of symbols alone would squash to their edition words
+        XCTAssertFalse(SongName.isSameAlbumName("÷ (Deluxe)", "- (Deluxe)"))
     }
 
     func testOnlyAPartAtTheEndGivesAShortTitle() {

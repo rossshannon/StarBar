@@ -500,22 +500,39 @@ final class SongMatcherTests: XCTestCase {
     }
 
     func testTheShortTitleOnASoundtrackIsNotTheSong() {
-        // Two recordings on Supergiant's soundtrack, 2:58 and 2:57
-        let solo = song("Good Riddance", by: "Darren Korb", on: "Hades: Original Soundtrack", length: 178)
-        let matcher = SongMatcher(library: [solo])
+        // "Good Riddance" and "Good Riddance (Eurydice Solo)" on Supergiant's soundtrack are two
+        // recordings, 2:58 and 2:57, and a soundtrack's cue can come in versions whose names
+        // the rules can't read
+        let cue = song("Good Riddance", by: "Darren Korb", on: "Hades: Original Soundtrack", length: 178)
+        let matcher = SongMatcher(library: [cue])
 
-        XCTAssertNil(matcher.match(for: query("Good Riddance (Eurydice Solo)", by: "Darren Korb",
+        XCTAssertNil(matcher.match(for: query("Good Riddance (For Orpheus)", by: "Darren Korb",
                                               on: "Hades: Original Soundtrack", length: 177)))
         XCTAssertNil(SongMatcher(library: [song("Lurelin Village", by: "Manaka Kataoka", on: "Zelda: Breath of the Wild OST", length: 120)])
-            .match(for: query("Lurelin Village (Night)", by: "Manaka Kataoka", on: "Zelda: Breath of the Wild OST", length: 120)))
+            .match(for: query("Lurelin Village (At Night Time)", by: "Manaka Kataoka", on: "Zelda: Breath of the Wild OST", length: 120)))
+    }
+
+    func testAnotherRecordingOnTheSameAlbumIsNotTheSong() {
+        // The master's length, on the album the user's copy is on: only the words of the part
+        // say it is another recording (the second review, 2026-11-16)
+        let goYourOwnWay = song("Go Your Own Way", by: "Fleetwood Mac", on: "Rumours (Super Deluxe)", length: 221.5)
+        let niceStereo = song("Wouldn't It Be Nice (Stereo)", by: "The Beach Boys", on: "Pet Sounds (50th Anniversary Edition)", length: 153)
+        let single = song("Song", by: "Someone", on: "Song - Single", length: 200)
+        let matcher = SongMatcher(library: [goYourOwnWay, niceStereo, single])
+
+        XCTAssertNil(matcher.match(for: query("Go Your Own Way (Early Take)", by: "Fleetwood Mac", on: "Rumours (Super Deluxe)", length: 220)))
+        XCTAssertNil(matcher.match(for: query("Wouldn't It Be Nice (Backing Track)", by: "The Beach Boys",
+                                              on: "Pet Sounds (50th Anniversary Edition)", length: 153)))
+        XCTAssertNil(matcher.match(for: query("Song (Off Vocal Ver.)", by: "Someone", on: "Song - Single", length: 200)))
+        XCTAssertNil(matcher.match(for: query("Song (Minus One)", by: "Someone", on: "Song - Single", length: 200)))
     }
 
     func testATitleEndingInTwoPartsOnlyFindsItsShortTitleWithoutOne() {
-        // "Song (Who) (Loves Me)" is short for "Song (Who)", which ends in a part of its own:
-        // the copy can't be told from another piece called "Song (Something Else)"
-        let matcher = SongMatcher(library: [song("Song (Who)", by: "Someone", on: "Album", length: 200)])
+        // "Song (Who Knows) (Loves Me)" is short for "Song (Who Knows)", which ends in a part of
+        // its own: the copy can't be told from another piece called "Song (Something Else)"
+        let matcher = SongMatcher(library: [song("Song (Who Knows)", by: "Someone", on: "Album", length: 200)])
 
-        XCTAssertNil(matcher.match(for: query("Song (Who) (Loves Me)", by: "Someone", on: "Album", length: 200)))
+        XCTAssertNil(matcher.match(for: query("Song (Who Knows) (Loves Me)", by: "Someone", on: "Album", length: 200)))
     }
 
     func testTheShortTitleOnAnotherReleaseIsNotTheSong() {
@@ -528,15 +545,16 @@ final class SongMatcherTests: XCTestCase {
     }
 
     func testTheShortTitleAtAnotherLengthIsNotTheSong() {
-        // Two cues on one soundtrack, 25 s apart
-        let cue = song("Vanishing Grace", by: "Gustavo Santaolalla", on: "The Last of Us", length: 126.1)
+        // "The Path" and "The Path (A New Beginning)" are 0.1 s apart in the user's library;
+        // other cues of that game's soundtrack under one name are 25 s and more apart
+        let cue = song("The Path", by: "Gustavo Santaolalla", on: "The Last of Us", length: 126.1)
         let matcher = SongMatcher(library: [cue])
 
-        XCTAssertNil(matcher.match(for: query("Vanishing Grace (Childhood)", by: "Gustavo Santaolalla",
+        XCTAssertNil(matcher.match(for: query("The Path (A New Beginning)", by: "Gustavo Santaolalla",
                                               on: "The Last of Us", length: 101.1)))
-        XCTAssertNil(matcher.match(for: query("Vanishing Grace (Childhood)", by: "Gustavo Santaolalla",
+        XCTAssertNil(matcher.match(for: query("The Path (A New Beginning)", by: "Gustavo Santaolalla",
                                               on: "The Last of Us", length: 126.1 + SongMatcher.shortTitleLengthGap + 0.1)))
-        XCTAssertNotNil(matcher.match(for: query("Vanishing Grace (Childhood)", by: "Gustavo Santaolalla",
+        XCTAssertNotNil(matcher.match(for: query("The Path (A New Beginning)", by: "Gustavo Santaolalla",
                                                  on: "The Last of Us", length: 126.1 + SongMatcher.shortTitleLengthGap)))
     }
 

@@ -314,10 +314,26 @@ final class MusicLibraryLookupTests: XCTestCase {
 
         let playing = PlayingTrack(track: track)
         try XCTSkipUnless(playing.canRate, "this song is not in the library")
+        try XCTSkipUnless(playing.sleeveCopy != nil, "the user's copy is on another album: see the next test")
 
         XCTAssertNotEqual(playing.artworkTrack?.databaseID, track.databaseID,
                           "the catalog track is the object that answers with the wrong cover")
         XCTAssertEqual(playing.artworkTrack?.databaseID, playing.ratingTrack?.databaseID)
+    }
+
+    /// But a copy on another album, which the matcher's rules can find, has that album's
+    /// cover, so the song's own artwork goes the way of a song the user doesn't have
+    func testACopyOnAnotherAlbumGivesNoCover() throws {
+        let iTunes = try XCTUnwrap(iTunesRadioStation.shared.iTunes, "Music isn't running")
+        let track = try XCTUnwrap(iTunes.currentTrackCopy, "nothing is playing")
+        try XCTSkipUnless(track.isCatalogStream, "the playing track is not an Apple Music catalog track")
+
+        let playing = PlayingTrack(track: track)
+        guard let copy = playing.ratingTrack else { throw XCTSkip("this song is not in the library") }
+        try XCTSkipIf(SongName.isSameAlbumName(copy.album ?? "", track.album ?? ""), "the user's copy is on this album")
+
+        XCTAssertNil(playing.sleeveCopy)
+        XCTAssertEqual(playing.artworkTrack?.databaseID, track.databaseID)
     }
 
     /// Only meaningful while a catalog track is playing, so it steps aside otherwise

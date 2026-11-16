@@ -403,12 +403,13 @@ extension AppDelegate {
                 // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
                 // back to the playing track rather than refusing, and `sleeve()` for the
                 // one answer it does refuse: the previous song's cover, left over. A song the
-                // user doesn't have is read even when Music's notification says it has no
-                // artwork, because then `sleeve()` asks Apple for the cover. A refresh of the
-                // strip on show reads none: it keeps its artwork, and a cover that comes
-                // later is attached by `.appleMusicCoverDidLoad`.
+                // user doesn't have, or has only on another album (`PlayingTrack.sleeveCopy`), is
+                // read even when Music's notification says it has no artwork, because then
+                // `sleeve()` asks Apple for the cover. A refresh of the strip on show reads
+                // none: it keeps its artwork, and a cover that comes later is attached by
+                // `.appleMusicCoverDidLoad`.
                 if case .forNewStrip(let listed) = artwork {
-                    if let playing = playing, listed || !playing.canRate {
+                    if let playing = playing, listed || playing.sleeveCopy == nil {
                         live.artwork = playing.sleeve()
                     } else if playing == nil, listed {
                         live.artwork = track.firstArtworkImage()
