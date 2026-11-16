@@ -1,6 +1,6 @@
 # Last.fm: how StarBar scrobbles
 
-**Tried against the live service once, on 2026-11-16**: one sign-in, one "now playing" and one scrobble of a Music song, from a build that took the key and secret out of a 1Password `.env`. "The first live run", near the end, says what was seen. Everything else said about Last.fm's API is from its documentation at last.fm/api, checked on 2026-11-13, and from how other desktop scrobblers are known to work, and is not measured. Where a fact matters, it says which kind it is. "Still to measure" lists what is left; replace each guess here with what was seen, dated, as `docs/spotify.md` does.
+**Tried against the live service once, on 2026-11-16**: one sign-in, a "now playing" and eleven Music songs scrobbled in a row, from a build that took the key and secret out of a 1Password `.env`. "The first live run", near the end, says what was seen. Everything else said about Last.fm's API is from its documentation at last.fm/api, checked on 2026-11-13, and from how other desktop scrobblers are known to work, and is not measured. Where a fact matters, it says which kind it is. "Still to measure" lists what is left; replace each guess here with what was seen, dated, as `docs/spotify.md` does.
 
 The code is in `StarBar/Lastfm/` and `StarBar/Helper/PlayTracker.swift`. The short rules for anyone changing it are in `AGENTS.md`, under "Last.fm".
 
@@ -122,21 +122,22 @@ Never run both live on the same account.
 
 ## The first live run (2026-11-16)
 
-One sign-in and one song, on the Mac the dry run was tried on, with a Release build of this branch installed (1.9.0, build 465). Everything below was read afterwards, from the app's log, its folder and Music; nothing was played or posted for it.
+One sign-in and the songs that followed it, on the Mac the dry run was tried on, with a Release build of this branch installed (1.9.0, build 465). The first song was read afterwards from the app's log, its folder and Music, and the rest from two screenshots of the profile on Last.fm's site; nothing was played or posted for it.
 
 - **The build had both values.** Its `Info.plist` held `LastfmAPIKey` and `LastfmSharedSecret`, 64 characters each, which is 32 concealed bytes, and `build/StarBarSecrets.xcconfig` was 0600. To see which build is installed without printing either value, read their lengths.
 - **Sign-in.** "Last.fm scrobbler started, inactive" at launch, then "signed in to Last.fm as ..." and "Last.fm queue now for ..., 0 waiting" 104 s later, with the session file written 0600. So `auth.getToken`, the approval page and a polled `auth.getSession` work on the real service, signatures included. Not seen: how many asks went before the session came, and what the approval page did afterwards.
 - **Now playing.** The first song, which started at about 17:13:45, was "Scrobbling now" on Last.fm's site in a screenshot taken at 17:14:07. That build logged nothing for a "now playing" that worked, so what showed the entry was StarBar's was that the Mac's other scrobbler wasn't running. `LastfmClient` logs "Last.fm now playing set" since.
 - **The scrobble.** The song was 298.9 s long. "queued a scrobble: Sade, Smooth Operator, from music, 1 waiting" came between one and four seconds after its halfway point (Music's position, read twice afterwards with the time taken to the second, put the song's start two seconds apart). "Last.fm took 1 scrobbles and ignored 0" followed 0.26 s later, and the queue file was written 0600 with nothing waiting. **That build's log can't say whether the 1 was read from Last.fm's answer**: an answer that worked but whose summary can't be read is counted as accepted too, in the same words. The call worked either way, an HTTP 2xx with no `error` in it, and an unreadable summary is logged as an error since.
+- **The profile, 46 minutes on.** A screenshot of Recent Tracks taken at 17:59:52 showed eleven songs since the sign-in, the first of them the song above, each once, with no other entry between them. **The time on each is when the song started, not when it was scrobbled**: "Hey Jude" (about 7:10 long) was seven minutes before the next song, where the moments the two were scrobbled would be about five and a half minutes apart, and the other gaps were three to five minutes, as songs played back to back give. So a song following another is tracked as a new play, and `timestamp` arrives as sent. The log wasn't read for these ten, so whether any needed a retry or a position read isn't known. None was shown as loved; whether any was a favourite in Music isn't known either.
+- **Titles arrive as Music has them**: "Yesterday (Remastered 2009)" and "Hey Jude (Remastered 2009)" were listed under those names. Nothing is folded before a scrobble.
 - **The log.** Every line above is at the default level, so `log show` has them without `--info`. Search for "Last.fm", and read it the same day.
 
-Not exercised: a second song, a pause, a restart and the position read, hearts, a favourite loved as it scrobbles, the queue's retries and anything offline, an error of any code, a batch, and Spotify.
+Not exercised, as far as is known: a pause, a restart and the position read, hearts, a favourite loved as it scrobbles, the queue's retries and anything offline, an error of any code, a batch, and Spotify.
 
 ## Still to measure
 
 - How many asks of `auth.getSession` go before a session, and does Last.fm ever mind one every 2.5 s? The first sign-in worked; "Last.fm allowed access on ask N" counts them from now on.
 - What does Last.fm's approval page do once access is allowed: does it stay open, and does anything try to send the browser on? The same line says whether the page was still open when the session came.
-- Does a scrobble show in the profile once, at the time the song started? The first run's screenshot was taken before its scrobble.
 - Does error 9 arrive as an HTTP 403, and do the other errors come under the statuses expected?
 - Do numbers in the answers arrive as strings, as numbers, or both?
 - How long does Last.fm show a "now playing" before it lapses without a scrobble?
