@@ -183,6 +183,21 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(live.versions, ["live"])
     }
 
+    func testASoundtracksNameSaysSo() {
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Hades: Original Soundtrack"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Zelda: Breath of the Wild OST"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Black Mirror: San Junipero (Original Score)"))
+        XCTAssertFalse(SongName.isSoundtrackAlbum("The Last of Us"), "a known miss: nothing in the name says so")
+        XCTAssertFalse(SongName.isSoundtrackAlbum("Lost Souls"))
+        XCTAssertFalse(SongName.isSoundtrackAlbum("Whitney"))
+    }
+
+    func testAnAlbumsNameIsComparedWithNothingTakenOff() {
+        XCTAssertTrue(SongName.isSameAlbumName("Whitney", "WHITNEY"))
+        XCTAssertFalse(SongName.isSameAlbumName("Whitney", "Whitney (Deluxe Edition)"))
+        XCTAssertFalse(SongName.isSameAlbumName("", ""))
+    }
+
     func testOnlyAPartAtTheEndGivesAShortTitle() {
         XCTAssertNil(SongName.title("(Don't Fear) The Reaper").shortCore)
         XCTAssertNil(SongName.title("Bohemian Rhapsody").shortCore)

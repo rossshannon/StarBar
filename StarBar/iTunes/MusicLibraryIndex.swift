@@ -486,6 +486,18 @@ final class MusicLibraryIndex {
         return songs
     }
 
+    /// The songs in two columns read from one artist's songs (`iTunesRadioStation.libraryCopy(matching:)`),
+    /// credited to `artist`, which the search was for. Nil when either column is missing, holds
+    /// anything but strings, or is a different length from the other: Music leaves a missing
+    /// value out of a column rather than hold its place, so such columns can't be paired. An
+    /// empty pair is no songs, which is what an artist with none in the library reads as.
+    static func songs(ids: [Any]?, names: [Any]?, artist: String) -> [LibrarySong]? {
+        guard let ids = ids as? [String], let names = names as? [String], ids.count == names.count else { return nil }
+        return zip(ids, names)
+            .filter { !$0.0.isEmpty }
+            .map { LibrarySong(persistentID: $0, name: $1, artist: artist, albumArtist: "") }
+    }
+
     /// Why a bulk read can't be used, in words for the log, or nil when the columns a song
     /// needs line up. The causes look alike from outside -- each makes the read useless --
     /// but not when working out why every read fails.

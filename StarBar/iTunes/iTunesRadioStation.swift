@@ -646,14 +646,25 @@ extension iTunesRadioStation {
         // Keep the track the search returned. Don't look it up again by database ID:
         // `object(withID:)` matches a track's `id`, which is a different number, and answers
         // with a dead specifier that reads as empty and rates as nothing.
+        let failuresBefore = failedEvents
         if let copy = libraryMatches(name: name, artist: artist, album: album, in: libraryPlaylist)
             .min(by: { ($0.databaseID ?? .max) < ($1.databaseID ?? .max) }) {
             return copy
         }
         // Scripting Bridge gives a number 0 when its Apple Event fails
         let duration = track.duration.flatMap { $0 > 0 ? $0 : nil }
+        // A search Music didn't answer comes back empty, which is no reason to look further
+        guard failedEvents == failuresBefore else {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer the search for \u{201C}%{public}s\u{201D}, so no copy of it is matched", ((#file as NSString).lastPathComponent), #line, #function, name)
+            return nil
+        }
         return libraryCopy(matching: SongQuery(name: name, artist: artist, album: album, duration: duration))
     }
+
+    /// The longest `libraryCopy(matching:)` may take in all. It runs on the main thread, while
+    /// a song change is on its way to the screen; an answer later than this is given up as one
+    /// Music didn't answer, as `MusicLibraryIndex.copiesDeadline` does on the index's queue.
+    static let catalogCopyDeadline: TimeInterval = 2
 
     /// The user's copy of the song `query` names, by `SongMatcher`'s rules, or nil when they
     /// have none Music would say so of, or Music didn't answer.
@@ -669,39 +680,70 @@ extension iTunesRadioStation {
     ///
     /// Two columns, where the index reads four and its IDs again: each is a search of the
     /// whole library, about 30 ms of 8,104 tracks on 2026-11-16, on the main thread. The
-    /// artist is the one searched for, which Music compares as `SongName` does, ignoring case
-    /// and accents. And a library change between the columns can't pair one song's name with
-    /// another's ID unnoticed, since each copy is found again by its ID, name and artist
-    /// together before anything is read from it.
+    /// artist is the one searched for, which Music's `whose` compares ignoring case, accents
+    /// and the two apostrophes, as `SongName` does (measured 2026-10-28, `cross-app-matching.md`).
+    /// And a library change between the columns can't pair one song's name with another's ID
+    /// unnoticed, since each copy is found again by its ID, name and artist together before
+    /// anything is read from it.
     ///
     /// A known miss: a copy credited to the artist under another name, or only as its album
     /// artist, since the search is for the artist exactly as Music names the playing song's.
     ///
-    /// Main thread, on this connection, under whatever timeout the caller set: about ten Apple
-    /// Events for one copy. Gives up after the first one Music doesn't answer.
+    /// Main thread, on this connection: about ten Apple Events for one copy. Each is given
+    /// what is left of `catalogCopyDeadline`, and after the first one Music doesn't answer the
+    /// rest get a tick and nothing is matched, as `MusicLibraryIndex.readCopies` does, so a
+    /// Music that has stopped answering holds the menu bar for the deadline, not a default
+    /// timeout of about two minutes an event.
     func libraryCopy(matching query: SongQuery) -> iTunesTrack? {
-        guard let tracks = libraryPlaylist()?.tracks?(),
+        guard let application = iTunes as? SBApplication,
+              let tracks = libraryPlaylist()?.tracks?(),
               let byArtist = iTunesRadioStation.tracks(tracks, matching: NSPredicate(format: "artist == %@", query.artist)) else { return nil }
         let started = Date()
+        let deadline = started.addingTimeInterval(iTunesRadioStation.catalogCopyDeadline)
         let failuresBefore = failedEvents
+        let timeout = application.timeout
+        defer { application.timeout = timeout }
+        // Before every event: the time left, or a tick once one has failed
+        func beforeEachEvent() {
+            application.timeout = failedEvents == failuresBefore ? MusicLibraryIndex.timeoutLeft(until: deadline) : 1
+        }
+        // Whether Music has answered every event so far, in time
+        func answered(_ what: @autoclosure () -> String) -> Bool {
+            guard failedEvents == failuresBefore, Date() <= deadline else {
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer %{public}s in time, so no copy of \u{201C}%{public}s\u{201D} by %{public}s is matched (%{public}.0f ms)", ((#file as NSString).lastPathComponent), #line, #function, what(), query.name, query.artist, Date().timeIntervalSince(started) * 1000)
+                return false
+            }
+            return true
+        }
+
+        // Counted first, because a column read of no songs is an error, -1728, which can't be
+        // told from Music not answering: measured 2026-11-16, for an artist with no songs in
+        // the library. Most catalog songs on a station are by such an artist.
+        beforeEachEvent()
+        let count = byArtist.count
+        guard answered("how many songs there are by the artist") else { return nil }
+        guard count > 0 else { return nil }
+        beforeEachEvent()
         let ids = MusicLibraryIndex.column("persistentID", of: byArtist)
+        guard answered("for the songs' IDs") else { return nil }
+        beforeEachEvent()
         let names = MusicLibraryIndex.column("name", of: byArtist)
-        guard failedEvents == failuresBefore else {
-            os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer for the songs by %{public}s, so no copy of \u{201C}%{public}s\u{201D} is matched", ((#file as NSString).lastPathComponent), #line, #function, query.artist, query.name)
+        guard answered("for the songs' names") else { return nil }
+        guard let songs = MusicLibraryIndex.songs(ids: ids, names: names, artist: query.artist) else {
+            os_log(.error, "%{public}s[%{public}ld], %{public}s: the songs by %{public}s read as %{public}ld IDs and %{public}ld names, so no copy of \u{201C}%{public}s\u{201D} is matched", ((#file as NSString).lastPathComponent), #line, #function, query.artist, ids?.count ?? -1, names?.count ?? -1, query.name)
             return nil
         }
-        // Music leaves a missing value out of a column rather than hold its place, so columns
-        // of different lengths can't be paired
-        guard let ids = ids as? [String], let names = names as? [String], ids.count == names.count else {
-            os_log(.error, "%{public}s[%{public}ld], %{public}s: the songs by %{public}s read as %{public}ld IDs and %{public}ld names, so no copy of \u{201C}%{public}s\u{201D} is matched", ((#file as NSString).lastPathComponent), #line, #function, query.artist, ids?.count ?? 0, names?.count ?? 0, query.name)
-            return nil
-        }
-        let songs = zip(ids, names).map { LibrarySong(persistentID: $0, name: $1, artist: query.artist, albumArtist: "") }
         let searched = Date().timeIntervalSince(started) * 1000
-        let copies = SongMatcher(library: songs).copies(of: query)
-        guard !copies.isEmpty else { return nil }
-        guard copies.count <= LibraryMatchFinder.copiesRead else {
-            os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of \u{201C}%{public}s\u{201D} by %{public}s, more than the %{public}ld read, so none is matched", ((#file as NSString).lastPathComponent), #line, #function, copies.count, query.name, query.artist, LibraryMatchFinder.copiesRead)
+        let candidates = SongMatcher(library: songs).copies(of: query)
+        guard !candidates.isEmpty else {
+            os_log("%{public}s[%{public}ld], %{public}s: none of the %{public}ld songs by %{public}s is called \u{201C}%{public}s\u{201D} (%{public}.0f ms)", ((#file as NSString).lastPathComponent), #line, #function, songs.count, query.artist, query.name, searched)
+            return nil
+        }
+        // As `LibraryMatchFinder` does: past the copies it reads, those titled as the song is
+        // recorded, and none when they are still too many
+        let copies = candidates.count <= LibraryMatchFinder.copiesRead ? candidates : SongMatcher.titledAlike(candidates, as: query)
+        guard !copies.isEmpty, copies.count <= LibraryMatchFinder.copiesRead else {
+            os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of \u{201C}%{public}s\u{201D} by %{public}s, %{public}ld of them titled alike, more than the %{public}ld read, so none is matched", ((#file as NSString).lastPathComponent), #line, #function, candidates.count, query.name, query.artist, copies.count, LibraryMatchFinder.copiesRead)
             return nil
         }
 
@@ -713,17 +755,19 @@ extension iTunesRadioStation {
             // its short title was ever kept. The search checks the name and artist as well.
             let predicate = NSPredicate(format: "persistentID == %@ AND name == %@ AND artist == %@",
                                         copy.persistentID, copy.name, copy.artist)
+            beforeEachEvent()
             let found = iTunesRadioStation.tracks(tracks, matching: predicate)?.get() as? [iTunesTrack] ?? []
+            // A search Music didn't answer comes back empty too, and the copy it was for may be
+            // the one to choose
+            guard answered("the search for library song \(copy.persistentID)") else { return nil }
             guard found.count == 1, let track = found.first else {
                 os_log("%{public}s[%{public}ld], %{public}s: library song %{public}s is not \u{201C}%{public}s\u{201D} by %{public}s any more (%{public}ld found)", ((#file as NSString).lastPathComponent), #line, #function, copy.persistentID, copy.name, copy.artist, found.count)
                 continue
             }
             // The length and plays only choose between copies, or keep one found by its short title
-            let song = copy.reading(track, choosing: copies.count > 1 || SongMatcher.isFoundByShortTitle(copy, for: query))
-            guard failedEvents == failuresBefore else {
-                os_log(.error, "%{public}s[%{public}ld], %{public}s: Music didn't answer for library song %{public}s, so no copy of \u{201C}%{public}s\u{201D} is matched", ((#file as NSString).lastPathComponent), #line, #function, copy.persistentID, query.name)
-                return nil
-            }
+            let song = copy.reading(track, choosing: copies.count > 1 || SongMatcher.isFoundByShortTitle(copy, for: query),
+                                    beforeEachEvent: beforeEachEvent)
+            guard answered("for library song \(copy.persistentID)") else { return nil }
             if let song = song {
                 read.append((song, track))
             }
@@ -735,8 +779,10 @@ extension iTunesRadioStation {
             os_log("%{public}s[%{public}ld], %{public}s: of %{public}ld songs by %{public}s, %{public}ld had the name of \u{201C}%{public}s\u{201D} on %{public}s, %{public}s, and %{public}ld of them songs, none of them that recording: %{public}s (%{public}.0f ms, %{public}.0f of them searching)", ((#file as NSString).lastPathComponent), #line, #function, songs.count, query.artist, copies.count, query.name, query.album, query.duration.map { String(format: "%.1f s", $0) } ?? "no length", read.count, described.joined(separator: "; "), elapsed, searched)
             return nil
         }
+        // With the copy's rating as it was, since a rating written to the wrong copy can't be
+        // undone, and the write itself logs only the playing song's name
         let rule = SongMatcher.isFoundByShortTitle(chosen, for: query) ? "by the title without its last bracket" : "by its title"
-        os_log("%{public}s[%{public}ld], %{public}s: \u{201C}%{public}s\u{201D} by %{public}s on %{public}s is library song %{public}s, \u{201C}%{public}s\u{201D} on %{public}s, found %{public}s (%{public}ld of %{public}ld copies, %{public}.0f ms, %{public}.0f of them searching)", ((#file as NSString).lastPathComponent), #line, #function, query.name, query.artist, query.album, chosen.persistentID, chosen.name, chosen.album, rule, ranked.count, copies.count, elapsed, searched)
+        os_log("%{public}s[%{public}ld], %{public}s: \u{201C}%{public}s\u{201D} by %{public}s on %{public}s is library song %{public}s, \u{201C}%{public}s\u{201D} on %{public}s, rated %{public}ld%{public}s, found %{public}s (%{public}ld of %{public}ld copies, %{public}.0f ms, %{public}.0f of them searching)", ((#file as NSString).lastPathComponent), #line, #function, query.name, query.artist, query.album, chosen.persistentID, chosen.name, chosen.album, chosen.rating, chosen.isRatingComputed ? " (from the album)" : "", rule, ranked.count, copies.count, elapsed, searched)
         return found.track
     }
 

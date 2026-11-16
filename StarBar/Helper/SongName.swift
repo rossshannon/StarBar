@@ -42,9 +42,10 @@ enum SongName {
         /// no edition, such as "(Who Loves Me)": "i wanna dance with somebody". Nil when the
         /// title ends in no such part. Apple's catalog gives a song's full title where a
         /// user's own copy often has the short one, so a copy can be the same song by this
-        /// name, but only on the same release and length (`SongMatcher.ranked(_:for:)`): the
-        /// part is as often the name of another piece, "(Battle)" against "(Explore)", or of
-        /// another performance, "The Model (London)".
+        /// name, but only on an album of the same name and at the same length
+        /// (`SongMatcher.ranked(_:for:)`): the part is as often the name of another piece,
+        /// "(Battle)" against "(Explore)", another performance, "The Model (London)", or a
+        /// deluxe edition's stem or early take of the song, "(Backing Track)".
         var shortCore: String? = nil
     }
 
@@ -218,6 +219,26 @@ enum SongName {
     /// artist are the same track only on the same release.
     static func isGenericTitle(_ core: String) -> Bool {
         return genericTitle.firstMatch(in: core, range: whole(core)) != nil
+    }
+
+    /// Whether two albums have one name, folded but with nothing taken off: "Whitney" is
+    /// "WHITNEY", but not "Whitney (Deluxe Edition)". For a copy found by its short title,
+    /// where a deluxe edition's bonus stems and early takes ("Song (Backing Track)") are the
+    /// master's length, so only the album keeps them apart. Never for a track with no album.
+    static func isSameAlbumName(_ album: String, _ otherAlbum: String) -> Bool {
+        let one = squash(fold(album))
+        return !one.isEmpty && one == squash(fold(otherAlbum))
+    }
+
+    /// Whether an album's name says it is a soundtrack: "Hades: Original Soundtrack", "The
+    /// Last of Us (Video Game Soundtrack)", "Zelda: Breath of the Wild OST". A soundtrack can
+    /// hold one cue in several versions of one length, so a short title is never trusted on
+    /// one: "Good Riddance" and "Good Riddance (Eurydice Solo)" on *Hades* are two
+    /// recordings a second apart.
+    static func isSoundtrackAlbum(_ album: String) -> Bool {
+        let folded = fold(album)
+        return soundtrackWords.firstMatch(in: folded, range: whole(folded)) != nil
+            || soundtrackAbbreviation.firstMatch(in: folded, range: whole(folded)) != nil
     }
 
     // MARK: - Artists and albums
@@ -645,6 +666,8 @@ enum SongName {
 
     /// A soundtrack credit says which film, or that it is one
     private static let soundtrackWords = pattern(#"\bsoundtrack\b|\bmotion picture\b|\bfilm\b|\bmovie\b|\bseries\b|\bmusical\b|\bscore\b"#)
+    /// "OST", "O.S.T."
+    private static let soundtrackAbbreviation = pattern(#"\bo\.?s\.?t\b"#)
 
     /// The words a soundtrack credit on an album is made of, and nothing that says which
     /// series, volume or part

@@ -443,7 +443,8 @@ final class MenuBarRatingControl {
                 // for a rated song (the sixth review, 2026-10-30)
                 MenuBarRatingControl.withShortTimeoutIfAnswered { _ in
                     guard let playing = iTunesPlayer.shared.playing, let track = playing.ratingTrack else { return nil }
-                    return MenuBarRatingControl.readPlayerSnapshot(track: track, userRating: track.userRating, trackID: playing.persistentID)
+                    return MenuBarRatingControl.readPlayerSnapshot(track: track, userRating: track.userRating, trackID: playing.persistentID,
+                                                                   playingTrack: playing.track)
                 } ?? nil
             },
             readPosition: {
@@ -1386,7 +1387,8 @@ extension MenuBarRatingControl {
             // song, so then the stars on show stand for it, and the reminder reads the
             // rating again before it rings: a new song's stars on show are none
             let known = ratingAnswer == nil ? ratingControl.rating : userRating
-            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: known, isPlaying: isPlaying, trackID: playing?.persistentID) }
+            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: known, isPlaying: isPlaying, trackID: playing?.persistentID,
+                                                                                          playingTrack: playing?.track) }
             reminderController?.playerDidUpdate(snapshot, ratingIsKnown: ratingAnswer != nil)
         } else {
             reminderController?.playerDidUpdate(nil)
@@ -1483,7 +1485,11 @@ extension MenuBarRatingControl {
     /// values already read. Call only while Music is running.
     ///
     /// - Parameter isPlaying: the player state, or nil to read it
-    static func readPlayerSnapshot(track: iTunesTrack, userRating: Int?, isPlaying: Bool? = nil, trackID: String? = nil) -> RatingReminderController.PlayerSnapshot? {
+    /// - Parameter playingTrack: the track Music is playing, whose length the position is
+    ///   measured against, when `track` is the user's copy of it: the copy can be on another
+    ///   release, at another length (`iTunesRadioStation.libraryCopy(matching:)`)
+    static func readPlayerSnapshot(track: iTunesTrack, userRating: Int?, isPlaying: Bool? = nil, trackID: String? = nil,
+                                   playingTrack: iTunesTrack? = nil) -> RatingReminderController.PlayerSnapshot? {
         // A read that timed out gives an empty ID, which would look like a different track
         guard let iTunes = iTunesRadioStation.shared.iTunes,
               let trackID = trackID ?? track.persistentID, !trackID.isEmpty else { return nil }
@@ -1491,7 +1497,7 @@ extension MenuBarRatingControl {
             trackID: trackID,
             isPlaying: isPlaying ?? (iTunes.playerState == .playing),
             position: iTunes.playerPosition ?? 0,
-            duration: track.duration ?? 0,
+            duration: (playingTrack ?? track).duration ?? 0,
             isRated: (userRating ?? 0) > 0
         )
     }

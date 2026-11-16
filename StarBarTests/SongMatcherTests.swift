@@ -475,20 +475,47 @@ final class SongMatcherTests: XCTestCase {
                                                 on: "Whitney", length: 291.4)), copy)
     }
 
-    func testTheFullTitleFindsACopyWithTheShortOne() {
-        // The other way round, as the user's library has it: one song under two titles
+    func testAShortTitleNeverFindsACopyWithTheFullOne() {
+        // Only the catalog's full title finds the user's short one. The other way, a plain
+        // "Mantis" would have to choose between "Mantis (Explore)" and "Mantis (Battle)"
         let copy = song("Still Got The Blues (For You)", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)
         let matcher = SongMatcher(library: [copy])
 
-        XCTAssertEqual(matcher.match(for: query("Still Got The Blues", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)), copy)
+        XCTAssertNil(matcher.match(for: query("Still Got The Blues", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)))
     }
 
-    func testTheShortTitleOnAnEditionOfTheReleaseIsTheSong() {
+    func testTheShortTitleOnAnotherEditionIsNotTheSong() {
+        // Only the album's name tells a deluxe edition's bonus stem or early take from the
+        // master: they are the master's length (the review of 2026-11-16)
         let copy = song("I Wanna Dance With Somebody", by: "Whitney Houston", on: "Whitney", length: 289.4)
         let matcher = SongMatcher(library: [copy])
 
+        XCTAssertNil(matcher.match(for: query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
+                                              on: "Whitney (Deluxe Edition)", length: 291.4)))
+        XCTAssertNil(matcher.match(for: query("I Wanna Dance With Somebody (Backing Track)", by: "Whitney Houston",
+                                              on: "Whitney (Super Deluxe Edition)", length: 289.9)))
+        // The album's name is compared folded, so its case doesn't matter
         XCTAssertEqual(matcher.match(for: query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
-                                                on: "Whitney (Deluxe Edition)", length: 291.4)), copy)
+                                                on: "WHITNEY", length: 291.4)), copy)
+    }
+
+    func testTheShortTitleOnASoundtrackIsNotTheSong() {
+        // Two recordings on Supergiant's soundtrack, 2:58 and 2:57
+        let solo = song("Good Riddance", by: "Darren Korb", on: "Hades: Original Soundtrack", length: 178)
+        let matcher = SongMatcher(library: [solo])
+
+        XCTAssertNil(matcher.match(for: query("Good Riddance (Eurydice Solo)", by: "Darren Korb",
+                                              on: "Hades: Original Soundtrack", length: 177)))
+        XCTAssertNil(SongMatcher(library: [song("Lurelin Village", by: "Manaka Kataoka", on: "Zelda: Breath of the Wild OST", length: 120)])
+            .match(for: query("Lurelin Village (Night)", by: "Manaka Kataoka", on: "Zelda: Breath of the Wild OST", length: 120)))
+    }
+
+    func testATitleEndingInTwoPartsOnlyFindsItsShortTitleWithoutOne() {
+        // "Song (Who) (Loves Me)" is short for "Song (Who)", which ends in a part of its own:
+        // the copy can't be told from another piece called "Song (Something Else)"
+        let matcher = SongMatcher(library: [song("Song (Who)", by: "Someone", on: "Album", length: 200)])
+
+        XCTAssertNil(matcher.match(for: query("Song (Who) (Loves Me)", by: "Someone", on: "Album", length: 200)))
     }
 
     func testTheShortTitleOnAnotherReleaseIsNotTheSong() {
@@ -539,14 +566,17 @@ final class SongMatcherTests: XCTestCase {
                                               on: "Whitney", length: 289.4)))
     }
 
-    func testACopyWithTheFullTitleComesBeforeOneWithTheShort() {
-        // Both on one album at one length, and the short one rated and played more
+    func testACopyWithTheFullTitleLeavesNoneWithTheShortOne() {
+        // Both on one album at one length, and the short one rated and played more. Only the
+        // full title's copies are candidates, so short ones can't push them past the number
+        // of copies `LibraryMatchFinder` reads
         let short = song("Still Got The Blues", by: "Gary Moore", on: "Still Got The Blues", length: 406.8, rating: 80, played: 9)
         let full = song("Still Got The Blues (For You)", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)
         let matcher = SongMatcher(library: [short, full])
         let wanted = query("Still Got The Blues (For You)", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)
 
-        XCTAssertEqual(SongMatcher.ranked(matcher.copies(of: wanted), for: wanted), [full, short])
+        XCTAssertEqual(matcher.copies(of: wanted), [full])
+        XCTAssertEqual(SongMatcher.ranked(matcher.copies(of: wanted), for: wanted), [full])
     }
 
     func testOnlyACopyFoundByTheShortTitleNeedsItsLengthRead() {
