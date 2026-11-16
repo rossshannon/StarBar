@@ -116,9 +116,10 @@ enum TrackAnnouncementLayout {
     static let slideDuration: TimeInterval = 0.3
     /// A cover that arrives after the strip went up cross-fades from the placeholder over this
     static let artworkFadeDuration: TimeInterval = 0.3
-    /// The background's change of colour with the album tint on: a little slower than the
-    /// cover's cross-fade, so the colour blooms in behind a cover that arrives late
-    static let tintFadeDuration: TimeInterval = 0.5
+    /// The background's change of colour with the album tint on: slower than the cover's
+    /// cross-fade, so the colour blooms in behind a cover that arrives late. Ross chose it from
+    /// the mock-up's 0.3, 0.5 and 0.8 s on 2026-11-16.
+    static let tintFadeDuration: TimeInterval = 0.8
     /// Time fully on screen between the slides
     static let holdDuration: TimeInterval = 5.0
 

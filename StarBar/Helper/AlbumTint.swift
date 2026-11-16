@@ -325,8 +325,9 @@ extension AlbumTint {
         var halo: CGFloat
 
         /// The reach at scale 1, unless `announcementGlowReach` says otherwise: from the
-        /// break-out sleeve's centre, about a third of a 1440 point wide strip
-        static let defaultReach: CGFloat = 480
+        /// break-out sleeve's centre, half of a 1440 point wide strip. Ross chose it from the
+        /// mock-up's 320, 480 and 720 on 2026-11-16.
+        static let defaultReach: CGFloat = 720
         static let defaultHalo: CGFloat = 10
         /// How much of the light is the halo; the rest is the spill
         static let haloShare = 0.4
