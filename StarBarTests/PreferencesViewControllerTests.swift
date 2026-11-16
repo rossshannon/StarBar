@@ -82,6 +82,26 @@ final class PreferencesViewControllerTests: XCTestCase {
         XCTAssertEqual(lastfmRow.rowAlignment, .firstBaseline, "the label sits on the Connect button's text")
     }
 
+    /// The Music Video strip's three settings are a block of their own in General, under a line
+    func testTheStripSettingsAreABlockOfTheirOwn() throws {
+        let controller = loadedController()
+        let general = try XCTUnwrap(controller.tabViewItems.first { PreferencesViewController.pane(of: $0) == .general }?.viewController as? GeneralPreferencesViewController)
+        let grid = general.gridView
+        func rowIndex(of view: NSView) throws -> Int {
+            return grid.index(of: try XCTUnwrap(grid.cell(for: view)?.row, "\(view) is in the General grid"))
+        }
+
+        let lines = descendants(of: grid, NSBox.self).filter { $0.boxType == .separator }
+        XCTAssertEqual(lines.count, 1)
+        let line = try rowIndex(of: try XCTUnwrap(lines.first))
+        for view in [general.launchAtLoginCheckboxButton, general.halfStarCheckboxButton, general.reminderCheckboxButton] {
+            XCTAssertLessThan(try rowIndex(of: view), line, "\(view) is above the line")
+        }
+        for view in [general.announceRowView, general.announcementStylePopUpButton, general.albumTintPopUpButton] {
+            XCTAssertGreaterThan(try rowIndex(of: view), line, "\(view) is below the line")
+        }
+    }
+
     /// The window's title is the pane's, as in macOS's own Settings windows
     func testTheTitleFollowsThePane() {
         let controller = loadedController()

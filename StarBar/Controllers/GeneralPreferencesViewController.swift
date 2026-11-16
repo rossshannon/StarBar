@@ -8,15 +8,15 @@
 import Cocoa
 import os
 
-/// The General pane of Preferences: launching at login, half stars, the rating reminder and
-/// the Music Video strip
+/// The General pane of Preferences: launching at login, half stars and the rating reminder,
+/// then, under a line, the Music Video strip with its style and colour
 final class GeneralPreferencesViewController: NSViewController {
 
     lazy var announcementStyleTextField: NSTextField = {
         return NSTextField(labelWithString: "Strip style: ")
     }()
     lazy var albumTintTextField: NSTextField = {
-        return NSTextField(labelWithString: "Album colour: ")
+        return NSTextField(labelWithString: "Album art tinting: ")
     }()
 
     let launchAtLoginCheckboxButton: NSButton = {
@@ -74,6 +74,8 @@ final class GeneralPreferencesViewController: NSViewController {
             [empty, launchAtLoginCheckboxButton],
             [empty, halfStarCheckboxButton],
             [empty, reminderCheckboxButton],
+            // The strip's settings are a block of their own
+            [NSBox.separatorLine],
             [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
             [albumTintTextField, albumTintPopUpButton],
