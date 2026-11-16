@@ -63,6 +63,10 @@ final class RatingClickController {
     @discardableResult
     func click() -> Bool {
         drag = nil
+        // The button before the position, here and in `tick()`. The other way round, a
+        // release landing between the two reads pairs the button let go with where the mouse
+        // was before it moved on, and a fast drag saves a rating short of where it ended.
+        let isHeld = pointer.isLeftButtonHeld
         guard !isStopped(), let positionX = pointer.imagePositionX else { return false }
 
         if ratingControl.isFavoriteHit(positionX: positionX) {
@@ -83,7 +87,7 @@ final class RatingClickController {
         guard ratingControl.mode == .rating else { return false }
 
         let rating = ratingControl.rating(atPositionX: positionX, behavior: behavior())
-        guard pointer.isLeftButtonHeld else {
+        guard isHeld else {
             if let rating = rating {
                 ratingControl.commit(rating: rating)
             }
@@ -100,9 +104,12 @@ final class RatingClickController {
     /// Follow the cursor during a drag. Returns false once the drag has ended.
     func tick() -> Bool {
         guard var drag = drag else { return false }
+        // The button first, as in `click()`: once it reads as up, the position read after it
+        // is where the mouse was let go
+        let isHeld = pointer.isLeftButtonHeld
         let rating = pointer.imagePositionX.flatMap { ratingControl.rating(atPositionX: $0, behavior: behavior()) }
 
-        guard pointer.isLeftButtonHeld, !isStopped() else {
+        guard isHeld, !isStopped() else {
             self.drag = nil
             if !isStopped(), let releaseRating = drag.releaseRating(at: rating) {
                 os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, releaseRating)

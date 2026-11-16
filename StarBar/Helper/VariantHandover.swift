@@ -136,7 +136,7 @@ final class VariantHandover {
 
         let alert = NSAlert()
         alert.messageText = "\(otherName) is running too"
-        alert.informativeText = "This copy of \(otherName) is from before the two took turns, so it doesn't quit when \(ownName) opens. With both running, both show the strip, both answer the rating shortcuts, and both scrobble if they're signed in to Last.fm.\n\nQuit \(otherName) from its menu to try \(ownName) on its own."
+        alert.informativeText = "This copy of \(otherName) is from before the two took turns, so it doesn’t quit when \(ownName) opens. With both running, both show the strip, both answer the rating shortcuts, and both scrobble if they’re signed in to Last.fm.\n\nQuit \(otherName) from its menu to try \(ownName) on its own."
         alert.addButton(withTitle: "OK")
         alert.addButton(withTitle: "Quit \(ownName)")
         NSApp.activate(ignoringOtherApps: true)

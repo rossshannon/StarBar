@@ -291,7 +291,7 @@ final class LastfmAccountTests: XCTestCase {
         XCTAssertTrue(fake.requests.isEmpty, "nothing should be sent without credentials")
         XCTAssertTrue(pages.isEmpty)
         XCTAssertEqual(account.state, .disconnected)
-        XCTAssertEqual(account.lastProblem, "This copy of StarBar was built without a Last.fm key, so it can't connect.")
+        XCTAssertEqual(account.lastProblem, "This copy of StarBar was built without a Last.fm key, so it can’t connect.")
         XCTAssertEqual(posts.count, 1, "the problem should be posted for Preferences")
     }
 
@@ -303,7 +303,7 @@ final class LastfmAccountTests: XCTestCase {
         fake.answers = []
         account.connect(presentingFrom: nil)
         settle()
-        XCTAssertEqual(account.lastProblem, "Couldn't reach Last.fm.")
+        XCTAssertEqual(account.lastProblem, "Couldn’t reach Last.fm.")
         XCTAssertEqual(account.state, .disconnected)
         XCTAssertTrue(pages.isEmpty, "no page should open without a token")
     }
@@ -312,7 +312,7 @@ final class LastfmAccountTests: XCTestCase {
         fake.answers = [FakeSpotifyTransport.Answer(status: 403, body: #"{"error":10,"message":"Invalid API key"}"#)]
         account.connect(presentingFrom: nil)
         settle()
-        XCTAssertEqual(account.lastProblem, "Last.fm didn't start the sign-in (error 10).")
+        XCTAssertEqual(account.lastProblem, "Last.fm didn’t start the sign-in (error 10).")
         XCTAssertEqual(account.state, .disconnected)
     }
 
@@ -321,7 +321,7 @@ final class LastfmAccountTests: XCTestCase {
         fake.answers = [tokenAnswer]
         account.connect(presentingFrom: nil)
         settle()
-        XCTAssertEqual(account.lastProblem, "The Last.fm sign-in couldn't open.")
+        XCTAssertEqual(account.lastProblem, "The Last.fm sign-in couldn’t open.")
         XCTAssertEqual(account.state, .disconnected)
         XCTAssertTrue(clock.pendingRepeating.isEmpty, "nothing should be asked without a page")
     }
@@ -392,7 +392,7 @@ final class LastfmAccountTests: XCTestCase {
         account.note(.network)
         // Catches a loop with the scrobbler, which notes failures and listens to this
         XCTAssertEqual(posts.count, 1, "the same problem again should not post")
-        XCTAssertEqual(account.lastProblem, "Couldn't reach Last.fm. What you play is kept and sent later.")
+        XCTAssertEqual(account.lastProblem, "Couldn’t reach Last.fm. What you play is kept and sent later.")
         account.note(.temporary(16))
         XCTAssertEqual(posts.count, 2, "a different problem should post")
         XCTAssertEqual(account.lastProblem, "Last.fm is busy or down. What you play is kept and sent later.")
@@ -400,7 +400,7 @@ final class LastfmAccountTests: XCTestCase {
 
     func testProblemTexts() {
         account.note(.credentialsRejected(26))
-        XCTAssertEqual(account.lastProblem, "Last.fm isn't accepting StarBar's key (error 26).")
+        XCTAssertEqual(account.lastProblem, "Last.fm isn’t accepting StarBar’s key (error 26).")
         account.note(.refused(6))
         XCTAssertEqual(account.lastProblem, "Last.fm answered with an error (6).")
         account.note(.sessionInvalid)

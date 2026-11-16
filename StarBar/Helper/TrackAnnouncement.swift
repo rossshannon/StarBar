@@ -146,7 +146,7 @@ struct TrackAnnouncement: Equatable {
             identity: "preview",
             title: "Music Video",
             artist: "StarBar",
-            album: "A strip like Growl's, for the song that just started",
+            album: "A strip like Growl’s, for the song that just started",
             rating: 70,
             isFavorited: true,
             artwork: previewArtwork

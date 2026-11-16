@@ -22,6 +22,8 @@ enum ApplicationKey: String {
     case lastfmDryRun
     case lastfmAPIKey
     case lastfmSharedSecret
+    /// The Preferences pane chosen last, a `PreferencesViewController.Pane` raw value
+    case preferencesPane
 }
 
 extension UserDefaults {

@@ -168,10 +168,10 @@ final class SpotifyAccount: NSObject {
         case .rateLimited:
             lastProblem = "Spotify is limiting requests from StarBar for a while."
         case .network:
-            lastProblem = "Couldn't reach Spotify."
+            lastProblem = "Couldn’t reach Spotify."
         case .http(let status):
             lastProblem = status == 403
-                ? "Spotify hasn't let this account in yet. For now StarBar's Spotify app serves only a few people, added one by one."
+                ? "Spotify hasn’t let this account in yet. For now StarBar’s Spotify app serves only a few people, added one by one."
                 : "Spotify answered with an error (\(status))."
         }
         postAccountChange()
@@ -240,7 +240,7 @@ extension SpotifyAccount: ASWebAuthenticationPresentationContextProviding {
         postAccountChange()
         if !session.start() {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: the Spotify sign-in didn't start", ((#file as NSString).lastPathComponent), #line, #function)
-            fail("The Spotify sign-in couldn't open.")
+            fail("The Spotify sign-in couldn’t open.")
         }
     }
 
@@ -268,14 +268,14 @@ extension SpotifyAccount: ASWebAuthenticationPresentationContextProviding {
             return
         }
         guard let callbackURL = callbackURL else {
-            fail("Spotify didn't send StarBar back a sign-in.")
+            fail("Spotify didn’t send StarBar back a sign-in.")
             return
         }
         switch SpotifyAuth.code(fromCallback: callbackURL, expectedState: expectedState) {
         case .failure(.denied(let reason)):
             fail(reason == "access_denied" ? nil : "Spotify refused the sign-in (\(reason)).")
         case .failure:
-            fail("Spotify's answer didn't match this sign-in.")
+            fail("Spotify’s answer didn’t match this sign-in.")
         case .success(let code):
             let request = SpotifyAuth.tokenRequest(code: code, clientID: clientID, verifier: pkce.verifier)
             transport(request) { [weak self] data, response in
@@ -290,7 +290,7 @@ extension SpotifyAccount: ASWebAuthenticationPresentationContextProviding {
         guard response?.statusCode == 200, let data = data, let token = SpotifyToken.parse(data, now: Date()) else {
             let code = SpotifyToken.errorCode(data) ?? response.map { "\($0.statusCode)" } ?? "no answer"
             os_log(.error, "%{public}s[%{public}ld], %{public}s: Spotify token exchange failed: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, code)
-            fail("Spotify didn't accept the sign-in (\(code)).")
+            fail("Spotify didn’t accept the sign-in (\(code)).")
             return
         }
         os_log("%{public}s[%{public}ld], %{public}s: connected to Spotify", ((#file as NSString).lastPathComponent), #line, #function)
