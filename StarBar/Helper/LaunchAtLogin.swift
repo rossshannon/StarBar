@@ -137,7 +137,7 @@ enum LaunchAtLogin {
     /// (`VariantHandover`), and which one would be up to the order the system opened them in.
     struct DevBuildError: LocalizedError {
         var errorDescription: String? {
-            return "StarBar Dev doesn't open at login. StarBar does."
+            return "StarBar Dev doesn’t open at login. StarBar does."
         }
     }
 

@@ -59,7 +59,7 @@ final class LaunchAtLoginTests: XCTestCase {
         let dev = LaunchAtLogin.checkbox(for: .dev)
         XCTAssertEqual(dev.title, "Launch at login (StarBar only)")
         XCTAssertFalse(dev.isEnabled)
-        XCTAssertEqual(dev.toolTip, "StarBar Dev doesn't open at login. StarBar does.")
+        XCTAssertEqual(dev.toolTip, "StarBar Dev doesn’t open at login. StarBar does.")
     }
 
 }
