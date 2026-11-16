@@ -22,6 +22,9 @@ final class PreferencesViewController: NSViewController {
     lazy var announcementStyleTextField: NSTextField = {
         return NSTextField(labelWithString: "Strip style: ")
     }()
+    lazy var albumTintTextField: NSTextField = {
+        return NSTextField(labelWithString: "Album colour: ")
+    }()
     lazy var ratingDownTextField: NSTextField = {
         return NSTextField(labelWithString: "Rating down: ")
     }()
@@ -86,6 +89,14 @@ final class PreferencesViewController: NSViewController {
         for style in TrackAnnouncementStyle.allCases {
             button.addItem(withTitle: style.title)
             button.lastItem?.representedObject = style.rawValue
+        }
+        return button
+    }()
+    let albumTintPopUpButton: NSPopUpButton = {
+        let button = NSPopUpButton(frame: .zero, pullsDown: false)
+        for mode in TrackAnnouncementAlbumTint.allCases {
+            button.addItem(withTitle: mode.title)
+            button.lastItem?.representedObject = mode.rawValue
         }
         return button
     }()
@@ -193,6 +204,7 @@ final class PreferencesViewController: NSViewController {
             [empty, reminderCheckboxButton],
             [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
+            [albumTintTextField, albumTintPopUpButton],
             [NSBox.separatorLine],
             [spotifyTextField, spotifyConnectButton],
             [empty, spotifyStatusTextField],
@@ -218,7 +230,7 @@ final class PreferencesViewController: NSViewController {
 
         gridView.row(at: 0).rowAlignment = .lastBaseline
         // A label beside a pop-up or a push button sits on the control's text, not its top
-        for label in [announcementStyleTextField, spotifyTextField, lastfmTextField] {
+        for label in [announcementStyleTextField, albumTintTextField, spotifyTextField, lastfmTextField] {
             gridView.cell(for: label)?.row?.rowAlignment = .firstBaseline
         }
 
@@ -243,6 +255,7 @@ final class PreferencesViewController: NSViewController {
     var reminderObservation: NSKeyValueObservation?
     var announceObservation: NSKeyValueObservation?
     var announcementStyleObservation: NSKeyValueObservation?
+    var albumTintObservation: NSKeyValueObservation?
     var lastfmSpotifyObservation: NSKeyValueObservation?
     var lastfmLoveObservation: NSKeyValueObservation?
 
@@ -255,6 +268,7 @@ final class PreferencesViewController: NSViewController {
         reminderObservation?.invalidate()
         announceObservation?.invalidate()
         announcementStyleObservation?.invalidate()
+        albumTintObservation?.invalidate()
         lastfmSpotifyObservation?.invalidate()
         lastfmLoveObservation?.invalidate()
     }
@@ -338,6 +352,11 @@ extension PreferencesViewController {
     @objc private func announcementStyleChanged(_ sender: NSPopUpButton) {
         guard let rawValue = sender.selectedItem?.representedObject as? String else { return }
         UserDefaults.standard.announcementStyle = rawValue
+    }
+
+    @objc private func albumTintChanged(_ sender: NSPopUpButton) {
+        guard let rawValue = sender.selectedItem?.representedObject as? String else { return }
+        UserDefaults.standard.announcementAlbumTint = rawValue
     }
 
     @objc private func spotifyConnectButtonPressed(_ sender: NSButton) {
@@ -506,6 +525,13 @@ extension PreferencesViewController {
         announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak self] defaults, _ in
             let style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
             self?.announcementStylePopUpButton.selectItem(withTitle: style.title)
+        }
+
+        albumTintPopUpButton.target = self
+        albumTintPopUpButton.action = #selector(PreferencesViewController.albumTintChanged(_:))
+        albumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak self] defaults, _ in
+            let mode = TrackAnnouncementAlbumTint(storedValue: defaults.announcementAlbumTint)
+            self?.albumTintPopUpButton.selectItem(withTitle: mode.title)
         }
 
         spotifyConnectButton.target = self

@@ -64,6 +64,7 @@
 		5A7E1A000000000000000B04 /* SongMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B03 /* SongMatcher.swift */; };
 		5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C02 /* HeldChoice.swift */; };
 		5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D02 /* SleeveHistory.swift */; };
+		5A7E1A000000000000001601 /* AlbumTint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001602 /* AlbumTint.swift */; };
 		5A7E1A000000000000001101 /* SteppedTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001102 /* SteppedTimeline.swift */; };
 		5A7E1A000000000000001501 /* FrameCadence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001502 /* FrameCadence.swift */; };
 		5A7E1A000000000000001503 /* FrameCadenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001504 /* FrameCadenceTests.swift */; };
@@ -133,6 +134,7 @@
 		5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B07 /* SongMatcherTests.swift */; };
 		5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C04 /* HeldChoiceTests.swift */; };
 		5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */; };
+		5A7E1A000000000000001603 /* AlbumTintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001604 /* AlbumTintTests.swift */; };
 		5A7E1A000000000000000D07 /* AppleMusicArtworkLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D08 /* AppleMusicArtworkLoaderTests.swift */; };
 		5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */; };
 		5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */; };
@@ -250,6 +252,7 @@
 		5A7E1A000000000000000B03 /* SongMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcher.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000C02 /* HeldChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoice.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D02 /* SleeveHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistory.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001602 /* AlbumTint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumTint.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001102 /* SteppedTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteppedTimeline.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001502 /* FrameCadence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCadence.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001504 /* FrameCadenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCadenceTests.swift; sourceTree = "<group>"; };
@@ -320,6 +323,7 @@
 		5A7E1A000000000000000B07 /* SongMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcherTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000C04 /* HeldChoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoiceTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistoryTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001604 /* AlbumTintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumTintTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D08 /* AppleMusicArtworkLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicArtworkLoaderTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryIndexTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMatchFinderTests.swift; sourceTree = "<group>"; };
@@ -480,6 +484,7 @@
 				5A7E1A000000000000000B07 /* SongMatcherTests.swift */,
 				5A7E1A000000000000000C04 /* HeldChoiceTests.swift */,
 				5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */,
+				5A7E1A000000000000001604 /* AlbumTintTests.swift */,
 				5A7E1A000000000000001106 /* SteppedTimelineTests.swift */,
 				5A7E1A000000000000001504 /* FrameCadenceTests.swift */,
 				5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */,
@@ -584,6 +589,7 @@
 				5A7E1A000000000000000B03 /* SongMatcher.swift */,
 				5A7E1A000000000000000C02 /* HeldChoice.swift */,
 				5A7E1A000000000000000D02 /* SleeveHistory.swift */,
+				5A7E1A000000000000001602 /* AlbumTint.swift */,
 				5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000001F1 /* StarRollout.swift */,
@@ -870,6 +876,7 @@
 				5A7E1A000000000000000B04 /* SongMatcher.swift in Sources */,
 				5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */,
 				5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */,
+				5A7E1A000000000000001601 /* AlbumTint.swift in Sources */,
 				5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
 				5A7E1A0000000000000001F2 /* StarRollout.swift in Sources */,
@@ -962,6 +969,7 @@
 				5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */,
 				5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */,
 				5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */,
+				5A7E1A000000000000001603 /* AlbumTintTests.swift in Sources */,
 				5A7E1A000000000000001105 /* SteppedTimelineTests.swift in Sources */,
 				5A7E1A000000000000001503 /* FrameCadenceTests.swift in Sources */,
 				5A7E1A000000000000001107 /* RepeatedUpdateHoldTests.swift in Sources */,

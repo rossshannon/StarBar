@@ -103,8 +103,25 @@ final class PlayingTrack {
     /// Apple's cover over Music's for a catalog track the user doesn't have, whenever Apple's
     /// search finds the song's album.
     var artworkTrack: iTunesTrack? {
-        return ratingTrack ?? track
+        return sleeveCopy ?? track
     }
+
+    /// The user's copy when its cover is the playing song's: always for a library song, and
+    /// for a catalog song when the copy is on an album of the same name. A copy found on
+    /// another release (`iTunesRadioStation.libraryCopy(matching:)`), such as a compilation's
+    /// "Goodbye Yellow Brick Road" for the 40th-anniversary edition's, has the other
+    /// release's cover, so `sleeve()` treats the song as one the user doesn't have and shows
+    /// Apple's cover of the album playing. Resolves `ratingTrack`, and for a catalog song reads
+    /// the copy's album, once.
+    private(set) lazy var sleeveCopy: iTunesTrack? = {
+        guard let copy = ratingTrack else { return nil }
+        guard isCatalogStream else { return copy }
+        guard let copyAlbum = copy.album, let album = album, SongName.isSameAlbumName(copyAlbum, album) else {
+            os_log("%{public}s[%{public}ld], %{public}s: the copy of %{public}s is on another album, so its cover isn't this song's", ((#file as NSString).lastPathComponent), #line, #function, name ?? "nil")
+            return nil
+        }
+        return copy
+    }()
 
     /// The playing track's album, read once
     private(set) lazy var album: String? = track.album
@@ -154,9 +171,9 @@ final class PlayingTrack {
     func sleeve(history: SleeveHistory = .shared,
                 previousSong: (String) -> PlayingTrack? = { iTunesPlayer.shared.previousSong(before: $0) },
                 covers: AppleMusicArtworkLoader = .shared) -> NSImage? {
-        // With a copy of the song to read from, or no ID to keep a cover under, the artwork
-        // read is the answer
-        guard ratingTrack == nil, let song = persistentID else {
+        // With a copy of the song on its album to read from, or no ID to keep a cover under,
+        // the artwork read is the answer
+        guard sleeveCopy == nil, let song = persistentID else {
             let image = artworkTrack?.firstArtworkImage()
             if let image = image, let song = persistentID {
                 history.record(image, for: song, album: { self.album })
@@ -248,6 +265,8 @@ final class PlayingTrack {
     /// the library copy -- so this has to be told, it cannot be noticed.
     func didAddToLibrary(_ libraryTrack: iTunesTrack) {
         ratingTrack = libraryTrack
+        // The catalog item itself added, so on the album playing
+        sleeveCopy = libraryTrack
     }
 
 }

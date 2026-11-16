@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
+    private var announcementAlbumTintObservation: NSKeyValueObservation?
     /// The strip's wait for the answer about a Spotify song's Music copy. A new song is held
     /// back until the answer comes, for at most `MenuBarRatingControl.libraryMatchWaitNow`,
     /// as the menu bar is, rather than shown as a Spotify song and redrawn with stars a
@@ -176,6 +177,9 @@ extension AppDelegate {
         }
         announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak panel] defaults, _ in
             panel?.style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
+        }
+        announcementAlbumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak panel] defaults, _ in
+            panel?.albumTintMode = TrackAnnouncementAlbumTint(storedValue: defaults.announcementAlbumTint)
         }
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showCurrentTrack.rawValue, toAction: { [weak controller] in
             controller?.showCurrentTrack()
@@ -408,12 +412,13 @@ extension AppDelegate {
                 // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
                 // back to the playing track rather than refusing, and `sleeve()` for the
                 // one answer it does refuse: the previous song's cover, left over. A song the
-                // user doesn't have is read even when Music's notification says it has no
-                // artwork, because then `sleeve()` asks Apple for the cover. A refresh of the
-                // strip on show reads none: it keeps its artwork, and a cover that comes
-                // later is attached by `.appleMusicCoverDidLoad`.
+                // user doesn't have, or has only on another album (`PlayingTrack.sleeveCopy`), is
+                // read even when Music's notification says it has no artwork, because then
+                // `sleeve()` asks Apple for the cover. A refresh of the strip on show reads
+                // none: it keeps its artwork, and a cover that comes later is attached by
+                // `.appleMusicCoverDidLoad`.
                 if case .forNewStrip(let listed) = artwork {
-                    if let playing = playing, listed || !playing.canRate {
+                    if let playing = playing, listed || playing.sleeveCopy == nil {
                         live.artwork = playing.sleeve()
                     } else if playing == nil, listed {
                         live.artwork = track.firstArtworkImage()
@@ -547,6 +552,7 @@ extension AppDelegate {
             ApplicationKey.remindToRateUnrated.rawValue : true,
             ApplicationKey.announceNewTracks.rawValue : false,
             ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue,
+            ApplicationKey.announcementAlbumTint.rawValue : TrackAnnouncementAlbumTint.default.rawValue,
             ApplicationKey.lastfmLoveSync.rawValue : true
         ])
     }

@@ -331,6 +331,20 @@ final class LibraryMatchFinderTests: XCTestCase {
         XCTAssertEqual(choosing, [false], "no plays: there is nothing to choose between")
     }
 
+    func testOneCopyFoundByTheShortTitleHasItsLengthRead() throws {
+        // Kept only within 3 s of the song's length, so without the length read it would be
+        // left out every time
+        let whitney = LibrarySong(persistentID: "00000000000000C3", name: "I Wanna Dance With Somebody", artist: "Whitney Houston",
+                                  albumArtist: "", album: "Whitney", duration: 289.4, rating: 70, isRatingComputed: false, playedCount: 12)
+        library = [whitney]
+
+        let match = try XCTUnwrap(ask(spotify("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
+                                              on: "Whitney", seconds: 291)))
+
+        XCTAssertEqual(match.song.persistentID, whitney.persistentID)
+        XCTAssertEqual(choosing, [true])
+    }
+
     func testTheAlbumSpotifyNamesChoosesTheCopy() throws {
         // The index has no albums, so this is only right if the finder read them. The best-of
         // copy sorts after the album copy by persistent ID, so the index's order alone would
