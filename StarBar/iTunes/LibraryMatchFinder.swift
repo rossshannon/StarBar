@@ -312,7 +312,10 @@ final class LibraryMatchFinder {
                 os_log("%{public}s[%{public}ld], %{public}s: %{public}ld library copies of %{public}s; reading the %{public}ld titled alike", ((#file as NSString).lastPathComponent), #line, #function, copies.count, identity, marked.count)
                 reading = marked
             }
-            self.index.readCopies(reading, choosing: reading.count > 1) { [weak self] read in
+            // A copy found by its short title is kept only by its length, so that has to be
+            // read even when it is the only copy (`SongMatcher.ranked(_:for:)`)
+            let choosing = reading.count > 1 || reading.contains { SongMatcher.isFoundByShortTitle($0, for: query) }
+            self.index.readCopies(reading, choosing: choosing) { [weak self] read in
                 guard let self = self, self.asking?.identity == identity else { return }
                 guard let read = read else {
                     return self.noAnswer(for: query, identity: identity, triesLeft: triesLeft)
