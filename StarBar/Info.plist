@@ -26,6 +26,10 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>LastfmAPIKey</key>
+	<string>$(STARBAR_LASTFM_KEY)</string>
+	<key>LastfmSharedSecret</key>
+	<string>$(STARBAR_LASTFM_SECRET)</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>StarBar needs to control Music to read and set star ratings and favourites, and to read what is playing in Spotify.</string>
 	<key>NSHumanReadableCopyright</key>

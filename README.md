@@ -27,6 +27,7 @@ A library full of unrated songs is hard to make sense of. Rate them as you liste
 - **Catch the songs you meant to rate.** An optional reminder gives unrated songs a gentle nudge before they end.
 - **See what just came on.** An optional track announcement shows the artwork, song details, stars and heart, with Classic, Blur and Liquid Glass styles.
 - **Spotify too.** The announcement follows Spotify as well as Music, and with your Spotify account connected the menu bar's green heart likes and unlikes songs.
+- **Scrobble to Last.fm.** Connect your Last.fm account and what you play in Music is scrobbled, and the songs you favourite become loved tracks.
 - **Make your library your own.** Rate songs already in your Music library, including Apple Music songs you have added. For a catalog song that is not there yet, StarBar offers to add it so you can rate it.
 
 ## Get started
@@ -57,6 +58,19 @@ Spotify's scripting can't like a song, so StarBar uses Spotify's Web API, signed
 StarBar asks only for permission to read and change your Liked Songs. It asks Spotify once per new song whether that song is liked, and sends a like or unlike when you click the heart. Those requests go to `api.spotify.com` and `accounts.spotify.com`; nothing else is sent, and none of it happens until you press Connect. The sign-in is kept in a file inside StarBar's own sandbox container, readable only by you. **Disconnect** in Preferences forgets it on this Mac; to revoke it on Spotify's side too, remove the app under **Manage apps** on your Spotify account page.
 
 A song liked in Spotify itself while StarBar is showing it shows as liked the next time it plays: StarBar doesn't keep asking.
+
+## Scrobbling to Last.fm
+
+Connect your Last.fm account and StarBar scrobbles what you play in Music: each song that plays for half its length, or for four minutes, whichever comes first, is added to your Last.fm profile, and Last.fm shows it as playing now while it plays. Songs of 30 seconds or less are never scrobbled, as Last.fm asks.
+
+- **Connect**: press **Connect** next to Last.fm in Preferences. Last.fm's own page opens; sign in there if you need to and allow access. Your password goes to Last.fm, never through StarBar. StarBar notices that you have allowed access and Preferences says who it is scrobbling as.
+- **Favourites**: a heart you set in StarBar loves the song on Last.fm, and clearing it unloves it. A song that is already a favourite when it scrobbles is loved too. StarBar never unloves anything on its own. Uncheck "Love songs on Last.fm when I favourite them" in Preferences to keep your loved tracks to yourself.
+- **Spotify**: off by default. Last.fm can link to your Spotify account itself (under Applications in your Last.fm settings) and scrobbles Spotify on its own servers that way, so if StarBar did it as well every Spotify song would count twice. If you haven't linked them, check "Scrobble songs played in Spotify" in Preferences.
+- **Offline**: plays made while Last.fm can't be reached are kept on your Mac and sent when it can, even after StarBar has quit and opened again. Last.fm doesn't take plays more than two weeks old.
+- **Pause Scrobbling**, in StarBar's menu, stops StarBar keeping or sending anything you play until you choose it again. It stays paused after StarBar quits.
+- **Disconnect** in Preferences forgets your sign-in on this Mac, and any plays still waiting to be sent. To revoke StarBar's access on Last.fm's side too, remove it under **Applications** in your Last.fm settings.
+
+Use one scrobbler for Music at a time. If another app is also scrobbling Music to the same account, every song is scrobbled twice.
 
 ## FAQ
 
@@ -109,6 +123,28 @@ Every build takes its version from the nearest `v*` tag behind it and its build 
 
 The app is signed ad hoc ("Sign to Run Locally") with bundle ID `com.rossshannon.starbar`. After a rebuild, macOS can ask again for permission to control Music.
 
+### The Last.fm key and secret
+
+Last.fm knows an app by its API key and has it sign every request with a shared secret. StarBar's aren't in this public repository. A build without them works in every other way, but can't connect to Last.fm, and the build script says so. The script looks for `LASTFM_API_KEY` and `LASTFM_SHARED_SECRET` in the environment, and then for lines of those names in an env file, trying in turn the file `STARBAR_SECRETS_FILE` names, `.env` in the checkout, `.env` in the main checkout when you are building in a git worktree of it, and `~/.config/starbar/secrets.env`:
+
+```bash
+LASTFM_API_KEY=your32characterhexadecimalkey
+LASTFM_SHARED_SECRET=your32characterhexadecimalsecret
+```
+
+The script reads those lines rather than running the file, and passes both values to Xcode in a file under `build/`, never on a command line or in what it prints. Git ignores `.env`.
+
+The `.env` can be one that 1Password mounts for an Environment (its "Local .env file" destination), which keeps the values off the disk altogether. Reading such a file waits for 1Password to be unlocked and, the first time, for you to approve the read, so the script waits for up to a minute at a terminal, or ten seconds when nobody is at one, and then builds without them. `STARBAR_ENV_WAIT` sets another number of seconds.
+
+If you have a Last.fm API account of your own, you can use its key and secret instead, with a build made with or without StarBar's:
+
+```bash
+defaults write com.rossshannon.starbar lastfmAPIKey <your API key>
+defaults write com.rossshannon.starbar lastfmSharedSecret <your shared secret>
+```
+
+Then quit StarBar, open it again and press Connect. A sign-in belongs to the key it was made with, so changing the key means connecting again. `defaults delete` on both puts StarBar's own back.
+
 ### Tests and CI
 
 The app tests are hosted in the app, so a test run launches StarBar. `--test` never touches Music: `ScriptBridgeTests`, which reads the playing track, skips itself unless `--test-all` opts it in.
@@ -156,6 +192,13 @@ To ship a signed and notarised build instead, add these [repository secrets](htt
 | `APPLE_APP_SPECIFIC_PASSWORD` | An app-specific password for that Apple ID, made at [account.apple.com](https://account.apple.com/) |
 
 The first three sign the build; all five notarise it and staple the ticket, so it opens without a prompt. `build.sh` signs the same way locally when `STARBAR_CODESIGN_IDENTITY` and `STARBAR_TEAM_ID` are set.
+
+Two more are separate from signing:
+
+| Secret | Value |
+|---|---|
+| `LASTFM_API_KEY` | The API key of StarBar's Last.fm API account |
+| `LASTFM_SHARED_SECRET` | That account's shared secret. Without both, the release can't connect to Last.fm |
 
 Release checklist:
 

@@ -437,8 +437,10 @@ final class MusicLibraryIndex {
     /// One property of every track, in one Apple Event: `-[SBElementArray
     /// arrayByApplyingSelector:]`. Called by its Objective-C name, which is the documented
     /// one: Xcode 16.4's SDK has no `arrayByApplying(_:)`. Nil when the method isn't there.
-    /// Background queue only.
-    private static func column(_ key: String, of tracks: SBElementArray) -> [Any]? {
+    /// On the thread of the connection `tracks` came from: the index's background queue for
+    /// the whole library, the main thread for the station's search by artist
+    /// (`iTunesRadioStation.libraryCopy(matching:)`).
+    static func column(_ key: String, of tracks: SBElementArray) -> [Any]? {
         typealias Apply = @convention(c) (AnyObject, Selector, Selector) -> NSArray?
         guard tracks.responds(to: arrayByApplyingSelector) else { return nil }
         let apply = unsafeBitCast(tracks.method(for: arrayByApplyingSelector), to: Apply.self)
@@ -482,6 +484,18 @@ final class MusicLibraryIndex {
                                      albumArtist: albumArtists[row] as? String ?? ""))
         }
         return songs
+    }
+
+    /// The songs in two columns read from one artist's songs (`iTunesRadioStation.libraryCopy(matching:)`),
+    /// credited to `artist`, which the search was for. Nil when either column is missing, holds
+    /// anything but strings, or is a different length from the other: Music leaves a missing
+    /// value out of a column rather than hold its place, so such columns can't be paired. An
+    /// empty pair is no songs, which is what an artist with none in the library reads as.
+    static func songs(ids: [Any]?, names: [Any]?, artist: String) -> [LibrarySong]? {
+        guard let ids = ids as? [String], let names = names as? [String], ids.count == names.count else { return nil }
+        return zip(ids, names)
+            .filter { !$0.0.isEmpty }
+            .map { LibrarySong(persistentID: $0, name: $1, artist: artist, albumArtist: "") }
     }
 
     /// Why a bulk read can't be used, in words for the log, or nil when the columns a song
