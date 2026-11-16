@@ -2,7 +2,7 @@
 
 StarBar has no accounts, no analytics, no crash reporting and no update check, and it keeps nothing about you anywhere but your Mac. It goes online for three things only: cover art, from Apple or Spotify; liking Spotify songs, if you connect your Spotify account; and scrobbling to Last.fm, if you connect your Last.fm account.
 
-This page lists everything StarBar reads, changes, keeps and sends. It was last updated in November 2026, for StarBar 1.9.0.
+This page lists everything StarBar reads, changes, keeps and sends. It was last updated in November 2026, for StarBar 1.10.0.
 
 ## What StarBar reads
 
@@ -56,6 +56,6 @@ StarBar's web pages at [rossshannon.com/starbar](https://rossshannon.com/starbar
 
 ## Changes
 
-If any of this changes, this page changes with it and the release notes say so. StarBar 1.9.0 added the request to Apple for covers, and remembering the last library song Music played. Scrobbling to Last.fm, described above, came after 1.9.0.
+If any of this changes, this page changes with it and the release notes say so. StarBar 1.9.0 added the request to Apple for covers, and remembering the last library song Music played. StarBar 1.10.0 added scrobbling to Last.fm, described above.
 
 Questions: [open an issue](https://github.com/rossshannon/StarBar/issues).
