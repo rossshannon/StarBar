@@ -49,4 +49,17 @@ final class LaunchAtLoginTests: XCTestCase {
         XCTAssertFalse(LaunchAtLogin.isInstalledLocation(Bundle.main.bundleURL))
     }
 
+    /// StarBar Dev's checkbox is greyed out and says why, rather than ticking and turning straight back off
+    func testOnlyStarBarsCheckboxCanBeTicked() {
+        let standard = LaunchAtLogin.checkbox(for: .standard)
+        XCTAssertEqual(standard.title, "Launch at login")
+        XCTAssertTrue(standard.isEnabled)
+        XCTAssertNil(standard.toolTip)
+
+        let dev = LaunchAtLogin.checkbox(for: .dev)
+        XCTAssertEqual(dev.title, "Launch at login (StarBar only)")
+        XCTAssertFalse(dev.isEnabled)
+        XCTAssertEqual(dev.toolTip, "StarBar Dev doesn't open at login. StarBar does.")
+    }
+
 }

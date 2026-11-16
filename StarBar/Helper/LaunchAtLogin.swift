@@ -55,6 +55,13 @@ enum LaunchAtLogin {
         return nil
     }
 
+    /// How Preferences shows the checkbox. StarBar Dev's is greyed out and says why: left
+    /// clickable, it ticked and at once turned itself back off, which read as a stuck control.
+    static func checkbox(for variant: BuildInfo.Variant) -> (title: String, isEnabled: Bool, toolTip: String?) {
+        guard variant == .dev else { return (title: "Launch at login", isEnabled: true, toolTip: nil) }
+        return (title: "Launch at login (StarBar only)", isEnabled: false, toolTip: DevBuildError().errorDescription)
+    }
+
     /// Show the Login Items pane, for when the item needs the user's approval
     static func openSystemSettings() {
         SMAppService.openSystemSettingsLoginItems()
