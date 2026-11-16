@@ -16,6 +16,8 @@ enum ApplicationKey: String {
     case announcementStyle
     case announcementAlbumTint
     case spotifyClientID
+    /// The Preferences pane chosen last, a `PreferencesViewController.Pane` raw value
+    case preferencesPane
 }
 
 extension UserDefaults {

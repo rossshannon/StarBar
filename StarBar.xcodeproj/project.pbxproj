@@ -90,6 +90,9 @@
 		DB95216A22CB186F007FCF40 /* WindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216922CB186F007FCF40 /* WindowManager.swift */; };
 		DB95216E22CB1CB8007FCF40 /* AboutViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */; };
 		DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */; };
+		5E7750000000000000000002 /* GeneralPreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7750000000000000000001 /* GeneralPreferencesViewController.swift */; };
+		5E7750000000000000000004 /* AccountsPreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7750000000000000000003 /* AccountsPreferencesViewController.swift */; };
+		5E7750000000000000000006 /* ShortcutsPreferencesViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E7750000000000000000005 /* ShortcutsPreferencesViewController.swift */; };
 		DB9D9AF0235F7974008C53C3 /* DispatchQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */; };
 		DB9D9B6F2364288E008C53C3 /* UserDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */; };
 		DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBD6A935250DA48E002C1B6C /* NSBox.swift */; };
@@ -260,6 +263,9 @@
 		DB95216922CB186F007FCF40 /* WindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowManager.swift; sourceTree = "<group>"; };
 		DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutViewController.swift; sourceTree = "<group>"; };
 		DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewController.swift; sourceTree = "<group>"; };
+		5E7750000000000000000001 /* GeneralPreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneralPreferencesViewController.swift; sourceTree = "<group>"; };
+		5E7750000000000000000003 /* AccountsPreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountsPreferencesViewController.swift; sourceTree = "<group>"; };
+		5E7750000000000000000005 /* ShortcutsPreferencesViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsPreferencesViewController.swift; sourceTree = "<group>"; };
 		DB9D9AEF235F7974008C53C3 /* DispatchQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DispatchQueue.swift; sourceTree = "<group>"; };
 		DB9D9B6E2364288E008C53C3 /* UserDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDefaults.swift; sourceTree = "<group>"; };
 		DBD6A935250DA48E002C1B6C /* NSBox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSBox.swift; sourceTree = "<group>"; };
@@ -563,6 +569,9 @@
 			children = (
 				DB95216D22CB1CB8007FCF40 /* AboutViewController.swift */,
 				DB95217122CB3E68007FCF40 /* PreferencesViewController.swift */,
+				5E7750000000000000000001 /* GeneralPreferencesViewController.swift */,
+				5E7750000000000000000003 /* AccountsPreferencesViewController.swift */,
+				5E7750000000000000000005 /* ShortcutsPreferencesViewController.swift */,
 				DB424A3723073CB000230C7E /* PopoverViewController.swift */,
 				DB424A3B230877F400230C7E /* PlayerViewController.swift */,
 				DB05F0622353909000CE6DF9 /* PlayerPanelViewController.swift */,
@@ -827,6 +836,9 @@
 				DBD6A936250DA48E002C1B6C /* NSBox.swift in Sources */,
 				DB05F0652353912500CE6DF9 /* PlayerInfoView.swift in Sources */,
 				DB95217222CB3E68007FCF40 /* PreferencesViewController.swift in Sources */,
+				5E7750000000000000000002 /* GeneralPreferencesViewController.swift in Sources */,
+				5E7750000000000000000004 /* AccountsPreferencesViewController.swift in Sources */,
+				5E7750000000000000000006 /* ShortcutsPreferencesViewController.swift in Sources */,
 				DB106CA822CA45BB00502D7C /* RatingControl.swift in Sources */,
 				5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */,
 				5A7E1A0000000000000000D6 /* RatingReminderController.swift in Sources */,
