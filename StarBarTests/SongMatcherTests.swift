@@ -454,12 +454,106 @@ final class SongMatcherTests: XCTestCase {
         XCTAssertNil(matcher.match(for: query("September", by: "Earth")))
     }
 
-    func testABracketThatIsPartOfTheNameMustBeThere() {
-        // A miss the rules accept: loosening them would cost wrong matches elsewhere
+    func testABracketThatIsPartOfTheNameMustBeThereWhenNothingElseSaysItIsTheSong() {
+        // With no album or length to hold it to, a title without its part is a miss the rules
+        // accept: loosening them would cost wrong matches elsewhere
         let matcher = SongMatcher(library: [song("Street Spirit (Fade Out)", by: "Radiohead")])
 
         XCTAssertNil(matcher.match(for: query("Street Spirit", by: "Radiohead")))
         XCTAssertNotNil(matcher.match(for: query("Street Spirit (Fade Out)", by: "Radiohead")))
+    }
+
+    // MARK: - A title without a part of its name at the end
+
+    func testTheShortTitleOnTheSameReleaseAndLengthIsTheSong() {
+        // Apple's catalog and the user's matched copy, measured 2026-11-16: StarBar offered to
+        // add a song the user had
+        let copy = song("I Wanna Dance With Somebody", by: "Whitney Houston", on: "Whitney", length: 289.4, rating: 70)
+        let matcher = SongMatcher(library: [copy])
+
+        XCTAssertEqual(matcher.match(for: query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
+                                                on: "Whitney", length: 291.4)), copy)
+    }
+
+    func testTheFullTitleFindsACopyWithTheShortOne() {
+        // The other way round, as the user's library has it: one song under two titles
+        let copy = song("Still Got The Blues (For You)", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)
+        let matcher = SongMatcher(library: [copy])
+
+        XCTAssertEqual(matcher.match(for: query("Still Got The Blues", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)), copy)
+    }
+
+    func testTheShortTitleOnAnEditionOfTheReleaseIsTheSong() {
+        let copy = song("I Wanna Dance With Somebody", by: "Whitney Houston", on: "Whitney", length: 289.4)
+        let matcher = SongMatcher(library: [copy])
+
+        XCTAssertEqual(matcher.match(for: query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
+                                                on: "Whitney (Deluxe Edition)", length: 291.4)), copy)
+    }
+
+    func testTheShortTitleOnAnotherReleaseIsNotTheSong() {
+        // 0.8 s apart, and the live one says so nowhere but in its album's name, which the
+        // rules don't read as live
+        let studio = song("The Model", by: "Kraftwerk", on: "The Man Machine", length: 221.0)
+        let matcher = SongMatcher(library: [studio])
+
+        XCTAssertNil(matcher.match(for: query("The Model (London)", by: "Kraftwerk", on: "Minimum-Maximum", length: 221.8)))
+    }
+
+    func testTheShortTitleAtAnotherLengthIsNotTheSong() {
+        // Two cues on one soundtrack, 25 s apart
+        let cue = song("Vanishing Grace", by: "Gustavo Santaolalla", on: "The Last of Us", length: 126.1)
+        let matcher = SongMatcher(library: [cue])
+
+        XCTAssertNil(matcher.match(for: query("Vanishing Grace (Childhood)", by: "Gustavo Santaolalla",
+                                              on: "The Last of Us", length: 101.1)))
+        XCTAssertNil(matcher.match(for: query("Vanishing Grace (Childhood)", by: "Gustavo Santaolalla",
+                                              on: "The Last of Us", length: 126.1 + SongMatcher.shortTitleLengthGap + 0.1)))
+        XCTAssertNotNil(matcher.match(for: query("Vanishing Grace (Childhood)", by: "Gustavo Santaolalla",
+                                                 on: "The Last of Us", length: 126.1 + SongMatcher.shortTitleLengthGap)))
+    }
+
+    func testTheShortTitleWithoutBothLengthsIsNotTheSong() {
+        let copy = song("I Wanna Dance With Somebody", by: "Whitney Houston", on: "Whitney")
+        let timed = song("I Wanna Dance With Somebody", by: "Whitney Houston", on: "Whitney", length: 289.4)
+
+        XCTAssertNil(SongMatcher(library: [copy]).match(for: query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
+                                                                    on: "Whitney", length: 291.4)))
+        XCTAssertNil(SongMatcher(library: [timed]).match(for: query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston",
+                                                                     on: "Whitney")))
+    }
+
+    func testTwoTitlesEndingInDifferentPartsAreNeverOneSong() {
+        // Two layers of one game's track, the same length to the millisecond
+        let explore = song("Mantis (Explore)", by: "Ben Prunty Music", on: "FTL", length: 182.9)
+        let matcher = SongMatcher(library: [explore])
+
+        XCTAssertNil(matcher.match(for: query("Mantis (Battle)", by: "Ben Prunty Music", on: "FTL", length: 182.9)))
+    }
+
+    func testTheShortTitleStillNeedsTheSameKindOfRecording() {
+        let studio = song("I Wanna Dance With Somebody", by: "Whitney Houston", on: "Whitney", length: 289.4)
+        let matcher = SongMatcher(library: [studio])
+
+        XCTAssertNil(matcher.match(for: query("I Wanna Dance with Somebody (Who Loves Me) - Live", by: "Whitney Houston",
+                                              on: "Whitney", length: 289.4)))
+    }
+
+    func testACopyWithTheFullTitleComesBeforeOneWithTheShort() {
+        // Both on one album at one length, and the short one rated and played more
+        let short = song("Still Got The Blues", by: "Gary Moore", on: "Still Got The Blues", length: 406.8, rating: 80, played: 9)
+        let full = song("Still Got The Blues (For You)", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)
+        let matcher = SongMatcher(library: [short, full])
+        let wanted = query("Still Got The Blues (For You)", by: "Gary Moore", on: "Still Got The Blues", length: 406.8)
+
+        XCTAssertEqual(SongMatcher.ranked(matcher.copies(of: wanted), for: wanted), [full, short])
+    }
+
+    func testOnlyACopyFoundByTheShortTitleNeedsItsLengthRead() {
+        let wanted = query("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston", on: "Whitney")
+
+        XCTAssertTrue(SongMatcher.isFoundByShortTitle(song("I Wanna Dance With Somebody", by: "Whitney Houston"), for: wanted))
+        XCTAssertFalse(SongMatcher.isFoundByShortTitle(song("I Wanna Dance with Somebody (Who Loves Me)", by: "Whitney Houston"), for: wanted))
     }
 
     func testAnUnfamiliarVersionOnlyMatchesItself() {

@@ -38,6 +38,14 @@ enum SongName {
         /// is a guest on the same recording or an arrangement of a different one ("(With
         /// Strings)"), and only the other track's credits can tell which.
         let withNames: [String]
+        /// `core` without a bracketed part at the end of the title that names no version and
+        /// no edition, such as "(Who Loves Me)": "i wanna dance with somebody". Nil when the
+        /// title ends in no such part. Apple's catalog gives a song's full title where a
+        /// user's own copy often has the short one, so a copy can be the same song by this
+        /// name, but only on the same release and length (`SongMatcher.ranked(_:for:)`): the
+        /// part is as often the name of another piece, "(Battle)" against "(Explore)", or of
+        /// another performance, "The Model (London)".
+        var shortCore: String? = nil
     }
 
     /// What a bracketed or dashed part of a title says about the recording
@@ -152,11 +160,24 @@ enum SongName {
             text = removing(match.range, from: text)
         }
 
-        let core = squash(text)
-            .split(separator: " ")
-            .map { $0 == "pt" ? "part" : String($0) }
-            .joined(separator: " ")
-        return Title(core: core, versions: versions, featured: featured, withNames: withNames)
+        func folded(_ text: String) -> String {
+            return squash(text)
+                .split(separator: " ")
+                .map { $0 == "pt" ? "part" : String($0) }
+                .joined(separator: " ")
+        }
+        let core = folded(text)
+
+        // "(Who Loves Me)": any bracket left at the end names neither a version nor an
+        // edition, since those have gone, so it is part of the name the short title leaves out
+        var shortCore: String?
+        if let match = trailingBracket.firstMatch(in: text, range: whole(text)) {
+            let short = folded(removing(match.range, from: text))
+            if !short.isEmpty, short != core {
+                shortCore = short
+            }
+        }
+        return Title(core: core, versions: versions, featured: featured, withNames: withNames, shortCore: shortCore)
     }
 
     /// What a part of a title in brackets or after " - " says, or nil when it is part of the
@@ -665,6 +686,8 @@ enum SongName {
     private static let featuredCredit = pattern(#"^(feat\.?|ft\.?|featuring|with)\s+(.*)$"#)
     private static let featuredBare = pattern(#"\s+(feat\.|ft\.|featuring)\s+(.*)$"#)
     private static let bracketed = pattern(#"\s*[\(\[]([^\(\)\[\]]*)[\)\]]"#)
+    /// A bracketed part that ends the title: "(Who Loves Me)"
+    private static let trailingBracket = pattern(#"\s*[\(\[][^\(\)\[\]]*[\)\]]\s*$"#)
     private static let dashSuffix = pattern(#"\s+-\s+(.*)$"#)
     /// "I Might Be Wrong: Live Recordings"
     private static let subtitle = pattern(#"\s*:\s+([^:]+)$"#)

@@ -163,6 +163,37 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(core("Hurt (Quiet)"), "hurt quiet")
     }
 
+    func testAPartOfTheNameAtTheEndGivesAShortTitle() {
+        // Apple's catalog title, and the one the user's own copy had, measured 2026-11-16
+        XCTAssertEqual(SongName.title("I Wanna Dance with Somebody (Who Loves Me)").shortCore, "i wanna dance with somebody")
+        XCTAssertEqual(core("I Wanna Dance with Somebody (Who Loves Me)"), "i wanna dance with somebody who loves me")
+        XCTAssertEqual(SongName.title("Street Spirit (Fade Out)").shortCore, "street spirit")
+        XCTAssertEqual(SongName.title("Rocket Man (I Think It's Going to Be a Long Long Time)").shortCore, "rocket man")
+        XCTAssertEqual(SongName.title("Mantis [Battle]").shortCore, "mantis")
+    }
+
+    func testTheShortTitleIsLeftWhenEditionsAndVersionsHaveGone() {
+        // An edition after the part comes off first, so the part is still at the end
+        let remastered = SongName.title("I Wanna Dance with Somebody (Who Loves Me) [2023 Remaster]")
+        XCTAssertEqual(remastered.shortCore, "i wanna dance with somebody")
+        XCTAssertEqual(remastered.core, "i wanna dance with somebody who loves me")
+        // A version stays a version, and the part before it is still the end of the name
+        let live = SongName.title("I Wanna Dance with Somebody (Who Loves Me) [Live]")
+        XCTAssertEqual(live.shortCore, "i wanna dance with somebody")
+        XCTAssertEqual(live.versions, ["live"])
+    }
+
+    func testOnlyAPartAtTheEndGivesAShortTitle() {
+        XCTAssertNil(SongName.title("(Don't Fear) The Reaper").shortCore)
+        XCTAssertNil(SongName.title("Bohemian Rhapsody").shortCore)
+        // An edition or a version is not part of the name
+        XCTAssertNil(SongName.title("Bohemian Rhapsody (Remastered 2011)").shortCore)
+        XCTAssertNil(SongName.title("Clocks (Live)").shortCore)
+        XCTAssertNil(SongName.title("Stay (with Justin Bieber)").shortCore)
+        // Nor is a whole title in brackets, which would leave nothing
+        XCTAssertNil(SongName.title("(Untitled)").shortCore)
+    }
+
     func testADashThatIsPartOfTheNameStays() {
         XCTAssertEqual(core("Lights, Camera, Action! - Studiopolis Zone Act 1"),
                        "lights camera action studiopolis zone act 1")

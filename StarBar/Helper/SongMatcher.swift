@@ -60,7 +60,9 @@ struct SongQuery: Equatable {
 /// Album and length choose between copies when the user has the song more than once -- 442
 /// songs in the library measured on 2026-10-28, 103 of them with copies rated differently --
 /// so the same copy is chosen every time the song comes round. Neither rules a copy out on
-/// its own: "Sweet Harmony" is 4:22 on the single and 15:18 on the album. Only a title that
+/// its own: "Sweet Harmony" is 4:22 on the single and 15:18 on the album. The exception is a
+/// copy whose title is the query's without a part of its name at the end, or the other way
+/// round, which has to be on the same release and length (`ranked(_:for:)`). Only a title that
 /// names no song, such as "Intro" or "Interlude", has to be on the same release, since every
 /// album can have one (`SongName.isGenericTitle`).
 ///
@@ -99,6 +101,8 @@ struct SongMatcher {
         /// Who its title credits with "with" (`SongName.Title.withNames`)
         let withNames: Set<String>
         let versions: Set<String>
+        /// The title without a part of its name at the end (`SongName.Title.shortCore`)
+        let shortCore: String?
 
         /// `credited` is `SongName.credited(_:)`, or a lookup of what it has already answered
         init(_ names: Names, credited: (String) -> (artists: Set<String>, everyone: Set<String>)) {
@@ -116,10 +120,13 @@ struct SongMatcher {
             credits = everyone.union(title.featured)
             withNames = Set(title.withNames)
             versions = title.versions
+            shortCore = title.shortCore
         }
     }
 
     private let byTitle: [String: [Entry]]
+    /// The tracks whose titles end in a part of their name, by the title without it
+    private let byShortTitle: [String: [Entry]]
     /// Each track's names as worked out, for the next matcher to reuse
     private let worked: [Names: Worked]
 
@@ -132,6 +139,7 @@ struct SongMatcher {
     /// as it was, so a track whose names are unchanged takes what `previous` worked out.
     init(library: [LibrarySong], reusing previous: SongMatcher? = nil) {
         var byTitle: [String: [Entry]] = [:]
+        var byShortTitle: [String: [Entry]] = [:]
         var worked: [Names: Worked] = [:]
         worked.reserveCapacity(library.count)
         // Each credit is worked out once however many tracks carry it, since most artists
@@ -150,9 +158,14 @@ struct SongMatcher {
             let work = worked[names] ?? previous?.worked[names] ?? Worked(names, credited: credited)
             worked[names] = work
             guard !work.core.isEmpty else { continue }
-            byTitle[work.core, default: []].append(Entry(song: song, work: work))
+            let entry = Entry(song: song, work: work)
+            byTitle[work.core, default: []].append(entry)
+            if let short = work.shortCore {
+                byShortTitle[short, default: []].append(entry)
+            }
         }
         self.byTitle = byTitle
+        self.byShortTitle = byShortTitle
         self.worked = worked
         count = library.count
     }
@@ -170,6 +183,12 @@ struct SongMatcher {
     /// Someone a title credits with "with" has to be credited on the other side too: "Stay
     /// (with Justin Bieber)" is the "Stay" by The Kid LAROI & Justin Bieber, but "Yesterday
     /// (With Strings)" is not the Beatles' "Yesterday".
+    ///
+    /// One title can also be the other without a part of its name at the end: the user's "I
+    /// Wanna Dance With Somebody" for Apple's "I Wanna Dance with Somebody (Who Loves Me)", or
+    /// the other way round (`SongName.Title.shortCore`). Such a copy is a candidate only, and
+    /// `ranked(_:for:)` keeps it only on the same release and length. Two titles that end in
+    /// different parts, "Mantis (Explore)" and "Mantis (Battle)", are never one song.
     func copies(of query: SongQuery) -> [LibrarySong] {
         let title = SongName.title(query.name)
         let artist = SongName.artist(query.artist)
@@ -182,7 +201,13 @@ struct SongMatcher {
         let kinds = SongName.versions(of: query.name, on: query.album)
         let credits = Set([artist]).union(title.featured)
         let withNames = Set(title.withNames)
-        return (byTitle[title.core] ?? [])
+        var entries = byTitle[title.core] ?? []
+        if let short = title.shortCore {
+            entries += (byTitle[short] ?? []).filter { $0.work.shortCore == nil }
+        } else {
+            entries += byShortTitle[title.core] ?? []
+        }
+        return entries
             .filter {
                 $0.work.artists.contains(artist)
                     && SongName.kinds(of: $0.work.versions).isSubset(of: kinds)
@@ -213,16 +238,53 @@ struct SongMatcher {
     /// recording from the song `query` names: one on "Live at the Fillmore West" when Spotify
     /// is playing the studio song, or the other way round, or another night's live recording
     /// (`SongName.isSameRecording`), or an "Intro" on another album.
+    ///
+    /// A copy found by the short title (`copies(of:)`, `isFoundByShortTitle(_:for:)`) is kept
+    /// only on the same release and within `shortTitleLengthGap` of the query's length, and a
+    /// copy with either length unknown is left out. **This is the one place a length rules a
+    /// copy out.** Measured on 2026-11-16 across a 7,996-song library, 37 pairs of songs had
+    /// one title that was the other with such a part on the end, among them the studio "The
+    /// Model" and the live "The Model (London)", 0.8 s apart on another album, and soundtrack
+    /// cues such as "The Last of Us" and "The Last of Us (Never Again)". The same release and
+    /// 3 s left 4 pairs: one song under two titles, and three soundtrack cues that may be
+    /// different pieces. A copy found by its full title comes before one found this way.
     static func ranked(_ copies: [LibrarySong], for query: SongQuery) -> [LibrarySong] {
         let album = SongName.album(query.album)
-        let isGeneric = SongName.isGenericTitle(SongName.title(query.name).core)
-        return copies.filter {
-            SongName.isSameRecording(query.name, on: query.album, as: $0.name, on: $0.album)
-                && (!isGeneric || SongName.isSameRelease(query.name, on: query.album, as: $0.name, on: $0.album))
-        }
-            .map { (song: $0, album: SongName.album($0.album)) }
-            .sorted { choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration) }
+        let core = SongName.title(query.name).core
+        let isGeneric = SongName.isGenericTitle(core)
+        return copies
+            .map { (song: $0, isFullTitle: SongName.title($0.name).core == core) }
+            .filter {
+                SongName.isSameRecording(query.name, on: query.album, as: $0.song.name, on: $0.song.album)
+                    && (!isGeneric || SongName.isSameRelease(query.name, on: query.album, as: $0.song.name, on: $0.song.album))
+                    && ($0.isFullTitle || isSameByShortTitle($0.song, as: query))
+            }
+            .map { (song: $0.song, album: SongName.album($0.song.album), isFullTitle: $0.isFullTitle) }
+            .sorted {
+                if $0.isFullTitle != $1.isFullTitle {
+                    return $0.isFullTitle
+                }
+                return choose($0.song, $0.album, over: $1.song, $1.album, album: album, duration: query.duration)
+            }
             .map { $0.song }
+    }
+
+    /// The most a copy found by its short title can differ in length from the query, in
+    /// seconds. "I Wanna Dance With Somebody" was 289.4 s in the user's library and 291.4 s
+    /// in Apple's catalog, measured 2026-11-16.
+    static let shortTitleLengthGap: Double = 3
+
+    /// Whether `copy` is one of the query's copies only by the title without a part of its
+    /// name at the end (`copies(of:)`), so `ranked(_:for:)` needs its length to keep it
+    static func isFoundByShortTitle(_ copy: LibrarySong, for query: SongQuery) -> Bool {
+        return SongName.title(copy.name).core != SongName.title(query.name).core
+    }
+
+    /// A copy found by the short title on the query's release, within `shortTitleLengthGap`
+    private static func isSameByShortTitle(_ copy: LibrarySong, as query: SongQuery) -> Bool {
+        guard let length = copy.duration, let wanted = query.duration else { return false }
+        return abs(length - wanted) <= shortTitleLengthGap
+            && SongName.isSameRelease(query.name, on: query.album, as: copy.name, on: copy.album)
     }
 
     /// Which of two copies comes first: the one on the album the query names, then one the
