@@ -186,7 +186,7 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
     func connect(presentingFrom window: NSWindow?) {
         guard state != .connecting else { return }
         guard let credentials = credentials() else {
-            lastProblem = "This copy of StarBar was built without a Last.fm key, so it can't connect."
+            lastProblem = "This copy of StarBar was built without a Last.fm key, so it can’t connect."
             postAccountChange()
             return
         }
@@ -234,11 +234,11 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
         let problem: String
         switch failure {
         case .network:
-            problem = "Couldn't reach Last.fm. What you play is kept and sent later."
+            problem = "Couldn’t reach Last.fm. What you play is kept and sent later."
         case .temporary:
             problem = "Last.fm is busy or down. What you play is kept and sent later."
         case .credentialsRejected(let code):
-            problem = "Last.fm isn't accepting StarBar's key (error \(code))."
+            problem = "Last.fm isn’t accepting StarBar’s key (error \(code))."
         case .refused(let code):
             problem = "Last.fm answered with an error (\(code))."
         case .sessionInvalid, .tokenNotAuthorized:
@@ -269,9 +269,9 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: Last.fm gave no sign-in token: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, failure.map { "\($0)" } ?? "unreadable answer")
             switch failure {
             case .some(.network), .some(.temporary):
-                fail("Couldn't reach Last.fm.")
+                fail("Couldn’t reach Last.fm.")
             default:
-                fail(LastfmAccount.sentence("Last.fm didn't start the sign-in", code: failure.flatMap(LastfmAccount.code(of:))))
+                fail(LastfmAccount.sentence("Last.fm didn’t start the sign-in", code: failure.flatMap(LastfmAccount.code(of:))))
             }
             return
         }
@@ -289,7 +289,7 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
         guard let opened = page else {
             os_log(.error, "%{public}s[%{public}ld], %{public}s: the Last.fm sign-in didn't open", ((#file as NSString).lastPathComponent), #line, #function)
             endSignIn()
-            fail("The Last.fm sign-in couldn't open.")
+            fail("The Last.fm sign-in couldn’t open.")
             return
         }
         signIn.page = opened

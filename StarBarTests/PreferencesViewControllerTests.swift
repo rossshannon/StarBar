@@ -239,7 +239,7 @@ final class PreferencesViewControllerTests: XCTestCase {
         return AccountsPreferencesViewController.lastfmStatus(state: state, username: username, canConnect: canConnect, problem: problem, isPaused: isPaused, waiting: waiting, isDryRun: isDryRun)
     }
 
-    private let revokeText = " To remove StarBar's access, go to Applications in your Last.fm settings."
+    private let revokeText = " To remove StarBar’s access, go to Applications in your Last.fm settings."
 
     /// Catches a connected status that forgets who is scrobbling or how to revoke access
     func testLastfmConnectedNamesTheUser() {
@@ -255,7 +255,7 @@ final class PreferencesViewControllerTests: XCTestCase {
     /// A build with no key must not invite the user to press a button that can't work
     func testLastfmWithoutAKeySaysItCantConnect() {
         XCTAssertEqual(lastfmStatus(state: .disconnected, username: nil, canConnect: false),
-                       "This copy of StarBar was built without a Last.fm key, so it can't connect.",
+                       "This copy of StarBar was built without a Last.fm key, so it can’t connect.",
                        "a build without a key should say it can't connect")
     }
 

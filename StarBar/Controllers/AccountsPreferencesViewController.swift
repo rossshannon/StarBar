@@ -111,9 +111,9 @@ extension AccountsPreferencesViewController {
         case .connected:
             status = "Connected. Click the green heart in the menu bar to like or unlike the Spotify song playing."
         case .connecting:
-            status = "Waiting for Spotify's sign-in…"
+            status = "Waiting for Spotify’s sign-in…"
         case .disconnected:
-            status = "Connect your Spotify account to like songs with the menu bar's green heart."
+            status = "Connect your Spotify account to like songs with the menu bar’s green heart."
         }
         guard let problem = problem else { return status }
         return problem + " " + status
@@ -185,13 +185,13 @@ extension AccountsPreferencesViewController {
             } else if waiting > 1 {
                 text += " \(waiting) plays waiting to be sent."
             }
-            status = text + " To remove StarBar's access, go to Applications in your Last.fm settings."
+            status = text + " To remove StarBar’s access, go to Applications in your Last.fm settings."
         case .connecting:
             return "Waiting for you to allow access on last.fm…"
         case .disconnected:
             status = canConnect
                 ? "Scrobble what you play in Music to your Last.fm profile."
-                : "This copy of StarBar was built without a Last.fm key, so it can't connect."
+                : "This copy of StarBar was built without a Last.fm key, so it can’t connect."
         }
         guard let problem = problem else { return status }
         return problem + " " + status
