@@ -18,6 +18,25 @@
 		5A7E1A000000000000000517 /* SpotifyAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000516 /* SpotifyAuthTests.swift */; };
 		5A7E1A000000000000000515 /* SpotifyAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000514 /* SpotifyAccount.swift */; };
 		5A7E1A000000000000000513 /* SpotifyLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000512 /* SpotifyLibrary.swift */; };
+		1A57F3000000000000001603 /* Scrobble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001602 /* Scrobble.swift */; };
+		1A57F3000000000000001605 /* LastfmAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001604 /* LastfmAPI.swift */; };
+		1A57F3000000000000001607 /* LastfmSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001606 /* LastfmSession.swift */; };
+		1A57F3000000000000001609 /* LastfmClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001608 /* LastfmClient.swift */; };
+		1A57F300000000000000160B /* ScrobbleQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F300000000000000160A /* ScrobbleQueue.swift */; };
+		1A57F300000000000000160D /* LastfmSources.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F300000000000000160C /* LastfmSources.swift */; };
+		1A57F300000000000000160F /* LastfmScrobbler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F300000000000000160E /* LastfmScrobbler.swift */; };
+		1A57F3000000000000001611 /* LastfmAccount.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001610 /* LastfmAccount.swift */; };
+		1A57F3000000000000001613 /* LastfmCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001612 /* LastfmCredentials.swift */; };
+		1A57F3000000000000001615 /* PlayTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001614 /* PlayTracker.swift */; };
+		1A57F3000000000000001617 /* LastfmFakes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001616 /* LastfmFakes.swift */; };
+		1A57F3000000000000001619 /* LastfmAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001618 /* LastfmAPITests.swift */; };
+		1A57F300000000000000161B /* LastfmClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F300000000000000161A /* LastfmClientTests.swift */; };
+		1A57F300000000000000161D /* PlayTrackerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F300000000000000161C /* PlayTrackerTests.swift */; };
+		1A57F300000000000000161F /* ScrobbleQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F300000000000000161E /* ScrobbleQueueTests.swift */; };
+		1A57F3000000000000001621 /* LastfmSourcesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001620 /* LastfmSourcesTests.swift */; };
+		1A57F3000000000000001623 /* LastfmScrobblerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001622 /* LastfmScrobblerTests.swift */; };
+		1A57F3000000000000001625 /* LastfmAccountTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001624 /* LastfmAccountTests.swift */; };
+		1A57F3000000000000001627 /* LastfmCredentialsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A57F3000000000000001626 /* LastfmCredentialsTests.swift */; };
 		5A7E1A000000000000000511 /* SpotifyAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000510 /* SpotifyAuth.swift */; };
 		FA0000000000000000000003 /* MASShortcut in Frameworks */ = {isa = PBXBuildFile; productRef = FA0000000000000000000002 /* MASShortcut */; };
 		5A7E1A0000000000000000C2 /* RatingClickController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000C1 /* RatingClickController.swift */; };
@@ -45,6 +64,7 @@
 		5A7E1A000000000000000B04 /* SongMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B03 /* SongMatcher.swift */; };
 		5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C02 /* HeldChoice.swift */; };
 		5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D02 /* SleeveHistory.swift */; };
+		5A7E1A000000000000001601 /* AlbumTint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001602 /* AlbumTint.swift */; };
 		5A7E1A000000000000001101 /* SteppedTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001102 /* SteppedTimeline.swift */; };
 		5A7E1A000000000000001501 /* FrameCadence.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001502 /* FrameCadence.swift */; };
 		5A7E1A000000000000001503 /* FrameCadenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001504 /* FrameCadenceTests.swift */; };
@@ -76,9 +96,13 @@
 		DB89C9F322E2D766003981F5 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */; };
 		DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */; };
 		FA0000000000000000000021 /* LaunchAtLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000020 /* LaunchAtLogin.swift */; };
+		B1D000000000000000000004 /* VariantHandover.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000003 /* VariantHandover.swift */; };
+		B1D000000000000000000002 /* BuildInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000001 /* BuildInfo.swift */; };
 		DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */; };
 		FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000010 /* PreferencesViewControllerTests.swift */; };
 		FA0000000000000000000031 /* LaunchAtLoginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0000000000000000000030 /* LaunchAtLoginTests.swift */; };
+		B1D000000000000000000014 /* VariantHandoverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000013 /* VariantHandoverTests.swift */; };
+		B1D000000000000000000012 /* BuildInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1D000000000000000000011 /* BuildInfoTests.swift */; };
 		5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */; };
 		5A7E1A0000000000000001F4 /* StarRolloutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F3 /* StarRolloutTests.swift */; };
 		5A7E1A0000000000000001FA /* StarCollapseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000001F9 /* StarCollapseTests.swift */; };
@@ -114,6 +138,7 @@
 		5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B07 /* SongMatcherTests.swift */; };
 		5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000C04 /* HeldChoiceTests.swift */; };
 		5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */; };
+		5A7E1A000000000000001603 /* AlbumTintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001604 /* AlbumTintTests.swift */; };
 		5A7E1A000000000000000D07 /* AppleMusicArtworkLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000D08 /* AppleMusicArtworkLoaderTests.swift */; };
 		5A7E1A000000000000000B0C /* MusicLibraryIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */; };
 		5A7E1A000000000000000B10 /* LibraryMatchFinderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */; };
@@ -179,6 +204,25 @@
 		5A7E1A000000000000000516 /* SpotifyAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000514 /* SpotifyAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAccount.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000512 /* SpotifyLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyLibrary.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001602 /* Scrobble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scrobble.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001604 /* LastfmAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPI.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001606 /* LastfmSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSession.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001608 /* LastfmClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmClient.swift; sourceTree = "<group>"; };
+		1A57F300000000000000160A /* ScrobbleQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueue.swift; sourceTree = "<group>"; };
+		1A57F300000000000000160C /* LastfmSources.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSources.swift; sourceTree = "<group>"; };
+		1A57F300000000000000160E /* LastfmScrobbler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmScrobbler.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001610 /* LastfmAccount.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAccount.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001612 /* LastfmCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmCredentials.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001614 /* PlayTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayTracker.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001616 /* LastfmFakes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmFakes.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001618 /* LastfmAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPITests.swift; sourceTree = "<group>"; };
+		1A57F300000000000000161A /* LastfmClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmClientTests.swift; sourceTree = "<group>"; };
+		1A57F300000000000000161C /* PlayTrackerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayTrackerTests.swift; sourceTree = "<group>"; };
+		1A57F300000000000000161E /* ScrobbleQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueueTests.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001620 /* LastfmSourcesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSourcesTests.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001622 /* LastfmScrobblerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmScrobblerTests.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001624 /* LastfmAccountTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAccountTests.swift; sourceTree = "<group>"; };
+		1A57F3000000000000001626 /* LastfmCredentialsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmCredentialsTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000510 /* SpotifyAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuth.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000C1 /* RatingClickController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000C3 /* RatingClickControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingClickControllerTests.swift; sourceTree = "<group>"; };
@@ -212,6 +256,7 @@
 		5A7E1A000000000000000B03 /* SongMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcher.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000C02 /* HeldChoice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoice.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D02 /* SleeveHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistory.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001602 /* AlbumTint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumTint.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001102 /* SteppedTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SteppedTimeline.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001502 /* FrameCadence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCadence.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001504 /* FrameCadenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FrameCadenceTests.swift; sourceTree = "<group>"; };
@@ -244,9 +289,13 @@
 		DB89C9F222E2D766003981F5 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
 		DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = OSVersionHelper.swift; sourceTree = "<group>"; };
 		FA0000000000000000000020 /* LaunchAtLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLogin.swift; sourceTree = "<group>"; };
+		B1D000000000000000000003 /* VariantHandover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VariantHandover.swift; sourceTree = "<group>"; };
+		B1D000000000000000000001 /* BuildInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfo.swift; sourceTree = "<group>"; };
 		DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptBridgeTests.swift; sourceTree = "<group>"; };
 		FA0000000000000000000010 /* PreferencesViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreferencesViewControllerTests.swift; sourceTree = "<group>"; };
 		FA0000000000000000000030 /* LaunchAtLoginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginTests.swift; sourceTree = "<group>"; };
+		B1D000000000000000000013 /* VariantHandoverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VariantHandoverTests.swift; sourceTree = "<group>"; };
+		B1D000000000000000000011 /* BuildInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BuildInfoTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RatingControlGeometryTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000001F3 /* StarRolloutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarRolloutTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000001F9 /* StarCollapseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarCollapseTests.swift; sourceTree = "<group>"; };
@@ -282,6 +331,7 @@
 		5A7E1A000000000000000B07 /* SongMatcherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SongMatcherTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000C04 /* HeldChoiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeldChoiceTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleeveHistoryTests.swift; sourceTree = "<group>"; };
+		5A7E1A000000000000001604 /* AlbumTintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumTintTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000D08 /* AppleMusicArtworkLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicArtworkLoaderTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0B /* MusicLibraryIndexTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MusicLibraryIndexTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000B0F /* LibraryMatchFinderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryMatchFinderTests.swift; sourceTree = "<group>"; };
@@ -354,6 +404,22 @@
 			path = Spotify;
 			sourceTree = "<group>";
 		};
+		1A57F3000000000000001600 /* Lastfm */ = {
+			isa = PBXGroup;
+			children = (
+				1A57F3000000000000001602 /* Scrobble.swift */,
+				1A57F3000000000000001604 /* LastfmAPI.swift */,
+				1A57F3000000000000001606 /* LastfmSession.swift */,
+				1A57F3000000000000001608 /* LastfmClient.swift */,
+				1A57F300000000000000160A /* ScrobbleQueue.swift */,
+				1A57F300000000000000160C /* LastfmSources.swift */,
+				1A57F300000000000000160E /* LastfmScrobbler.swift */,
+				1A57F3000000000000001610 /* LastfmAccount.swift */,
+				1A57F3000000000000001612 /* LastfmCredentials.swift */,
+			);
+			path = Lastfm;
+			sourceTree = "<group>";
+		};
 		7E6699F3E558528B857B7A62 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -395,6 +461,7 @@
 				DB27976C2306E95A00DDE3EB /* Helper */,
 				DB106CC822CA9F2D00502D7C /* iTunes */,
 				5A7E1A00000000000000050E /* Spotify */,
+				1A57F3000000000000001600 /* Lastfm */,
 				DB106CC722CA9ECE00502D7C /* Supporting Files */,
 				DB106C4E22C53D4C00502D7C /* Info.plist */,
 			);
@@ -407,6 +474,8 @@
 				DB89CA0122E37947003981F5 /* ScriptBridgeTests.swift */,
 				FA0000000000000000000010 /* PreferencesViewControllerTests.swift */,
 				FA0000000000000000000030 /* LaunchAtLoginTests.swift */,
+				B1D000000000000000000013 /* VariantHandoverTests.swift */,
+				B1D000000000000000000011 /* BuildInfoTests.swift */,
 				5A7E1A0000000000000000A1 /* RatingControlGeometryTests.swift */,
 				5A7E1A0000000000000001F3 /* StarRolloutTests.swift */,
 				5A7E1A0000000000000001F9 /* StarCollapseTests.swift */,
@@ -425,6 +494,7 @@
 				5A7E1A000000000000000B07 /* SongMatcherTests.swift */,
 				5A7E1A000000000000000C04 /* HeldChoiceTests.swift */,
 				5A7E1A000000000000000D04 /* SleeveHistoryTests.swift */,
+				5A7E1A000000000000001604 /* AlbumTintTests.swift */,
 				5A7E1A000000000000001106 /* SteppedTimelineTests.swift */,
 				5A7E1A000000000000001504 /* FrameCadenceTests.swift */,
 				5A7E1A000000000000001108 /* RepeatedUpdateHoldTests.swift */,
@@ -445,6 +515,15 @@
 				5A7E1A00000000000000050C /* SpotifyArtworkLoaderTests.swift */,
 				5A7E1A000000000000000518 /* SpotifyLibraryTests.swift */,
 				5A7E1A000000000000000516 /* SpotifyAuthTests.swift */,
+				1A57F3000000000000001616 /* LastfmFakes.swift */,
+				1A57F3000000000000001618 /* LastfmAPITests.swift */,
+				1A57F300000000000000161A /* LastfmClientTests.swift */,
+				1A57F300000000000000161C /* PlayTrackerTests.swift */,
+				1A57F300000000000000161E /* ScrobbleQueueTests.swift */,
+				1A57F3000000000000001620 /* LastfmSourcesTests.swift */,
+				1A57F3000000000000001622 /* LastfmScrobblerTests.swift */,
+				1A57F3000000000000001624 /* LastfmAccountTests.swift */,
+				1A57F3000000000000001626 /* LastfmCredentialsTests.swift */,
 				5A7E1A0000000000000000EF /* TrackAnnouncementPanelTests.swift */,
 				5A7E1A000000000000000306 /* TrackAnnouncementSeeThroughTests.swift */,
 				5A7E1A000000000000000416 /* TrackAnnouncementSleeveTests.swift */,
@@ -520,6 +599,7 @@
 				5A7E1A000000000000000B03 /* SongMatcher.swift */,
 				5A7E1A000000000000000C02 /* HeldChoice.swift */,
 				5A7E1A000000000000000D02 /* SleeveHistory.swift */,
+				5A7E1A000000000000001602 /* AlbumTint.swift */,
 				5A7E1A0000000000000000F7 /* AddToLibraryBadge.swift */,
 				5A7E1A0000000000000000D3 /* StarSweep.swift */,
 				5A7E1A0000000000000001F1 /* StarRollout.swift */,
@@ -529,6 +609,7 @@
 				5A7E1A000000000000001102 /* SteppedTimeline.swift */,
 				5A7E1A000000000000001502 /* FrameCadence.swift */,
 				5A7E1A000000000000001104 /* RepeatedUpdateHold.swift */,
+				1A57F3000000000000001614 /* PlayTracker.swift */,
 				5A7E1A000000000000001206 /* PopoverEmptyState.swift */,
 				5A7E1A0000000000000001FB /* StarRatingTransition.swift */,
 				5A7E1A0000000000000001F5 /* MenuBarPlaybackState.swift */,
@@ -538,6 +619,8 @@
 				FB0000000000000000000001 /* RatingWriter.swift */,
 				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
 				FA0000000000000000000020 /* LaunchAtLogin.swift */,
+				B1D000000000000000000003 /* VariantHandover.swift */,
+				B1D000000000000000000001 /* BuildInfo.swift */,
 				DB05F0852354CA5800CE6DF9 /* NSViewPreview.swift */,
 				DB05F0872354CA6B00CE6DF9 /* NSViewControllerPreview.swift */,
 				DB33438A235E103200B45ED0 /* ExceptionCatcher.h */,
@@ -768,6 +851,16 @@
 				5A7E1A000000000000000515 /* SpotifyAccount.swift in Sources */,
 				5A7E1A000000000000000513 /* SpotifyLibrary.swift in Sources */,
 				5A7E1A000000000000000511 /* SpotifyAuth.swift in Sources */,
+				1A57F3000000000000001603 /* Scrobble.swift in Sources */,
+				1A57F3000000000000001605 /* LastfmAPI.swift in Sources */,
+				1A57F3000000000000001607 /* LastfmSession.swift in Sources */,
+				1A57F3000000000000001609 /* LastfmClient.swift in Sources */,
+				1A57F300000000000000160B /* ScrobbleQueue.swift in Sources */,
+				1A57F300000000000000160D /* LastfmSources.swift in Sources */,
+				1A57F300000000000000160F /* LastfmScrobbler.swift in Sources */,
+				1A57F3000000000000001611 /* LastfmAccount.swift in Sources */,
+				1A57F3000000000000001613 /* LastfmCredentials.swift in Sources */,
+				1A57F3000000000000001615 /* PlayTracker.swift in Sources */,
 				DB106CC422CA86A500502D7C /* iTunes.swift in Sources */,
 				DB334389235E102600B45ED0 /* ExceptionCatcher.m in Sources */,
 				DB05F0882354CA6B00CE6DF9 /* NSViewControllerPreview.swift in Sources */,
@@ -785,6 +878,8 @@
 				DB89C9EB22E2B7DF003981F5 /* MenuBarRatingControl.swift in Sources */,
 				DB89CA0022E37826003981F5 /* OSVersionHelper.swift in Sources */,
 				FA0000000000000000000021 /* LaunchAtLogin.swift in Sources */,
+				B1D000000000000000000004 /* VariantHandover.swift in Sources */,
+				B1D000000000000000000002 /* BuildInfo.swift in Sources */,
 				DB106CA622CA3EE700502D7C /* Stars.swift in Sources */,
 				5A7E1A00000000000001B4 /* SmartPunctuation.swift in Sources */,
 				5A7E1A00000000000001A6 /* SVGPath.swift in Sources */,
@@ -795,6 +890,7 @@
 				5A7E1A000000000000000B04 /* SongMatcher.swift in Sources */,
 				5A7E1A000000000000000C01 /* HeldChoice.swift in Sources */,
 				5A7E1A000000000000000D01 /* SleeveHistory.swift in Sources */,
+				5A7E1A000000000000001601 /* AlbumTint.swift in Sources */,
 				5A7E1A0000000000000000F8 /* AddToLibraryBadge.swift in Sources */,
 				5A7E1A0000000000000000D4 /* StarSweep.swift in Sources */,
 				5A7E1A0000000000000001F2 /* StarRollout.swift in Sources */,
@@ -855,6 +951,8 @@
 				DB89CA0222E37947003981F5 /* ScriptBridgeTests.swift in Sources */,
 				FA0000000000000000000011 /* PreferencesViewControllerTests.swift in Sources */,
 				FA0000000000000000000031 /* LaunchAtLoginTests.swift in Sources */,
+				B1D000000000000000000014 /* VariantHandoverTests.swift in Sources */,
+				B1D000000000000000000012 /* BuildInfoTests.swift in Sources */,
 				5A7E1A0000000000000000A2 /* RatingControlGeometryTests.swift in Sources */,
 				5A7E1A0000000000000001F4 /* StarRolloutTests.swift in Sources */,
 				5A7E1A000000000000000509 /* NowPlayingArbiterTests.swift in Sources */,
@@ -862,6 +960,15 @@
 				5A7E1A00000000000000050D /* SpotifyArtworkLoaderTests.swift in Sources */,
 				5A7E1A000000000000000519 /* SpotifyLibraryTests.swift in Sources */,
 				5A7E1A000000000000000517 /* SpotifyAuthTests.swift in Sources */,
+				1A57F3000000000000001617 /* LastfmFakes.swift in Sources */,
+				1A57F3000000000000001619 /* LastfmAPITests.swift in Sources */,
+				1A57F300000000000000161B /* LastfmClientTests.swift in Sources */,
+				1A57F300000000000000161D /* PlayTrackerTests.swift in Sources */,
+				1A57F300000000000000161F /* ScrobbleQueueTests.swift in Sources */,
+				1A57F3000000000000001621 /* LastfmSourcesTests.swift in Sources */,
+				1A57F3000000000000001623 /* LastfmScrobblerTests.swift in Sources */,
+				1A57F3000000000000001625 /* LastfmAccountTests.swift in Sources */,
+				1A57F3000000000000001627 /* LastfmCredentialsTests.swift in Sources */,
 				5A7E1A0000000000000001FA /* StarCollapseTests.swift in Sources */,
 				5A7E1A0000000000000001FE /* StarRatingTransitionTests.swift in Sources */,
 				5A7E1A0000000000000000FA /* RatingControlAddToLibraryTests.swift in Sources */,
@@ -878,6 +985,7 @@
 				5A7E1A000000000000000B08 /* SongMatcherTests.swift in Sources */,
 				5A7E1A000000000000000C03 /* HeldChoiceTests.swift in Sources */,
 				5A7E1A000000000000000D03 /* SleeveHistoryTests.swift in Sources */,
+				5A7E1A000000000000001603 /* AlbumTintTests.swift in Sources */,
 				5A7E1A000000000000001105 /* SteppedTimelineTests.swift in Sources */,
 				5A7E1A000000000000001503 /* FrameCadenceTests.swift in Sources */,
 				5A7E1A000000000000001107 /* RepeatedUpdateHoldTests.swift in Sources */,
@@ -1063,7 +1171,7 @@
 		DB106C5E22C53D4C00502D7C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "$(STARBAR_APP_ICON_$(STARBAR_VARIANT))";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "StarBar/StarBar.entitlements";
 				CODE_SIGN_IDENTITY = "-";
@@ -1079,10 +1187,17 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STARBAR_BUNDLE_ID_$(STARBAR_VARIANT))";
 				PRODUCT_MODULE_NAME = StarBar;
-				PRODUCT_NAME = "StarBar";
+				PRODUCT_NAME = "$(STARBAR_PRODUCT_NAME_$(STARBAR_VARIANT))";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				STARBAR_APP_ICON_dev = AppIconDev;
+				STARBAR_APP_ICON_standard = AppIcon;
+				STARBAR_BUNDLE_ID_dev = com.rossshannon.starbar.dev;
+				STARBAR_BUNDLE_ID_standard = com.rossshannon.starbar;
+				STARBAR_PRODUCT_NAME_dev = "StarBar Dev";
+				STARBAR_PRODUCT_NAME_standard = StarBar;
+				STARBAR_VARIANT = standard;
 				SWIFT_OBJC_BRIDGING_HEADER = "StarBar/Helper/StarBar-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -1092,7 +1207,7 @@
 		DB106C5F22C53D4C00502D7C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_APPICON_NAME = "$(STARBAR_APP_ICON_$(STARBAR_VARIANT))";
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = "StarBar/StarBar.entitlements";
 				CODE_SIGN_IDENTITY = "-";
@@ -1108,10 +1223,17 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.rossshannon.starbar;
+				PRODUCT_BUNDLE_IDENTIFIER = "$(STARBAR_BUNDLE_ID_$(STARBAR_VARIANT))";
 				PRODUCT_MODULE_NAME = StarBar;
-				PRODUCT_NAME = "StarBar";
+				PRODUCT_NAME = "$(STARBAR_PRODUCT_NAME_$(STARBAR_VARIANT))";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				STARBAR_APP_ICON_dev = AppIconDev;
+				STARBAR_APP_ICON_standard = AppIcon;
+				STARBAR_BUNDLE_ID_dev = com.rossshannon.starbar.dev;
+				STARBAR_BUNDLE_ID_standard = com.rossshannon.starbar;
+				STARBAR_PRODUCT_NAME_dev = "StarBar Dev";
+				STARBAR_PRODUCT_NAME_standard = StarBar;
+				STARBAR_VARIANT = standard;
 				SWIFT_OBJC_BRIDGING_HEADER = "StarBar/Helper/StarBar-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};

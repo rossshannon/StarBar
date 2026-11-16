@@ -19,6 +19,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
     private var readSeeThroughKnobs: (() -> TrackAnnouncementSeeThroughKnobs)!
     private var seeThroughKnobs = TrackAnnouncementSeeThroughKnobs()
     private var readSleeveKnobs: (() -> TrackAnnouncementSleeveKnobs)!
+    private var readGlowKnobs: (() -> TrackAnnouncementGlowKnobs)!
     /// The flat artwork, unless a test says otherwise: several tests count the repeating
     /// timers, and the sleeve steps on one of its own
     private var sleeveKnobs = TrackAnnouncementSleeveKnobs(breakout: false, tilt: false)
@@ -37,6 +38,8 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         readSleeveKnobs = TrackAnnouncementSleeveKnobs.read
         sleeveKnobs = TrackAnnouncementSleeveKnobs(breakout: false, tilt: false)
         TrackAnnouncementSleeveKnobs.read = { [unowned self] in self.sleeveKnobs }
+        readGlowKnobs = TrackAnnouncementGlowKnobs.read
+        TrackAnnouncementGlowKnobs.read = { TrackAnnouncementGlowKnobs() }
         mouse = NSScreen.main.map { NSPoint(x: $0.frame.midX, y: $0.frame.midY) } ?? .zero
         panel = TrackAnnouncementPanel(
             slideDuration: 0,
@@ -52,6 +55,7 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         TrackAnnouncementGlassKnobs.read = readKnobs
         TrackAnnouncementSeeThroughKnobs.read = readSeeThroughKnobs
         TrackAnnouncementSleeveKnobs.read = readSleeveKnobs
+        TrackAnnouncementGlowKnobs.read = readGlowKnobs
         super.tearDown()
     }
 
@@ -1349,7 +1353,6 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(animated.sleeveTilt, .rest, "a stale tick does nothing")
     }
 
-
     // MARK: - Stalls
 
     /// Measured 2026-11-03: Music's second notification for a song held the main thread for
@@ -1692,6 +1695,431 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertEqual(animated.phase, .hidden)
         XCTAssertFalse(animated.isAnimatingHeart)
         XCTAssertFalse(animated.stripView.hidesHeart)
+    }
+
+    // MARK: The album tint
+
+    private func tintPanel(_ clock: FakeClock) -> TrackAnnouncementPanel {
+        return TrackAnnouncementPanel(slideDuration: 0, artworkFadeDuration: 0, tintFadeDuration: 0.5, screens: { NSScreen.screens }, mouseLocation: { [unowned self] in self.mouse }, keyboard: { [unowned self] in self.keys }, clock: clock)
+    }
+
+    /// A cover of one sRGB colour, as a cover read from Music would be drawn
+    private func solidCover(_ red: CGFloat, _ green: CGFloat, _ blue: CGFloat) throws -> NSImage {
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try XCTUnwrap(CGContext(data: nil, width: 16, height: 16, bitsPerComponent: 8, bytesPerRow: 0, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.setFillColor(CGColor(srgbRed: red, green: green, blue: blue, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 16, height: 16))
+        return NSImage(cgImage: try XCTUnwrap(context.makeImage()), size: NSSize(width: 16, height: 16))
+    }
+
+    private func song(_ identity: String, cover: NSImage?) -> TrackAnnouncement {
+        return TrackAnnouncement(identity: identity, title: "Title \(identity)", artist: "Artist", album: "Album \(identity)", artwork: cover)
+    }
+
+    /// The classic strip's background in `cover`'s colour
+    private func classicWash(_ cover: NSImage) throws -> TrackAnnouncementWash {
+        return TrackAnnouncementWash(colour: try XCTUnwrap(AlbumTint.colour(of: cover)), alpha: TrackAnnouncementLayout.backgroundAlpha)
+    }
+
+    private let classicBlack = TrackAnnouncementWash(colour: .black, alpha: TrackAnnouncementLayout.backgroundAlpha)
+
+    private func assertWash(_ wash: TrackAnnouncementWash, _ expected: TrackAnnouncementWash, accuracy: Double = 0.002, _ message: String = "", file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(Double(wash.alpha), Double(expected.alpha), accuracy: accuracy, "alpha. \(message)", file: file, line: line)
+        XCTAssertEqual(wash.colour.l, expected.colour.l, accuracy: accuracy, "L. \(message)", file: file, line: line)
+        XCTAssertEqual(wash.colour.a, expected.colour.a, accuracy: accuracy, "a. \(message)", file: file, line: line)
+        XCTAssertEqual(wash.colour.b, expected.colour.b, accuracy: accuracy, "b. \(message)", file: file, line: line)
+    }
+
+    func testTheAlbumTintIsOffUntilTurnedOn() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+
+        animated.show(song("1", cover: try solidCover(0.8, 0.1, 0.1)), reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertEqual(animated.albumTintMode, .off)
+        XCTAssertNil(animated.stripView.albumTint)
+        XCTAssertNil(animated.stripView.albumTintLayerColor, "no colour layer")
+        XCTAssertTrue(animated.stripView.washDrawsTint, "the style's own black, drawn as it always was")
+        XCTAssertFalse(animated.isFadingTint)
+    }
+
+    func testAStripArrivesAlreadyInItsColour() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let cover = try solidCover(0.8, 0.1, 0.1)
+
+        animated.show(song("1", cover: cover), reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertFalse(animated.isFadingTint, "no fade on the way in: the strip slides up in its colour")
+        XCTAssertEqual(animated.stripView.albumTint, AlbumTint.colour(of: cover))
+        assertWash(animated.stripView.displayedWash, try classicWash(cover))
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.albumTintLayerColor).alpha, TrackAnnouncementLayout.backgroundAlpha, accuracy: 0.001)
+        XCTAssertFalse(animated.stripView.washDrawsTint, "the colour takes the black wash's place rather than going over it")
+    }
+
+    func testANewSongFadesFromTheOldColourToItsOwn() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let redCover = try solidCover(0.8, 0.1, 0.1)
+        let blueCover = try solidCover(0.1, 0.3, 0.9)
+        let red = try classicWash(redCover)
+        let blue = try classicWash(blueCover)
+        animated.show(song("1", cover: redCover), reduceMotion: false, reduceTransparency: false)
+
+        animated.show(song("2", cover: blueCover), reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertTrue(animated.isFadingTint)
+        assertWash(animated.stripView.displayedWash, red, "still the old colour on the first frame")
+        clock.runFrames(for: 0.25)
+        assertWash(animated.stripView.displayedWash, .mix(red, blue, progress: 0.5), accuracy: 0.01, "half way at half time on an ease-in-out curve")
+        clock.runFrames(for: 0.3)
+        XCTAssertFalse(animated.isFadingTint)
+        assertWash(animated.stripView.displayedWash, blue)
+        // Done: more frames change nothing
+        clock.runFrames(for: 0.5)
+        assertWash(animated.stripView.displayedWash, blue)
+    }
+
+    func testALateCoverBloomsItsColourIn() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        XCTAssertNil(animated.stripView.albumTint, "no cover yet: the style's black")
+        assertWash(animated.stripView.displayedWash, classicBlack)
+        let cover = try solidCover(0.8, 0.1, 0.1)
+        let red = try classicWash(cover)
+        let withCover = TrackAnnouncement(copying: sample, artwork: cover)
+
+        animated.refresh(withCover)
+
+        XCTAssertTrue(animated.isFadingTint)
+        clock.runFrames(for: 0.25)
+        assertWash(animated.stripView.displayedWash, .mix(classicBlack, red, progress: 0.5), accuracy: 0.01)
+        clock.runFrames(for: 0.3)
+        assertWash(animated.stripView.displayedWash, red)
+        // A change to the stars leaves the colour as it is
+        animated.refresh(TrackAnnouncement(copying: withCover, rating: 80))
+        XCTAssertFalse(animated.isFadingTint)
+        assertWash(animated.stripView.displayedWash, red)
+    }
+
+    func testAChangeOfColourCaughtPartWayGoesOnFromWhatIsShown() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let greenCover = try solidCover(0.2, 0.7, 0.3)
+        animated.show(song("1", cover: try solidCover(0.8, 0.1, 0.1)), reduceMotion: false, reduceTransparency: false)
+        animated.show(song("2", cover: try solidCover(0.1, 0.3, 0.9)), reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.25)
+        let shown = animated.stripView.displayedWash
+
+        animated.show(song("3", cover: greenCover), reduceMotion: false, reduceTransparency: false)
+
+        assertWash(animated.stripView.displayedWash, shown, "no jump back to the first colour or on to the second")
+        clock.runFrames(for: 1.0 / 60.0)
+        assertWash(animated.stripView.displayedWash, shown, accuracy: 0.01, "and the first step is a small one")
+        clock.runFrames(for: 0.6)
+        XCTAssertFalse(animated.isFadingTint)
+        assertWash(animated.stripView.displayedWash, try classicWash(greenCover))
+    }
+
+    func testASongWithNoColourFadesBackToTheStylesBlack() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        animated.show(song("1", cover: try solidCover(0.8, 0.1, 0.1)), reduceMotion: false, reduceTransparency: false)
+
+        animated.show(song("2", cover: try solidCover(0.5, 0.5, 0.5)), reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertNil(animated.stripView.albumTint, "a grey cover has no colour to give")
+        XCTAssertTrue(animated.isFadingTint)
+        clock.runFrames(for: 0.6)
+        assertWash(animated.stripView.displayedWash, classicBlack)
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.albumTintLayerColor).alpha, TrackAnnouncementLayout.backgroundAlpha, accuracy: 0.001)
+
+        // A song with no cover at all is the same black: nothing to change
+        animated.show(song("3", cover: nil), reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(animated.isFadingTint)
+    }
+
+    func testAStripThatHasGoneComesBackInItsNewColourAtOnce() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let blueCover = try solidCover(0.1, 0.3, 0.9)
+        let greenCover = try solidCover(0.2, 0.7, 0.3)
+        animated.show(song("1", cover: try solidCover(0.8, 0.1, 0.1)), reduceMotion: false, reduceTransparency: false)
+        animated.show(song("2", cover: blueCover), reduceMotion: false, reduceTransparency: false)
+        XCTAssertTrue(animated.isFadingTint)
+
+        animated.hide()
+
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertFalse(animated.isFadingTint, "the change ends with the strip")
+        assertWash(animated.stripView.displayedWash, try classicWash(blueCover), "at the colour it was heading for")
+
+        animated.show(song("3", cover: greenCover), reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(animated.isFadingTint)
+        assertWash(animated.stripView.displayedWash, try classicWash(greenCover))
+    }
+
+    func testReduceTransparencyMakesTheColourOpaque() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let cover = try solidCover(0.9, 0.8, 0.2)
+
+        animated.show(song("1", cover: cover), reduceMotion: false, reduceTransparency: true)
+
+        let tint = try XCTUnwrap(AlbumTint.colour(of: cover))
+        assertWash(animated.stripView.displayedWash, TrackAnnouncementWash(colour: tint, alpha: 1))
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.albumTintLayerColor).alpha, 1)
+        XCTAssertGreaterThanOrEqual(tint.contrastWithWhite, 4.5, "white text stays readable on the colour drawn solid")
+    }
+
+    func testTurningTheTintOffAndOnWhileTheStripIsUp() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let cover = try solidCover(0.8, 0.1, 0.1)
+        animated.show(song("1", cover: cover), reduceMotion: false, reduceTransparency: false)
+
+        animated.albumTintMode = .off
+
+        XCTAssertNil(animated.stripView.albumTintLayerColor)
+        XCTAssertTrue(animated.stripView.washDrawsTint, "the black is back at once")
+        XCTAssertFalse(animated.isFadingTint)
+
+        animated.albumTintMode = .strip
+
+        XCTAssertTrue(animated.isFadingTint, "the colour fades in, as a late cover's does")
+        assertWash(animated.stripView.displayedWash, classicBlack)
+        clock.runFrames(for: 0.6)
+        assertWash(animated.stripView.displayedWash, try classicWash(cover))
+    }
+
+    func testTheBlurTakesTheCoversColourInPlaceOfItsBlackWash() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        view.style = .blur
+        XCTAssertNil(view.albumTintLayerColor)
+
+        view.albumTintMode = .strip
+
+        XCTAssertFalse(view.washDrawsTint)
+        XCTAssertEqual(try XCTUnwrap(view.albumTintLayerColor).alpha, TrackAnnouncementLayout.blurTintAlpha, accuracy: 0.001, "no colour yet: the blur's own black, on the colour layer")
+        view.setAlbumTint(AlbumTint.legible(OKLab(red: 0.8, green: 0.1, blue: 0.1)))
+        XCTAssertEqual(try XCTUnwrap(view.albumTintLayerColor).alpha, TrackAnnouncementLayout.blurAlbumTintAlpha, accuracy: 0.001, "stronger than the black, so the colour reads through the blur")
+
+        view.albumTintMode = .off
+        XCTAssertNil(view.albumTintLayerColor)
+        XCTAssertTrue(view.washDrawsTint)
+    }
+
+    /// Liquid Glass takes the colour through its own tint, so it keeps its lensing and edge
+    func testTheAlbumTintColoursLiquidGlassThroughItsOwnTint() throws {
+        try skipWithoutLiquidGlass()
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        view.style = .glass
+        view.albumTintMode = .strip
+        let tint = AlbumTint.legible(OKLab(red: 0.8, green: 0.1, blue: 0.1))
+
+        view.setAlbumTint(tint)
+
+        XCTAssertNil(view.albumTintLayerColor, "no layer over the glass")
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            let glass = try XCTUnwrap(view.backdropView as? NSGlassEffectView)
+            let colour = try XCTUnwrap(glass.tintColor?.usingColorSpace(.sRGB))
+            XCTAssertEqual(colour.alphaComponent, TrackAnnouncementLayout.glassAlbumTintAlpha, accuracy: 0.001)
+            XCTAssertEqual(Double(colour.redComponent), tint.sRGB.red, accuracy: 0.001)
+            XCTAssertEqual(Double(colour.greenComponent), tint.sRGB.green, accuracy: 0.001)
+            XCTAssertEqual(Double(colour.blueComponent), tint.sRGB.blue, accuracy: 0.001)
+
+            view.setAlbumTint(nil)
+            XCTAssertNil(glass.tintColor, "no colour in the cover: the glass untinted, as it was built")
+
+            view.setAlbumTint(tint)
+            view.albumTintMode = .off
+            XCTAssertNil(glass.tintColor, "turned off: the glass as it was built")
+        }
+        #endif
+    }
+
+    // MARK: The glow from behind the cover
+
+    /// The classic strip's glow for `cover`: its light, as strong as the title allows
+    private func classicGlow(_ cover: NSImage) throws -> TrackAnnouncementWash {
+        let light = AlbumTint.light(try XCTUnwrap(AlbumTint.colour(of: cover)))
+        return TrackAnnouncementWash(colour: light, alpha: AlbumTint.Glow.peak(for: light, most: 1))
+    }
+
+    func testTheGlowShinesFromBehindTheSleeveOverTheStylesBlack() throws {
+        sleeveKnobs = TrackAnnouncementSleeveKnobs(breakout: true, tilt: false)
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .glow
+        let cover = try solidCover(0.1, 0.3, 0.9)
+
+        animated.show(song("1", cover: cover), reduceMotion: false, reduceTransparency: false)
+
+        let view = animated.stripView
+        XCTAssertFalse(animated.isFadingTint, "no fade on the way in")
+        assertWash(view.displayedWash, try classicGlow(cover))
+        assertWash(try XCTUnwrap(view.glowLight), try classicGlow(cover))
+        XCTAssertGreaterThan(try XCTUnwrap(view.glowLight).colour.l, AlbumTint.lightness.upperBound, "a light, brighter than the whole-strip tint is allowed")
+        // Under it, the classic strip's own black, on the colour layer rather than the wash
+        XCTAssertFalse(view.washDrawsTint)
+        let black = try XCTUnwrap(view.albumTintLayerColor)
+        XCTAssertEqual(black.alpha, TrackAnnouncementLayout.backgroundAlpha, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(black.components).prefix(3).max() ?? 1, 0, accuracy: 0.001, "black")
+
+        // From the sleeve's centre, full strength out to its edge
+        let shape = try XCTUnwrap(view.glowShape)
+        let sleeve = view.artworkFrame
+        XCTAssertEqual(view.glowFrame, view.bounds, "the classic strip glows edge to edge")
+        XCTAssertEqual(shape.centre.x, sleeve.midX, accuracy: 0.001)
+        XCTAssertEqual(shape.centre.y, sleeve.midY, accuracy: 0.001)
+        XCTAssertEqual(shape.core, TrackAnnouncementSleeve.size / 2 * animated.scale, accuracy: 0.001)
+        XCTAssertEqual(shape.reach, AlbumTint.Glow.defaultReach * animated.scale, accuracy: 0.001)
+    }
+
+    func testTheGlowFadesFromSongToSongAndFromNothing() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .glow
+        let redCover = try solidCover(0.8, 0.1, 0.1)
+        let blueCover = try solidCover(0.1, 0.3, 0.9)
+        animated.show(song("1", cover: redCover), reduceMotion: false, reduceTransparency: false)
+
+        animated.show(song("2", cover: blueCover), reduceMotion: false, reduceTransparency: false)
+
+        XCTAssertTrue(animated.isFadingTint)
+        clock.runFrames(for: 0.25)
+        assertWash(animated.stripView.displayedWash, .mix(try classicGlow(redCover), try classicGlow(blueCover), progress: 0.5), accuracy: 0.01)
+        clock.runFrames(for: 0.3)
+        assertWash(animated.stripView.displayedWash, try classicGlow(blueCover))
+
+        // A grey cover puts the light out, and the strip is today's black
+        animated.show(song("3", cover: try solidCover(0.5, 0.5, 0.5)), reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.6)
+        XCTAssertEqual(animated.stripView.displayedWash.alpha, 0)
+        XCTAssertNil(animated.stripView.glowLight, "no glow layer at all")
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.albumTintLayerColor).alpha, TrackAnnouncementLayout.backgroundAlpha, accuracy: 0.001)
+
+        // A late cover lights it again, growing in its own colour from nothing
+        animated.refresh(song("3", cover: redCover))
+        XCTAssertTrue(animated.isFadingTint)
+        clock.runFrames(for: 0.25)
+        let half = animated.stripView.displayedWash
+        let red = try classicGlow(redCover)
+        XCTAssertEqual(Double(half.alpha), Double(red.alpha) / 2, accuracy: 0.01)
+        XCTAssertEqual(half.colour.l, red.colour.l, accuracy: 0.001, "the light's own colour, only weaker")
+        clock.runFrames(for: 0.3)
+        assertWash(animated.stripView.displayedWash, red)
+    }
+
+    func testChangingBetweenTheTintAndTheGlowWhileTheStripIsUp() throws {
+        let clock = FakeClock()
+        let animated = tintPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.albumTintMode = .strip
+        let cover = try solidCover(0.8, 0.1, 0.1)
+        animated.show(song("1", cover: cover), reduceMotion: false, reduceTransparency: false)
+        assertWash(animated.stripView.displayedWash, try classicWash(cover))
+        XCTAssertNil(animated.stripView.glowLight)
+
+        animated.albumTintMode = .glow
+
+        XCTAssertTrue(animated.isFadingTint, "the light comes up")
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.albumTintLayerColor).alpha, TrackAnnouncementLayout.backgroundAlpha, accuracy: 0.001, "the strip is back to its black under the light")
+        XCTAssertEqual(animated.stripView.displayedWash.alpha, 0, "and the light starts from nothing")
+        clock.runFrames(for: 0.6)
+        assertWash(animated.stripView.displayedWash, try classicGlow(cover))
+
+        animated.albumTintMode = .off
+
+        XCTAssertNil(animated.stripView.glowLight)
+        XCTAssertNil(animated.stripView.albumTintLayerColor)
+        XCTAssertTrue(animated.stripView.washDrawsTint, "today's strip at once")
+        XCTAssertFalse(animated.isFadingTint)
+    }
+
+    func testTheGlowLayersCircleIsRoundOnAWideStrip() {
+        let glow = AlbumTint.Glow(centre: CGPoint(x: 68, y: 36), core: 56, reach: 480, halo: 10)
+        let points = TrackAnnouncementGlowView.points(for: glow, in: CGSize(width: 1440, height: 104))
+        XCTAssertEqual(points.start.x * 1440, 68, accuracy: 1e-9)
+        XCTAssertEqual(points.start.y * 104, 36, accuracy: 1e-9)
+        XCTAssertEqual((points.end.x - points.start.x) * 1440, 480, accuracy: 1e-9)
+        XCTAssertEqual((points.end.y - points.start.y) * 104, 480, accuracy: 1e-9, "the same radius both ways, though the strip is far wider than tall")
+    }
+
+    /// The light is brightest by the artwork and gone at the far end, drawn where the view
+    /// says: not upside down, and not off to one side
+    func testTheGlowLayerDrawsItsLightBehindTheArtwork() throws {
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 900, height: TrackAnnouncementLayout.height))
+        // The sleeve's centre is above the strip's middle, so the light is too
+        view.breakout = true
+        view.albumTintMode = .glow
+        view.setAlbumTint(AlbumTint.legible(OKLab(red: 0.1, green: 0.3, blue: 0.9)))
+        let gradient = try XCTUnwrap(view.glowLayer)
+        XCTAssertEqual(gradient.type, .radial)
+        XCTAssertEqual((gradient.colors ?? []).count, gradient.locations?.count)
+
+        let width = Int(view.bounds.width), height = Int(view.bounds.height)
+        let space = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try XCTUnwrap(CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        gradient.render(in: context)
+        let data = try XCTUnwrap(context.data).assumingMemoryBound(to: UInt8.self)
+        // The context's y counts up from the bottom, as the view's does, but its first row in
+        // memory is the top one
+        let alpha = { (x: CGFloat, y: CGFloat) -> Int in Int(data[((height - 1 - Int(y)) * width + Int(x)) * 4 + 3]) }
+        let artwork = view.artworkFrame
+        XCTAssertGreaterThan(artwork.midY, view.bounds.midY)
+        let beside = alpha(artwork.maxX + 4, 60)
+        XCTAssertGreaterThan(beside, 120, "bright just past the sleeve")
+        XCTAssertGreaterThan(alpha(artwork.minX - 4, 60), 120, "on both sides of it")
+        XCTAssertLessThan(alpha(artwork.maxX + 200, 60), beside - 60, "and much less further out")
+        XCTAssertGreaterThan(alpha(artwork.maxX + 10, 100), alpha(artwork.maxX + 10, 2) + 10, "brighter near the strip's top edge, which is nearer the sleeve's centre: not upside down")
+        XCTAssertEqual(alpha(CGFloat(width - 2), 2), 0, "nothing at the far end")
+    }
+
+    func testTheGlowStaysInsideLiquidGlassAndLeavesItsTintAlone() throws {
+        try skipWithoutLiquidGlass()
+        let view = TrackAnnouncementView(announcement: sample, frame: NSRect(x: 0, y: 0, width: 600, height: 96))
+        view.style = .glass
+        view.albumTintMode = .glow
+
+        view.setAlbumTint(AlbumTint.legible(OKLab(red: 0.8, green: 0.1, blue: 0.1)))
+
+        XCTAssertEqual(view.glowFrame, view.backdropFrame, "the glass's shape")
+        XCTAssertGreaterThan(view.glowCornerRadius, 0, "and its corners")
+        XCTAssertEqual(Double(try XCTUnwrap(view.glowLight).alpha), Double(AlbumTint.Glow.strongest(for: .glass, opaque: false)), accuracy: 0.05)
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *) {
+            let glass = try XCTUnwrap(view.backdropView as? NSGlassEffectView)
+            XCTAssertNil(glass.tintColor, "the glass keeps the tint it was built with")
+        }
+        #endif
+
+        // Reduce Transparency covers the glass with black: the light goes edge to edge over it
+        view.backgroundAlpha = 1
+        XCTAssertEqual(view.glowFrame, view.bounds)
+        XCTAssertEqual(view.glowCornerRadius, 0)
+        XCTAssertEqual(try XCTUnwrap(view.albumTintLayerColor).alpha, 1, "the opaque black, under the light")
     }
 
 }

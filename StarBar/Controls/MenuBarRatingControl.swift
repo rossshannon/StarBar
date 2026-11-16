@@ -243,7 +243,7 @@ final class MenuBarRatingControl {
 
     private(set) lazy var menuBarMenu: NSMenu = {
         let menu = NSMenu()
-        let about = NSMenuItem(title: "About StarBar", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
+        let about = NSMenuItem(title: "About \(BuildInfo.current.name)", action: #selector(WindowManager.aboutMenuItemPressed(_:)), keyEquivalent: "")
         about.target = WindowManager.shared
         menu.addItem(about)
         let preferences = NSMenuItem(title: "Preferences…", action: #selector(WindowManager.preferencesMenuItemPressed(_:)), keyEquivalent: ",")
@@ -252,8 +252,10 @@ final class MenuBarRatingControl {
         let showCurrentTrack = NSMenuItem(title: "Show Current Track", action: #selector(TrackAnnouncementController.showCurrentTrackMenuItemPressed(_:)), keyEquivalent: "")
         showCurrentTrack.target = TrackAnnouncementController.shared
         menu.addItem(showCurrentTrack)
+        menu.addItem(LastfmPauseMenuItems.shared.makeItem())
+        menu.delegate = LastfmPauseMenuItems.shared
         menu.addItem(NSMenuItem.separator())
-        menu.addItem(NSMenuItem(title: "Quit StarBar", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.addItem(NSMenuItem(title: "Quit \(BuildInfo.current.name)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }()
     private(set) var isPlaying = false {
@@ -443,7 +445,8 @@ final class MenuBarRatingControl {
                 // for a rated song (the sixth review, 2026-10-30)
                 MenuBarRatingControl.withShortTimeoutIfAnswered { _ in
                     guard let playing = iTunesPlayer.shared.playing, let track = playing.ratingTrack else { return nil }
-                    return MenuBarRatingControl.readPlayerSnapshot(track: track, userRating: track.userRating, trackID: playing.persistentID)
+                    return MenuBarRatingControl.readPlayerSnapshot(track: track, userRating: track.userRating, trackID: playing.persistentID,
+                                                                   playingTrack: playing.track)
                 } ?? nil
             },
             readPosition: {
@@ -961,6 +964,7 @@ extension MenuBarRatingControl {
         let isFavorited = !ratingControl.isFavorited
         // Before the write, so that the strip counts Music's refusals from before it
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited, heldFor: playing.persistentID)
+        LastfmScrobbler.shared.userDidSetHeart(isFavorited, title: playing.name, artist: playing.artist)
         // The heart goes where the rating goes: the user's own copy of the song, not the
         // catalog track playing it. Music keeps a separate `favorited` on each.
         writeFavorite(isFavorited, heldFor: playing.persistentID) {
@@ -986,6 +990,12 @@ extension MenuBarRatingControl {
         let trackID = match.song.persistentID
         LibraryMatchFinder.shared.userDidFavorite(trackID, isFavorited: isFavorited)
         TrackAnnouncementController.shared?.userDidFavorite(isFavorited, heldFor: trackID)
+        // Scrobbles of a Spotify song carry Spotify's names, so the love must too
+        if let spotify = SpotifyPlayer.shared.latest, spotify.trackID == match.identity {
+            LastfmScrobbler.shared.userDidSetHeart(isFavorited, title: spotify.name, artist: spotify.artist)
+        } else {
+            LastfmScrobbler.shared.userDidSetHeart(isFavorited, title: match.song.name, artist: match.song.artist)
+        }
         writeFavorite(isFavorited, heldFor: trackID) {
             match.track.updateFavorited(isFavorited)
         }
@@ -1124,12 +1134,19 @@ extension MenuBarRatingControl {
             if !isOnIcon, let uri = displayedSongIdentity, SpotifyAccount.shared.canLike(uri) {
                 let previous = favoriteHeartView.image
                 let wasLiked = spotifyIsLiked == true
+                // What the toggle sets, read before it as `toggleLike` reads it
+                let willBeLiked = !(SpotifyAccount.shared.isLiked(uri) ?? false)
                 // Shows the new like at once, through `spotifyLikeDidChange`
                 SpotifyAccount.shared.toggleLike(uri)
                 let isLiked = spotifyIsLiked == true
                 if isLiked != wasLiked {
                     beginHeartChange(favorited: isLiked, from: previous, palette: .spotify)
                     TrackAnnouncementController.shared?.userDidLikeOnSpotify(isLiked, identity: uri)
+                    // A song only: Last.fm has no episodes to love
+                    if let spotify = SpotifyPlayer.shared.latest, spotify.trackID == uri,
+                       spotify.content == .track || spotify.content == .local {
+                        LastfmScrobbler.shared.userDidSetHeart(willBeLiked, title: spotify.name, artist: spotify.artist)
+                    }
                 }
             } else {
                 SpotifyPlayer.shared.activate()
@@ -1386,7 +1403,8 @@ extension MenuBarRatingControl {
             // song, so then the stars on show stand for it, and the reminder reads the
             // rating again before it rings: a new song's stars on show are none
             let known = ratingAnswer == nil ? ratingControl.rating : userRating
-            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: known, isPlaying: isPlaying, trackID: playing?.persistentID) }
+            let snapshot = ratedTrack.flatMap { MenuBarRatingControl.readPlayerSnapshot(track: $0, userRating: known, isPlaying: isPlaying, trackID: playing?.persistentID,
+                                                                                          playingTrack: playing?.track) }
             reminderController?.playerDidUpdate(snapshot, ratingIsKnown: ratingAnswer != nil)
         } else {
             reminderController?.playerDidUpdate(nil)
@@ -1483,7 +1501,11 @@ extension MenuBarRatingControl {
     /// values already read. Call only while Music is running.
     ///
     /// - Parameter isPlaying: the player state, or nil to read it
-    static func readPlayerSnapshot(track: iTunesTrack, userRating: Int?, isPlaying: Bool? = nil, trackID: String? = nil) -> RatingReminderController.PlayerSnapshot? {
+    /// - Parameter playingTrack: the track Music is playing, whose length the position is
+    ///   measured against, when `track` is the user's copy of it: the copy can be on another
+    ///   release, at another length (`iTunesRadioStation.libraryCopy(matching:)`)
+    static func readPlayerSnapshot(track: iTunesTrack, userRating: Int?, isPlaying: Bool? = nil, trackID: String? = nil,
+                                   playingTrack: iTunesTrack? = nil) -> RatingReminderController.PlayerSnapshot? {
         // A read that timed out gives an empty ID, which would look like a different track
         guard let iTunes = iTunesRadioStation.shared.iTunes,
               let trackID = trackID ?? track.persistentID, !trackID.isEmpty else { return nil }
@@ -1491,7 +1513,7 @@ extension MenuBarRatingControl {
             trackID: trackID,
             isPlaying: isPlaying ?? (iTunes.playerState == .playing),
             position: iTunes.playerPosition ?? 0,
-            duration: track.duration ?? 0,
+            duration: (playingTrack ?? track).duration ?? 0,
             isRated: (userRating ?? 0) > 0
         )
     }
@@ -1580,4 +1602,43 @@ private final class PassthroughImageView: NSImageView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         return nil
     }
+}
+
+/// "Pause Scrobbling", made once for each of the two app menus (the menu bar's and the
+/// popover's) and kept up to date by this one object as their delegate.
+///
+/// The menus are built once, so the item's check mark and visibility are set each time a
+/// menu is about to open (`menuNeedsUpdate`), not when it is made. It shows only while a
+/// Last.fm user is connected or the hidden dry run is on, since otherwise there is nothing to
+/// pause. Pausing only flips `UserDefaults.lastfmPaused`, which the scrobbler watches itself
+/// and which is kept between launches. Main thread only.
+final class LastfmPauseMenuItems: NSObject, NSMenuDelegate {
+
+    static let shared = LastfmPauseMenuItems()
+
+    /// A new "Pause Scrobbling" item. The menu it goes in must have this object as its
+    /// delegate, or the item keeps the state it was made with.
+    func makeItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Pause Scrobbling", action: #selector(LastfmPauseMenuItems.togglePause(_:)), keyEquivalent: "")
+        item.target = self
+        update(item)
+        return item
+    }
+
+    @objc func togglePause(_ sender: NSMenuItem) {
+        UserDefaults.standard.lastfmPaused = !UserDefaults.standard.lastfmPaused
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        for item in menu.items where item.action == #selector(LastfmPauseMenuItems.togglePause(_:)) {
+            update(item)
+        }
+    }
+
+    private func update(_ item: NSMenuItem) {
+        let defaults = UserDefaults.standard
+        item.state = defaults.lastfmPaused ? .on : .off
+        item.isHidden = !(LastfmAccount.shared.isConnected || defaults.lastfmDryRun)
+    }
+
 }

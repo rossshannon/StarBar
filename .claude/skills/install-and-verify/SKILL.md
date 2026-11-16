@@ -18,14 +18,18 @@ The script ends with an **Install verification** block and exits non-zero if the
 ```
 === Install verification ===
 Commit:     21847ff
+App:        StarBar, main at 21847ff
 Version:    1.5.0 (18)
 Binary:     Sep 17 00:32:10 2026  sha256 3f9a1c0d2b7e
 Running:    PID 41424, started Wed Sep 17 00:32:11 2026
 Verified: /Applications has the new build, and it is running.
 ```
 
+For **StarBar Dev**, the copy that installs beside StarBar (`./build.sh --dev --install`, see `AGENTS.md`), everything here applies with its own names: `/Applications/StarBar Dev.app`, and `process == "StarBar Dev"` in the log. Installing either quits the other, since the two take turns.
+
 Read it; don't just check the exit code.
 - **Commit** should be the commit you meant to test. `+ uncommitted changes` means the build includes work that isn't committed. Say so when you report.
+- **App** names the app and what the installed bundle says it was built from (branch and commit), which is what its About window shows; `release` means a build at a `v*` tag.
 - **Running** must show a start time from this install. An older time means an old copy is still running.
 - `FAILED` lines: fix the cause before going on. Don't report the install as done.
 

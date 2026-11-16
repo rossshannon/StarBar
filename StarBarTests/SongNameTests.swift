@@ -163,6 +163,77 @@ final class SongNameTests: XCTestCase {
         XCTAssertEqual(core("Hurt (Quiet)"), "hurt quiet")
     }
 
+    func testAPartOfTheNameAtTheEndGivesAShortTitle() {
+        // Apple's catalog title, and the one the user's own copy had, measured 2026-11-16
+        XCTAssertEqual(SongName.title("I Wanna Dance with Somebody (Who Loves Me)").shortCore, "i wanna dance with somebody")
+        XCTAssertEqual(core("I Wanna Dance with Somebody (Who Loves Me)"), "i wanna dance with somebody who loves me")
+        XCTAssertEqual(SongName.title("Street Spirit (Fade Out)").shortCore, "street spirit")
+        XCTAssertEqual(SongName.title("Rocket Man (I Think It's Going to Be a Long Long Time)").shortCore, "rocket man")
+        XCTAssertEqual(SongName.title("Still Got The Blues [For You]").shortCore, "still got the blues")
+        XCTAssertEqual(SongName.title("The Path (A New Beginning)").shortCore, "the path")
+    }
+
+    func testADescriptionOfTheRecordingGivesNoShortTitle() {
+        // A deluxe edition's or a single's other recordings, the master's length on the
+        // master's album, which the second review found matched to it (2026-11-16)
+        for title in ["Go Your Own Way (Early Take)", "Song (Backing Track)", "Song (Stereo Backing Track)",
+                      "Song (Off Vocal Ver.)", "Song (Inst. Ver.)", "Song (English Ver.)", "Song (Minus One)",
+                      "Song (Vocals Only)", "Song (Isolated Vocals)", "Song (Strings Only)", "Song (TV Track)",
+                      "Song (First Take)", "Song (B-Side)", "Goldberg Variations, BWV 988: Aria (Da Capo)",
+                      "Shine On You Crazy Diamond (Part One)", "Mongrel Meets His Maker (2)", "Suite (Movement II)"] {
+            XCTAssertNil(SongName.title(title).shortCore, title)
+        }
+        // A part of one word is never left out: it names a cue or a recording as often as not
+        for title in ["Mantis (Battle)", "Interlude (Night)", "Song (Unreleased)", "Song (Inst.)", "Vanishing Grace (Childhood)"] {
+            XCTAssertNil(SongName.title(title).shortCore, title)
+        }
+    }
+
+    func testTheShortTitleIsLeftWhenEditionsAndVersionsHaveGone() {
+        // An edition after the part comes off first, so the part is still at the end
+        let remastered = SongName.title("I Wanna Dance with Somebody (Who Loves Me) [2023 Remaster]")
+        XCTAssertEqual(remastered.shortCore, "i wanna dance with somebody")
+        XCTAssertEqual(remastered.core, "i wanna dance with somebody who loves me")
+        // A version stays a version, and the part before it is still the end of the name
+        let live = SongName.title("I Wanna Dance with Somebody (Who Loves Me) [Live]")
+        XCTAssertEqual(live.shortCore, "i wanna dance with somebody")
+        XCTAssertEqual(live.versions, ["live"])
+    }
+
+    func testASoundtracksNameSaysSo() {
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Hades: Original Soundtrack"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Zelda: Breath of the Wild OST"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Black Mirror: San Junipero (Original Score)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Hades (Original Sound Track)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Chrono Trigger Original Sound Version"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Hamilton (Original Broadway Cast Recording)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Les Misérables (Original London Cast)"))
+        XCTAssertTrue(SongName.isSoundtrackAlbum("Music from Baldur's Gate 3"))
+        XCTAssertFalse(SongName.isSoundtrackAlbum("The Last of Us"), "a known miss: nothing in the name says so")
+        XCTAssertFalse(SongName.isSoundtrackAlbum("Lost Souls"))
+        XCTAssertFalse(SongName.isSoundtrackAlbum("Berlin Ost"), "German for east")
+        XCTAssertFalse(SongName.isSoundtrackAlbum("Whitney"))
+    }
+
+    func testAnAlbumsNameIsComparedWithNothingTakenOff() {
+        XCTAssertTrue(SongName.isSameAlbumName("Whitney", "WHITNEY"))
+        XCTAssertFalse(SongName.isSameAlbumName("Whitney", "Whitney (Deluxe Edition)"))
+        XCTAssertFalse(SongName.isSameAlbumName("", ""))
+        // Names of symbols alone would squash to their edition words
+        XCTAssertFalse(SongName.isSameAlbumName("÷ (Deluxe)", "- (Deluxe)"))
+    }
+
+    func testOnlyAPartAtTheEndGivesAShortTitle() {
+        XCTAssertNil(SongName.title("(Don't Fear) The Reaper").shortCore)
+        XCTAssertNil(SongName.title("Bohemian Rhapsody").shortCore)
+        // An edition or a version is not part of the name
+        XCTAssertNil(SongName.title("Bohemian Rhapsody (Remastered 2011)").shortCore)
+        XCTAssertNil(SongName.title("Clocks (Live)").shortCore)
+        XCTAssertNil(SongName.title("Stay (with Justin Bieber)").shortCore)
+        // Nor is a whole title in brackets, which would leave nothing
+        XCTAssertNil(SongName.title("(Untitled)").shortCore)
+    }
+
     func testADashThatIsPartOfTheNameStays() {
         XCTAssertEqual(core("Lights, Camera, Action! - Studiopolis Zone Act 1"),
                        "lights camera action studiopolis zone act 1")
