@@ -46,6 +46,9 @@ final class LastfmClient: LastfmSending {
                 LastfmClient.log(failure, of: "track.updateNowPlaying")
                 completion(.failure(failure))
             } else {
+                // Logged because nothing else says it happened: on the first live run
+                // (2026-11-16) only the absence of another scrobbler showed whose it was
+                os_log("%{public}s[%{public}ld], %{public}s: Last.fm now playing set: %{public}s, %{public}s", ((#file as NSString).lastPathComponent), #line, #function, track.artist, track.title)
                 completion(.success(()))
             }
         }
@@ -74,8 +77,12 @@ final class LastfmClient: LastfmSending {
                 completion(.failure(failure))
                 return
             }
-            var summary = data.flatMap(LastfmAPI.parseScrobbles)
-                ?? LastfmAPI.ScrobbleSummary(accepted: sendable.count, ignored: 0, ignoredCodes: [])
+            let read = data.flatMap(LastfmAPI.parseScrobbles)
+            if read == nil {
+                // Says so, or the line below reads as Last.fm's own count
+                os_log(.error, "%{public}s[%{public}ld], %{public}s: Last.fm's answer for %{public}ld scrobbles couldn't be read, so all are taken as accepted", ((#file as NSString).lastPathComponent), #line, #function, sendable.count)
+            }
+            var summary = read ?? LastfmAPI.ScrobbleSummary(accepted: sendable.count, ignored: 0, ignoredCodes: [])
             summary.ignored += unsendable
             let codes: String = summary.ignoredCodes.isEmpty ? "" : " (codes " + summary.ignoredCodes.map { String($0) }.joined(separator: ", ") + ")"
             os_log("%{public}s[%{public}ld], %{public}s: Last.fm took %{public}ld scrobbles and ignored %{public}ld%{public}s", ((#file as NSString).lastPathComponent), #line, #function, summary.accepted, summary.ignored, codes)

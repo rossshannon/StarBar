@@ -720,7 +720,8 @@ final class LastfmScrobbler {
             sentFor.finished(batch)
             retryStep = 0
             environment.account.noteSuccess()
-            os_log("%{public}s[%{public}ld], %{public}s: Last.fm answered for %{public}ld scrobbles: %{public}ld accepted, %{public}ld ignored %{public}s, %{public}ld waiting", ((#file as NSString).lastPathComponent), #line, #function, batch.count, summary.accepted, summary.ignored, summary.ignoredCodes.map { String($0) }.joined(separator: ","), waitingCount)
+            let codes: String = summary.ignoredCodes.isEmpty ? "" : " (codes " + summary.ignoredCodes.map { String($0) }.joined(separator: ", ") + ")"
+            os_log("%{public}s[%{public}ld], %{public}s: Last.fm answered for %{public}ld scrobbles: %{public}ld accepted, %{public}ld ignored%{public}s, %{public}ld waiting", ((#file as NSString).lastPathComponent), #line, #function, batch.count, summary.accepted, summary.ignored, codes, waitingCount)
             postIfChanged()
             sendNext()
         case .failure(let failure):

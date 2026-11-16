@@ -93,6 +93,8 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
         var timer: RatingReminderTimer?
         /// An `auth.getSession` is on its way
         var isAsking = false
+        /// How many have been sent, for the log
+        var asks = 0
         /// Nil once the page has closed, by the user or from here
         var page: LastfmApprovalPage?
         /// The user closed the page: the ask now on its way, or the one made for this, is the last
@@ -317,6 +319,7 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
     private func ask(_ signIn: SignIn) {
         guard !signIn.isAsking else { return }
         signIn.isAsking = true
+        signIn.asks += 1
         transport(LastfmAPI.sessionRequest(token: signIn.token, credentials: signIn.credentials)) { [weak self] data, response in
             DispatchQueue.main.async {
                 self?.sessionArrived(data: data, response: response, for: signIn)
@@ -362,6 +365,10 @@ final class LastfmAccount: NSObject, LastfmAccountProviding {
     }
 
     private func finish(_ signIn: SignIn, with session: LastfmSession) {
+        // How long the token stayed good, and over how many asks, is otherwise unseen: the
+        // first live sign-in (2026-11-16) worked, and its log couldn't say after how many
+        let waited = clock.now().timeIntervalSince(signIn.startedAt)
+        os_log("%{public}s[%{public}ld], %{public}s: Last.fm allowed access on ask %{public}ld, %{public}.1f s after its page opened, the page %{public}s", ((#file as NSString).lastPathComponent), #line, #function, signIn.asks, waited, signIn.closedByUser ? "closed by the user" : "still open")
         endSignIn()
         let apiKey = signIn.credentials.apiKey
         storeQueue.async { [store] in store.save(session, apiKey: apiKey) }
