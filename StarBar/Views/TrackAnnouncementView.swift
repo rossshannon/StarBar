@@ -19,11 +19,14 @@ import os.log
 /// and corners in light mode), `announcementGlassSheen` (bool; false by default: the drawn rim light and
 /// shade that suggest a domed surface) and `announcementGlassAlpha` (0 to 1; 1 by default:
 /// the glass view's own opacity, which fades frost and rim together, since the API has no
-/// frost dial). They are read when the glass is built, so switch the strip style away and
-/// back after changing one.
+/// frost dial). `announcementGlassAlbumTintAlpha` (0 to 1;
+/// `TrackAnnouncementLayout.glassAlbumTintAlpha` by default) is how strongly the glass takes
+/// the cover's colour when the album tint is on. They are read when the glass is built, so
+/// switch the strip style away and back after changing one.
 struct TrackAnnouncementGlassKnobs: Equatable {
     var regular = true
     var tintAlpha = TrackAnnouncementLayout.glassTint.alphaComponent
+    var albumTintAlpha = TrackAnnouncementLayout.glassAlbumTintAlpha
     var cornerRadius = TrackAnnouncementLayout.glassCornerRadius
     var edgeLine = true
     var sheen = false
@@ -53,6 +56,9 @@ struct TrackAnnouncementGlassKnobs: Equatable {
         }
         if defaults.object(forKey: "announcementGlassAlpha") != nil {
             knobs.alpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassAlpha"))))
+        }
+        if defaults.object(forKey: "announcementGlassAlbumTintAlpha") != nil {
+            knobs.albumTintAlpha = min(1, max(0, CGFloat(defaults.double(forKey: "announcementGlassAlbumTintAlpha"))))
         }
         return knobs
     }
@@ -151,6 +157,9 @@ final class TrackAnnouncementView: NSView {
             surface.wash.tintAlpha = tintAlpha
             // The glare is a translucent wash; Reduce Transparency asks for none
             sleeve.showsGlare = backgroundAlpha < 1
+            if backgroundAlpha != oldValue {
+                applyAlbumTint()
+            }
         }
     }
 
@@ -269,6 +278,7 @@ final class TrackAnnouncementView: NSView {
             applySeeThrough()
             surface.wash.tintAlpha = tintAlpha
             surface.wash.tintColor = tintColor
+            applyAlbumTint()
         }
     }
 
@@ -390,9 +400,136 @@ final class TrackAnnouncementView: NSView {
 
     private func rebuildBackdrop() {
         renderedStyle = TrackAnnouncementView.effectiveStyle(for: style)
+        glassKnobs = TrackAnnouncementGlassKnobs.read()
         surface.backdropView = TrackAnnouncementView.makeBackdrop(for: style)
+        // A new glass has its tint as it was built
+        glassAlbumTint = nil
         // Always, so the sheen drawn over a glass backdrop goes when the style loses it
         layoutBackdrop()
+    }
+
+    // MARK: Album tint
+
+    /// Whether the background takes its colour from the cover, from Preferences. Off, the
+    /// style's own black is drawn exactly as it always was, and nothing here runs.
+    var tintsWithAlbum = false {
+        didSet {
+            guard tintsWithAlbum != oldValue else { return }
+            applyAlbumTint()
+        }
+    }
+
+    /// The cover's colour the background is tinted with, or on its way to; nil for the style's
+    /// own black
+    private(set) var albumTint: OKLab?
+    /// A change of colour under way: what the background showed when it began, and how far
+    /// it has got, eased, 0 to 1. The panel steps it.
+    private var albumTintFade: (from: TrackAnnouncementWash, progress: CGFloat)?
+
+    /// Tint the background towards `tint`, `progress` of the way from `from`, which is what it
+    /// showed when the change began; with no `from`, all the way at once
+    func setAlbumTint(_ tint: OKLab?, from: TrackAnnouncementWash? = nil, progress: CGFloat = 1) {
+        albumTint = tint
+        if let from = from, progress < 1 {
+            albumTintFade = (from, max(0, progress))
+        } else {
+            albumTintFade = nil
+        }
+        applyAlbumTint()
+    }
+
+    /// What the background shows now: the colour for `albumTint`, or part of the way to it
+    var displayedWash: TrackAnnouncementWash {
+        let target = wash(for: albumTint)
+        guard let fade = albumTintFade else { return target }
+        return .mix(fade.from, target, progress: fade.progress)
+    }
+
+    /// The background for `tint` in the style as rendered: the cover's colour, at the style's
+    /// strength, or the style's own black for nil. Opaque under Reduce Transparency, where the
+    /// tint's lightness limit is what keeps the white text readable.
+    func wash(for tint: OKLab?) -> TrackAnnouncementWash {
+        if backgroundAlpha >= 1 {
+            return TrackAnnouncementWash(colour: tint ?? .black, alpha: 1)
+        }
+        switch renderedStyle {
+        case .classic:
+            return TrackAnnouncementWash(colour: tint ?? .black, alpha: backgroundAlpha)
+        case .blur:
+            return tint.map { TrackAnnouncementWash(colour: $0, alpha: TrackAnnouncementLayout.blurAlbumTintAlpha) }
+                ?? TrackAnnouncementWash(colour: .black, alpha: TrackAnnouncementLayout.blurTintAlpha)
+        case .glass:
+            // The glass's own tint: the knob's black when untinted, as the glass was built
+            return tint.map { TrackAnnouncementWash(colour: $0, alpha: glassKnobs.albumTintAlpha) }
+                ?? TrackAnnouncementWash(colour: .black, alpha: glassKnobs.tintAlpha)
+        }
+    }
+
+    /// The glass knobs the backdrop was built with, read once per build rather than on every
+    /// step of a fade
+    private var glassKnobs = TrackAnnouncementGlassKnobs()
+    /// The tint this view last gave the glass; nil while the glass has the tint it was built
+    /// with, so a strip that never tints never touches it
+    private var glassAlbumTint: TrackAnnouncementWash?
+
+    /// Whether the cover's colour goes to Liquid Glass's own tint rather than a layer over it:
+    /// the glass keeps its lensing and lit edge that way. Not under Reduce Transparency, whose
+    /// opaque colour covers the glass as the opaque black does.
+    private var tintsTheGlass: Bool {
+        return renderedStyle == .glass && backgroundAlpha < 1
+    }
+
+    /// Show `displayedWash`: on the glass, or on the tint layer in place of the wash's black
+    private func applyAlbumTint() {
+        guard tintsWithAlbum else {
+            surface.albumTint.tint = nil
+            surface.wash.drawsTint = true
+            restoreGlassTint()
+            return
+        }
+        surface.wash.drawsTint = false
+        let shown = displayedWash
+        if tintsTheGlass {
+            surface.albumTint.tint = nil
+            applyGlassTint(shown)
+        } else {
+            surface.albumTint.tint = shown
+            restoreGlassTint()
+        }
+    }
+
+    private func applyGlassTint(_ wash: TrackAnnouncementWash) {
+        guard wash != glassAlbumTint else { return }
+        glassAlbumTint = wash
+        setGlassTint(wash)
+    }
+
+    /// Give the glass back the tint it was built with
+    private func restoreGlassTint() {
+        guard glassAlbumTint != nil else { return }
+        glassAlbumTint = nil
+        setGlassTint(wash(for: nil))
+    }
+
+    private func setGlassTint(_ wash: TrackAnnouncementWash) {
+        #if compiler(>=6.2)
+        if #available(macOS 26.0, *), let glass = backdropView as? NSGlassEffectView {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            glass.tintColor = wash.alpha > 0 ? wash.colour.color(alpha: wash.alpha) : nil
+            CATransaction.commit()
+        }
+        #endif
+    }
+
+    /// The colour on the tint layer, for tests; nil when it shows none
+    var albumTintLayerColor: CGColor? {
+        return surface.albumTint.shownColor
+    }
+
+    /// Whether the wash draws the style's black, for tests
+    var washDrawsTint: Bool {
+        return surface.wash.drawsTint
     }
 
     /// The glass's corner radius, already scaled with the strip; nothing for a blur

@@ -23,6 +23,10 @@ final class TrackAnnouncementSurfaceView: NSView {
     /// The tint and the glass's edge line, over the backdrop
     let wash: TrackAnnouncementWashView
 
+    /// The cover's colour, between the backdrop and the wash, while the strip is tinted from
+    /// the album; hidden otherwise
+    let albumTint: TrackAnnouncementTintView
+
     /// The backdrop and the wash, masked by the typing window
     private let stack: NSView
 
@@ -32,7 +36,7 @@ final class TrackAnnouncementSurfaceView: NSView {
             guard backdropView !== oldValue else { return }
             oldValue?.removeFromSuperview()
             if let backdrop = backdropView {
-                stack.addSubview(backdrop, positioned: .below, relativeTo: wash)
+                stack.addSubview(backdrop, positioned: .below, relativeTo: albumTint)
             }
             applyMasks()
         }
@@ -71,6 +75,7 @@ final class TrackAnnouncementSurfaceView: NSView {
     override init(frame frameRect: NSRect) {
         let bounds = NSRect(origin: .zero, size: frameRect.size)
         wash = TrackAnnouncementWashView(frame: bounds)
+        albumTint = TrackAnnouncementTintView(frame: bounds)
         stack = NSView(frame: bounds)
         super.init(frame: frameRect)
         wantsLayer = true
@@ -82,6 +87,8 @@ final class TrackAnnouncementSurfaceView: NSView {
         }
         stack.autoresizingMask = [.width, .height]
         wash.autoresizingMask = [.width, .height]
+        albumTint.autoresizingMask = [.width, .height]
+        stack.addSubview(albumTint)
         stack.addSubview(wash)
         addSubview(stack)
     }
@@ -162,6 +169,16 @@ final class TrackAnnouncementWashView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// False while the album tint is on: `TrackAnnouncementTintView` draws the strip's colour
+    /// then, and this view only the glass's sheen. `tintAlpha` still says whether the
+    /// background is opaque, which decides whether there is a sheen.
+    var drawsTint = true {
+        didSet {
+            guard drawsTint != oldValue else { return }
+            needsDisplay = true
+        }
+    }
+
     /// The glass's shape in this view's coordinates, and which parts of the sheen to draw
     /// over it: the bright line along the top edge, and the soft shading that suggests a dome
     struct Sheen: Equatable {
@@ -200,7 +217,7 @@ final class TrackAnnouncementWashView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if tintAlpha > 0 {
+        if drawsTint && tintAlpha > 0 {
             tintColor.withAlphaComponent(tintAlpha).setFill()
             bounds.fill()
         }
@@ -238,6 +255,51 @@ final class TrackAnnouncementWashView: NSView {
             shape.stroke()
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+}
+
+/// The album's colour under the strip's content: a plain layer colour rather than a drawing,
+/// so the fade from one song's colour to the next sets one property a frame and redraws
+/// nothing. It spans the strip, as the wash does.
+final class TrackAnnouncementTintView: NSView {
+
+    /// The colour and how much of it; nil, or an alpha of 0, shows nothing
+    var tint: TrackAnnouncementWash? {
+        didSet {
+            guard tint != oldValue else { return }
+            apply()
+        }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// The colour as the layer has it, for tests
+    var shownColor: CGColor? {
+        return isHidden ? nil : layer?.backgroundColor
+    }
+
+    private func apply() {
+        CATransaction.begin()
+        // Each step of a fade is drawn as it is set: a layer's implicit animation would lag
+        // behind it, and on macOS 27 such animations on this panel were not drawn at all
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard let tint = tint, tint.alpha > 0 else {
+            layer?.backgroundColor = nil
+            isHidden = true
+            return
+        }
+        layer?.backgroundColor = tint.colour.cgColor(alpha: tint.alpha)
+        isHidden = false
     }
 
 }

@@ -89,6 +89,10 @@ final class PreferencesViewController: NSViewController {
         }
         return button
     }()
+    let albumTintCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Tint the strip with the album’s colour", target: nil, action: nil)
+        return button
+    }()
     let showCurrentTrackShortcutView: MASShortcutView = {
         let shortcutView = MASShortcutView()
         shortcutView.associatedUserDefaultsKey = ShortcutKey.showCurrentTrack.rawValue
@@ -168,6 +172,7 @@ final class PreferencesViewController: NSViewController {
             [empty, reminderCheckboxButton],
             [empty, announceRowView],
             [announcementStyleTextField, announcementStylePopUpButton],
+            [empty, albumTintCheckboxButton],
             [NSBox.separatorLine],
             [spotifyTextField, spotifyConnectButton],
             [empty, spotifyStatusTextField],
@@ -214,6 +219,7 @@ final class PreferencesViewController: NSViewController {
     var reminderObservation: NSKeyValueObservation?
     var announceObservation: NSKeyValueObservation?
     var announcementStyleObservation: NSKeyValueObservation?
+    var albumTintObservation: NSKeyValueObservation?
 
     override func loadView() {
         self.view = NSView()
@@ -224,6 +230,7 @@ final class PreferencesViewController: NSViewController {
         reminderObservation?.invalidate()
         announceObservation?.invalidate()
         announcementStyleObservation?.invalidate()
+        albumTintObservation?.invalidate()
     }
 
 }
@@ -304,6 +311,10 @@ extension PreferencesViewController {
     @objc private func announcementStyleChanged(_ sender: NSPopUpButton) {
         guard let rawValue = sender.selectedItem?.representedObject as? String else { return }
         UserDefaults.standard.announcementStyle = rawValue
+    }
+
+    @objc private func albumTintCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.announcementAlbumTint = sender.state == .on
     }
 
     @objc private func spotifyConnectButtonPressed(_ sender: NSButton) {
@@ -400,6 +411,12 @@ extension PreferencesViewController {
         announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak self] defaults, _ in
             let style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
             self?.announcementStylePopUpButton.selectItem(withTitle: style.title)
+        }
+
+        albumTintCheckboxButton.target = self
+        albumTintCheckboxButton.action = #selector(PreferencesViewController.albumTintCheckboxButtonChanged(_:))
+        albumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak self] defaults, _ in
+            self?.albumTintCheckboxButton.state = defaults.announcementAlbumTint ? .on : .off
         }
 
         spotifyConnectButton.target = self

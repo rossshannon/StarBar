@@ -14,6 +14,7 @@ enum ApplicationKey: String {
     case remindToRateUnrated
     case announceNewTracks
     case announcementStyle
+    case announcementAlbumTint
     case spotifyClientID
 }
 
@@ -75,6 +76,16 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.announcementStyle.rawValue)
+        }
+    }
+
+    /// Tint the strip's background with the colour of the song's cover, off by default
+    @objc dynamic var announcementAlbumTint: Bool {
+        get {
+            return bool(forKey: ApplicationKey.announcementAlbumTint.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.announcementAlbumTint.rawValue)
         }
     }
 

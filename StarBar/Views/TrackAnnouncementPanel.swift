@@ -33,6 +33,12 @@ final class TrackAnnouncementPanel: NSPanel {
     private let slideDuration: TimeInterval
     private let artworkFadeDuration: TimeInterval
     private var artworkFadeTimer: RatingReminderTimer?
+    private let tintFadeDuration: TimeInterval
+    /// Steps the background from one colour to another, with the album tint on
+    private var tintTimer: RatingReminderTimer?
+    /// The last few covers' tints, so a refresh of the same song doesn't read its cover again.
+    /// Kept by the image object, which a refresh carries over (`TrackAnnouncement(copying:)`).
+    private var tintCache: [(cover: NSImage, tint: OKLab?)] = []
     private let screens: () -> [NSScreen]
     private let mouseLocation: () -> NSPoint
     private let keyboard: () -> KeyboardActivity
@@ -92,6 +98,8 @@ final class TrackAnnouncementPanel: NSPanel {
     ///   - slideDuration: 0 applies the final state at once, for tests
     ///   - artworkFadeDuration: how long a cover that arrives after the strip went up takes to
     ///     fade in over the placeholder; 0 draws it at once
+    ///   - tintFadeDuration: how long the background takes to change colour with the album
+    ///     tint on; 0 changes it at once
     ///   - screens: the screens to choose from
     ///   - mouseLocation: where the pointer is, to pick the screen the user is looking at and
     ///     to put the see-through hole under it
@@ -101,6 +109,7 @@ final class TrackAnnouncementPanel: NSPanel {
     init(
         slideDuration: TimeInterval = TrackAnnouncementLayout.slideDuration,
         artworkFadeDuration: TimeInterval = TrackAnnouncementLayout.artworkFadeDuration,
+        tintFadeDuration: TimeInterval = TrackAnnouncementLayout.tintFadeDuration,
         screens: @escaping () -> [NSScreen] = { NSScreen.screens },
         mouseLocation: @escaping () -> NSPoint = { NSEvent.mouseLocation },
         keyboard: @escaping () -> KeyboardActivity = KeyboardActivity.system,
@@ -108,6 +117,7 @@ final class TrackAnnouncementPanel: NSPanel {
     ) {
         self.slideDuration = slideDuration
         self.artworkFadeDuration = artworkFadeDuration
+        self.tintFadeDuration = tintFadeDuration
         self.screens = screens
         self.mouseLocation = mouseLocation
         self.keyboard = keyboard
@@ -170,6 +180,7 @@ final class TrackAnnouncementPanel: NSPanel {
         seeThroughTimer?.invalidate()
         warmUpTimer?.invalidate()
         sleeveTimer?.invalidate()
+        tintTimer?.invalidate()
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
         }
@@ -192,6 +203,22 @@ final class TrackAnnouncementPanel: NSPanel {
             // The glass's side insets move the sleeve and the heart with the rest of the content
             layoutSleeve()
             layoutHeart()
+        }
+    }
+
+    /// Tint the strip's background with the colour of the song's cover, from Preferences.
+    /// Turned on while the strip is up, the colour fades in as a late cover's does; turned off,
+    /// the strip goes back to its own black at once.
+    var tintsWithAlbum: Bool {
+        get { return stripView.tintsWithAlbum }
+        set {
+            guard newValue != stripView.tintsWithAlbum else { return }
+            stopTintFade()
+            stripView.setAlbumTint(nil)
+            stripView.tintsWithAlbum = newValue
+            if newValue {
+                retint(fading: phase != .hidden && !isWarmingUp, why: "turned on")
+            }
         }
     }
 
@@ -226,6 +253,9 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         stopArtworkFade()
         stripView.artworkFade = 1
         stripView.announcement = announcement
+        // The new song's colour: faded on a strip already on screen, even one turning round
+        // on its way out; set at once on one that is about to arrive
+        retint(fading: phase != .hidden, why: "new song")
         let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
 
         switch phase {
@@ -308,6 +338,8 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         if coverArrived {
             fadeInArtwork()
         }
+        // A cover that arrived late blooms its colour in as it fades in over the placeholder
+        retint(fading: true, why: coverArrived ? "late cover" : "same song")
         layoutHeart()
     }
 
@@ -399,6 +431,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
                 self.stopSeeThrough()
                 self.stopSleeve()
                 self.stopHeart()
+                self.finishTintFade()
             }
         }
 
@@ -489,6 +522,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         stopSeeThrough()
         stopSleeve()
         stopHeart()
+        finishTintFade()
     }
 
     /// Whether anything the user can see is moving: the strip sliding in or out, or the
@@ -500,6 +534,96 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         guard !isWarmingUp else { return false }
         return phase == .slidingIn || phase == .slidingOut || sleeveRise != nil
     }
+
+}
+
+// MARK: - The album tint
+
+extension TrackAnnouncementPanel {
+
+    /// Whether the background is changing colour
+    var isFadingTint: Bool {
+        return tintTimer != nil
+    }
+
+    /// Tint the background from the strip's cover, or back to the style's black for a song
+    /// with no cover or no colour in it. `fading` steps the change over `tintFadeDuration`
+    /// from whatever the background shows now, part way through another change included;
+    /// otherwise it is made at once. A change to the colour already shown, or on its way,
+    /// does nothing.
+    fileprivate func retint(fading: Bool, why: String) {
+        guard stripView.tintsWithAlbum else { return }
+        let target = albumTint(for: stripView.announcement.artwork)
+        guard fading else {
+            stopTintFade()
+            stripView.setAlbumTint(target)
+            return
+        }
+        guard target != stripView.albumTint else { return }
+        fadeTint(to: target, why: why)
+    }
+
+    /// Step the background from what it shows now to `target`'s colour, on the slide's clock
+    /// with a `SteppedTimeline`, as the slide and the cover's cross-fade are, never with Core
+    /// Animation: on macOS 27 an animation on this panel ran to completion without being
+    /// drawn. Each step sets one layer colour (or the glass's tint) and redraws nothing.
+    private func fadeTint(to target: OKLab?, why: String) {
+        stopTintFade()
+        let from = stripView.displayedWash
+        guard tintFadeDuration > 0 else {
+            stripView.setAlbumTint(target)
+            return
+        }
+        stripView.setAlbumTint(target, from: from, progress: 0)
+        os_log("%{public}s[%{public}ld], %{public}s: strip tint fading to %{public}s (%{public}s)", ((#file as NSString).lastPathComponent), #line, #function, target?.logDescription ?? "the style's own black", why)
+        var timeline = SteppedTimeline(start: clock.now())
+        var cadence = FrameCadence()
+        // A real frame interval, never 0: before macOS 14 this is a Timer
+        tintTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            guard let self = self, self.tintTimer != nil else { return }
+            let now = self.clock.now()
+            let elapsed = timeline.step(at: now)
+            cadence.frame(at: now, animationTime: elapsed)
+            let progress = min(1, elapsed / self.tintFadeDuration)
+            self.stripView.setAlbumTint(target, from: from, progress: CGFloat(TrackAnnouncementPlacement.easeInOut(progress)))
+            if progress >= 1 {
+                self.stopTintFade()
+                os_log("%{public}s[%{public}ld], %{public}s: strip tint faded: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, cadence.summary)
+            }
+        }
+    }
+
+    private func stopTintFade() {
+        tintTimer?.invalidate()
+        tintTimer = nil
+    }
+
+    /// Stop a change of colour where it is meant to end: the strip has gone, and the next one
+    /// arrives in its own colour anyway
+    fileprivate func finishTintFade() {
+        guard tintTimer != nil else { return }
+        stopTintFade()
+        stripView.setAlbumTint(stripView.albumTint)
+    }
+
+    /// `cover`'s tint, read once per cover and logged with how long the reading took
+    private func albumTint(for cover: NSImage?) -> OKLab? {
+        guard let cover = cover else { return nil }
+        if let known = tintCache.first(where: { $0.cover === cover }) {
+            return known.tint
+        }
+        let start = Date()
+        let tint = AlbumTint.colour(of: cover)
+        os_log("%{public}s[%{public}ld], %{public}s: strip tint from a %.0f by %.0f point cover: %{public}s, in %.1f ms", ((#file as NSString).lastPathComponent), #line, #function, Double(cover.size.width), Double(cover.size.height), tint.map { "\($0.logDescription), white text \(String(format: "%.1f", $0.contrastWithWhite)) : 1 opaque" } ?? "too little colour, so none", Date().timeIntervalSince(start) * 1000)
+        tintCache.append((cover, tint))
+        if tintCache.count > TrackAnnouncementPanel.tintCacheSize {
+            tintCache.removeFirst(tintCache.count - TrackAnnouncementPanel.tintCacheSize)
+        }
+        return tint
+    }
+
+    /// Covers whose tints are kept: the song on show, and the ones either side of a quick skip
+    static let tintCacheSize = 4
 
 }
 
@@ -542,6 +666,8 @@ extension TrackAnnouncementPanel {
         stopArtworkFade()
         stripView.artworkFade = 1
         stripView.announcement = TrackAnnouncementPanel.warmUpAnnouncement
+        // With the album tint on, its first reading of a cover is paid here too
+        retint(fading: false, why: "warm-up")
         let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
         appear(transition: transition)
         slide(in: true, transition: transition)

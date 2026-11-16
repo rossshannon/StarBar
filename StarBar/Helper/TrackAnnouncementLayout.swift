@@ -46,6 +46,15 @@ enum TrackAnnouncementLayout {
     /// No wash over Liquid Glass: the darkness is the glass view's own tint, so the glass
     /// material is what shows
     static let glassTintAlpha: CGFloat = 0
+    /// With the album tint on, the cover's colour over a blur takes the place of the black
+    /// wash, and is stronger than its 0.25 so that the colour reads through the material. The
+    /// classic strip keeps its 0.6, in colour.
+    static let blurAlbumTintAlpha: CGFloat = 0.45
+    /// And Liquid Glass is tinted with the cover's colour at this alpha, through the glass
+    /// view's own tint so it keeps its lensing: about half, since an opaque tint paints the
+    /// glass solid (`announcementGlassAlbumTintAlpha` changes it). Picked from a browser mockup,
+    /// not yet seen on real glass.
+    static let glassAlbumTintAlpha: CGFloat = 0.5
     static let shadowOffset = CGSize(width: 0, height: -2)
     static let shadowBlurRadius: CGFloat = 3
     /// The colour Liquid Glass is tinted with. Alpha 0 means no tint at all: the glass's
@@ -107,6 +116,9 @@ enum TrackAnnouncementLayout {
     static let slideDuration: TimeInterval = 0.3
     /// A cover that arrives after the strip went up cross-fades from the placeholder over this
     static let artworkFadeDuration: TimeInterval = 0.3
+    /// The background's change of colour with the album tint on: a little slower than the
+    /// cover's cross-fade, so the colour blooms in behind a cover that arrives late
+    static let tintFadeDuration: TimeInterval = 0.5
     /// Time fully on screen between the slides
     static let holdDuration: TimeInterval = 5.0
 
