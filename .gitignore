@@ -99,6 +99,9 @@ Dependencies/**
 # macOS
 .DS_Store
 
+# Keys for local builds (see "The Last.fm key and secret" in README.md)
+.env
+
 # Claude Code tools (project skills are tracked)
 .claude/*
 !.claude/skills/
