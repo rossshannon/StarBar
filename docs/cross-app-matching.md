@@ -130,6 +130,26 @@ Claude Code's /code-review and a probe of the fifth round's fixes, built against
 - From the check of those fixes: the reminder's second read, after one Music hadn't answered, is made at its next check rather than at once on the main thread; each song starts its own count of failed reads; the strip's hold and the write read their song once between them, and a refused choice Music never answered for goes back to what the strip showed before it; and a short year after this one's is last century's.
 - Left as they are: a named bonus performance on a deluxe edition matches a plain "(Live)" on the live album of the same name ("Song - Live at Wembley 1986" on "Album (Deluxe Edition)" against "Song (Live)" on "Album (Live)"), the same shape as the *Hell Freezes Over* case the fifth round asked for, which the rules can't tell apart; and "Live at Wembley '86" no longer matches "Live at Wembley 86", whose bare number could as well be a name.
 
+## Apple Music catalog songs, and titles without their last bracket
+
+Measured 2026-11-16 on Music 1.7.2, against a library of 8,104 tracks (7,996 songs), read-only.
+
+The same rules now find the user's copy of a song Music plays from the Apple Music catalog, when the exact search on name, artist and album finds none (`iTunesRadioStation.libraryCopy(matching:)`). In one hour of a station, StarBar had offered to add three songs the user had:
+
+| Catalog | The user's copy | Found by |
+|---|---|---|
+| "I Wanna Dance with Somebody (Who Loves Me)", *Whitney*, 291.4 s | "I Wanna Dance With Somebody", *Whitney*, 289.4 s, matched | the short title, below |
+| "Goodbye Yellow Brick Road (Remastered 2014)", 40th-anniversary super deluxe edition | "Goodbye Yellow Brick Road", *Best Songs Of All Time* | the edition words, as for Spotify |
+| "Just the Way You Are", *The Stranger (30th Anniversary Legacy Edition)* | "Just The Way You Are", *The Stranger* | case and the album, as for Spotify |
+
+Music's `whose` already ignores case, so the Whitney miss was the bracket alone: the rules kept "(Who Loves Me)" as part of the name, as they keep "(Fade Out)".
+
+- **A short title is the full one without a bracketed part at its end that names no version or edition** (`SongName.Title.shortCore`). Across the library, 308 songs have one. One title being another's short title found 37 pairs of songs. They are mostly different pieces: soundtrack cues ("The Last of Us" and "The Last of Us (Never Again)", "Town Music" and "Town Music (Night)"), a live recording whose title names only its city ("The Model (London)", 0.8 s from the studio "The Model", on *Minimum-Maximum*), and parts ("Shine On You Crazy Diamond (Part One)").
+- **So the short title counts only on the same release and within 3 s** (`SongMatcher.shortTitleLengthGap`), with both lengths known. That left 4 of the 37 pairs: Gary Moore's "Still Got The Blues" and "Still Got The Blues (For You)", one song under two titles, and three soundtrack cues that may be different pieces ("The Path (A New Beginning)", "All Gone (No Escape)", "Good Riddance (Eurydice Solo)"). A copy found by its full title comes before one found this way.
+- **Two titles ending in different parts never pair.** "Mantis (Explore)" and "Mantis (Battle)" on *FTL* are the same length to the millisecond, as are three more of that game's pairs.
+- A known miss the gate accepts: Billy Joel's "Movin' Out (Anthony's Song)" on the 30th-anniversary *The Stranger* against the user's "Movin' Out" on a greatest hits album, 2.8 s apart, which is very likely one recording on another release.
+- **The lookup is synchronous**, inside `PlayingTrack.ratingTrack`, like the exact search before it, so every surface still reads one answer and the stars show at once. It reads two columns of the artist's songs (persistent ID and name, 17 to 118 ms), then each copy found, resolved with `get()`: through the unresolved search by persistent ID that `libraryTrack(for:)` makes, `duration` read empty on every copy tried. 143 to 325 ms in all when a copy was found, in five lookups.
+
 ## Open
 
 - Recall against the user's likes is above; recall against what they actually play has not been measured. The first live checks, 2026-10-29: three versions of "The Maker" by Daniel Lanois each got the right answer. The studio version found the user's studio copy on Sling Blade, "The Maker - Live" found their "The Maker (Live)" on the same live album, and "The Maker - Calypso Demo" found nothing, the word "demo" keeping it from the studio copy. Seven songs the user doesn't own were correctly not found.

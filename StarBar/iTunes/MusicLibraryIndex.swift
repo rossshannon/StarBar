@@ -437,8 +437,10 @@ final class MusicLibraryIndex {
     /// One property of every track, in one Apple Event: `-[SBElementArray
     /// arrayByApplyingSelector:]`. Called by its Objective-C name, which is the documented
     /// one: Xcode 16.4's SDK has no `arrayByApplying(_:)`. Nil when the method isn't there.
-    /// Background queue only.
-    private static func column(_ key: String, of tracks: SBElementArray) -> [Any]? {
+    /// On the thread of the connection `tracks` came from: the index's background queue for
+    /// the whole library, the main thread for the station's search by artist
+    /// (`iTunesRadioStation.libraryCopy(matching:)`).
+    static func column(_ key: String, of tracks: SBElementArray) -> [Any]? {
         typealias Apply = @convention(c) (AnyObject, Selector, Selector) -> NSArray?
         guard tracks.responds(to: arrayByApplyingSelector) else { return nil }
         let apply = unsafeBitCast(tracks.method(for: arrayByApplyingSelector), to: Apply.self)
