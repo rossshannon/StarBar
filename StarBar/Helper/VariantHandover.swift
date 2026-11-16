@@ -18,8 +18,8 @@ import os
 /// quits through `NSApp.terminate`, which flushes a held rating, when the other variant opens
 /// after it. The newcomer does nothing: it is the older copy's job to step aside.
 ///
-/// A sandboxed app can't quit another, so a copy made before this existed (StarBar 1.10.0 and
-/// earlier) never steps aside. When the other variant is still running `olderCopyWait` after
+/// A sandboxed app can't quit another, so a copy made before this existed (StarBar 1.9.0, for
+/// one) never steps aside. When the other variant is still running `olderCopyWait` after
 /// this one opened, this one says so once, and offers to quit itself.
 ///
 /// Only copies in an Applications folder count (`LaunchAtLogin.isInstalledLocation`): the test
