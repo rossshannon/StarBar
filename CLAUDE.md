@@ -7,6 +7,7 @@ The project guide above applies to every tool. This file adds only what is speci
 ## Skills
 
 - `install-and-verify` (`.claude/skills/install-and-verify/`): use it whenever you install, reinstall, relaunch or "try out" the app, and before telling the user a change is ready to test. It says how to read the install verification block and how to prove from the log that the changed code runs.
+- `release` (`.claude/skills/release/`): use it to cut a release, or to write or check release notes. It covers what goes into the release, the notes in `docs/releases/`, the one command that tags and publishes, and the checks afterwards. The product site's half is the `release-site` skill in the site's repository.
 
 ## Working in this repo
 
