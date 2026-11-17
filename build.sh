@@ -5,11 +5,22 @@
 #   ./build.sh                  Release build into build/ (incremental)
 #   ./build.sh --clean          Clean first
 #   ./build.sh --install    Also replace /Applications/StarBar.app and launch it
+#   ./build.sh --dev        Build StarBar Dev instead, to install beside StarBar (see below)
 #   ./build.sh --watch      Rebuild on source changes (combine with --install)
 #   ./build.sh --version=1.2.0  Build with this marketing version (the release workflow does)
 #   ./build.sh --test           Run the tests that don't need Music
 #   ./build.sh --test-all   Also run the tests that talk to Music (needs a track playing)
 #   ./build.sh --ui-test    Run the UI tests, which take over the screen (asks first; --yes skips)
+#
+# StarBar Dev: --dev builds the same code as "StarBar Dev", with its own bundle ID
+# (com.rossshannon.starbar.dev), so its own settings and sign-ins, and a blue DEV ribbon on
+# its icon, into build/dev/. With --install it goes to /Applications/StarBar Dev.app, beside
+# the everyday StarBar rather than over it. The two take turns: installing one quits the
+# other, and the app itself quits when the other is opened after it.
+#
+# Every build but a release records the branch, commit and time it was built from, which the
+# About window shows under the version. A release is a build of StarBar at a v* tag with
+# nothing uncommitted, which is what the release workflow makes.
 #
 # Version numbers: the marketing version is --version, else the latest v* tag, else the
 # project's own. The build number (CFBundleVersion) is the commit count, so it rises with
@@ -18,6 +29,18 @@
 #
 # Signing: builds are ad hoc unless STARBAR_CODESIGN_IDENTITY (a "Developer ID Application"
 # identity) and STARBAR_TEAM_ID are set, as the release workflow sets them from its secrets.
+#
+# Last.fm: the app's API key and shared secret for Last.fm's API are not in the repository. A
+# build takes LASTFM_API_KEY and LASTFM_SHARED_SECRET from the environment (the release
+# workflow sets them from its secrets), else from the lines of those names in an env file:
+# the one STARBAR_SECRETS_FILE names, then .env beside this script, then .env in the main
+# checkout when this is a git worktree of it, then ~/.config/starbar/secrets.env. A file is
+# read, never sourced. A .env that 1Password mounts for an Environment is a named pipe that
+# waits for 1Password to be unlocked and the read approved, so it is given up on after
+# STARBAR_ENV_WAIT seconds (60 at a terminal, 10 otherwise). Both values reach Xcode
+# concealed (LastfmCredentials.conceal) in build/StarBarSecrets.xcconfig, never on a command
+# line or in anything printed, because CI logs are public. Without them the build works in
+# every other way and can't connect to Last.fm.
 
 set -e
 set -o pipefail
@@ -25,9 +48,8 @@ set -o pipefail
 cd "$(dirname "$0")"
 
 PROJECT_NAME="StarBar"
-APP_NAME="StarBar"
-APP_PATH="build/Build/Products/Release/$APP_NAME.app"
-INSTALL_PATH="/Applications/$APP_NAME.app"
+STANDARD_APP_NAME="StarBar"
+DEV_APP_NAME="StarBar Dev"
 # Fewest tests a run may execute before it counts as broken (see xcode_test)
 MIN_APP_TESTS=150
 MIN_UI_TESTS=5
@@ -40,6 +62,7 @@ TEST_ALL=false
 UI_TEST=false
 ASSUME_YES=false
 VERSION=""
+VARIANT=standard
 
 for arg in "$@"; do
     case $arg in
@@ -51,6 +74,7 @@ for arg in "$@"; do
         --test-all) TEST=true; TEST_ALL=true ;;
         --ui-test) UI_TEST=true ;;
         --yes|-y) ASSUME_YES=true ;;
+        --dev) VARIANT=dev ;;
         *) echo "Unknown option: $arg"; exit 2 ;;
     esac
 done
@@ -64,6 +88,25 @@ if { [ "$TEST" = true ] || [ "$UI_TEST" = true ]; } && { [ "$INSTALL" = true ] |
     echo "Error: --test and --ui-test run on their own. Don't combine them with --install or --watch."
     exit 2
 fi
+
+if [ "$VARIANT" = dev ] && { [ "$TEST" = true ] || [ "$UI_TEST" = true ]; }; then
+    echo "Error: the tests always run on StarBar, so --dev doesn't go with --test or --ui-test."
+    exit 2
+fi
+
+# The project's STARBAR_VARIANT setting picks the product name, bundle ID and icon
+if [ "$VARIANT" = dev ]; then
+    APP_NAME="$DEV_APP_NAME"
+    OTHER_APP_NAME="$STANDARD_APP_NAME"
+    # Its own derived data, so going between the two rebuilds neither from scratch
+    DERIVED_DATA="build/dev"
+else
+    APP_NAME="$STANDARD_APP_NAME"
+    OTHER_APP_NAME="$DEV_APP_NAME"
+    DERIVED_DATA="build"
+fi
+APP_PATH="$DERIVED_DATA/Build/Products/Release/$APP_NAME.app"
+INSTALL_PATH="/Applications/$APP_NAME.app"
 
 # xcodebuild needs a full Xcode. If xcode-select points at the Command Line
 # Tools, fall back to the first Xcode app we can find.
@@ -100,6 +143,7 @@ verify_install() {
     echo ""
     echo "=== Install verification ==="
     echo "Commit:     $(git rev-parse --short HEAD 2>/dev/null)$(git diff --quiet 2>/dev/null || echo ' + uncommitted changes')"
+    echo "App:        $APP_NAME, $(describe_source "$INSTALL_PATH")"
     echo "Version:    $version"
     echo "Binary:     $(stat -f '%Sm' "$installed_binary")  sha256 ${installed_hash:0:12}"
 
@@ -115,6 +159,11 @@ verify_install() {
     echo "Running:    PID $pid, started $started"
     echo "Verified: /Applications has the new build, and it is running."
 }
+
+# Last.fm's API key and shared secret: find_lastfm_credentials, prepare_lastfm_credentials and
+# redact_build_log, in a file of their own so that Scripts/test-lastfm-credentials.sh can run
+# them with made-up values
+source Scripts/lastfm-credentials.sh
 
 # xcodebuild settings for the version numbers and signing, appended to BUILD_SETTINGS
 BUILD_SETTINGS=()
@@ -134,6 +183,8 @@ collect_build_settings() {
     else
         echo "Note: shallow or missing git history, so the build number stays the project's own"
     fi
+    BUILD_SETTINGS+=("STARBAR_VARIANT=$VARIANT")
+    collect_source_settings
     if [ -n "$STARBAR_CODESIGN_IDENTITY" ] && [ -n "$STARBAR_TEAM_ID" ]; then
         BUILD_SETTINGS+=(
             "CODE_SIGN_STYLE=Manual"
@@ -146,6 +197,43 @@ collect_build_settings() {
     fi
 }
 
+# The branch, commit and build time, which the app shows in its About window (BuildInfo),
+# for every build but a release: StarBar at a v* tag with no uncommitted changes to tracked
+# files. Appends to BUILD_SETTINGS.
+collect_source_settings() {
+    local commit branch modified=NO
+    commit=$(git rev-parse --short HEAD 2>/dev/null) || return 0
+    git diff --quiet HEAD -- 2>/dev/null || modified=YES
+    if [ "$VARIANT" = standard ] && [ "$modified" = NO ] \
+        && git describe --exact-match --tags --match 'v[0-9]*' HEAD > /dev/null 2>&1; then
+        return 0
+    fi
+    branch=$(git symbolic-ref --short -q HEAD || true)
+    # A pull request's checkout in GitHub Actions is detached; Actions names its branch
+    [ -n "$branch" ] || branch="${GITHUB_HEAD_REF:-}"
+    # Only characters Xcode takes as they are: it would expand a $(...) in a branch name
+    branch=$(printf '%s' "$branch" | tr -cd 'A-Za-z0-9._/+-')
+    [ -z "$branch" ] || BUILD_SETTINGS+=("STARBAR_SOURCE_BRANCH=$branch")
+    BUILD_SETTINGS+=(
+        "STARBAR_SOURCE_COMMIT=$commit"
+        "STARBAR_SOURCE_MODIFIED=$modified"
+        "STARBAR_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    )
+}
+
+# What an app bundle says it was built from: "release", or "main at 8c978ba" and so on
+describe_source() {
+    local plist="$1/Contents/Info.plist" branch commit modified
+    commit=$(/usr/libexec/PlistBuddy -c "Print :StarBarSourceCommit" "$plist" 2>/dev/null || true)
+    if [ -z "$commit" ]; then
+        echo "release"
+        return
+    fi
+    branch=$(/usr/libexec/PlistBuddy -c "Print :StarBarSourceBranch" "$plist" 2>/dev/null || true)
+    modified=$(/usr/libexec/PlistBuddy -c "Print :StarBarSourceModified" "$plist" 2>/dev/null || true)
+    echo "${branch:+$branch at }$commit$([ "$modified" = YES ] && echo ' + uncommitted changes')"
+}
+
 build_and_install() {
     echo ""
     echo "=== Building $APP_NAME... ==="
@@ -155,18 +243,22 @@ build_and_install() {
         actions=(clean build)
     fi
     collect_build_settings
+    prepare_lastfm_credentials
 
     # Capture build output so a failure shows the full log
     BUILD_LOG=$(mktemp)
     if xcodebuild -project "$PROJECT_NAME.xcodeproj" \
         -scheme "$PROJECT_NAME" \
         -configuration Release \
-        -derivedDataPath build \
+        -derivedDataPath "$DERIVED_DATA" \
+        "${LASTFM_BUILD_ARGS[@]}" \
         "${BUILD_SETTINGS[@]}" \
         "${actions[@]}" > "$BUILD_LOG" 2>&1; then
+        redact_build_log "$BUILD_LOG"
         tail -10 "$BUILD_LOG"
         rm -f "$BUILD_LOG"
     else
+        redact_build_log "$BUILD_LOG"
         echo "Build failed! Full output:"
         cat "$BUILD_LOG"
         rm -f "$BUILD_LOG"
@@ -179,7 +271,7 @@ build_and_install() {
     fi
 
     echo ""
-    echo "Build successful: version $(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist"))"
+    echo "Build successful: $APP_NAME version $(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP_PATH/Contents/Info.plist") ($(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP_PATH/Contents/Info.plist")), $(describe_source "$APP_PATH")"
 
     if [ "$INSTALL" = true ]; then
         if [ -d "$INSTALL_PATH" ] && ! command -v trash &> /dev/null; then
@@ -188,6 +280,12 @@ build_and_install() {
         fi
         echo "Installing to /Applications..."
         killall "$APP_NAME" 2>/dev/null || true
+        # StarBar and StarBar Dev take turns (VariantHandover in the app). Quitting the other
+        # here also covers a StarBar from before that, which doesn't quit by itself.
+        if pgrep -xq "$OTHER_APP_NAME"; then
+            echo "Quitting $OTHER_APP_NAME: only one of StarBar and StarBar Dev runs at a time"
+            killall "$OTHER_APP_NAME" 2>/dev/null || true
+        fi
         sleep 0.5
         if [ -d "$INSTALL_PATH" ]; then
             trash "$INSTALL_PATH"
@@ -198,7 +296,7 @@ build_and_install() {
         verify_install
     else
         echo "App location: $APP_PATH"
-        echo "To install, run: ./build.sh --install"
+        echo "To install, run: ./build.sh$([ "$VARIANT" = dev ] && echo ' --dev') --install"
     fi
 }
 
@@ -255,6 +353,12 @@ run_tests() {
     fi
     local status=0
 
+    # First, since it takes seconds: how a build finds the Last.fm key and secret and keeps them
+    # out of its log, with made-up values, under the bash this script itself runs in
+    echo ""
+    echo "=== Checking the build's Last.fm credentials... ==="
+    /bin/bash Scripts/test-lastfm-credentials.sh || status=1
+
     echo ""
     echo "=== Testing $APP_NAME... ==="
     # The app hosts the unit tests, so a test run launches it
@@ -287,21 +391,25 @@ run_ui_tests() {
         esac
     fi
 
-    # The test build has the same bundle ID as the installed app, so quit the installed copy
-    # while the tests run, then reopen it
-    local was_running=false
-    if pgrep -xq "$APP_NAME"; then
-        was_running=true
-        killall "$APP_NAME" 2>/dev/null || true
-        sleep 0.5
-    fi
+    # The test build has the same bundle ID as the installed app, and StarBar Dev follows
+    # Music as well, so quit whichever installed copy is running while the tests run, then
+    # reopen it
+    local name reopen=()
+    for name in "$STANDARD_APP_NAME" "$DEV_APP_NAME"; do
+        if pgrep -xq "$name"; then
+            reopen+=("/Applications/$name.app")
+            killall "$name" 2>/dev/null || true
+        fi
+    done
+    [ ${#reopen[@]} -eq 0 ] || sleep 0.5
 
     local status=0
     xcode_test ui-test "$PROJECT_NAME UI Tests" "$MIN_UI_TESTS" || status=1
 
-    if [ "$was_running" = true ] && [ -d "$INSTALL_PATH" ]; then
-        open "$INSTALL_PATH"
-    fi
+    local app
+    for app in "${reopen[@]}"; do
+        [ -d "$app" ] && open "$app"
+    done
     return $status
 }
 

@@ -23,6 +23,14 @@ final class TrackAnnouncementSurfaceView: NSView {
     /// The tint and the glass's edge line, over the backdrop
     let wash: TrackAnnouncementWashView
 
+    /// The cover's colour, between the backdrop and the wash, while the strip is tinted from
+    /// the album; hidden otherwise. With the glow, the style's own black, under the light.
+    let albumTint: TrackAnnouncementTintView
+
+    /// The glow from behind the cover, over the tint layer and under the wash, so the glass's
+    /// edge line stays white; hidden unless the glow is on
+    let glow: TrackAnnouncementGlowView
+
     /// The backdrop and the wash, masked by the typing window
     private let stack: NSView
 
@@ -32,7 +40,7 @@ final class TrackAnnouncementSurfaceView: NSView {
             guard backdropView !== oldValue else { return }
             oldValue?.removeFromSuperview()
             if let backdrop = backdropView {
-                stack.addSubview(backdrop, positioned: .below, relativeTo: wash)
+                stack.addSubview(backdrop, positioned: .below, relativeTo: albumTint)
             }
             applyMasks()
         }
@@ -71,6 +79,8 @@ final class TrackAnnouncementSurfaceView: NSView {
     override init(frame frameRect: NSRect) {
         let bounds = NSRect(origin: .zero, size: frameRect.size)
         wash = TrackAnnouncementWashView(frame: bounds)
+        albumTint = TrackAnnouncementTintView(frame: bounds)
+        glow = TrackAnnouncementGlowView(frame: bounds)
         stack = NSView(frame: bounds)
         super.init(frame: frameRect)
         wantsLayer = true
@@ -82,6 +92,10 @@ final class TrackAnnouncementSurfaceView: NSView {
         }
         stack.autoresizingMask = [.width, .height]
         wash.autoresizingMask = [.width, .height]
+        albumTint.autoresizingMask = [.width, .height]
+        stack.addSubview(albumTint)
+        // Placed by the strip view, which knows where the artwork is
+        stack.addSubview(glow)
         stack.addSubview(wash)
         addSubview(stack)
     }
@@ -162,6 +176,16 @@ final class TrackAnnouncementWashView: NSView {
         didSet { needsDisplay = true }
     }
 
+    /// False while the album tint is on: `TrackAnnouncementTintView` draws the strip's colour
+    /// then, and this view only the glass's sheen. `tintAlpha` still says whether the
+    /// background is opaque, which decides whether there is a sheen.
+    var drawsTint = true {
+        didSet {
+            guard drawsTint != oldValue else { return }
+            needsDisplay = true
+        }
+    }
+
     /// The glass's shape in this view's coordinates, and which parts of the sheen to draw
     /// over it: the bright line along the top edge, and the soft shading that suggests a dome
     struct Sheen: Equatable {
@@ -200,7 +224,7 @@ final class TrackAnnouncementWashView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        if tintAlpha > 0 {
+        if drawsTint && tintAlpha > 0 {
             tintColor.withAlphaComponent(tintAlpha).setFill()
             bounds.fill()
         }
@@ -238,6 +262,172 @@ final class TrackAnnouncementWashView: NSView {
             shape.stroke()
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+}
+
+/// The album's colour under the strip's content: a plain layer colour rather than a drawing,
+/// so the fade from one song's colour to the next sets one property a frame and redraws
+/// nothing. It spans the strip, as the wash does.
+final class TrackAnnouncementTintView: NSView {
+
+    /// The colour and how much of it; nil, or an alpha of 0, shows nothing
+    var tint: TrackAnnouncementWash? {
+        didSet {
+            guard tint != oldValue else { return }
+            apply()
+        }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// The colour as the layer has it, for tests
+    var shownColor: CGColor? {
+        return isHidden ? nil : layer?.backgroundColor
+    }
+
+    private func apply() {
+        CATransaction.begin()
+        // Each step of a fade is drawn as it is set: a layer's implicit animation would lag
+        // behind it, and on macOS 27 such animations on this panel were not drawn at all
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        guard let tint = tint, tint.alpha > 0 else {
+            layer?.backgroundColor = nil
+            isHidden = true
+            return
+        }
+        layer?.backgroundColor = tint.colour.cgColor(alpha: tint.alpha)
+        isHidden = false
+    }
+
+}
+
+/// The glow from behind the cover: a radial gradient layer, so like the tint layer it is drawn
+/// from properties, and a step of a fade sets its colours and redraws nothing. Its light and
+/// shape are `AlbumTint.light(_:)` and `AlbumTint.Glow`; the strip view places it, over the
+/// whole strip, or cut to the glass's shape so the light stays inside the glass.
+final class TrackAnnouncementGlowView: NSView {
+
+    /// The light's colour and its strength at the artwork's edge; nil, or an alpha of 0, shows
+    /// nothing
+    var light: TrackAnnouncementWash? {
+        didSet {
+            guard light != oldValue else { return }
+            applyColours()
+        }
+    }
+
+    /// Where the light is and how it falls away, in this view's coordinates
+    var shape: AlbumTint.Glow? {
+        didSet {
+            guard shape != oldValue else { return }
+            applyShape()
+        }
+    }
+
+    /// Rounds the glow to the glass's corners; 0 for a square strip
+    var cornerRadius: CGFloat = 0 {
+        didSet {
+            guard cornerRadius != oldValue else { return }
+            withoutAnimation {
+                layer?.cornerRadius = cornerRadius
+                layer?.masksToBounds = cornerRadius > 0
+            }
+            if #available(macOS 14.0, *) {
+                // AppKit keeps the layer's masking in step with this
+                clipsToBounds = cornerRadius > 0
+            }
+        }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        isHidden = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func makeBackingLayer() -> CALayer {
+        let gradient = CAGradientLayer()
+        gradient.type = .radial
+        return gradient
+    }
+
+    private var gradient: CAGradientLayer? {
+        return layer as? CAGradientLayer
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        // The gradient's points are shares of the size
+        applyShape()
+    }
+
+    /// The light as the layer shows it, for tests; nil while hidden
+    var shownLight: TrackAnnouncementWash? {
+        return isHidden ? nil : light
+    }
+
+    /// The layer's colours, for tests
+    var shownColors: [CGColor] {
+        return (gradient?.colors as? [CGColor]) ?? []
+    }
+
+    /// A radial gradient's ellipse is centred on `startPoint` and passes through `endPoint`'s
+    /// x and y, in shares of the layer's size, so a circle needs the radius as a share of each
+    static func points(for shape: AlbumTint.Glow, in size: CGSize) -> (start: CGPoint, end: CGPoint) {
+        let width = max(size.width, 1)
+        let height = max(size.height, 1)
+        let start = CGPoint(x: shape.centre.x / width, y: shape.centre.y / height)
+        let end = CGPoint(x: (shape.centre.x + shape.reach) / width, y: (shape.centre.y + shape.reach) / height)
+        return (start, end)
+    }
+
+    private func applyShape() {
+        guard let gradient = gradient, let shape = shape else { return }
+        let points = TrackAnnouncementGlowView.points(for: shape, in: bounds.size)
+        withoutAnimation {
+            gradient.startPoint = points.start
+            gradient.endPoint = points.end
+            gradient.locations = shape.stops.map { NSNumber(value: Double($0.location)) }
+        }
+        applyColours()
+    }
+
+    private func applyColours() {
+        guard let gradient = gradient else { return }
+        guard let light = light, light.alpha > 0, let shape = shape else {
+            withoutAnimation {
+                gradient.colors = nil
+                isHidden = true
+            }
+            return
+        }
+        withoutAnimation {
+            gradient.colors = shape.stops.map { light.colour.cgColor(alpha: light.alpha * $0.strength) }
+            isHidden = false
+        }
+    }
+
+    /// Each change is drawn as it is set: a layer's implicit animation would lag behind a
+    /// fade's steps, and on macOS 27 such animations on this panel were not drawn at all
+    private func withoutAnimation(_ change: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        change()
+        CATransaction.commit()
     }
 
 }

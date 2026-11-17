@@ -34,6 +34,39 @@ enum TrackAnnouncementStyle: String, CaseIterable {
     }
 }
 
+/// Whether the strip's background takes its colour from the song's cover, chosen in
+/// Preferences (`AlbumTint`)
+enum TrackAnnouncementAlbumTint: String, CaseIterable {
+    /// The style's own background, as it always was
+    case off
+    /// The whole background in the cover's colour, kept dark enough for the white text
+    case strip
+    /// A light of the cover's colour behind the artwork, falling away across the strip
+    case glow
+
+    /// The default, and what an unknown stored value falls back to
+    static let `default`: TrackAnnouncementAlbumTint = .off
+
+    /// The first build stored a checkbox, read back as "1" or "0"
+    init(storedValue: String?) {
+        switch storedValue {
+        case "1", "true", "YES":
+            self = .strip
+        default:
+            self = storedValue.flatMap(TrackAnnouncementAlbumTint.init(rawValue:)) ?? .default
+        }
+    }
+
+    /// The Preferences pop-up's wording
+    var title: String {
+        switch self {
+        case .off: return "None"
+        case .strip: return "Tint the whole strip"
+        case .glow: return "Glow from behind the cover"
+        }
+    }
+}
+
 /// What the announcement strip shows for one track. A plain value, so the Preview button,
 /// the UI tests and the unit tests can show a strip without Music.
 struct TrackAnnouncement: Equatable {
@@ -113,7 +146,7 @@ struct TrackAnnouncement: Equatable {
             identity: "preview",
             title: "Music Video",
             artist: "StarBar",
-            album: "A strip like Growl's, for the song that just started",
+            album: "A strip like Growl’s, for the song that just started",
             rating: 70,
             isFavorited: true,
             artwork: previewArtwork

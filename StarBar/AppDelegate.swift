@@ -20,6 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var trackAnnouncementController: TrackAnnouncementController?
     private var announceNewTracksObservation: NSKeyValueObservation?
     private var announcementStyleObservation: NSKeyValueObservation?
+    private var announcementAlbumTintObservation: NSKeyValueObservation?
     /// The strip's wait for the answer about a Spotify song's Music copy. A new song is held
     /// back until the answer comes, for at most `MenuBarRatingControl.libraryMatchWaitNow`,
     /// as the menu bar is, rather than shown as a Spotify song and redrawn with stars a
@@ -35,6 +36,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Which build this is, so the log says what was running when
+        os_log("%{public}s[%{public}ld], %{public}s: %{public}s launched from %{public}s", ((#file as NSString).lastPathComponent), #line, #function, BuildInfo.current.logDescription, Bundle.main.bundlePath)
+        // StarBar and StarBar Dev take turns: the one opened last runs
+        VariantHandover.shared.start()
+
         // setup shortcut validator
         if let validator = MASShortcutValidator.shared() {
             validator.allowAnyShortcutWithOptionModifier = true
@@ -91,6 +97,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if flushed == nil {
                 os_log("%{public}s[%{public}ld], %{public}s: Music isn't running, so no held rating could be flushed", ((#file as NSString).lastPathComponent), #line, #function)
             }
+            // Plays and hearts not yet sent to Last.fm go to disk, for the next launch
+            LastfmScrobbler.shared.prepareToQuit()
         }
     }
 
@@ -164,6 +172,9 @@ extension AppDelegate {
             MusicLibraryIndex.shared.start()
             // After the player, so a restored sign-in can ask about the song already playing
             SpotifyAccount.shared.start()
+            // Both return at once under tests; the scrobbler after the account it sends for
+            LastfmAccount.shared.start()
+            LastfmScrobbler.shared.start()
         }
 
         announceNewTracksObservation = UserDefaults.standard.observe(\.announceNewTracks, options: [.new]) { [weak controller] defaults, _ in
@@ -171,6 +182,9 @@ extension AppDelegate {
         }
         announcementStyleObservation = UserDefaults.standard.observe(\.announcementStyle, options: [.initial, .new]) { [weak panel] defaults, _ in
             panel?.style = TrackAnnouncementStyle(storedValue: defaults.announcementStyle)
+        }
+        announcementAlbumTintObservation = UserDefaults.standard.observe(\.announcementAlbumTint, options: [.initial, .new]) { [weak panel] defaults, _ in
+            panel?.albumTintMode = TrackAnnouncementAlbumTint(storedValue: defaults.announcementAlbumTint)
         }
         MASShortcutBinder.shared()?.bindShortcut(withDefaultsKey: PreferencesViewController.ShortcutKey.showCurrentTrack.rawValue, toAction: { [weak controller] in
             controller?.showCurrentTrack()
@@ -403,12 +417,13 @@ extension AppDelegate {
                 // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
                 // back to the playing track rather than refusing, and `sleeve()` for the
                 // one answer it does refuse: the previous song's cover, left over. A song the
-                // user doesn't have is read even when Music's notification says it has no
-                // artwork, because then `sleeve()` asks Apple for the cover. A refresh of the
-                // strip on show reads none: it keeps its artwork, and a cover that comes
-                // later is attached by `.appleMusicCoverDidLoad`.
+                // user doesn't have, or has only on another album (`PlayingTrack.sleeveCopy`), is
+                // read even when Music's notification says it has no artwork, because then
+                // `sleeve()` asks Apple for the cover. A refresh of the strip on show reads
+                // none: it keeps its artwork, and a cover that comes later is attached by
+                // `.appleMusicCoverDidLoad`.
                 if case .forNewStrip(let listed) = artwork {
-                    if let playing = playing, listed || !playing.canRate {
+                    if let playing = playing, listed || playing.sleeveCopy == nil {
                         live.artwork = playing.sleeve()
                     } else if playing == nil, listed {
                         live.artwork = track.firstArtworkImage()
@@ -541,7 +556,9 @@ extension AppDelegate {
             ApplicationKey.allowHalfStar.rawValue : false,
             ApplicationKey.remindToRateUnrated.rawValue : true,
             ApplicationKey.announceNewTracks.rawValue : false,
-            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue
+            ApplicationKey.announcementStyle.rawValue : TrackAnnouncementStyle.default.rawValue,
+            ApplicationKey.announcementAlbumTint.rawValue : TrackAnnouncementAlbumTint.default.rawValue,
+            ApplicationKey.lastfmLoveSync.rawValue : true
         ])
     }
 }

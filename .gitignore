@@ -99,9 +99,15 @@ Dependencies/**
 # macOS
 .DS_Store
 
+# Keys for local builds (see "The Last.fm key and secret" in README.md)
+.env
+
 # Claude Code tools (project skills are tracked)
 .claude/*
 !.claude/skills/
 
 # Git worktrees (see "Worktrees" in AGENTS.md)
 .worktrees/
+
+# A worktree's working files: recordings, logs, measurements (see "Worktrees" in AGENTS.md)
+/scratch/

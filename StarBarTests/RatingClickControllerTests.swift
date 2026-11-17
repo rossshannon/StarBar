@@ -14,8 +14,28 @@ import Cocoa
 final class RatingClickControllerTests: XCTestCase {
 
     private final class FakePointer: RatingPointer {
-        var isLeftButtonHeld = false
-        var imagePositionX: CGFloat?
+        private var held = false
+        private var positionX: CGFloat?
+        /// What the mouse does straight after the next read of it, such as the button coming
+        /// up between the two reads the controller makes in one go
+        var afterNextRead: (() -> Void)?
+
+        var isLeftButtonHeld: Bool {
+            get { return read(held) }
+            set { held = newValue }
+        }
+
+        var imagePositionX: CGFloat? {
+            get { return read(positionX) }
+            set { positionX = newValue }
+        }
+
+        private func read<Value>(_ value: Value) -> Value {
+            let event = afterNextRead
+            afterNextRead = nil
+            event?()
+            return value
+        }
     }
 
     /// Records the ratings the control asks to save
@@ -181,6 +201,41 @@ final class RatingClickControllerTests: XCTestCase {
         XCTAssertEqual(ratingControl.rating, 40)
         XCTAssertFalse(release(at: 52))
         XCTAssertEqual(recorder.savedRatings, [60])
+    }
+
+    /// The mouse can arrive and be let go between the two reads of it one tick makes. Once
+    /// on CI's macOS 26 runner a UI test's drag to five stars saved four: the tick read the
+    /// position on the way, then found the button up, and saved where the mouse had been.
+    func testAReleaseBetweenATicksTwoReadsSavesWhereTheMouseWasLetGo() {
+        XCTAssertTrue(press(at: 12))
+        XCTAssertTrue(move(to: 72))
+        XCTAssertEqual(ratingControl.rating, 80)
+
+        pointer.afterNextRead = { [unowned self] in
+            self.pointer.imagePositionX = 97
+            self.pointer.isLeftButtonHeld = false
+        }
+        // The release is seen by this tick or the next, whichever reads the button after it
+        if controller.tick() {
+            XCTAssertFalse(controller.tick())
+        }
+        XCTAssertEqual(recorder.savedRatings, [100])
+        XCTAssertEqual(dragEnds, [true])
+    }
+
+    /// The same between the two reads of the click that begins a drag, which before macOS 27
+    /// comes once the mouse has already moved some way
+    func testAReleaseBetweenTheClicksTwoReadsSavesWhereTheMouseWasLetGo() {
+        pointer.isLeftButtonHeld = true
+        pointer.imagePositionX = 52
+        pointer.afterNextRead = { [unowned self] in
+            self.pointer.imagePositionX = 97
+            self.pointer.isLeftButtonHeld = false
+        }
+        if controller.click() {
+            XCTAssertFalse(controller.tick())
+        }
+        XCTAssertEqual(recorder.savedRatings, [100])
     }
 
     func testRejectedDragRestoresOriginalRatingWhenRefreshHasNoTrack() {
