@@ -28,6 +28,8 @@ export GH_PROMPT_DISABLED=1
 
 NOTES_DIR="docs/releases"
 CHECKER=".claude/skills/release/scripts/check-notes.sh"
+WATCHER=".claude/skills/release/scripts/watch-run.sh"
+PROJECT="StarBar.xcodeproj/project.pbxproj"
 RELEASE_WORKFLOW="release.yml"
 TEST_WORKFLOW="test.yml"
 # How long to look for the workflow run after the tag is pushed (tests shorten these)
@@ -81,6 +83,17 @@ if ! [[ "$SHA" =~ $SHA_RE ]]; then
 fi
 TAG="v$VERSION"
 SHORT="${SHA:0:7}"
+
+# Watch a workflow run to its end. At a terminal, watch-run.sh from the release commit shows
+# the running step with its time (gh run watch marks running and waiting steps alike, so a
+# long step looked stuck, 1.10.0); in a log, or from a commit without it, gh run watch.
+watch_run() {
+  if [ -t 1 ] && git show "$SHA:$WATCHER" > "$WORK/watch-run.sh" 2>/dev/null; then
+    bash "$WORK/watch-run.sh" "$1" "$SLUG"
+  else
+    gh run watch "$1" --exit-status
+  fi
+}
 
 # version_lt A B: true when A is a lower version than B
 version_lt() {
@@ -166,6 +179,36 @@ sed '1,2d' "$WORK/notes.md" \
 echo "Title: $TITLE"
 
 # ---------------------------------------------------------------------------------------
+step "Checking the project and the build's secrets"
+
+# Two branches that each add files can give two objects one ID: git merges the project as
+# text without a conflict, and the build then looks for one branch's file under the other's
+# name (PR #52 and the Last.fm branch, 2026-11-16)
+if git cat-file -e "$SHA:$PROJECT" 2>/dev/null; then
+  DUPLICATES=$(git show "$SHA:$PROJECT" | grep -oE $'^\t\t[0-9A-Za-z]+ ' | tr -d '\t ' | sort | uniq -d | paste -sd ' ' - || true)
+  [ -z "$DUPLICATES" ] || stop "$PROJECT in $SHORT defines these object IDs more than once: $DUPLICATES. Give one branch's objects new IDs (AGENTS.md says how) and start again from the fix's merge commit."
+  echo "Every object ID in the project is defined once."
+fi
+
+# A secret the Release workflow passes without first checking it is set has no fallback:
+# the build goes out without it (the Last.fm key and secret). The signing secrets are each
+# checked with != '' and fall back to ad hoc signing, so they are not required.
+WORKFLOW_TEXT=$(git show "$SHA:.github/workflows/$RELEASE_WORKFLOW" 2>/dev/null || true)
+MENTIONED=$(grep -oE 'secrets\.[A-Z0-9_]+' <<<"$WORKFLOW_TEXT" | sed 's/^secrets\.//' | sort -u || true)
+OPTIONAL=$(grep -oE "secrets\.[A-Z0-9_]+ != ''" <<<"$WORKFLOW_TEXT" | sed -E 's/^secrets\.([A-Z0-9_]+).*/\1/' | sort -u || true)
+REQUIRED=$(comm -23 <(printf '%s\n' "$MENTIONED" | grep -v '^$' || true) <(printf '%s\n' "$OPTIONAL" | grep -v '^$' || true))
+if [ -n "$REQUIRED" ]; then
+  HAVE=$(gh secret list --json name -q '.[].name') \
+    || stop "couldn't list the repository's Actions secrets (see above). Publishing needs to know that $(echo $REQUIRED | sed 's/ / and /g') are set."
+  MISSING=""
+  for name in $REQUIRED; do
+    grep -q -x -F "$name" <<<"$HAVE" || MISSING="$MISSING $name"
+  done
+  [ -z "$MISSING" ] || stop "the Release workflow needs the Actions secret(s)$MISSING, which $SLUG doesn't have, and would build without them. Add them under Settings, Secrets and variables, Actions, then run this again."
+  echo "The Actions secrets the build needs are set: $(echo $REQUIRED)."
+fi
+
+# ---------------------------------------------------------------------------------------
 step "Checking the tests passed on $SHORT"
 
 # The run for the push to main, as "id status conclusion", newest first
@@ -179,7 +222,7 @@ if ! grep -q ' completed success$' <<<"$RUNS"; then
   WAITING=$(grep -v ' completed ' <<<"$RUNS" | sed -n '1s/ .*//p' || true)
   if [ -n "$WAITING" ]; then
     echo "The tests are still running (run $WAITING). Waiting for them."
-    gh run watch "$WAITING" --exit-status \
+    watch_run "$WAITING" \
       || stop "the tests failed on $SHORT: https://github.com/$SLUG/actions/runs/$WAITING"
   else
     FAILED=$(sed -n '1s/ .*//p' <<<"$RUNS")
@@ -269,7 +312,7 @@ while [ "$tries" -lt "$POLL_TRIES" ]; do
 done
 [ -n "$RUN" ] || stop "no Release run for $TAG has appeared. Look at https://github.com/$SLUG/actions, then run this again."
 echo "Run $RUN: https://github.com/$SLUG/actions/runs/$RUN"
-gh run watch "$RUN" --exit-status \
+watch_run "$RUN" \
   || stop "the Release run failed: https://github.com/$SLUG/actions/runs/$RUN. If a job was flaky, rerun it there (gh run rerun $RUN --failed) and run this again. If the code needs a fix, merge it and ask for a new command, which will end in --retag."
 
 # ---------------------------------------------------------------------------------------

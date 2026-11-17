@@ -45,6 +45,15 @@ def handle(args, state):
     if os.environ.get("GH_REPO") != state["repo"]:
         return unexpected(args, "GH_REPO is %r" % os.environ.get("GH_REPO"))
 
+    if args[:2] == ["secret", "list"]:
+        # Names only: gh never shows a secret's value
+        if state.get("secret_list_fails"):
+            sys.stderr.write("HTTP 403: Resource not accessible\n")
+            return 1
+        names = state.get("secrets", ["LASTFM_API_KEY", "LASTFM_SHARED_SECRET"])
+        sys.stdout.write("".join(name + "\n" for name in names))
+        return 0
+
     if args[:2] == ["run", "list"]:
         workflow = option(args, "--workflow")
         if workflow == "test.yml":

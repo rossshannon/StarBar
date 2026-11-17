@@ -50,7 +50,7 @@ The app's standing promise is that everything it sends over the network is state
 
 - A release that talks to a new host, or sends something new to an old one, has a `## Network access` section: what is sent, to which host, what triggers it, and what never does. If the Privacy Policy changed, link it.
 - A release that reads or keeps something new on the Mac, without sending it, has a `## Privacy` section.
-- `check-notes.sh` insists on one of the two when `StarBar/StarBar.entitlements` or `Privacy Policy.md` changed since the last release. That is a floor: 1.7.0 added two hosts under an entitlement the app already had, and only the writer could know its notes needed the section.
+- `check-notes.sh` insists on one of the two when `StarBar/StarBar.entitlements` or `Privacy Policy.md` changed since the last release. When only the Privacy Policy changed, a sentence naming it where the feature is described will do, as 1.10.0's Last.fm section had ("Nothing is sent to Last.fm until you connect, and the privacy policy lists what is"). That is a floor: 1.7.0 added two hosts under an entitlement the app already had, and only the writer could know its notes needed the section.
 
 ## Gathering what changed
 
@@ -73,6 +73,6 @@ Read each merged pull request's description, not only its title: the user-facing
 | One `## Installation`, as the last section | People look for it at the bottom |
 | The last line is the compare link, from the release before to this one | The link is copied from the last notes, so it is the line most likely to be left as it was |
 | No `MERGE_COMMIT`, `BUILD_NUMBER`, `TODO`, `TBD`, `FIXME`, HTML comment, Source or Package line | Leftovers from drafting |
-| Entitlements or Privacy Policy changed since the last release: a `## Network access` or `## Privacy` section | The standing promise above |
+| Entitlements or Privacy Policy changed since the last release: a `## Network access` or `## Privacy` section (the policy alone: a sentence naming it) | The standing promise above |
 
 The same check runs in CI over every file in `docs/releases/`, through the skill's tests.

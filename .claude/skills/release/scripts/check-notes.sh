@@ -189,8 +189,12 @@ if [ -n "$ROOT" ] && [ -n "$PREVIOUS" ] \
   fi
   if [ "$CHANGED" = "?" ]; then
     echo "  note: could not compare with $PREVIOUS, so the entitlements and privacy policy rule was not checked"
+  elif [ "$CHANGED" = "$WATCHED_TWO" ] && grep -q -i 'privacy policy' "$FILE"; then
+    # A change to the policy alone is answered where the feature it covers is described,
+    # as 1.10.0's Last.fm section did ("the privacy policy lists what is")
+    :
   elif [ -n "$CHANGED" ] && ! grep -q -E '^## (Network access|Privacy)' "$FILE"; then
-    problem "$(echo "$CHANGED" | tr '\n' ',' | sed 's/,$//; s/,/ and /') changed since $PREVIOUS, so the notes need a '## Network access' or '## Privacy' section saying what changed for the user"
+    problem "$(echo "$CHANGED" | tr '\n' ',' | sed 's/,$//; s/,/ and /') changed since $PREVIOUS, so the notes need a '## Network access' or '## Privacy' section saying what changed for the user (for the privacy policy alone, a sentence naming it is enough)"
   fi
 else
   echo "  note: no earlier release to compare with in this checkout, so the entitlements and privacy policy rule was not checked"

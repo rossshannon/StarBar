@@ -351,5 +351,69 @@ class AfterTheTagIsPushed(PublishTestCase):
         self.assertIn("GitHub marks v1.0.0 as the latest release, not v1.1.0", result.stdout)
 
 
+RELEASE_YML = """name: Release
+jobs:
+  release:
+    env:
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE_P12 != '' && secrets.APPLE_TEAM_ID != '' }}
+    steps:
+      - name: Build
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          LASTFM_API_KEY: ${{ secrets.LASTFM_API_KEY }}
+          LASTFM_SHARED_SECRET: ${{ secrets.LASTFM_SHARED_SECRET }}
+"""
+
+PROJECT = "StarBar.xcodeproj/project.pbxproj"
+
+
+def project(*ids):
+    """A project file defining these object IDs, one line each, as Xcode writes them."""
+    return "{\n\tobjects = {\n" + "".join("\t\t%s /* a */ = {isa = PBXBuildFile; };\n" % i for i in ids) + "\t};\n}\n"
+
+
+class ProjectAndSecrets(PublishTestCase):
+    def test_a_project_with_each_id_once_passes(self):
+        self.box.write(PROJECT, project("5A7E1A000000000000001601", "5A7E1A000000000000001602"))
+        sha = self.box.release_commit()
+        result = self.box.publish("1.1.0", sha)
+        self.assert_published(result, sha)
+        self.assertIn("Every object ID in the project is defined once.", result.stdout)
+
+    def test_an_id_defined_twice_stops_it_before_tagging(self):
+        self.box.write(PROJECT, project("5A7E1A000000000000001601", "5A7E1A000000000000001602",
+                                        "5A7E1A000000000000001602"))
+        sha = self.box.release_commit()
+        result = self.box.publish("1.1.0", sha)
+        self.assert_stopped(result, "defines these object IDs more than once: 5A7E1A000000000000001602.")
+
+    def test_without_a_release_workflow_no_secrets_are_asked_for(self):
+        sha = self.box.release_commit()
+        self.assert_published(self.box.publish("1.1.0", sha), sha)
+        self.assertEqual(self.box.calls("secret"), [])
+
+    def test_the_secrets_the_build_needs_must_be_set(self):
+        self.box.write(".github/workflows/release.yml", RELEASE_YML)
+        sha = self.box.release_commit()
+        self.box.set_state(secrets=["LASTFM_API_KEY"])
+        result = self.box.publish("1.1.0", sha)
+        self.assert_stopped(result, "needs the Actions secret(s) LASTFM_SHARED_SECRET, which %s doesn't have" % REPO)
+
+    def test_secrets_checked_for_before_use_are_not_required(self):
+        # The signing secrets fall back to ad hoc signing, so they needn't be set
+        self.box.write(".github/workflows/release.yml", RELEASE_YML)
+        sha = self.box.release_commit()
+        result = self.box.publish("1.1.0", sha)
+        self.assert_published(result, sha)
+        self.assertIn("The Actions secrets the build needs are set: LASTFM_API_KEY LASTFM_SHARED_SECRET.", result.stdout)
+
+    def test_secrets_that_cannot_be_listed_stop_it(self):
+        self.box.write(".github/workflows/release.yml", RELEASE_YML)
+        sha = self.box.release_commit()
+        self.box.set_state(secret_list_fails=True)
+        self.assert_stopped(self.box.publish("1.1.0", sha), "couldn't list the repository's Actions secrets")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -205,6 +205,22 @@ class NotesInARepository(unittest.TestCase):
         result = self.box.check_notes("1.1.0", "--commit", fixed)
         self.assertEqual(result.returncode, 0, output(result))
 
+    def test_a_changed_policy_is_answered_by_a_sentence_naming_it(self):
+        self.box.write("Privacy Policy.md", "# Privacy\n\nStarBar now scrobbles.\n")
+        text = notes(extra="\n## Scrobbling\n\n- Nothing is sent until you connect, and the privacy policy lists what is.\n")
+        sha = self.box.release_commit("1.1.0", text=text, push=False)
+        result = self.box.check_notes("1.1.0", "--commit", sha)
+        self.assertEqual(result.returncode, 0, output(result))
+
+    def test_changed_entitlements_still_need_a_section_when_the_policy_is_named(self):
+        self.box.write("StarBar/StarBar.entitlements", "<plist><dict><key>network</key></dict></plist>\n")
+        self.box.write("Privacy Policy.md", "# Privacy\n\nStarBar now downloads covers.\n")
+        text = notes(extra="\n## Covers\n\n- The privacy policy says which covers are downloaded.\n")
+        sha = self.box.release_commit("1.1.0", text=text, push=False)
+        result = self.box.check_notes("1.1.0", "--commit", sha)
+        self.assertEqual(result.returncode, 1, output(result))
+        self.assertIn("Privacy Policy.md and StarBar/StarBar.entitlements changed since v1.0.0", result.stdout)
+
     def test_an_uncommitted_change_counts_without_a_commit(self):
         self.box.write("docs/releases/v1.1.0.md", notes())
         self.box.write("Privacy Policy.md", "# Privacy\n\nEdited, not committed.\n")
