@@ -1631,7 +1631,7 @@ extension TrackAnnouncementControllerTests {
 
 // MARK: - Fakes
 
-private final class FakePresenter: TrackAnnouncementPresenter {
+final class FakePresenter: TrackAnnouncementPresenter {
     private(set) var shown: [TrackAnnouncement] = []
     private(set) var refreshed: [TrackAnnouncement] = []
     private(set) var reduceMotionFlags: [Bool] = []

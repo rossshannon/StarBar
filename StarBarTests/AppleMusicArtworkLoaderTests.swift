@@ -11,6 +11,10 @@ import XCTest
 
 final class AppleMusicArtworkLoaderTests: XCTestCase {
 
+    private let center = NotificationCenter()
+    private var finishImage: ((Data?) -> Void)?
+    private var holdImage = false
+    private var previous: PlayInfo?
     private var requests: [URL] = []
     private var searchAnswer: Data?
     /// Answers by search term, ahead of `searchAnswer`
@@ -28,10 +32,18 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         clock = Date(timeIntervalSinceReferenceDate: 0)
         loader = AppleMusicArtworkLoader(fetch: { [unowned self] url, completion in
             self.requests.append(url)
-            guard url.host == "itunes.apple.com" else { return completion(self.coverAnswer) }
+            guard url.host == "itunes.apple.com" else {
+                if self.holdImage {
+                    self.finishImage = completion
+                } else {
+                    let data = self.coverAnswer
+                    DispatchQueue.main.async { completion(data) }
+                }
+                return
+            }
             let term = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "term" })?.value ?? ""
             completion(self.answersByTerm[term] ?? self.searchAnswer)
-        }, country: "IE", now: { [unowned self] in self.clock })
+        }, country: "IE", now: { [unowned self] in self.clock }, center: center)
     }
 
     private func terms() -> [String] {
@@ -99,6 +111,238 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         return rep.representation(using: .png, properties: [:])!
     }
 
+    // MARK: - From Music's notification to the strip
+
+    private var payload: [String: Any] {
+        ["Name": chainHome.title, "Artist": chainHome.artists[0], "Album": chainHome.album, "Player State": "Playing"]
+    }
+
+    private func notify(_ fields: [String: Any], enabled: Bool = true,
+                        name: Notification.Name = iTunesRadioStation.playerInfoNotification,
+                        onUpdate: () -> Void = {}) {
+        let note = Notification(name: name, userInfo: fields)
+        iTunesRadioStation.handlePlayInfo(note, previous: previous, announcementsEnabled: enabled, covers: loader) { info, _, _ in
+            previous = info
+            onUpdate()
+        }
+    }
+
+    func testPlayingWithoutAnIDAsksBeforeThePlayerUpdateAndUsesTheAlbumArtist() {
+        let fields = payload.merging(["Album Artist": "Ensemble"]) { $1 }
+        searchAnswer = answer([("Ensemble", chainHome.album, "https://is3-ssl.mzstatic.com/fs/100x100bb.jpg")])
+        notify(fields) {
+            XCTAssertEqual(self.terms(), ["Tom Rogerson & Brian Eno Chain Home"])
+            XCTAssertEqual(self.requests.last?.host, "is3-ssl.mzstatic.com", "only the Album Artist matches the search result")
+        }
+        notify(fields)
+        XCTAssertEqual(requests.count, 2, "one search and one download")
+    }
+
+    func testPlayingWithAPersistentIDDoesNotAsk() {
+        notify(payload.merging(["Persistent ID": 123]) { $1 })
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testPausedWaitsForPlaying() {
+        notify(payload.merging(["Player State": "Paused"]) { $1 })
+        XCTAssertTrue(requests.isEmpty)
+        notify(payload)
+        XCTAssertEqual(terms().count, 1)
+    }
+
+    func testDisabledAnnouncementsDoNotAsk() {
+        notify(payload, enabled: false)
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testARepeatDoesNotStartEvenAColdSearch() {
+        notify(payload, enabled: false)
+        notify(payload)
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testOnlyNamedSongsInPlayerInfoCanStartTheSearch() {
+        for field in ["Name", "Artist", "Album"] {
+            notify(payload.merging([field: "", "Album Artist": "Ensemble"]) { $1 })
+        }
+        notify(payload, name: Notification.Name("com.apple.iTunes.sourceSaved"))
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    private func catalogTrack(albumArtist: String = "") -> FakeTrack {
+        let track = FakeTrack(name: chainHome.title, artist: chainHome.artists[0], album: chainHome.album, albumArtist: albumArtist)
+        track.objectClassCode = MusicTrackClass.urlTrack
+        return track
+    }
+
+    private func strip(for playing: PlayingTrack, presenter: FakePresenter, clock: FakeClock) -> TrackAnnouncementController {
+        TrackAnnouncementController(
+            readPlayer: { self.previous.map(TrackAnnouncementController.PlayerSnapshot.init(playInfo:)) },
+            loadLiveTrack: { identity, artwork in
+                AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: artwork, covers: self.loader, failedEvents: { 0 })
+            },
+            readCurrentIdentity: { $0 }, readPosition: { nil }, presenter: presenter, clock: clock,
+            accessibility: { (false, false) }, isEnabled: true
+        )
+    }
+
+    private func runQueuedCompletions() {
+        let delivered = expectation(description: "queued cover callbacks ran")
+        DispatchQueue.main.async { delivered.fulfill() }
+        wait(for: [delivered], timeout: 1)
+    }
+
+    func testSleeveJoinsTheNotificationSearchAndPublishesOnceToTheShowingStrip() throws {
+        holdImage = true
+        let track = catalogTrack()
+        let playing = PlayingTrack(track: track, libraryCopy: { _ in nil })
+        let presenter = FakePresenter(), frames = FakeClock()
+        let controller = strip(for: playing, presenter: presenter, clock: frames)
+        notify(payload) { controller.playerDidUpdate() }
+        let announcement = try XCTUnwrap(presenter.shown.first)
+        XCTAssertNil(announcement.artwork)
+        XCTAssertNil(playing.sleeve(covers: loader), "a second reader must not publish again")
+        frames.runFrames(for: 0.1)
+
+        var posts = 0
+        let observer = center.addObserver(forName: .appleMusicCoverDidLoad, object: nil, queue: nil) { note in
+            posts += 1
+            let identities = note.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String]
+            XCTAssertEqual(identities, [track.persistentID, announcement.identity])
+            if let cover = note.userInfo?[AppleMusicArtworkLoader.imageKey] as? NSImage {
+                for id in identities ?? [] { controller.attachArtwork(cover, identity: id) }
+            }
+        }
+        defer { center.removeObserver(observer) }
+        try XCTUnwrap(finishImage)(coverAnswer)
+        runQueuedCompletions()
+        XCTAssertEqual(posts, 1)
+        XCTAssertEqual(presenter.refreshed.count, 1)
+        XCTAssertNotNil(presenter.refreshed.first?.artwork)
+        XCTAssertEqual(presenter.shown.count, 1)
+        XCTAssertEqual(terms().count, 1)
+    }
+
+    func testCoverDecodedBeforeTheStripReadIsInTheInitialPresentation() throws {
+        holdImage = true
+        notify(payload)
+        try XCTUnwrap(finishImage)(coverAnswer)
+        let presenter = FakePresenter(), frames = FakeClock()
+        let controller = strip(for: PlayingTrack(track: catalogTrack(), libraryCopy: { _ in nil }), presenter: presenter, clock: frames)
+        controller.playerDidUpdate()
+        XCTAssertNotNil(presenter.shown.first?.artwork, "ready before the first slide frame, without pumping the main queue")
+        frames.runFrames(for: 1.0 / 60)
+        XCTAssertTrue(presenter.refreshed.isEmpty)
+        XCTAssertEqual(terms().count, 1)
+    }
+
+    func testCoverDecodedDuringTheHeartReadIsInTheInitialPresentation() throws {
+        holdImage = true
+        let track = catalogTrack()
+        notify(payload)
+        let finish = try XCTUnwrap(finishImage)
+        track.whenRead = { finish(self.coverAnswer) }
+        let presenter = FakePresenter()
+        let controller = strip(for: PlayingTrack(track: track, libraryCopy: { _ in nil }), presenter: presenter, clock: FakeClock())
+        controller.playerDidUpdate()
+        XCTAssertNotNil(presenter.shown.first?.artwork)
+        XCTAssertEqual(terms().count, 1)
+    }
+
+    func testEarlyAppleCoverCannotStandInForASameAlbumLibraryCopy() throws {
+        holdImage = true
+        notify(payload)
+        let ownCover = try XCTUnwrap(NSImage(data: png))
+        let copy = FakeTrack(album: chainHome.album)
+        let playing = PlayingTrack(track: catalogTrack(), readArtwork: { $0 === copy ? ownCover : nil }, libraryCopy: { _ in copy })
+        XCTAssertTrue(playing.sleeve(covers: loader) === ownCover)
+        var posts = 0
+        let observer = center.addObserver(forName: .appleMusicCoverDidLoad, object: nil, queue: nil) { _ in posts += 1 }
+        defer { center.removeObserver(observer) }
+        try XCTUnwrap(finishImage)(coverAnswer)
+        runQueuedCompletions()
+        XCTAssertEqual(posts, 0)
+        let presenter = FakePresenter()
+        let controller = strip(for: playing, presenter: presenter, clock: FakeClock())
+        controller.playerDidUpdate()
+        XCTAssertEqual(presenter.shown.count, 1)
+        XCTAssertTrue(presenter.shown.first?.artwork === ownCover, "a warmed cache must not replace the owned sleeve")
+    }
+
+    func testRetryFinishingDuringTheHeartReadSupersedesMusicsFallbackBeforeShow() throws {
+        searchAnswer = nil
+        XCTAssertNil(load(chainHome))
+        clock += AppleMusicArtworkLoader.retryAfter
+        holdImage = true
+        searchAnswer = finding
+        notify(payload)
+        // An image with no representation still stands as the fallback, without consulting
+        // the hosted app's live song history for a fingerprint comparison.
+        let music = NSImage()
+        guard SleeveFingerprint(image: music) == nil else { return XCTFail("expected an empty image") }
+        let track = catalogTrack()
+        let finish = try XCTUnwrap(finishImage)
+        track.whenRead = { finish(self.coverAnswer) }
+        let playing = PlayingTrack(track: track, readArtwork: { _ in music }, libraryCopy: { _ in nil })
+        let presenter = FakePresenter()
+        let controller = strip(for: playing, presenter: presenter, clock: FakeClock())
+        controller.playerDidUpdate()
+        let apple = try XCTUnwrap(loader.cachedCover(artists: chainHome.artists, album: chainHome.album))
+        XCTAssertTrue(presenter.shown.first?.artwork === apple)
+    }
+
+    func testAnEarlyMissStillChecksMusicForThePreviousSongsCover() throws {
+        let leftOver = try XCTUnwrap(NSImage(data: png))
+        let oldSong = PlayingTrack(track: FakeTrack(album: "Another Album", persistentID: "0011"), readArtwork: { _ in leftOver })
+        let playing = PlayingTrack(track: catalogTrack(), readArtwork: { _ in leftOver }, libraryCopy: { _ in nil })
+        searchAnswer = answer([])
+        notify(payload)
+        let observer = center.addObserver(forName: .appleMusicCoverDidLoad, object: nil, queue: nil) { _ in
+            XCTFail("the previous song's cover reached the strip")
+        }
+        defer { center.removeObserver(observer) }
+        let history = SleeveHistory()
+        XCTAssertNil(playing.sleeve(history: history, previousSong: { _ in oldSong }, covers: loader))
+        runQueuedCompletions()
+        XCTAssertNil(playing.sleeve(history: history, previousSong: { _ in oldSong }, covers: loader))
+    }
+
+    private func assertLiveAlbumArtistIdentifiesEarlyResult(afterMiss: Bool) {
+        searchAnswer = answer([("Ensemble", chainHome.album, "https://is3-ssl.mzstatic.com/fs/100x100bb.jpg")])
+        notify(payload)
+        if afterMiss { runQueuedCompletions() }
+        let playing = PlayingTrack(track: catalogTrack(albumArtist: "Ensemble"), libraryCopy: { _ in nil })
+        let posted = expectation(forNotification: .appleMusicCoverDidLoad, object: nil, notificationCenter: center) { note in
+            note.userInfo?[AppleMusicArtworkLoader.imageKey] is NSImage
+        }
+        XCTAssertNil(playing.sleeve(covers: loader))
+        wait(for: [posted], timeout: 1)
+        XCTAssertEqual(terms().count, 1, "the same search result already contains the right album")
+    }
+
+    func testLiveAlbumArtistCanMatchAnOutstandingSearch() {
+        assertLiveAlbumArtistIdentifiesEarlyResult(afterMiss: false)
+    }
+
+    func testLiveAlbumArtistCanMatchACompletedSearch() {
+        assertLiveAlbumArtistIdentifiesEarlyResult(afterMiss: true)
+    }
+
+    func testLiveAlbumArtistCanUseTheFullTitleResultEvenIfTheShortSearchFails() {
+        let title = chainHome.title + " (Edit)"
+        answersByTerm[chainHome.artists[0] + " " + title] = answer([
+            ("Ensemble", chainHome.album, "https://is3-ssl.mzstatic.com/fs/100x100bb.jpg")
+        ])
+        searchAnswer = nil
+        notify(payload.merging(["Name": title]) { $1 })
+        runQueuedCompletions()
+        let song = (title: title, artists: chainHome.artists + ["Ensemble"], album: chainHome.album)
+        XCTAssertFalse(loader.hasFailedBefore(title: song.title, artists: song.artists, album: song.album),
+                       "the full-title result was usable, so the first sleeve read should still wait for Apple")
+        XCTAssertNotNil(load(song))
+        XCTAssertEqual(terms(), [chainHome.artists[0] + " " + title, chainHome.artists[0] + " " + chainHome.title])
+    }
+
     // MARK: - The search
 
     func testNewStripStartsOneSearchBeforeReadingTheHeart() {
@@ -108,17 +352,17 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         let identity = [track.name, track.artist, track.album].joined(separator: "|")
         let newStrip = TrackAnnouncementController.ArtworkRead.forNewStrip(listed: false)
 
-        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: "another|artist|album", artwork: newStrip, covers: loader)
-        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: .skip, covers: loader)
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: "another|artist|album", artwork: newStrip, covers: loader, failedEvents: { 0 })
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: .skip, covers: loader, failedEvents: { 0 })
         XCTAssertTrue(requests.isEmpty, "a stale notification and a refresh ask nothing")
 
         var searchesAtHeartRead: [Int] = []
         track.whenRead = { searchesAtHeartRead.append(self.terms().count) }
-        let arrived = expectation(forNotification: .appleMusicCoverDidLoad, object: nil) { note in
+        let arrived = expectation(forNotification: .appleMusicCoverDidLoad, object: nil, notificationCenter: center) { note in
             let identities = note.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String]
             return identities == [track.persistentID, identity] && note.userInfo?[AppleMusicArtworkLoader.imageKey] is NSImage
         }
-        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: newStrip, covers: loader)
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: newStrip, covers: loader, failedEvents: { 0 })
         XCTAssertEqual(searchesAtHeartRead, [1])
         XCTAssertNil(playing.sleeve(covers: loader), "the popover leaves the outstanding ask alone")
         wait(for: [arrived], timeout: 1)
@@ -131,7 +375,7 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         track.objectClassCode = MusicTrackClass.urlTrack
         let copy = FakeTrack()
         let playing = PlayingTrack(track: track, libraryCopy: { _ in copy })
-        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: track.persistentID, artwork: .forNewStrip(listed: true), covers: loader)
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: track.persistentID, artwork: .forNewStrip(listed: true), covers: loader, failedEvents: { 0 })
         XCTAssertTrue(requests.isEmpty)
     }
 
@@ -143,11 +387,11 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         var searchesAtRead: [Int] = []
         copy.whenRead = { searchesAtRead.append(self.terms().count) }
 
-        let arrived = expectation(forNotification: .appleMusicCoverDidLoad, object: nil) { note in
+        let arrived = expectation(forNotification: .appleMusicCoverDidLoad, object: nil, notificationCenter: center) { note in
             let identities = note.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String]
             return identities?.first == track.persistentID
         }
-        let load = AppDelegate.loadAnnouncementLiveTrack(playing, for: track.persistentID, artwork: .forNewStrip(listed: false), covers: loader)
+        let load = AppDelegate.loadAnnouncementLiveTrack(playing, for: track.persistentID, artwork: .forNewStrip(listed: false), covers: loader, failedEvents: { 0 })
         guard case .loaded(let live) = load else { return XCTFail("same catalog song") }
         XCTAssertEqual(live.rating, 80)
         XCTAssertNil(live.artwork)
@@ -160,7 +404,7 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         track.objectClassCode = MusicTrackClass.urlTrack
         let playing = PlayingTrack(track: track, libraryCopy: { _ in nil })
         let identity = [track.name, track.artist, track.album].joined(separator: "|")
-        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: .forNewStrip(listed: true), covers: loader)
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: .forNewStrip(listed: true), covers: loader, failedEvents: { 0 })
         XCTAssertTrue(requests.isEmpty)
     }
 
@@ -336,6 +580,18 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
         XCTAssertEqual(requests.count, 2, "a kept cover asks nothing")
     }
 
+    func testTheNinthDecodedAlbumEvictsOnlyTheOldestCover() {
+        for n in 1...9 {
+            let album = "Album \(n)"
+            searchAnswer = answer([("Artist", album, "https://is3-ssl.mzstatic.com/\(n)/100x100bb.jpg")])
+            XCTAssertNotNil(load((title: "Song", artists: ["Artist"], album: album)))
+        }
+        XCTAssertNil(loader.cachedCover(artists: ["Artist"], album: "Album 1"))
+        for n in 2...9 {
+            XCTAssertNotNil(loader.cachedCover(artists: ["Artist"], album: "Album \(n)"))
+        }
+    }
+
     func testTwoAsksAtOnceShareOneSearch() {
         let both = expectation(description: "both answered")
         both.expectedFulfillmentCount = 2
@@ -478,23 +734,23 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
     func testASongIsBeingAskedForUntilItsCoverComes() {
         // The answers come on the main queue, so the ask is still out when `load` returns
         let marbleHill = (title: "Marble Hill", artists: chainHome.artists, album: chainHome.album)
-        XCTAssertFalse(loader.isAsking(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertFalse(loader.hasWaitingReader(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
         let both = expectation(description: "both answered")
         both.expectedFulfillmentCount = 2
         loader.load(title: chainHome.title, artists: chainHome.artists, album: chainHome.album) { _ in both.fulfill() }
-        XCTAssertTrue(loader.isAsking(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
-        XCTAssertFalse(loader.isAsking(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album),
+        XCTAssertTrue(loader.hasWaitingReader(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertFalse(loader.hasWaitingReader(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album),
                        "another song of the album hasn't asked, so nothing would say when its cover comes")
         loader.load(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album) { _ in both.fulfill() }
-        XCTAssertTrue(loader.isAsking(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album))
+        XCTAssertTrue(loader.hasWaitingReader(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album))
         wait(for: [both], timeout: 1)
-        XCTAssertFalse(loader.isAsking(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
-        XCTAssertFalse(loader.isAsking(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album))
+        XCTAssertFalse(loader.hasWaitingReader(title: chainHome.title, artists: chainHome.artists, album: chainHome.album))
+        XCTAssertFalse(loader.hasWaitingReader(title: marbleHill.title, artists: marbleHill.artists, album: marbleHill.album))
         XCTAssertEqual(requests.count, 2, "one search and one download for the album")
     }
 
     func testASongThatCantBeAskedAboutIsNeverBeingAskedFor() {
-        XCTAssertFalse(loader.isAsking(title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: ""))
+        XCTAssertFalse(loader.hasWaitingReader(title: "Chain Home", artists: ["Tom Rogerson & Brian Eno"], album: ""))
     }
 
     func testASongThatCantBeAskedAboutIsAnswered() {

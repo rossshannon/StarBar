@@ -27,9 +27,12 @@ final class PlayingTrack {
     let track: iTunesTrack
 
     private let libraryCopy: (iTunesTrack) -> iTunesTrack?
+    private let readArtwork: (iTunesTrack) -> NSImage?
 
-    init(track: iTunesTrack, libraryCopy: @escaping (iTunesTrack) -> iTunesTrack? = { iTunesRadioStation.shared.libraryCopy(of: $0) }) {
+    init(track: iTunesTrack, readArtwork: @escaping (iTunesTrack) -> NSImage? = { $0.firstArtworkImage() },
+         libraryCopy: @escaping (iTunesTrack) -> iTunesTrack? = { iTunesRadioStation.shared.libraryCopy(of: $0) }) {
         self.track = track
+        self.readArtwork = readArtwork
         self.libraryCopy = libraryCopy
     }
 
@@ -136,13 +139,13 @@ final class PlayingTrack {
 
     /// The playing track's artist and album artist, in that order, without the empty ones,
     /// each read once
-    private(set) lazy var artists: [String] = [artist, track.albumArtist].compactMap { $0 }.filter { !$0.isEmpty }
+    private(set) lazy var artists = AppleMusicArtworkLoader.artists(artist, albumArtist: track.albumArtist)
 
     /// The cover Music gives for the playing track, as a fingerprint, read once. Asked only of
     /// the record of the song before a catalog track whose cover is being checked: see
     /// `sleeve(history:previousSong:covers:)`. One artwork read, 44 ms on 2026-11-02.
     private(set) lazy var playedSleeve: SleeveHistory.Sleeve? = {
-        guard let image = track.firstArtworkImage(), let fingerprint = SleeveFingerprint(image: image) else { return nil }
+        guard let image = readArtwork(track), let fingerprint = SleeveFingerprint(image: image) else { return nil }
         return SleeveHistory.Sleeve(fingerprint: fingerprint, album: album)
     }()
 
@@ -177,7 +180,7 @@ final class PlayingTrack {
         // With a copy of the song on its album to read from, or no ID to keep a cover under,
         // the artwork read is the answer
         guard sleeveCopy == nil, let song = persistentID else {
-            let image = artworkTrack?.firstArtworkImage()
+            let image = artworkTrack.flatMap(readArtwork)
             if let image = image, let song = persistentID {
                 history.record(image, for: song, album: { self.album })
             }
@@ -185,14 +188,11 @@ final class PlayingTrack {
         }
 
         let title = name ?? "", album = self.album ?? ""
-        if let cover = covers.cachedCover(artists: artists, album: album) {
-            history.record(cover, for: song, album: { album })
-            return cover
-        }
+        if let cover = cachedCatalogSleeve(history: history, covers: covers) { return cover }
         // An earlier read of this song asked already, and that ask says when the cover comes:
         // the popover reads on every update, and each read once read Music's cover and waited
         // on the ask again, so the cover arrived once for every read made meanwhile
-        guard !covers.isAsking(title: title, artists: artists, album: album) else { return nil }
+        guard !covers.hasWaitingReader(title: title, artists: artists, album: album) else { return nil }
         guard !covers.hasAnswered(title: title, artists: artists, album: album) else {
             if title.isEmpty || album.isEmpty || artists.isEmpty {
                 os_log("%{public}s[%{public}ld], %{public}s: can't ask Apple for the cover of %{public}s: Music named no album, artist or title (%{public}s, %{public}ld artists, %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, song, album, artists.count, title)
@@ -210,7 +210,7 @@ final class PlayingTrack {
             song.uppercased(),
             TrackAnnouncementController.PlayerSnapshot.identity(name: title, artist: artist, album: album),
         ].compactMap { $0 }
-        let notification = iTunesRadioStation.shared.artworkNotification
+        let notification = covers.artworkNotification
         let notificationTime = notification.flatMap { note -> TimeInterval? in
             guard let identity = note.identity, identities.contains(identity) else { return nil }
             return note.receivedAt
@@ -225,11 +225,20 @@ final class PlayingTrack {
             }
             guard let cover = apple ?? fallback else { return }
             history.record(cover, for: song, album: { album })
-            NotificationCenter.default.post(name: .appleMusicCoverDidLoad, object: nil, userInfo: [
+            covers.center.post(name: .appleMusicCoverDidLoad, object: nil, userInfo: [
                 AppleMusicArtworkLoader.imageKey: cover,
                 AppleMusicArtworkLoader.identitiesKey: identities,
             ])
         })
+    }
+
+    /// After a sleeve read all these properties are already resolved. A second look after
+    /// the rating and heart picks up a download that finished while Music was answering.
+    func cachedCatalogSleeve(history: SleeveHistory = .shared, covers: AppleMusicArtworkLoader, alreadyShowing: NSImage? = nil) -> NSImage? {
+        guard sleeveCopy == nil, let song = persistentID, let album = album,
+              let cover = covers.cachedCover(artists: artists, album: album) else { return nil }
+        if cover !== alreadyShowing { history.record(cover, for: song, album: { album }) }
+        return cover
     }
 
     /// Music's cover for this catalog track, or nil when it gave none or **gave the previous
@@ -239,7 +248,7 @@ final class PlayingTrack {
     /// Apple's cover, where what Music leaves over is its own answer for that track, and with
     /// the strip off and the popover first opened on the new song StarBar showed nothing.
     private func musicsOwnCover(for song: String, history: SleeveHistory, previousSong: (String) -> PlayingTrack?) -> NSImage? {
-        guard let image = track.firstArtworkImage() else {
+        guard let image = readArtwork(track) else {
             os_log("%{public}s[%{public}ld], %{public}s: Music gave no cover for %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, song, album ?? "nil")
             return nil
         }

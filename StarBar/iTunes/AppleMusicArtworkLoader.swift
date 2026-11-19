@@ -2,9 +2,8 @@
 //  AppleMusicArtworkLoader.swift
 //  StarBar
 //
-//  An Apple Music song's cover, from Apple's public iTunes Search service, for a catalog track
-//  the user doesn't have, whose cover Music can get wrong. The search's answer is read by pure
-//  rules: see `AppleMusicArtworkLoaderTests`.
+//  An Apple Music song's cover, from Apple's public iTunes Search service. Music can give
+//  a catalog track the wrong cover. See `AppleMusicArtworkLoaderTests` for the matching rules.
 //
 
 import Cocoa
@@ -20,9 +19,9 @@ extension Notification.Name {
 
 /// Finds a song's cover on Apple's iTunes Search service and downloads it.
 ///
-/// Asked for every catalog track the user doesn't have, so there is no copy to read instead,
-/// once per album, since Music can answer its artwork read with another song's cover or with
-/// none at all (`PlayingTrack.sleeve()`). It sends the song's artist and title to `itunes.apple.com`,
+/// A Playing notification with no persistent ID can start the search before StarBar knows
+/// whether the user has a copy. Only `PlayingTrack.sleeve()` decides which cover to show.
+/// It sends the song's artist and title to `itunes.apple.com`,
 /// which belongs to the company streaming the song, and nothing else about the user. Only
 /// `https` on `itunes.apple.com` is asked and only `https` on `mzstatic.com`, Apple's image
 /// host, is downloaded; each answer is capped, and the image is decoded off the main thread.
@@ -76,25 +75,39 @@ final class AppleMusicArtworkLoader {
     private let fetch: Fetch
     private let country: String?
     private let now: () -> Date
+    let center: NotificationCenter
+    /// Only while the station delivers an update. A manual read later has no decode time.
+    var artworkNotification: (identity: String?, receivedAt: TimeInterval)?
+    /// A download can finish while synchronous Music reads hold the main queue. Make the
+    /// decoded cover available to the strip before dispatching the readers' completions.
+    private let cacheLock = NSLock()
     private var cache: [(album: String, image: NSImage)] = []
-    /// Songs, by album key and folded title, the search answered without a match
+    /// Songs, by album key and folded title, the searches answered without a match
     private var notFound: Set<String> = []
+    /// Exact-album results the notification couldn't identify. The live track may supply
+    /// the album artist. An unanswered second search doesn't invalidate the first result.
+    private var otherCredits: [String: [Candidate]] = [:]
     /// Songs, as `notFound` names them, a search or download failed for, and when
     private var failedAt: [String: Date] = [:]
-    /// What waits on each album's search, by album key: the song each ask was for, as
-    /// `notFound` names it, and its completion
+    /// An entry means the album is being fetched. An empty list means no reader has joined.
     private var inFlight: [String: [(song: String, completion: (NSImage?) -> Void)]] = [:]
 
     /// `country` picks the store searched, the Mac's region by default, since an album can be
     /// in one country's catalog and not another's
-    init(fetch: @escaping Fetch, country: String? = AppleMusicArtworkLoader.currentCountry, now: @escaping () -> Date = Date.init) {
+    init(fetch: @escaping Fetch, country: String? = AppleMusicArtworkLoader.currentCountry, now: @escaping () -> Date = Date.init,
+         center: NotificationCenter = .default) {
         self.fetch = fetch
         self.country = country
         self.now = now
+        self.center = center
     }
 
     static var currentCountry: String? {
         return Locale.current.region?.identifier
+    }
+
+    static func artists(_ artist: String?, albumArtist: String?) -> [String] {
+        return [artist, albumArtist].compactMap { $0 }.filter { !$0.isEmpty }
     }
 
     /// The album's key: its name and its first artist, folded, or nil when either is missing.
@@ -114,6 +127,8 @@ final class AppleMusicArtworkLoader {
 
     /// True while nothing has been downloaded
     var isEmpty: Bool {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
         return cache.isEmpty
     }
 
@@ -134,72 +149,108 @@ final class AppleMusicArtworkLoader {
     /// through `cachedCover` instead. No network.
     func hasAnswered(title: String, artists: [String], album: String) -> Bool {
         guard let song = query(title: title, artists: artists, album: album)?.song else { return true }
-        return hasAnswered(song)
+        return hasAnswered(song, artists: artists)
     }
 
-    /// Whether this song's cover is being asked for now, so that another read of the song can
-    /// leave it to the ask already made, which says when the cover comes. Another song of the
-    /// same album shares the search but not this, since only its own ask says when its cover
-    /// comes. No network.
-    func isAsking(title: String, artists: [String], album: String) -> Bool {
+    /// A sleeve read already waiting for this song will publish its answer. A search from
+    /// the notification alone has no reader, so the first sleeve read must still join it.
+    func hasWaitingReader(title: String, artists: [String], album: String) -> Bool {
         guard let asked = query(title: title, artists: artists, album: album) else { return false }
         return inFlight[asked.album]?.contains(where: { $0.song == asked.song }) ?? false
     }
 
-    /// Whether a search or download for this song has failed this session, however long ago.
-    /// No network.
+    /// Whether this read retries a previous failure. A shorter-title search that failed
+    /// doesn't count when the live album artist identifies the full-title result.
     func hasFailedBefore(title: String, artists: [String], album: String) -> Bool {
         guard let song = query(title: title, artists: artists, album: album)?.song else { return false }
-        return failedAt[song] != nil
+        return failedAt[song] != nil && coverWithLiveCredit(for: song, artists: artists) == nil
     }
 
-    private func hasAnswered(_ song: String) -> Bool {
-        if notFound.contains(song) {
-            return true
-        }
+    private func hasAnswered(_ song: String, artists: [String]) -> Bool {
+        if coverWithLiveCredit(for: song, artists: artists) != nil { return false }
+        if notFound.contains(song) { return true }
         guard let failed = failedAt[song] else { return false }
         return now().timeIntervalSince(failed) < AppleMusicArtworkLoader.retryAfter
+    }
+
+    private func coverWithLiveCredit(for song: String, artists: [String]) -> URL? {
+        otherCredits[song].flatMap { Self.match($0, artists: artists) }
     }
 
     /// A cover already downloaded for the album, or nil. No network.
     func cachedCover(artists: [String], album: String) -> NSImage? {
         guard let key = AppleMusicArtworkLoader.key(artists: artists, album: album) else { return nil }
+        return cachedCover(for: key)
+    }
+
+    private func cachedCover(for key: String) -> NSImage? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
         return cache.last(where: { $0.album == key })?.image
+    }
+
+    private func cache(_ image: NSImage, for key: String) {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        cache.removeAll(where: { $0.album == key })
+        cache.append((album: key, image: image))
+        if cache.count > Self.cacheSize {
+            cache.removeFirst()
+        }
     }
 
     /// The cover of the song `title` on `album`, from the cache or from Apple. `artists` is the
     /// track's artist first, then the album artist. `completion` runs on the main thread, with
-    /// nil when there's no match or the network failed.
-    func load(title: String, artists: [String], album: String, notificationTime: TimeInterval? = nil, completion: @escaping (NSImage?) -> Void) {
+    /// nil when there's no match or the network failed. Omit it to warm the cache at decode.
+    func load(title: String, artists: [String], album: String, notificationTime: TimeInterval? = nil, completion: ((NSImage?) -> Void)? = nil) {
         guard let asked = self.query(title: title, artists: artists, album: album) else {
-            completion(nil)
+            completion?(nil)
             return
         }
         let searches = asked.urls, key = asked.album, song = asked.song
-        if let image = cache.last(where: { $0.album == key })?.image {
-            completion(image)
+        if let image = cachedCover(for: key) {
+            completion?(image)
             return
         }
-        guard !hasAnswered(song) else {
-            completion(nil)
+        guard !hasAnswered(song, artists: artists) else {
+            completion?(nil)
             return
         }
         if inFlight[key] != nil {
-            inFlight[key]?.append((song: song, completion: completion))
+            if let completion = completion {
+                inFlight[key]?.append((song, { [weak self] image in
+                    // The early search may have finished with an album credit that only
+                    // this live reader knows. Use that answer before publishing a fallback.
+                    if image == nil, self?.coverWithLiveCredit(for: song, artists: artists) != nil {
+                        self?.load(title: title, artists: artists, album: album, completion: completion)
+                    } else {
+                        completion(image)
+                    }
+                }))
+            }
             return
         }
-        inFlight[key] = [(song: song, completion: completion)]
+        inFlight[key] = completion.map { [(song, $0)] } ?? []
+        if let cover = coverWithLiveCredit(for: song, artists: artists) {
+            notFound.remove(song)
+            download(cover, key: key, song: song, album: album, artist: artists.first)
+            return
+        }
+
         let timing = notificationTime.map {
-            String(format: "%.0f ms after Music notification", (ProcessInfo.processInfo.systemUptime - $0) * 1000)
+            let ms = (ProcessInfo.processInfo.systemUptime - $0) * 1000
+            return completion == nil ? String(format: "at the notification, %.0f ms after decode", ms)
+                                     : String(format: "%.0f ms after Music notification", ms)
         } ?? "outside a matching Music notification"
         os_log("%{public}s[%{public}ld], %{public}s: asking Apple for the cover of %{public}s by %{public}s on %{public}s (%{public}s)", ((#file as NSString).lastPathComponent), #line, #function, title, artists.first ?? "nil", album, timing)
 
-        find(searches[...], artists: artists, album: album) { [weak self] found, allAnswered in
+        let atNotification = completion == nil
+        find(searches[...], artists: artists, album: album) { [weak self] found, alternatives, allAnswered in
             guard let cover = found else {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
+                    self.otherCredits[song] = atNotification && !alternatives.isEmpty ? alternatives : nil
                     if allAnswered {
-                        // Apple answered, and none of it was this album
                         self.notFound.insert(song)
                     } else {
                         self.failedAt[song] = self.now()
@@ -209,46 +260,46 @@ final class AppleMusicArtworkLoader {
                 }
                 return
             }
-            self?.fetch(cover) { [weak self] data in
-                // Decode where the bytes arrived, off the main thread
-                let image = data.flatMap { $0.count <= AppleMusicArtworkLoader.maximumImageBytes ? NSImage(data: $0) : nil }
-                DispatchQueue.main.async { [weak self] in
-                    guard let self = self else { return }
-                    if let image = image {
-                        os_log("%{public}s[%{public}ld], %{public}s: the cover of %{public}s by %{public}s came from %{public}s", ((#file as NSString).lastPathComponent), #line, #function, album, artists.first ?? "nil", cover.absoluteString)
-                        self.cache.removeAll(where: { $0.album == key })
-                        self.cache.append((album: key, image: image))
-                        if self.cache.count > AppleMusicArtworkLoader.cacheSize {
-                            self.cache.removeFirst(self.cache.count - AppleMusicArtworkLoader.cacheSize)
-                        }
-                    } else {
-                        os_log("%{public}s[%{public}ld], %{public}s: no image at %{public}s", ((#file as NSString).lastPathComponent), #line, #function, cover.absoluteString)
-                        self.failedAt[song] = self.now()
-                    }
-                    self.finish(key, with: image)
+            self?.download(cover, key: key, song: song, album: album, artist: artists.first)
+        }
+    }
+
+    private func download(_ cover: URL, key: String, song: String, album: String, artist: String?) {
+        fetch(cover) { [weak self] data in
+            // Decode where the bytes arrived, off the main thread
+            let image = data.flatMap { $0.count <= AppleMusicArtworkLoader.maximumImageBytes ? NSImage(data: $0) : nil }
+            if let image = image {
+                self?.cache(image, for: key)
+            }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.otherCredits.removeValue(forKey: song)
+                if image != nil {
+                    os_log("%{public}s[%{public}ld], %{public}s: the cover of %{public}s by %{public}s came from %{public}s", ((#file as NSString).lastPathComponent), #line, #function, album, artist ?? "nil", cover.absoluteString)
+                } else {
+                    os_log("%{public}s[%{public}ld], %{public}s: no image at %{public}s", ((#file as NSString).lastPathComponent), #line, #function, cover.absoluteString)
+                    self.failedAt[song] = self.now()
                 }
+                self.finish(key, with: image)
             }
         }
     }
 
-    /// Runs each search in turn until one finds the album, and answers with its cover, or nil
-    /// and whether every search was answered. Off the main thread.
-    private func find(_ searches: ArraySlice<URL>, artists: [String], album: String, allAnswered: Bool = true,
-                      completion: @escaping (_ cover: URL?, _ allAnswered: Bool) -> Void) {
+    /// Try the full title first. Keep exact-album candidates in search order so a live
+    /// album artist can still identify a result the notification alone couldn't accept.
+    private func find(_ searches: ArraySlice<URL>, artists: [String], album: String, alternatives: [Candidate] = [],
+                      allAnswered: Bool = true, completion: @escaping (URL?, [Candidate], Bool) -> Void) {
         guard let search = searches.first else {
-            completion(nil, allAnswered)
+            completion(nil, alternatives, allAnswered)
             return
         }
         fetch(search) { [weak self] data in
-            let found = data
-                .flatMap { $0.count <= AppleMusicArtworkLoader.maximumSearchBytes ? $0 : nil }
-                .flatMap { AppleMusicArtworkLoader.cover(in: $0, artists: artists, album: album) }
-            if let found = found {
-                completion(found, true)
-            } else if let self = self {
-                self.find(searches.dropFirst(), artists: artists, album: album, allAnswered: allAnswered && data != nil, completion: completion)
+            let candidates = data.flatMap { $0.count <= Self.maximumSearchBytes ? Self.candidates(in: $0, album: album) : nil } ?? []
+            if let found = Self.match(candidates, artists: artists) {
+                completion(found, [], true)
             } else {
-                completion(nil, false)
+                self?.find(searches.dropFirst(), artists: artists, album: album, alternatives: alternatives + candidates,
+                           allAnswered: allAnswered && data != nil, completion: completion)
             }
         }
     }
@@ -302,22 +353,33 @@ final class AppleMusicArtworkLoader {
     /// The cover of the first result in a search's answer whose album is `album` (`albumName`)
     /// and whose artist or album artist is one of `artists`, at `coverSide` pixels, or nil
     static func cover(in data: Data, artists: [String], album: String) -> URL? {
-        guard let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let results = answer["results"] as? [[String: Any]] else { return nil }
+        match(candidates(in: data, album: album), artists: artists)
+    }
+
+    private struct Candidate {
+        let credits: Set<String>
+        let url: URL
+    }
+
+    private static func match(_ candidates: [Candidate], artists: [String]) -> URL? {
+        guard !candidates.isEmpty else { return nil }
+        let wanted = Set(artists.map(SongName.fold).filter { !$0.isEmpty })
+        return candidates.first { !$0.credits.isDisjoint(with: wanted) }?.url
+    }
+
+    private static func candidates(in data: Data, album: String) -> [Candidate] {
         let wanted = albumName(album)
-        let wantedArtists = Set(artists.map(SongName.fold).filter { !$0.isEmpty })
-        guard !wanted.isEmpty, !wantedArtists.isEmpty else { return nil }
-        for result in results {
-            let resultArtists = ["artistName", "collectionArtistName"].compactMap { result[$0] as? String }.map(SongName.fold)
+        guard !wanted.isEmpty, let answer = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let results = answer["results"] as? [[String: Any]] else { return [] }
+        return results.compactMap { result in
             guard let name = result["collectionName"] as? String, albumName(name) == wanted,
-                  resultArtists.contains(where: wantedArtists.contains),
-                  let small = result["artworkUrl100"] as? String else { continue }
+                  let small = result["artworkUrl100"] as? String else { return nil }
             let size = "\(coverSide)x\(coverSide)bb"
             guard let url = URL(string: small.replacingOccurrences(of: "100x100bb", with: size)),
-                  isAllowedCover(url) else { continue }
-            return url
+                  isAllowedCover(url) else { return nil }
+            let credits = ["artistName", "collectionArtistName"].compactMap { result[$0] as? String }.map(SongName.fold)
+            return Candidate(credits: Set(credits), url: url)
         }
-        return nil
     }
 
     /// True for a cover this loader will download: https, on `mzstatic.com` or a subdomain

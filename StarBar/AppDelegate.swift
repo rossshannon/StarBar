@@ -392,7 +392,8 @@ extension AppDelegate {
 
     static func loadAnnouncementLiveTrack(_ playing: PlayingTrack, for identity: String,
                                           artwork: TrackAnnouncementController.ArtworkRead,
-                                          covers: AppleMusicArtworkLoader = .shared) -> TrackAnnouncementController.LiveTrackLoad {
+                                          covers: AppleMusicArtworkLoader = .shared,
+                                          failedEvents: () -> Int = { iTunesRadioStation.shared.failedEvents }) -> TrackAnnouncementController.LiveTrackLoad {
         let byName = !TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity)
         let match = TrackAnnouncementController.PlayerSnapshot.liveTrackMatch(
             identity: identity, livePersistentID: playing.persistentID,
@@ -410,9 +411,12 @@ extension AppDelegate {
             }
             // Both belong to the user's copy if there is one. A failed read is no answer:
             // accepting 0 or false would end the strip's hold on a choice just made.
-            live.rating = MenuBarRatingControl.ifAnswered { playing.ratingTrack?.userRating }
-            live.isFavorited = MenuBarRatingControl.ifAnswered { playing.favoriteTrack.isFavorited }
+            live.rating = MenuBarRatingControl.ifAnswered(failures: failedEvents) { playing.ratingTrack?.userRating }
+            live.isFavorited = MenuBarRatingControl.ifAnswered(failures: failedEvents) { playing.favoriteTrack.isFavorited }
             live.canRate = playing.canRate
+            if case .forNewStrip = artwork {
+                live.artwork = playing.cachedCatalogSleeve(covers: covers, alreadyShowing: live.artwork) ?? live.artwork
+            }
             return .loaded(live)
         case .changed:
             os_log(.debug, "%{public}s[%{public}ld], %{public}s: live track %{public}s is not the announced %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playing.persistentID ?? "nil", identity)
