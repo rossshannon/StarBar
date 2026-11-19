@@ -47,6 +47,9 @@ final class TrackAnnouncementPanel: NSPanel {
     /// Bumped by every animation and by a cancel, so a stale timer tick does nothing
     private var animationGeneration = 0
     private var slideTimer: RatingReminderTimer?
+    private var slideStarted: TimeInterval?
+    /// Stays true on the way down and on a turnaround, until the panel goes away.
+    private var artworkSlotWasVisible = false
     private var screenObserver: NSObjectProtocol?
 
     /// Watches the pointer and the keyboard while the strip is on screen, to see through it
@@ -250,15 +253,16 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         // A heart still changing belongs to the song before
         stopHeart()
         // A new song's artwork, or the placeholder, shows at once; only a cover that comes
-        // later fades in
+        // later and finds the slot visible fades in
         stopArtworkFade()
         stripView.artworkFade = 1
         stripView.announcement = announcement
         // The new song's colour: faded on a strip already on screen, even one turning round
         // on its way out; set at once on one that is about to arrive
-        retint(fading: phase != .hidden, why: "new song")
+        retint(fading: artworkSlotWasVisible, why: "new song")
         let transition = TrackAnnouncementPlacement.transition(reduceMotion: reduceMotion)
 
+        defer { logArtwork(announcement.artwork == nil ? "placeholder" : "ready without fade") }
         switch phase {
         case .shown, .slidingIn:
             // Already on its way up or up: the new content is enough, but a sleeve that stopped
@@ -286,6 +290,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     /// Put the strip at the start of its way in on the screen the user is looking at, draw it,
     /// and order the panel in, ready for `slide(in:transition:)`
     private func appear(transition: TrackAnnouncementPlacement.Transition) {
+        artworkSlotWasVisible = false
         // Read once per appearance, so a changed default applies from the next song
         sleeveKnobs = TrackAnnouncementSleeveKnobs.read()
         stripView.breakout = sleeveKnobs.breakout
@@ -337,11 +342,29 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         }
         stripView.announcement = announcement
         if coverArrived {
-            fadeInArtwork()
+            if artworkSlotWasVisible {
+                fadeInArtwork()
+            } else {
+                stopArtworkFade()
+                stripView.artworkFade = 1
+            }
+            logArtwork(artworkSlotWasVisible && artworkFadeDuration > 0 ? "with fade" : "without fade")
         }
-        // A cover that arrived late blooms its colour in as it fades in over the placeholder
-        retint(fading: true, why: coverArrived ? "late cover" : "same song")
+        retint(fading: !coverArrived || artworkSlotWasVisible, why: coverArrived ? "cover arrived" : "same song")
         layoutHeart()
+    }
+
+    private func logArtwork(_ state: String) {
+        guard let start = slideStarted else { return }
+        os_log("%{public}s[%{public}ld], %{public}s: strip artwork %{public}s for %{public}s, %.0f ms since slide start", ((#file as NSString).lastPathComponent), #line, #function, state, stripView.announcement.identity, (ProcessInfo.processInfo.systemUptime - start) * 1000)
+    }
+
+    private func recordArtworkVisibility() {
+        guard !artworkSlotWasVisible, !isWarmingUp else { return }
+        artworkSlotWasVisible = TrackAnnouncementPlacement.artworkSlotIsVisible(
+            stripY: stripView.frame.minY, alpha: stripView.alphaValue, flatTop: stripView.artworkFrame.maxY,
+            sleeveRise: stripView.breakout ? stripView.sleeve.rise : nil, tilt: sleeveTilt, scale: scale
+        )
     }
 
     /// Cross-fade from the placeholder to a cover that arrived after the strip went up
@@ -392,6 +415,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
     /// The time is a `SteppedTimeline`, so a main thread held up by Apple Events pauses the
     /// slide where it was drawn instead of finishing it unseen.
     private func slide(in shown: Bool, transition: TrackAnnouncementPlacement.Transition) {
+        if shown { slideStarted = ProcessInfo.processInfo.systemUptime }
         phase = shown ? .slidingIn : .slidingOut
         lastTransition = transition
         slideTimer?.invalidate()
@@ -417,6 +441,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             }
         }
 
+        recordArtworkVisibility()
         let startY = stripView.frame.origin.y
         let targetY = TrackAnnouncementPlacement.stripOrigin(shown: shown, scale: scale).y
         let startAlpha = stripView.alphaValue
@@ -429,6 +454,8 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             } else {
                 self.orderOut(nil)
                 self.phase = .hidden
+                self.artworkSlotWasVisible = false
+                self.slideStarted = nil
                 self.stopSeeThrough()
                 self.stopSleeve()
                 self.stopHeart()
@@ -452,6 +479,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             }
             // The sleeve and the heart ride with the strip on the same step, so they never part
             self.layoutSleeve()
+            self.recordArtworkVisibility()
             self.layoutHeart()
         }
 
@@ -520,6 +548,8 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         stopArtworkFade()
         orderOut(nil)
         phase = .hidden
+        artworkSlotWasVisible = false
+        slideStarted = nil
         stopSeeThrough()
         stopSleeve()
         stopHeart()
@@ -867,6 +897,7 @@ extension TrackAnnouncementPanel {
         }
         // The view ignores a tilt that hasn't changed
         stripView.sleeve.tilt = TrackAnnouncementSleeve.approach(sleeveTilt, toward: target, elapsed: elapsed)
+        recordArtworkVisibility()
 
         // Risen, still, and with no pointer to follow: nothing more to step this appearance
         if !sleeveTilts && sleeveRise == nil && sleeveTilt == .rest {

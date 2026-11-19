@@ -385,58 +385,45 @@ extension AppDelegate {
     static func loadAnnouncementLiveTrack(for identity: String, artwork: TrackAnnouncementController.ArtworkRead) -> TrackAnnouncementController.LiveTrackLoad {
         guard !MenuBarRatingControl.isUITesting else { return .loaded(.init()) }
         return MenuBarRatingControl.withShortTimeout { _ -> TrackAnnouncementController.LiveTrackLoad in
-            guard let track = iTunesPlayer.shared.currentTrack else { return .loaded(.init()) }
-            let liveID = track.persistentID
-            let match = TrackAnnouncementController.PlayerSnapshot.liveTrackMatch(
-                identity: identity,
-                livePersistentID: liveID,
-                liveName: TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity) ? nil : track.name,
-                liveArtist: TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity) ? nil : track.artist,
-                liveAlbum: TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity) ? nil : track.album
-            )
-            switch match {
-            case .same:
-                var live = TrackAnnouncementController.LiveTrack()
-                // A catalog track carries neither the rating nor the heart of its own: both
-                // belong to the user's own copy, and both have to read the same track the
-                // menu bar reads or the strip and the stars disagree on screen. The heart was
-                // read from the playing track until 2026-09-18, on the belief that it was
-                // written there; Music answered `favorited` false on a catalog track whose
-                // library copy answered true.
-                // A read Music didn't answer comes back 0 or false, which would show a rated
-                // song as unrated and end the strip's hold on a choice just made, so it counts
-                // as no answer (nil), as the menu bar's reads do.
-                let playing = iTunesPlayer.shared.playing
-                live.rating = MenuBarRatingControl.ifAnswered { playing?.ratingTrack?.userRating }
-                live.isFavorited = MenuBarRatingControl.ifAnswered { () -> Bool? in
-                    playing.map { $0.favoriteTrack.isFavorited } ?? track.isFavorited
-                }
-                live.canRate = playing?.canRate ?? true
-                // The user's own copy first: a catalog track's artwork read can come back
-                // empty and raise even when the same song sits in the library with its
-                // sleeve intact. See `PlayingTrack.artworkTrack` for why it still falls
-                // back to the playing track rather than refusing, and `sleeve()` for the
-                // one answer it does refuse: the previous song's cover, left over. A song the
-                // user doesn't have, or has only on another album (`PlayingTrack.sleeveCopy`), is
-                // read even when Music's notification says it has no artwork, because then
-                // `sleeve()` asks Apple for the cover. A refresh of the strip on show reads
-                // none: it keeps its artwork, and a cover that comes later is attached by
-                // `.appleMusicCoverDidLoad`.
-                if case .forNewStrip(let listed) = artwork {
-                    if let playing = playing, listed || playing.sleeveCopy == nil {
-                        live.artwork = playing.sleeve()
-                    } else if playing == nil, listed {
-                        live.artwork = track.firstArtworkImage()
-                    }
-                }
-                return .loaded(live)
-            case .changed:
-                os_log(.debug, "%{public}s[%{public}ld], %{public}s: live track %{public}s is not the announced %{public}s", ((#file as NSString).lastPathComponent), #line, #function, liveID ?? "nil", identity)
-                return .trackChanged
-            case .unknown:
-                return .loaded(.init())
-            }
+            guard let playing = iTunesPlayer.shared.playing else { return .loaded(.init()) }
+            return loadAnnouncementLiveTrack(playing, for: identity, artwork: artwork)
         } ?? .loaded(.init())
+    }
+
+    static func loadAnnouncementLiveTrack(_ playing: PlayingTrack, for identity: String,
+                                          artwork: TrackAnnouncementController.ArtworkRead,
+                                          covers: AppleMusicArtworkLoader = .shared,
+                                          failedEvents: () -> Int = { iTunesRadioStation.shared.failedEvents }) -> TrackAnnouncementController.LiveTrackLoad {
+        let byName = !TrackAnnouncementController.PlayerSnapshot.isPersistentID(identity)
+        let match = TrackAnnouncementController.PlayerSnapshot.liveTrackMatch(
+            identity: identity, livePersistentID: playing.persistentID,
+            liveName: byName ? playing.name : nil, liveArtist: byName ? playing.artist : nil,
+            liveAlbum: byName ? playing.album : nil
+        )
+        switch match {
+        case .same:
+            var live = TrackAnnouncementController.LiveTrack()
+            // Only a new strip needs artwork. A catalog song with no copy on this album
+            // asks Apple even when Music lists no artwork. Start before reading the rating
+            // and heart so Apple can work while Music answers.
+            if case .forNewStrip(let listed) = artwork, listed || playing.sleeveCopy == nil {
+                live.artwork = playing.sleeve(covers: covers)
+            }
+            // Both belong to the user's copy if there is one. A failed read is no answer:
+            // accepting 0 or false would end the strip's hold on a choice just made.
+            live.rating = MenuBarRatingControl.ifAnswered(failures: failedEvents) { playing.ratingTrack?.userRating }
+            live.isFavorited = MenuBarRatingControl.ifAnswered(failures: failedEvents) { playing.favoriteTrack.isFavorited }
+            live.canRate = playing.canRate
+            if case .forNewStrip = artwork {
+                live.artwork = playing.cachedCatalogSleeve(covers: covers, alreadyShowing: live.artwork) ?? live.artwork
+            }
+            return .loaded(live)
+        case .changed:
+            os_log(.debug, "%{public}s[%{public}ld], %{public}s: live track %{public}s is not the announced %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playing.persistentID ?? "nil", identity)
+            return .trackChanged
+        case .unknown:
+            return .loaded(.init())
+        }
     }
 
 }

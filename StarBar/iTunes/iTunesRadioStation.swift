@@ -153,10 +153,15 @@ final class iTunesRadioStation {
     /// a player update, until the strip and the menu bar have stopped moving: see
     /// `RepeatedUpdateHold`. Timed on `rereadClock`, so the tests can fire it by hand like the
     /// re-reads.
-    private lazy var repeatHold = RepeatedUpdateHold<PlayInfo>(
+    private lazy var repeatHold = RepeatedUpdateHold<(info: PlayInfo, receivedAt: TimeInterval)>(
         clock: { [unowned self] in self.rereadClock },
         isBusy: { [unowned self] in self.somethingIsMoving() },
-        apply: { [unowned self] playInfo in self.latestPlayInfo = playInfo }
+        apply: { [unowned self] update in
+            let identity = TrackAnnouncementController.PlayerSnapshot(playInfo: update.info).identity
+            AppleMusicArtworkLoader.shared.artworkNotification = (identity, update.receivedAt)
+            defer { AppleMusicArtworkLoader.shared.artworkNotification = nil }
+            self.latestPlayInfo = update.info
+        }
     )
 
     /// How long to wait after a library change before re-reading the player.
@@ -183,7 +188,7 @@ final class iTunesRadioStation {
         if !iTunesRadioStation.isRunningTests {
             // Listen iTunes play state change notification
             // Note: The notification name on Catalina is same as Mojave
-            DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.playInfoChanged(_:)), name: NSNotification.Name("com.apple.iTunes.playerInfo"), object: nil)
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.playInfoChanged(_:)), name: Self.playerInfoNotification, object: nil)
             DistributedNotificationCenter.default().addObserver(self, selector: #selector(iTunesRadioStation.sourceSaved(_:)), name: NSNotification.Name("com.apple.iTunes.sourceSaved"), object: nil)  // only set rating in iTunes edit song info panel can trigger that
             observeLibraryChanges(in: DistributedNotificationCenter.default())
         }
@@ -347,7 +352,19 @@ extension iTunesRadioStation {
         }
     }
 
+    static let playerInfoNotification = Notification.Name("com.apple.iTunes.playerInfo")
+
     @objc func playInfoChanged(_ notification: Notification) {
+        Self.handlePlayInfo(notification, previous: latestPlayInfo, announcementsEnabled: UserDefaults.standard.announceNewTracks,
+                            covers: .shared) { info, receivedAt, repeatsLast in
+            if repeatHold.receive((info, receivedAt), repeatsLast: repeatsLast) {
+                os_log("%{public}s[%{public}ld], %{public}s: holding a repeat of the last notification until the motion on screen is over", ((#file as NSString).lastPathComponent), #line, #function)
+            }
+        }
+    }
+
+    static func handlePlayInfo(_ notification: Notification, previous: PlayInfo?, announcementsEnabled: Bool,
+                               covers: AppleMusicArtworkLoader, receive: (PlayInfo, TimeInterval, Bool) -> Void) {
         var dict: [String : Any] = [:]
         for (key, value) in notification.userInfo ?? [:] {
             guard let key = key as? String else { continue }
@@ -376,7 +393,18 @@ extension iTunesRadioStation {
             }
             let playInfo = try decoder.decode(PlayInfo.self, from: jsonData)
 
+            let receivedAt = ProcessInfo.processInfo.systemUptime
             os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playInfo.shortDescription)
+
+            let repeatsLast = previous.map { playInfo.repeats($0) } ?? false
+            // Paused can precede Playing even on a cold start. Wait for the song to play.
+            if notification.name == playerInfoNotification, announcementsEnabled, !repeatsLast,
+               playInfo.playerState == .playing, playInfo.persistentID == nil,
+               let title = playInfo.name, !title.isEmpty, let artist = playInfo.artist, !artist.isEmpty,
+               let album = playInfo.album, !album.isEmpty {
+                let artists = AppleMusicArtworkLoader.artists(artist, albumArtist: playInfo.albumArtist)
+                covers.load(title: title, artists: artists, album: album, notificationTime: receivedAt)
+            }
 
             #if DEBUG
             let keys = Set(dict.keys.map { $0.snakeCaseKey })
@@ -388,10 +416,7 @@ extension iTunesRadioStation {
             }
             #endif
 
-            let repeatsLast = latestPlayInfo.map { playInfo.repeats($0) } ?? false
-            if repeatHold.receive(playInfo, repeatsLast: repeatsLast) {
-                os_log("%{public}s[%{public}ld], %{public}s: holding a repeat of the last notification until the motion on screen is over", ((#file as NSString).lastPathComponent), #line, #function)
-            }
+            receive(playInfo, receivedAt, repeatsLast)
 
         } catch {
             // A payload this app can't decode is Music's business, not a bug to stop on:

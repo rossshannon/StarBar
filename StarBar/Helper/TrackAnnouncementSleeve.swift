@@ -225,11 +225,11 @@ enum TrackAnnouncementSleeve {
     /// How far above the strip's bottom edge the sleeve and its shadow reach, for a rise of
     /// `progress` and the pointer's `tilt`, at `scale`. Above the strip's height, it breaks out
     /// of the strip; below it, a strip that has slid out of sight takes all of the sleeve with it.
-    static func top(rise progress: CGFloat, tilt: Tilt = .rest, scale: CGFloat = 1) -> CGFloat {
+    static func top(rise progress: CGFloat, tilt: Tilt = .rest, scale: CGFloat = 1, includingShadow: Bool = true) -> CGFloat {
         let side = size * scale
         let turned = projectedBounds(of: CGSize(width: side, height: side), tilt: tilt, scale: scale, riseScale: riseScale(progress))
         let centre = (bottomInset + size / 2) * scale - riseDrop(progress, scale: scale)
-        return centre + turned.maxY + shadowReach * scale
+        return centre + turned.maxY + (includingShadow ? shadowReach * scale : 0)
     }
 
     /// The scale for a rise of `progress`: `riseStartScale` sunk, 1 in place
