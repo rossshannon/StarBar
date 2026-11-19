@@ -149,14 +149,23 @@ final class iTunesRadioStation {
     /// (`motionHoldsBackAReread`).
     var somethingIsMoving: () -> Bool = { false }
 
+    /// Only while passing on a decoded Music notification. A manual strip or a popover
+    /// opened later must not time its cover request from an unrelated notification.
+    private(set) var artworkNotification: (identity: String?, receivedAt: TimeInterval)?
+
     /// Holds a `playerInfo` that repeats the last one, and the Apple Events everything reads on
     /// a player update, until the strip and the menu bar have stopped moving: see
     /// `RepeatedUpdateHold`. Timed on `rereadClock`, so the tests can fire it by hand like the
     /// re-reads.
-    private lazy var repeatHold = RepeatedUpdateHold<PlayInfo>(
+    private lazy var repeatHold = RepeatedUpdateHold<(info: PlayInfo, receivedAt: TimeInterval)>(
         clock: { [unowned self] in self.rereadClock },
         isBusy: { [unowned self] in self.somethingIsMoving() },
-        apply: { [unowned self] playInfo in self.latestPlayInfo = playInfo }
+        apply: { [unowned self] update in
+            let identity = TrackAnnouncementController.PlayerSnapshot(playInfo: update.info).identity
+            self.artworkNotification = (identity, update.receivedAt)
+            defer { self.artworkNotification = nil }
+            self.latestPlayInfo = update.info
+        }
     )
 
     /// How long to wait after a library change before re-reading the player.
@@ -376,6 +385,7 @@ extension iTunesRadioStation {
             }
             let playInfo = try decoder.decode(PlayInfo.self, from: jsonData)
 
+            let receivedAt = ProcessInfo.processInfo.systemUptime
             os_log("%{public}s[%{public}ld], %{public}s: %{public}s", ((#file as NSString).lastPathComponent), #line, #function, playInfo.shortDescription)
 
             #if DEBUG
@@ -389,7 +399,7 @@ extension iTunesRadioStation {
             #endif
 
             let repeatsLast = latestPlayInfo.map { playInfo.repeats($0) } ?? false
-            if repeatHold.receive(playInfo, repeatsLast: repeatsLast) {
+            if repeatHold.receive((playInfo, receivedAt), repeatsLast: repeatsLast) {
                 os_log("%{public}s[%{public}ld], %{public}s: holding a repeat of the last notification until the motion on screen is over", ((#file as NSString).lastPathComponent), #line, #function)
             }
 

@@ -170,7 +170,7 @@ final class AppleMusicArtworkLoader {
     /// The cover of the song `title` on `album`, from the cache or from Apple. `artists` is the
     /// track's artist first, then the album artist. `completion` runs on the main thread, with
     /// nil when there's no match or the network failed.
-    func load(title: String, artists: [String], album: String, completion: @escaping (NSImage?) -> Void) {
+    func load(title: String, artists: [String], album: String, notificationTime: TimeInterval? = nil, completion: @escaping (NSImage?) -> Void) {
         guard let asked = self.query(title: title, artists: artists, album: album) else {
             completion(nil)
             return
@@ -189,7 +189,10 @@ final class AppleMusicArtworkLoader {
             return
         }
         inFlight[key] = [(song: song, completion: completion)]
-        os_log("%{public}s[%{public}ld], %{public}s: asking Apple for the cover of %{public}s by %{public}s on %{public}s", ((#file as NSString).lastPathComponent), #line, #function, title, artists.first ?? "nil", album)
+        let timing = notificationTime.map {
+            String(format: "%.0f ms after Music notification", (ProcessInfo.processInfo.systemUptime - $0) * 1000)
+        } ?? "outside a matching Music notification"
+        os_log("%{public}s[%{public}ld], %{public}s: asking Apple for the cover of %{public}s by %{public}s on %{public}s (%{public}s)", ((#file as NSString).lastPathComponent), #line, #function, title, artists.first ?? "nil", album, timing)
 
         find(searches[...], artists: artists, album: album) { [weak self] found, allAnswered in
             guard let cover = found else {

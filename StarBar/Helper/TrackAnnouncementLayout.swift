@@ -269,6 +269,16 @@ enum TrackAnnouncementPlacement {
         return CGPoint(x: 0, y: shown ? 0 : -TrackAnnouncementLayout.stripHeight(scale: scale))
     }
 
+    /// Does the placeholder itself reach above the bottom of the panel? The flat slot
+    /// rides the slide. The sleeve does too, even before it starts its independent rise.
+    /// Under Reduce Motion both are already in place, but start completely transparent.
+    static func artworkSlotIsVisible(stripY: CGFloat, alpha: CGFloat, flatTop: CGFloat,
+                                     sleeveRise: CGFloat?, tilt: TrackAnnouncementSleeve.Tilt, scale: CGFloat) -> Bool {
+        guard alpha > 0 else { return false }
+        let top = sleeveRise.map { TrackAnnouncementSleeve.top(rise: $0, tilt: tilt, scale: scale, includingShadow: false) } ?? flatTop
+        return stripY + top > 0
+    }
+
     static func transition(reduceMotion: Bool) -> Transition {
         return reduceMotion ? .fade : .slide
     }

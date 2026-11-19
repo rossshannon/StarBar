@@ -101,6 +101,108 @@ final class AppleMusicArtworkLoaderTests: XCTestCase {
 
     // MARK: - The search
 
+    func testNewStripStartsOneSearchBeforeReadingTheHeart() {
+        let track = FakeTrack(name: chainHome.title, artist: chainHome.artists[0], album: chainHome.album)
+        track.objectClassCode = MusicTrackClass.urlTrack
+        let playing = PlayingTrack(track: track, libraryCopy: { _ in nil })
+        let identity = [track.name, track.artist, track.album].joined(separator: "|")
+        let newStrip = TrackAnnouncementController.ArtworkRead.forNewStrip(listed: false)
+
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: "another|artist|album", artwork: newStrip, covers: loader)
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: .skip, covers: loader)
+        XCTAssertTrue(requests.isEmpty, "a stale notification and a refresh ask nothing")
+
+        var searchesAtHeartRead: [Int] = []
+        track.whenRead = { searchesAtHeartRead.append(self.terms().count) }
+        let arrived = expectation(forNotification: .appleMusicCoverDidLoad, object: nil) { note in
+            let identities = note.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String]
+            return identities == [track.persistentID, identity] && note.userInfo?[AppleMusicArtworkLoader.imageKey] is NSImage
+        }
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: newStrip, covers: loader)
+        XCTAssertEqual(searchesAtHeartRead, [1])
+        XCTAssertNil(playing.sleeve(covers: loader), "the popover leaves the outstanding ask alone")
+        wait(for: [arrived], timeout: 1)
+        XCTAssertNotNil(playing.sleeve(covers: loader), "the answer is ready for a later presentation")
+        XCTAssertEqual(terms().count, 1)
+    }
+
+    func testOwnedCopyOnThePlayingAlbumDoesNotStartAnAppleSearch() {
+        let track = FakeTrack()
+        track.objectClassCode = MusicTrackClass.urlTrack
+        let copy = FakeTrack()
+        let playing = PlayingTrack(track: track, libraryCopy: { _ in copy })
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: track.persistentID, artwork: .forNewStrip(listed: true), covers: loader)
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testACopyOnAnotherReleaseSuppliesTheRatingWhileAppleFindsThePlayingCover() {
+        let track = FakeTrack(name: chainHome.title, artist: chainHome.artists[0], album: chainHome.album, persistentID: "00000000000000F2")
+        track.objectClassCode = MusicTrackClass.urlTrack
+        let copy = FakeTrack(album: "Compilation", rating: 80)
+        let playing = PlayingTrack(track: track, libraryCopy: { _ in copy })
+        var searchesAtRead: [Int] = []
+        copy.whenRead = { searchesAtRead.append(self.terms().count) }
+
+        let arrived = expectation(forNotification: .appleMusicCoverDidLoad, object: nil) { note in
+            let identities = note.userInfo?[AppleMusicArtworkLoader.identitiesKey] as? [String]
+            return identities?.first == track.persistentID
+        }
+        let load = AppDelegate.loadAnnouncementLiveTrack(playing, for: track.persistentID, artwork: .forNewStrip(listed: false), covers: loader)
+        guard case .loaded(let live) = load else { return XCTFail("same catalog song") }
+        XCTAssertEqual(live.rating, 80)
+        XCTAssertNil(live.artwork)
+        wait(for: [arrived], timeout: 1)
+        XCTAssertEqual(searchesAtRead, [1, 1], "the search is in flight for both the rating and the heart")
+    }
+
+    func testACatalogSongWithNoLiveIDDoesNotStartAnAppleSearch() {
+        let track = FakeTrack(persistentID: "")
+        track.objectClassCode = MusicTrackClass.urlTrack
+        let playing = PlayingTrack(track: track, libraryCopy: { _ in nil })
+        let identity = [track.name, track.artist, track.album].joined(separator: "|")
+        _ = AppDelegate.loadAnnouncementLiveTrack(playing, for: identity, artwork: .forNewStrip(listed: true), covers: loader)
+        XCTAssertTrue(requests.isEmpty)
+    }
+
+    func testAppleStartsBeforeTheFallbackAndARetryKeepsMusicsCover() {
+        let music = NSImage(size: NSSize(width: 8, height: 8))
+        let apple = NSImage(size: music.size)
+        for retry in [false, true] {
+            var answer: ((NSImage?) -> Void)?
+            var published: [NSImage?] = []
+            let initial = PlayingTrack.requestCover(isRetry: retry, start: { answer = $0 }, readFallback: {
+                XCTAssertNotNil(answer, "the search must be in flight before Music's fallback read")
+                return music
+            }, publish: { published.append($0 ?? $1) })
+            XCTAssertTrue(initial === (retry ? music : nil))
+            XCTAssertTrue(published.isEmpty)
+            answer?(apple)
+            XCTAssertEqual(published.count, 1)
+            XCTAssertTrue(published.first == apple)
+        }
+    }
+
+    func testAnImmediateAppleAnswerUsesTheCheckedFallbackOnce() {
+        let music = NSImage(size: NSSize(width: 8, height: 8))
+        let apple = NSImage(size: music.size)
+        for answer in [apple, nil] {
+            var reads = 0
+            var publications = 0
+            let initial = PlayingTrack.requestCover(isRetry: false, start: { $0(answer) }, readFallback: {
+                reads += 1
+                return music
+            }, publish: { cover, fallback in
+                XCTAssertEqual(reads, 1)
+                XCTAssertTrue(cover === answer)
+                XCTAssertTrue(fallback === music)
+                publications += 1
+            })
+            XCTAssertTrue(initial === (answer ?? music))
+            XCTAssertEqual(reads, 1)
+            XCTAssertEqual(publications, 1)
+        }
+    }
+
     func testTheSearchAsksForTheSongByArtistAndTitle() {
         let url = AppleMusicArtworkLoader.searchURL(artist: "Radiohead", title: "Exit Music (For a Film) [Remastered]", country: "IE")!
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)!

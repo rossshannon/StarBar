@@ -16,6 +16,19 @@ final class TrackAnnouncementLayoutTests: XCTestCase {
 
     // MARK: - Frames
 
+    func testArtworkVisibilityUsesTheAppliedFrameAndOpacity() {
+        func visible(y: CGFloat, rise: CGFloat?, alpha: CGFloat = 1) -> Bool {
+            return TrackAnnouncementPlacement.artworkSlotIsVisible(stripY: y, alpha: alpha, flatTop: 92,
+                                                                   sleeveRise: rise, tilt: .rest, scale: 1)
+        }
+        XCTAssertFalse(visible(y: -104, rise: 0))
+        XCTAssertFalse(visible(y: -92, rise: nil), "touching the clip edge exposes nothing")
+        XCTAssertTrue(visible(y: -91, rise: nil))
+        XCTAssertTrue(visible(y: -92, rise: 0), "the sunk sleeve rides higher than the flat slot")
+        XCTAssertFalse(visible(y: 0, rise: 1, alpha: 0))
+        XCTAssertTrue(visible(y: 0, rise: 1, alpha: 0.01))
+    }
+
     func testArtworkMatchesGrowlAtScaleOne() {
         let frames = TrackAnnouncementLayout.frames(in: normal)
 

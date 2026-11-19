@@ -1297,6 +1297,84 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(animated.stripView.sleeve.isHidden)
     }
 
+    func testAnUnseenCoverAndItsColourAreReadyOnTheFirstExposedFrame() throws {
+        let cover = try solidCover(0.8, 0.2, 0.1)
+        for breakout in [false, true] {
+            for reduceMotion in [false, true] {
+                let clock = FakeClock()
+                let animated = sleevePanel(clock)
+                defer { animated.orderOut(nil) }
+                sleeveKnobs.breakout = breakout
+                animated.albumTintMode = breakout ? .glow : .strip
+                animated.show(sample, reduceMotion: reduceMotion, reduceTransparency: true)
+                if !reduceMotion {
+                    clock.runFrames(for: 1.0 / 60.0) // Both slots are still clipped.
+                }
+                let origin = animated.stripView.frame.origin
+                animated.refresh(TrackAnnouncement(copying: sample, artwork: cover))
+
+                XCTAssertEqual(animated.stripView.artworkFade, 1)
+                if breakout {
+                    XCTAssertEqual(animated.stripView.sleeve.coverOpacity, 1)
+                    XCTAssertEqual(animated.stripView.sleeve.placeholderOpacity, 0)
+                }
+                XCTAssertEqual(animated.stripView.albumTint, AlbumTint.colour(of: cover))
+                XCTAssertFalse(animated.isFadingTint)
+                XCTAssertEqual(animated.stripView.frame.origin, origin)
+                XCTAssertEqual(animated.phase, .slidingIn)
+            }
+        }
+    }
+
+    func testAnExposedPlaceholderFadesEvenBeforeTheSleevesRise() throws {
+        let cover = try solidCover(0.8, 0.2, 0.1)
+        for breakout in [false, true] {
+            for reduceMotion in [false, true] {
+                let clock = FakeClock()
+                let animated = sleevePanel(clock)
+                defer { animated.orderOut(nil) }
+                sleeveKnobs.breakout = breakout
+                animated.albumTintMode = breakout ? .glow : .strip
+                animated.show(sample, reduceMotion: reduceMotion, reduceTransparency: false)
+                clock.runFrames(for: reduceMotion ? 1.0 / 60.0 : 0.12)
+                if breakout && !reduceMotion { XCTAssertEqual(animated.stripView.sleeve.rise, 0) }
+                animated.refresh(TrackAnnouncement(copying: sample, artwork: cover))
+
+                XCTAssertEqual(animated.stripView.artworkFade, 0)
+                if breakout { XCTAssertEqual(animated.stripView.sleeve.placeholderOpacity, 1) }
+                XCTAssertTrue(animated.isFadingTint)
+                clock.runFrames(for: 0.15)
+                XCTAssertEqual(animated.stripView.artworkFade, 0.5, accuracy: 0.01)
+            }
+        }
+    }
+
+    func testATurnaroundRemembersTheSlotWasExposedAndANewAppearanceForgets() {
+        let clock = FakeClock()
+        let animated = sleevePanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.7)
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: drawnCover))
+        XCTAssertEqual(animated.stripView.artworkFade, 1, "the warm-up's frames belong to the warm-up")
+
+        clock.runFrames(for: 0.7)
+        animated.hide()
+        clock.runFrames(for: 0.29)
+        let next = song("next", cover: nil)
+        animated.show(next, reduceMotion: false, reduceTransparency: false)
+        animated.refresh(TrackAnnouncement(copying: next, artwork: drawnCover))
+        XCTAssertEqual(animated.stripView.artworkFade, 0, "turning round keeps the exposed slot")
+        animated.hide()
+        clock.runFrames(for: 0.4)
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: drawnCover))
+        XCTAssertEqual(animated.stripView.announcement.identity, next.identity, "a hidden strip ignores the refresh")
+        animated.show(sample, reduceMotion: false, reduceTransparency: false)
+        animated.refresh(TrackAnnouncement(copying: sample, artwork: drawnCover))
+        XCTAssertEqual(animated.stripView.artworkFade, 1)
+    }
+
     /// A cover that comes after the strip went up cross-fades from the placeholder on the
     /// sleeve as it does in the flat strip, on the same clock
     func testALateCoverCrossFadesOnTheSleeve() {
