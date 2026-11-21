@@ -66,6 +66,16 @@ When Spotify plays on another device, such as a speaker in another room, the Mac
 
 So StarBar watches Spotify's process through Core Audio (`ProcessAudioOutput`, `SpotifyPlaybackPlace`): Playing with no sound from Spotify within `outputWait` is another device's, and is hidden from the strip and the menu bar unless Preferences shows other devices (Ross chose this on 2026-11-21, off by default). A hidden song isn't scrobbled either: Ross asked the same day for scrobbling to follow what is shown, one for one. To the scrobbler a song on the other device is a pause, so a play begun on this Mac counts only its time here, and isn't scrobbled twice when it comes back. Each notification and each decision is logged, as "Spotify says … its sound is …" and "Spotify is playing …", so the first live run settles the open points above.
 
+### Measured live, 2026-11-21
+
+StarBar Dev on Exocortex (macOS 27), with the setting off, read from its log:
+
+- **The sandboxed app reads Core Audio**, and the listener on `IsRunningOutput` is called: no failed read in seven hours, and a "started sending sound" or "stopped sending sound" line for every change. Spotify's main process is the one that sends.
+- **Six songs played on the Alexa between 12:36 and 12:55 were all hidden**: each Playing came with no sound from Spotify and went out hidden.
+- **A song started on this Mac sends sound first**: "In Dulce Jubilo" began sending at 15:22:18.150 and Spotify's notification came 26 ms later, so it showed at once.
+- **A song started on the Alexa while this Mac was playing another reached the strip.** Spotify announced “Fairytale of New York” at 15:22:41.880, 0.252 s into the song, while this Mac's sound for “In Dulce Jubilo” was still going out, so StarBar took it as playing here and the strip came up 5 ms later. The sound stopped at 15:22:42.738, 0.86 s after the notification, and the song was hidden 2.2 s after that, with the strip already up. Hence `confirmWait`: a new song announced while the sound from the song before goes on is held 1.5 s, and shows only if the sound is still going then. A song that follows the one before as it ends (`dueToEnd`, 15 s, room for Spotify's crossfade of up to 12 s) or whose sound started at most `freshSound` (0.5 s) before its notification isn't held. A song skipped to on this Mac is held, and shows 1.5 s late; how Core Audio sees a skip here hasn't been measured, so whether it can be told apart sooner is open.
+- **One sample of the tail**: whether 0.86 s varies, with the network or the device, is not known.
+
 ## Opening a song
 
 `open spotify:track:…` drives playback rather than showing the song, and not consistently. Spotify never came to the front.

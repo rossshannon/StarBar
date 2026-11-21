@@ -40,7 +40,8 @@ extension Notification.Name {
 /// the same notification, with nothing to say where it plays. Core Audio can say whether
 /// Spotify's own process is sending sound to this Mac's outputs (`ProcessAudioOutput`), and
 /// `SpotifyPlaybackPlace` turns that into a place, holding a Playing notification for up to
-/// `SpotifyPlaybackPlace.outputWait` while it waits for the sound. Unless Preferences shows
+/// `SpotifyPlaybackPlace.outputWait` while it waits for the sound, or `confirmWait` while the
+/// sound of the song before may still be draining. Unless Preferences shows
 /// other devices (`spotifyShowsOtherDevices`), a Spotify playing elsewhere is hidden: `latest`
 /// is nil and `isShown` false, so the strip, the menu bar and the arbiter treat it as a
 /// Spotify that isn't running, it never takes the menu bar from Music, and its songs are
@@ -195,11 +196,17 @@ extension SpotifyPlayer {
     /// Pass `info` on now, or hold it while `place` waits for Spotify's sound. With other
     /// devices shown nothing is held: there is nothing to hide.
     private func hear(_ info: SpotifyPlayInfo, fetchingArtwork: Bool = true) {
-        let canPassOn = place.heard(info.state)
-        os_log("%{public}s[%{public}ld], %{public}s: Spotify says %{public}s for %{public}s; its sound is %{public}s, so it plays %{public}s", ((#file as NSString).lastPathComponent), #line, #function,
-               String(describing: info.state), info.trackID ?? "nothing",
-               place.output.map { $0 ? "going out" : "off" } ?? "unknown",
-               canPassOn ? (place.place == .here ? "here" : "on another device") : "where its sound says, once it comes")
+        let canPassOn = place.heard(info.state, song: info.trackID, position: info.position,
+                                    duration: info.duration.map { TimeInterval($0) / 1000 })
+        let verdict: String
+        switch (canPassOn, place.waiting) {
+        case (true, _): verdict = place.place == .here ? "here" : "on another device"
+        case (false, .afterNewSong): verdict = "here only if its sound goes on"
+        case (false, _): verdict = "where its sound says, once it comes"
+        }
+        os_log("%{public}s[%{public}ld], %{public}s: Spotify says %{public}s for %{public}s at %.3f s; its sound is %{public}s, so it plays %{public}s", ((#file as NSString).lastPathComponent), #line, #function,
+               String(describing: info.state), info.trackID ?? "nothing", info.position ?? -1,
+               place.output.map { $0 ? "going out" : "off" } ?? "unknown", verdict)
         guard canPassOn || !SpotifyPlayer.hidesOtherDevices else {
             isHolding = true
             return

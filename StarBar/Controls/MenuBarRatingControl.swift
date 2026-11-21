@@ -216,7 +216,8 @@ final class MenuBarRatingControl {
     }
     private lazy var playbackState = MenuBarPlaybackState { [weak self] in
         guard let self = self else { return }
-        os_log("Music quit; returning to the stopped icon and resetting the menu bar session")
+        // Music quit, or Spotify quit or went to another device with no song left in Music
+        os_log("No player left to follow; returning to the stopped icon and resetting the menu bar session")
         // The player popover has nothing left to show
         WindowManager.shared.closeAttachedPopover()
         self.displayedSongIdentity = nil
