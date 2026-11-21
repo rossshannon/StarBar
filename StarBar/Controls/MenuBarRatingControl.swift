@@ -1240,9 +1240,10 @@ extension MenuBarRatingControl {
     func applySpotifyDisplay() {
         let spotify = SpotifyPlayer.shared
         let info = spotify.latest
+        // A Spotify playing only on another device, and hidden, is one that isn't running
         let canShowTrack = playbackState.update(hasTrack: info?.isAnnounceable == true,
                                                isStopped: info?.state == .stopped,
-                                               isRunning: spotify.isRunning)
+                                               isRunning: spotify.isShown)
         updateGestureRecognizerBehavior()
         // Nothing for the reminder to time: it reads Music's position
         reminderController?.playerDidUpdate(nil)

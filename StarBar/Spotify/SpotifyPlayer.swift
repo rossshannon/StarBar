@@ -36,6 +36,17 @@ extension Notification.Name {
 ///
 /// Rating and favourites don't exist here: Spotify's AppleScript can't set Liked Songs.
 ///
+/// **Spotify playing on another device** (Spotify Connect: a speaker, a TV, a phone) posts
+/// the same notification, with nothing to say where it plays. Core Audio can say whether
+/// Spotify's own process is sending sound to this Mac's outputs (`ProcessAudioOutput`), and
+/// `SpotifyPlaybackPlace` turns that into a place, holding a Playing notification for up to
+/// `SpotifyPlaybackPlace.outputWait` while it waits for the sound. Unless Preferences shows
+/// other devices (`spotifyShowsOtherDevices`), a Spotify playing elsewhere is hidden: `latest`
+/// is nil and `isShown` false, so the strip, the menu bar and the arbiter treat it as a
+/// Spotify that isn't running, it never takes the menu bar from Music, and its songs are
+/// never announced. The scrobbler follows what is shown, so a hidden song isn't scrobbled
+/// either (`LastfmSources.spotify(shown:heard:isHidden:)`).
+///
 /// State is read and written on the main thread only.
 final class SpotifyPlayer {
 
@@ -45,8 +56,22 @@ final class SpotifyPlayer {
 
     static let shared = SpotifyPlayer()
 
-    /// Spotify's last notification, or what was read at launch. Nil when Spotify isn't running.
+    /// Spotify's last notification, or what was read at launch, as Spotify said it. Nil when
+    /// Spotify isn't running. The scrobbler reads this only while Spotify is hidden.
+    private(set) var heard: SpotifyPlayInfo?
+    /// What StarBar shows of Spotify: `heard` as last passed on, or nil while Spotify plays on
+    /// another device and Preferences hides those. A notification waiting for Spotify's sound
+    /// isn't passed on yet. The strip, the menu bar, the arbiter and the scrobbler read this.
     private(set) var latest: SpotifyPlayInfo?
+    /// True while Spotify plays on another device and Preferences hides those
+    private(set) var isHidden = false
+    /// Spotify's main process's sound
+    private let audioOutput = ProcessAudioOutput()
+    /// Where Spotify is playing, as far as Core Audio can tell
+    private(set) lazy var place = SpotifyPlaybackPlace(readOutput: { [weak self] in self?.audioOutput.isSendingAudio() })
+    /// True while a notification waits for `place` to decide
+    private var isHolding = false
+    private var showsOtherDevicesObservation: NSKeyValueObservation?
     /// Called on the main thread with the song found playing at launch, before the update
     /// that reports it, so the strip records it as seen rather than announcing it
     var didSeed: ((SpotifyPlayInfo) -> Void)?
@@ -72,6 +97,17 @@ final class SpotifyPlayer {
         let workspace = NSWorkspace.shared.notificationCenter
         workspace.addObserver(self, selector: #selector(SpotifyPlayer.applicationDidLaunch(_:)), name: NSWorkspace.didLaunchApplicationNotification, object: nil)
         workspace.addObserver(self, selector: #selector(SpotifyPlayer.applicationDidTerminate(_:)), name: NSWorkspace.didTerminateApplicationNotification, object: nil)
+        audioOutput.didChange = { [weak self] isSendingAudio in
+            self?.place.outputChanged(isSendingAudio)
+        }
+        place.didDecide = { [weak self] in
+            self?.placeDidChange()
+        }
+        audioOutput.watch(pid: runningApplication?.processIdentifier)
+        place.reset()
+        showsOtherDevicesObservation = UserDefaults.standard.observe(\.spotifyShowsOtherDevices, options: [.new]) { [weak self] _, _ in
+            DispatchQueue.main.async { self?.placeDidChange() }
+        }
         seed()
     }
 
@@ -82,6 +118,19 @@ final class SpotifyPlayer {
 
     var isRunning: Bool {
         return runningApplication != nil
+    }
+
+    /// Whether StarBar follows Spotify: it is running, and isn't playing on another device
+    /// that Preferences hides. The strip, the menu bar and the arbiter read this rather than
+    /// `isRunning`.
+    var isShown: Bool {
+        return isRunning && !isHidden
+    }
+
+    /// Whether Spotify playing on another device is hidden: unless Preferences shows them, and
+    /// only where this Mac can tell
+    static var hidesOtherDevices: Bool {
+        return ProcessAudioOutput.isAvailable && !UserDefaults.standard.spotifyShowsOtherDevices
     }
 
     /// The sleeve for a song, if it has arrived. No Apple Event, no network.
@@ -134,30 +183,70 @@ extension SpotifyPlayer {
         // The whole payload, so the first sandboxed run proves the userInfo arrives at all
         os_log("%{public}s[%{public}ld], %{public}s: Spotify payload %{public}s", ((#file as NSString).lastPathComponent), #line, #function, String(describing: userInfo))
         let info = SpotifyPlayInfo(userInfo: userInfo)
-        if info.state == .unknown, let previous = latest {
+        if info.state == .unknown, let previous = heard {
             // A payload that says nothing about the player changes nothing
             os_log(.debug, "%{public}s[%{public}ld], %{public}s: Spotify payload with no player state; keeping %{public}s", ((#file as NSString).lastPathComponent), #line, #function, previous.trackID ?? "nil")
             return
         }
-        latest = info
+        heard = info
+        hear(info)
+    }
+
+    /// Pass `info` on now, or hold it while `place` waits for Spotify's sound. With other
+    /// devices shown nothing is held: there is nothing to hide.
+    private func hear(_ info: SpotifyPlayInfo, fetchingArtwork: Bool = true) {
+        let canPassOn = place.heard(info.state)
+        os_log("%{public}s[%{public}ld], %{public}s: Spotify says %{public}s for %{public}s; its sound is %{public}s, so it plays %{public}s", ((#file as NSString).lastPathComponent), #line, #function,
+               String(describing: info.state), info.trackID ?? "nothing",
+               place.output.map { $0 ? "going out" : "off" } ?? "unknown",
+               canPassOn ? (place.place == .here ? "here" : "on another device") : "where its sound says, once it comes")
+        guard canPassOn || !SpotifyPlayer.hidesOtherDevices else {
+            isHolding = true
+            return
+        }
+        publish(fetchingArtwork: fetchingArtwork)
+    }
+
+    /// `place` decided after the event that started it, or the setting changed
+    private func placeDidChange() {
+        let hidden = place.place == .elsewhere && SpotifyPlayer.hidesOtherDevices
+        guard isHolding || hidden != isHidden else { return }
+        publish()
+    }
+
+    /// Pass the last notification on, shown or hidden by where Spotify plays, and fetch the
+    /// sleeve of a song that is shown
+    private func publish(fetchingArtwork: Bool = true) {
+        isHolding = false
+        let hidden = place.place == .elsewhere && SpotifyPlayer.hidesOtherDevices
+        if hidden != isHidden {
+            os_log("%{public}s[%{public}ld], %{public}s: %{public}s Spotify", ((#file as NSString).lastPathComponent), #line, #function, hidden ? "hiding, while it plays on another device," : "showing")
+        }
+        isHidden = hidden
+        latest = hidden ? nil : heard
         NotificationCenter.default.post(name: .spotifyPlayerDidUpdate, object: nil)
-        if info.isAnnounceable, info.hasArtwork, info.state != .stopped, let trackID = info.trackID, artwork(for: trackID) == nil {
+        if fetchingArtwork, let info = latest, info.isAnnounceable, info.hasArtwork, info.state != .stopped, let trackID = info.trackID, artwork(for: trackID) == nil {
             loadArtwork(for: trackID)
         }
     }
 
     @objc private func applicationDidLaunch(_ notification: Notification) {
         guard SpotifyPlayer.isSpotify(notification) else { return }
+        let application = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication
+        audioOutput.watch(pid: application?.processIdentifier)
+        place.reset()
         // Spotify posts its own notification when it starts playing; this is for the
         // arbiter, which only follows a player it knows is running
-        NotificationCenter.default.post(name: .spotifyPlayerDidUpdate, object: nil)
+        publish()
     }
 
     @objc private func applicationDidTerminate(_ notification: Notification) {
         guard SpotifyPlayer.isSpotify(notification) else { return }
         os_log("%{public}s[%{public}ld], %{public}s: Spotify quit, clearing its player", ((#file as NSString).lastPathComponent), #line, #function)
-        latest = nil
-        NotificationCenter.default.post(name: .spotifyPlayerDidUpdate, object: nil)
+        heard = nil
+        audioOutput.watch(pid: nil)
+        place.reset()
+        publish()
     }
 
     private static func isSpotify(_ notification: Notification) -> Bool {
@@ -198,14 +287,15 @@ extension SpotifyPlayer {
             }
             guard let reading = SpotifyPlayer.read(pid: pid, includingSong: true) else { return }
             DispatchQueue.main.async {
-                guard let self = self, self.latest == nil, reading.state != .unknown else { return }
+                guard let self = self, self.heard == nil, reading.state != .unknown else { return }
                 let info = SpotifyPlayInfo(trackID: reading.trackID, name: reading.name, artist: reading.artist, album: reading.album, state: reading.state,
                                            duration: reading.duration, position: reading.position)
                 os_log("%{public}s[%{public}ld], %{public}s: Spotify has %{public}s at launch", ((#file as NSString).lastPathComponent), #line, #function, info.trackID ?? "nothing")
-                self.latest = info
+                self.heard = info
                 self.didSeed?(info)
-                NotificationCenter.default.post(name: .spotifyPlayerDidUpdate, object: nil)
-                if let trackID = info.trackID, info.isAnnounceable, let url = reading.artworkURL.flatMap(URL.init(string:)) {
+                // The sleeve's address came with the reading
+                self.hear(info, fetchingArtwork: false)
+                if self.latest?.trackID == info.trackID, let trackID = info.trackID, info.isAnnounceable, let url = reading.artworkURL.flatMap(URL.init(string:)) {
                     self.download(url, for: trackID)
                 }
             }
@@ -231,7 +321,7 @@ extension SpotifyPlayer {
                 // an answer. The read is then for the song playing now, so it is kept as long
                 // as that is the song the notifications last named: that song's own
                 // notification came before permission did, so nothing else will fetch it.
-                guard let readID = reading.trackID, readID == trackID || readID == self.latest?.trackID,
+                guard let readID = reading.trackID, readID == trackID || readID == self.heard?.trackID,
                       let url = reading.artworkURL.flatMap(URL.init(string:)) else {
                     os_log(.debug, "%{public}s[%{public}ld], %{public}s: no artwork URL for %{public}s (Spotify has %{public}s)", ((#file as NSString).lastPathComponent), #line, #function, trackID, reading.trackID ?? "nil")
                     return

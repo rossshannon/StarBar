@@ -8,8 +8,9 @@
 import Cocoa
 import os
 
-/// The General pane of Preferences: launching at login, half stars and the rating reminder,
-/// then, under a line, the Music Video strip with its style and colour
+/// The General pane of Preferences: launching at login, half stars, the rating reminder and
+/// Spotify on other devices, then, under a line, the Music Video strip with its style and
+/// colour
 final class GeneralPreferencesViewController: NSViewController {
 
     lazy var announcementStyleTextField: NSTextField = {
@@ -32,6 +33,20 @@ final class GeneralPreferencesViewController: NSViewController {
     }()
     let reminderCheckboxButton: NSButton = {
         let button = NSButton(checkboxWithTitle: "Remind me to rate unrated songs", target: nil, action: nil)
+        return button
+    }()
+    /// Off, Spotify playing on another device shows on neither the strip nor the menu bar, and
+    /// isn't scrobbled (`LastfmSources.spotify(shown:heard:isHidden:)`). It
+    /// says what it does on its own, and the tooltip says what "other devices" are. Greyed
+    /// out where this Mac can't tell (before macOS 14.2), since it would change nothing.
+    let spotifyOtherDevicesCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Show Spotify songs playing on other devices", target: nil, action: nil)
+        if ProcessAudioOutput.isAvailable {
+            button.toolTip = "Spotify Connect plays on speakers, TVs and phones. With this off, StarBar shows, and scrobbles to Last.fm, only what Spotify plays on this Mac."
+        } else {
+            button.isEnabled = false
+            button.toolTip = "StarBar can tell where Spotify plays from macOS 14.2. Until then, it shows Spotify songs wherever they play."
+        }
         return button
     }()
     let announceCheckboxButton: NSButton = {
@@ -77,6 +92,7 @@ final class GeneralPreferencesViewController: NSViewController {
             [empty, launchAtLoginCheckboxButton],
             [empty, halfStarCheckboxButton],
             [empty, reminderCheckboxButton],
+            [empty, spotifyOtherDevicesCheckboxButton],
             // The strip's settings are a block of their own
             [NSBox.separatorLine],
             [empty, announceRowView],
@@ -89,6 +105,7 @@ final class GeneralPreferencesViewController: NSViewController {
 
     var halfStarObservation: NSKeyValueObservation?
     var reminderObservation: NSKeyValueObservation?
+    var spotifyOtherDevicesObservation: NSKeyValueObservation?
     var announceObservation: NSKeyValueObservation?
     var announcementStyleObservation: NSKeyValueObservation?
     var albumTintObservation: NSKeyValueObservation?
@@ -100,6 +117,7 @@ final class GeneralPreferencesViewController: NSViewController {
     deinit {
         halfStarObservation?.invalidate()
         reminderObservation?.invalidate()
+        spotifyOtherDevicesObservation?.invalidate()
         announceObservation?.invalidate()
         announcementStyleObservation?.invalidate()
         albumTintObservation?.invalidate()
@@ -139,6 +157,10 @@ extension GeneralPreferencesViewController {
 
     @objc private func reminderCheckboxButtonChanged(_ sender: NSButton) {
         UserDefaults.standard.remindToRateUnrated = sender.state == .on
+    }
+
+    @objc private func spotifyOtherDevicesCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.spotifyShowsOtherDevices = sender.state == .on
     }
 
     @objc private func announceCheckboxButtonChanged(_ sender: NSButton) {
@@ -183,6 +205,13 @@ extension GeneralPreferencesViewController {
         reminderCheckboxButton.action = #selector(GeneralPreferencesViewController.reminderCheckboxButtonChanged(_:))
         reminderObservation = UserDefaults.standard.observe(\.remindToRateUnrated, options: [.initial, .new]) { [weak self] defaults, _ in
             self?.reminderCheckboxButton.state = defaults.remindToRateUnrated ? .on : .off
+        }
+
+        spotifyOtherDevicesCheckboxButton.target = self
+        spotifyOtherDevicesCheckboxButton.action = #selector(GeneralPreferencesViewController.spotifyOtherDevicesCheckboxButtonChanged(_:))
+        spotifyOtherDevicesObservation = UserDefaults.standard.observe(\.spotifyShowsOtherDevices, options: [.initial, .new]) { [weak self] defaults, _ in
+            // Before macOS 14.2 StarBar shows them whatever the setting says, and so does the box
+            self?.spotifyOtherDevicesCheckboxButton.state = defaults.spotifyShowsOtherDevices || !ProcessAudioOutput.isAvailable ? .on : .off
         }
 
         announceCheckboxButton.target = self

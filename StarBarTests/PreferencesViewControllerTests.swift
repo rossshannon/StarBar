@@ -94,7 +94,8 @@ final class PreferencesViewControllerTests: XCTestCase {
         let lines = descendants(of: grid, NSBox.self).filter { $0.boxType == .separator }
         XCTAssertEqual(lines.count, 1)
         let line = try rowIndex(of: try XCTUnwrap(lines.first))
-        for view in [general.launchAtLoginCheckboxButton, general.halfStarCheckboxButton, general.reminderCheckboxButton] {
+        for view in [general.launchAtLoginCheckboxButton, general.halfStarCheckboxButton, general.reminderCheckboxButton,
+                     general.spotifyOtherDevicesCheckboxButton] {
             XCTAssertLessThan(try rowIndex(of: view), line, "\(view) is above the line")
         }
         for view in [general.announceRowView, general.announcementStylePopUpButton, general.albumTintPopUpButton] {
