@@ -192,13 +192,36 @@ enum LastfmSources {
         return .observed(PlayerObservation(state: state, song: song))
     }
 
-    /// What Spotify is doing, from its last notification or the read made at launch
-    /// (`SpotifyPlayer.shared.heard`), asking Spotify nothing. `.gone` when there is none,
-    /// which is also what Spotify quitting leaves. A song Spotify plays on another device
-    /// counts as well, though the strip and the menu bar hide it: a play counts wherever it
-    /// played.
+    /// What Spotify is doing, as StarBar shows it (`SpotifyPlayer.shared`), asking Spotify
+    /// nothing: `spotify(shown:heard:isHidden:)`.
     static func spotify() -> PlayerReport {
-        guard !MenuBarRatingControl.isUITesting, let info = SpotifyPlayer.shared.heard else { return .gone }
+        guard !MenuBarRatingControl.isUITesting else { return .gone }
+        let player = SpotifyPlayer.shared
+        return spotify(shown: player.latest, heard: player.heard, isHidden: player.isHidden)
+    }
+
+    /// Spotify in the scrobbler's terms, one for one with what the strip and the menu bar
+    /// show: a song StarBar hides is not scrobbled either (Ross, 2026-11-21).
+    ///
+    /// - Shown (`SpotifyPlayer.latest`): Spotify's last notification as it was passed on, or
+    ///   the read made at launch. A notification still waiting for Spotify's sound hasn't
+    ///   been passed on, so the song before it stands meanwhile, and a play begins only once
+    ///   StarBar has decided it is playing on this Mac.
+    /// - Hidden, because Spotify plays on another device and Preferences hides those
+    ///   (`SpotifyPlayer.isHidden`): the song Spotify last named (`heard`), paused, with no
+    ///   position. Nothing counts and nothing is announced as playing while it plays
+    ///   elsewhere, and a play begun on this Mac is kept rather than forgotten, so a song
+    ///   moved to a speaker and back neither loses the time it played here nor is scrobbled
+    ///   twice. A song that starts on the other device is a pause of another song, which
+    ///   ends the play here, and is never tracked.
+    /// - Neither: `.gone`, which is also what Spotify quitting leaves.
+    static func spotify(shown: SpotifyPlayInfo?, heard: SpotifyPlayInfo?, isHidden: Bool) -> PlayerReport {
+        if isHidden {
+            guard let heard = heard else { return .gone }
+            guard let observation = heard.lastfmObservation else { return .nothingNew }
+            return .observed(PlayerObservation(state: .paused, song: observation.song))
+        }
+        guard let info = shown else { return .gone }
         return info.lastfmObservation.map(PlayerReport.observed) ?? .nothingNew
     }
 

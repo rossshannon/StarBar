@@ -35,13 +35,14 @@ final class GeneralPreferencesViewController: NSViewController {
         let button = NSButton(checkboxWithTitle: "Remind me to rate unrated songs", target: nil, action: nil)
         return button
     }()
-    /// Off, Spotify playing on another device shows on neither the strip nor the menu bar. It
+    /// Off, Spotify playing on another device shows on neither the strip nor the menu bar, and
+    /// isn't scrobbled (`LastfmSources.spotify(shown:heard:isHidden:)`). It
     /// says what it does on its own, and the tooltip says what "other devices" are. Greyed
     /// out where this Mac can't tell (before macOS 14.2), since it would change nothing.
     let spotifyOtherDevicesCheckboxButton: NSButton = {
         let button = NSButton(checkboxWithTitle: "Show Spotify songs playing on other devices", target: nil, action: nil)
         if ProcessAudioOutput.isAvailable {
-            button.toolTip = "Spotify Connect plays on speakers, TVs and phones. With this off, StarBar shows only what Spotify plays on this Mac."
+            button.toolTip = "Spotify Connect plays on speakers, TVs and phones. With this off, StarBar shows, and scrobbles to Last.fm, only what Spotify plays on this Mac."
         } else {
             button.isEnabled = false
             button.toolTip = "StarBar can tell where Spotify plays from macOS 14.2. Until then, it shows Spotify songs wherever they play."

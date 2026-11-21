@@ -44,8 +44,8 @@ extension Notification.Name {
 /// other devices (`spotifyShowsOtherDevices`), a Spotify playing elsewhere is hidden: `latest`
 /// is nil and `isShown` false, so the strip, the menu bar and the arbiter treat it as a
 /// Spotify that isn't running, it never takes the menu bar from Music, and its songs are
-/// never announced. `heard` keeps what Spotify said, for the scrobbler: a play counts
-/// wherever it played.
+/// never announced. The scrobbler follows what is shown, so a hidden song isn't scrobbled
+/// either (`LastfmSources.spotify(shown:heard:isHidden:)`).
 ///
 /// State is read and written on the main thread only.
 final class SpotifyPlayer {
@@ -57,11 +57,11 @@ final class SpotifyPlayer {
     static let shared = SpotifyPlayer()
 
     /// Spotify's last notification, or what was read at launch, as Spotify said it. Nil when
-    /// Spotify isn't running. The scrobbler reads this.
+    /// Spotify isn't running. The scrobbler reads this only while Spotify is hidden.
     private(set) var heard: SpotifyPlayInfo?
     /// What StarBar shows of Spotify: `heard` as last passed on, or nil while Spotify plays on
     /// another device and Preferences hides those. A notification waiting for Spotify's sound
-    /// isn't passed on yet. The strip, the menu bar and the arbiter read this.
+    /// isn't passed on yet. The strip, the menu bar, the arbiter and the scrobbler read this.
     private(set) var latest: SpotifyPlayInfo?
     /// True while Spotify plays on another device and Preferences hides those
     private(set) var isHidden = false

@@ -111,8 +111,8 @@ extension UserDefaults {
     }
 
     /// Show Spotify's songs while it plays on another device through Spotify Connect, such as a
-    /// speaker in another room. Off by default: StarBar then shows only what Spotify plays on
-    /// this Mac (`SpotifyPlaybackPlace`), which it can tell from macOS 14.2.
+    /// speaker in another room. Off by default: StarBar then shows, and scrobbles, only what
+    /// Spotify plays on this Mac (`SpotifyPlaybackPlace`), which it can tell from macOS 14.2.
     @objc dynamic var spotifyShowsOtherDevices: Bool {
         get {
             return bool(forKey: ApplicationKey.spotifyShowsOtherDevices.rawValue)
