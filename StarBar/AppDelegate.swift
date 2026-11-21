@@ -142,7 +142,7 @@ extension AppDelegate {
             isRunning: { kind in
                 switch kind {
                 case .music: return iTunesRadioStation.shared.iTunes != nil
-                case .spotify: return SpotifyPlayer.shared.isRunning
+                case .spotify: return SpotifyPlayer.shared.isShown
                 }
             },
             refusedWrites: { iTunesRadioStation.shared.refusedWrites($0, to: $1) },
@@ -290,9 +290,9 @@ extension AppDelegate {
     }
 
     /// What Spotify is doing, from its last notification. No Apple Events. Nil when Spotify
-    /// isn't running or has said nothing yet.
+    /// isn't running, has said nothing yet, or plays on another device that is hidden.
     static func readSpotifySnapshot() -> TrackAnnouncementController.PlayerSnapshot? {
-        guard SpotifyPlayer.shared.isRunning else { return nil }
+        guard SpotifyPlayer.shared.isShown else { return nil }
         return SpotifyPlayer.shared.latest?.snapshot
     }
 

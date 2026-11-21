@@ -9,10 +9,13 @@
 /* Begin PBXBuildFile section */
 		5A7E1A000000000000000501 /* NowPlayingArbiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000500 /* NowPlayingArbiter.swift */; };
 		5A7E1A000000000000000503 /* SpotifyPlayInfo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000502 /* SpotifyPlayInfo.swift */; };
+		5A7E1A32C069BB8ED7000002 /* SpotifyPlaybackPlace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A32C069BB8ED7000001 /* SpotifyPlaybackPlace.swift */; };
+		5A7E1A32C069BB8ED7000004 /* ProcessAudioOutput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A32C069BB8ED7000003 /* ProcessAudioOutput.swift */; };
 		5A7E1A000000000000000505 /* SpotifyPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000504 /* SpotifyPlayer.swift */; };
 		5A7E1A000000000000000507 /* SpotifyArtworkLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000506 /* SpotifyArtworkLoader.swift */; };
 		5A7E1A000000000000000509 /* NowPlayingArbiterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000508 /* NowPlayingArbiterTests.swift */; };
 		5A7E1A00000000000000050B /* SpotifyPlayInfoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000000050A /* SpotifyPlayInfoTests.swift */; };
+		5A7E1A32C069BB8ED7000006 /* SpotifyPlaybackPlaceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A32C069BB8ED7000005 /* SpotifyPlaybackPlaceTests.swift */; };
 		5A7E1A00000000000000050D /* SpotifyArtworkLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000000050C /* SpotifyArtworkLoaderTests.swift */; };
 		5A7E1A000000000000000519 /* SpotifyLibraryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000518 /* SpotifyLibraryTests.swift */; };
 		5A7E1A000000000000000517 /* SpotifyAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000516 /* SpotifyAuthTests.swift */; };
@@ -198,10 +201,13 @@
 /* Begin PBXFileReference section */
 		5A7E1A000000000000000500 /* NowPlayingArbiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingArbiter.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000502 /* SpotifyPlayInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlayInfo.swift; sourceTree = "<group>"; };
+		5A7E1A32C069BB8ED7000001 /* SpotifyPlaybackPlace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlaybackPlace.swift; sourceTree = "<group>"; };
+		5A7E1A32C069BB8ED7000003 /* ProcessAudioOutput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessAudioOutput.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000504 /* SpotifyPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlayer.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000506 /* SpotifyArtworkLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyArtworkLoader.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000508 /* NowPlayingArbiterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingArbiterTests.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000000050A /* SpotifyPlayInfoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlayInfoTests.swift; sourceTree = "<group>"; };
+		5A7E1A32C069BB8ED7000005 /* SpotifyPlaybackPlaceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyPlaybackPlaceTests.swift; sourceTree = "<group>"; };
 		5A7E1A00000000000000050C /* SpotifyArtworkLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyArtworkLoaderTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000518 /* SpotifyLibraryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyLibraryTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000000516 /* SpotifyAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotifyAuthTests.swift; sourceTree = "<group>"; };
@@ -406,6 +412,7 @@
 				5A7E1A000000000000000514 /* SpotifyAccount.swift */,
 				5A7E1A000000000000000512 /* SpotifyLibrary.swift */,
 				5A7E1A000000000000000510 /* SpotifyAuth.swift */,
+				5A7E1A32C069BB8ED7000003 /* ProcessAudioOutput.swift */,
 			);
 			path = Spotify;
 			sourceTree = "<group>";
@@ -518,6 +525,7 @@
 				5A7E1A0000000000000000ED /* TrackAnnouncementControllerTests.swift */,
 				5A7E1A000000000000000508 /* NowPlayingArbiterTests.swift */,
 				5A7E1A00000000000000050A /* SpotifyPlayInfoTests.swift */,
+				5A7E1A32C069BB8ED7000005 /* SpotifyPlaybackPlaceTests.swift */,
 				5A7E1A00000000000000050C /* SpotifyArtworkLoaderTests.swift */,
 				5A7E1A000000000000000518 /* SpotifyLibraryTests.swift */,
 				5A7E1A000000000000000516 /* SpotifyAuthTests.swift */,
@@ -621,6 +629,7 @@
 				5A7E1A0000000000000001F5 /* MenuBarPlaybackState.swift */,
 				5A7E1A000000000000000500 /* NowPlayingArbiter.swift */,
 				5A7E1A0000000000000000D1 /* RatingReminder.swift */,
+				5A7E1A32C069BB8ED7000001 /* SpotifyPlaybackPlace.swift */,
 				5A7E1A0000000000000000F3 /* RatingWriteThrottle.swift */,
 				FB0000000000000000000001 /* RatingWriter.swift */,
 				DB89C9FF22E37826003981F5 /* OSVersionHelper.swift */,
@@ -855,6 +864,8 @@
 				DB106C6B22C661F900502D7C /* PlayInfo.swift in Sources */,
 				5A7E1A000000000000000501 /* NowPlayingArbiter.swift in Sources */,
 				5A7E1A000000000000000503 /* SpotifyPlayInfo.swift in Sources */,
+				5A7E1A32C069BB8ED7000002 /* SpotifyPlaybackPlace.swift in Sources */,
+				5A7E1A32C069BB8ED7000004 /* ProcessAudioOutput.swift in Sources */,
 				5A7E1A000000000000000505 /* SpotifyPlayer.swift in Sources */,
 				5A7E1A000000000000000507 /* SpotifyArtworkLoader.swift in Sources */,
 				5A7E1A000000000000000515 /* SpotifyAccount.swift in Sources */,
@@ -969,6 +980,7 @@
 				5A7E1A0000000000000001F4 /* StarRolloutTests.swift in Sources */,
 				5A7E1A000000000000000509 /* NowPlayingArbiterTests.swift in Sources */,
 				5A7E1A00000000000000050B /* SpotifyPlayInfoTests.swift in Sources */,
+				5A7E1A32C069BB8ED7000006 /* SpotifyPlaybackPlaceTests.swift in Sources */,
 				5A7E1A00000000000000050D /* SpotifyArtworkLoaderTests.swift in Sources */,
 				5A7E1A000000000000000519 /* SpotifyLibraryTests.swift in Sources */,
 				5A7E1A000000000000000517 /* SpotifyAuthTests.swift in Sources */,

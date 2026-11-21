@@ -143,7 +143,9 @@ extension NowPlayingArbiter {
 
     @objc private func spotifyDidUpdate(_ notification: Notification) {
         let spotify = SpotifyPlayer.shared
-        update(.spotify, isRunning: spotify.isRunning, isPlaying: spotify.latest?.state == .playing, identity: spotify.latest?.trackID)
+        // A Spotify playing only on another device, and hidden, counts as one that isn't
+        // running, so it never takes the menu bar from Music
+        update(.spotify, isRunning: spotify.isShown, isPlaying: spotify.latest?.state == .playing, identity: spotify.latest?.trackID)
         post(from: .spotify)
     }
 

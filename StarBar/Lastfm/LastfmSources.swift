@@ -193,10 +193,12 @@ enum LastfmSources {
     }
 
     /// What Spotify is doing, from its last notification or the read made at launch
-    /// (`SpotifyPlayer.shared.latest`), asking Spotify nothing. `.gone` when there is none,
-    /// which is also what Spotify quitting leaves.
+    /// (`SpotifyPlayer.shared.heard`), asking Spotify nothing. `.gone` when there is none,
+    /// which is also what Spotify quitting leaves. A song Spotify plays on another device
+    /// counts as well, though the strip and the menu bar hide it: a play counts wherever it
+    /// played.
     static func spotify() -> PlayerReport {
-        guard !MenuBarRatingControl.isUITesting, let info = SpotifyPlayer.shared.latest else { return .gone }
+        guard !MenuBarRatingControl.isUITesting, let info = SpotifyPlayer.shared.heard else { return .gone }
         return info.lastfmObservation.map(PlayerReport.observed) ?? .nothingNew
     }
 

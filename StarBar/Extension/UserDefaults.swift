@@ -16,6 +16,7 @@ enum ApplicationKey: String {
     case announcementStyle
     case announcementAlbumTint
     case spotifyClientID
+    case spotifyShowsOtherDevices
     case lastfmScrobbleSpotify
     case lastfmLoveSync
     case lastfmPaused
@@ -106,6 +107,18 @@ extension UserDefaults {
         }
         set {
             set(newValue, forKey: ApplicationKey.spotifyClientID.rawValue)
+        }
+    }
+
+    /// Show Spotify's songs while it plays on another device through Spotify Connect, such as a
+    /// speaker in another room. Off by default: StarBar then shows only what Spotify plays on
+    /// this Mac (`SpotifyPlaybackPlace`), which it can tell from macOS 14.2.
+    @objc dynamic var spotifyShowsOtherDevices: Bool {
+        get {
+            return bool(forKey: ApplicationKey.spotifyShowsOtherDevices.rawValue)
+        }
+        set {
+            set(newValue, forKey: ApplicationKey.spotifyShowsOtherDevices.rawValue)
         }
     }
 
