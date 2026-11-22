@@ -82,6 +82,25 @@ final class PreferencesViewControllerTests: XCTestCase {
         XCTAssertEqual(lastfmRow.rowAlignment, .firstBaseline, "the label sits on the Connect button's text")
     }
 
+    /// Spotify on other devices is a Spotify setting, so it sits in Spotify's block in
+    /// Accounts, above the line before Last.fm (Ross, 2026-11-22), and in no other pane
+    func testSpotifyOnOtherDevicesIsUnderSpotify() throws {
+        let controller = loadedController()
+        let accounts = try XCTUnwrap(controller.tabViewItems.first { PreferencesViewController.pane(of: $0) == .accounts }?.viewController as? AccountsPreferencesViewController)
+        let grid = accounts.gridView
+        func rowIndex(of view: NSView) throws -> Int {
+            return grid.index(of: try XCTUnwrap(grid.cell(for: view)?.row, "\(view) is in the Accounts grid"))
+        }
+        let line = try rowIndex(of: try XCTUnwrap(descendants(of: grid, NSBox.self).first { $0.boxType == .separator }))
+
+        let checkbox = try rowIndex(of: accounts.spotifyOtherDevicesCheckboxButton)
+
+        XCTAssertGreaterThan(checkbox, try rowIndex(of: accounts.spotifyStatusTextField), "under the sign-in's status")
+        XCTAssertLessThan(checkbox, line, "above the line before Last.fm")
+        let titles = controller.tabViewItems.compactMap { $0.viewController?.view }.flatMap { descendants(of: $0, NSButton.self) }.map(\.title)
+        XCTAssertEqual(titles.filter { $0 == "Show Spotify songs playing on other devices" }.count, 1, "in one pane only")
+    }
+
     /// The Music Video strip's three settings are a block of their own in General, under a line
     func testTheStripSettingsAreABlockOfTheirOwn() throws {
         let controller = loadedController()

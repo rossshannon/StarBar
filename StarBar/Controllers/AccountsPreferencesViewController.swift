@@ -8,7 +8,7 @@
 import Cocoa
 
 /// The Accounts pane of Preferences: the services StarBar signs in to, each with its
-/// Connect button and a line under it saying how the sign-in stands
+/// Connect button, a line under it saying how the sign-in stands, and that service's settings
 final class AccountsPreferencesViewController: NSViewController {
 
     lazy var spotifyTextField: NSTextField = {
@@ -24,6 +24,23 @@ final class AccountsPreferencesViewController: NSViewController {
         field.textColor = .secondaryLabelColor
         field.preferredMaxLayoutWidth = 300
         return field
+    }()
+
+    /// Off, Spotify playing on another device shows on neither the strip nor the menu bar, and
+    /// isn't scrobbled (`LastfmSources.spotify(shown:heard:isHidden:)`). It says what it does
+    /// on its own, and the tooltip says what "other devices" are. Greyed out where this Mac
+    /// can't tell (before macOS 14.2), since it would change nothing. It needs no sign-in, so
+    /// unlike Last.fm's settings it is never greyed out for want of one. Here under Spotify
+    /// rather than in General, where it was first: Ross, 2026-11-22.
+    let spotifyOtherDevicesCheckboxButton: NSButton = {
+        let button = NSButton(checkboxWithTitle: "Show Spotify songs playing on other devices", target: nil, action: nil)
+        if ProcessAudioOutput.isAvailable {
+            button.toolTip = "Spotify Connect plays on speakers, TVs and phones. With this off, StarBar shows, and scrobbles to Last.fm, only what Spotify plays on this Mac."
+        } else {
+            button.isEnabled = false
+            button.toolTip = "StarBar can tell where Spotify plays from macOS 14.2. Until then, it shows Spotify songs wherever they play."
+        }
+        return button
     }()
 
     lazy var lastfmTextField: NSTextField = {
@@ -56,6 +73,7 @@ final class AccountsPreferencesViewController: NSViewController {
         return PreferencesViewController.makeGrid([
             [spotifyTextField, spotifyConnectButton],
             [empty, spotifyStatusTextField],
+            [empty, spotifyOtherDevicesCheckboxButton],
             [NSBox.separatorLine],
             [lastfmTextField, lastfmConnectButton],
             [empty, lastfmStatusTextField],
@@ -64,6 +82,7 @@ final class AccountsPreferencesViewController: NSViewController {
         ], baselineLabels: [spotifyTextField, lastfmTextField])
     }()
 
+    var spotifyOtherDevicesObservation: NSKeyValueObservation?
     var lastfmSpotifyObservation: NSKeyValueObservation?
     var lastfmLoveObservation: NSKeyValueObservation?
 
@@ -73,6 +92,7 @@ final class AccountsPreferencesViewController: NSViewController {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        spotifyOtherDevicesObservation?.invalidate()
         lastfmSpotifyObservation?.invalidate()
         lastfmLoveObservation?.invalidate()
     }
@@ -90,6 +110,10 @@ extension AccountsPreferencesViewController {
         } else {
             account.connect(presentingFrom: view.window)
         }
+    }
+
+    @objc private func spotifyOtherDevicesCheckboxButtonChanged(_ sender: NSButton) {
+        UserDefaults.standard.spotifyShowsOtherDevices = sender.state == .on
     }
 
     @objc private func spotifyAccountDidChange(_ notification: Notification) {
@@ -212,6 +236,12 @@ extension AccountsPreferencesViewController {
         spotifyConnectButton.action = #selector(AccountsPreferencesViewController.spotifyConnectButtonPressed(_:))
         NotificationCenter.default.addObserver(self, selector: #selector(AccountsPreferencesViewController.spotifyAccountDidChange(_:)), name: .spotifyAccountDidChange, object: nil)
         refreshSpotify()
+        spotifyOtherDevicesCheckboxButton.target = self
+        spotifyOtherDevicesCheckboxButton.action = #selector(AccountsPreferencesViewController.spotifyOtherDevicesCheckboxButtonChanged(_:))
+        spotifyOtherDevicesObservation = UserDefaults.standard.observe(\.spotifyShowsOtherDevices, options: [.initial, .new]) { [weak self] defaults, _ in
+            // Before macOS 14.2 StarBar shows them whatever the setting says, and so does the box
+            self?.spotifyOtherDevicesCheckboxButton.state = defaults.spotifyShowsOtherDevices || !ProcessAudioOutput.isAvailable ? .on : .off
+        }
 
         lastfmConnectButton.target = self
         lastfmConnectButton.action = #selector(AccountsPreferencesViewController.lastfmConnectButtonPressed(_:))

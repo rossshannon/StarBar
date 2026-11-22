@@ -179,4 +179,118 @@ final class LastfmSourcesTests: XCTestCase {
         XCTAssertNil(spotify(duration: 0)?.song?.track.duration, "a length of 0 is none")
     }
 
+    // MARK: - Spotify as StarBar shows it
+
+    private let kateBush = "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
+    private let otherSong = "spotify:track:1PtQJZVZIdWIYdARpZRDFO"
+
+    /// One of Spotify's notifications: a 213.56 s song, which scrobbles after 106.78 s played
+    private func notification(_ trackID: String, state: SpotifyPlayInfo.State = .playing, position: TimeInterval?) -> SpotifyPlayInfo {
+        return SpotifyPlayInfo(trackID: trackID, name: "Running Up That Hill", artist: "Kate Bush", album: "Hounds of Love",
+                               state: state, duration: 213560, position: position)
+    }
+
+    func testAShownSpotifySongIsScrobbledAsShown() throws {
+        let shown = notification(kateBush, position: 7.938)
+
+        let report = LastfmSources.spotify(shown: shown, heard: shown, isHidden: false)
+
+        XCTAssertEqual(report, .observed(try XCTUnwrap(shown.lastfmObservation)), "playing, with its position")
+    }
+
+    func testANotificationWaitingForSpotifysSoundIsNotScrobbledYet() throws {
+        let onShow = notification(kateBush, position: 30)
+        let waiting = notification(otherSong, position: 0)
+
+        XCTAssertEqual(LastfmSources.spotify(shown: onShow, heard: waiting, isHidden: false), .observed(try XCTUnwrap(onShow.lastfmObservation)),
+                       "the song on show stands until StarBar decides where the new one plays")
+        XCTAssertEqual(LastfmSources.spotify(shown: nil, heard: waiting, isHidden: false), .gone, "nothing on show yet")
+    }
+
+    func testASpotifySongOnAnotherDeviceIsAPauseOfItWithNoPosition() throws {
+        let elsewhere = notification(kateBush, position: 61)
+
+        let report = LastfmSources.spotify(shown: nil, heard: elsewhere, isHidden: true)
+
+        XCTAssertEqual(report, .observed(PlayerObservation(state: .paused, song: try XCTUnwrap(elsewhere.lastfmObservation?.song))))
+    }
+
+    func testSpotifyQuittingIsGoneWhetherOrNotItWasHidden() {
+        XCTAssertEqual(LastfmSources.spotify(shown: nil, heard: nil, isHidden: false), .gone)
+        XCTAssertEqual(LastfmSources.spotify(shown: nil, heard: nil, isHidden: true), .gone)
+    }
+
+    func testAnUnknownStateOnAnotherDeviceChangesNothing() {
+        XCTAssertEqual(LastfmSources.spotify(shown: nil, heard: notification(kateBush, state: .unknown, position: nil), isHidden: true), .nothingNew)
+    }
+
+    /// A report as `LastfmScrobbler.apply(_:to:)` hands it to the tracker
+    private func feed(_ report: PlayerReport, to tracker: inout PlayTracker, at uptime: TimeInterval) -> [PlayTracker.Effect] {
+        let now = Date(timeIntervalSince1970: 1_800_000_000 + uptime)
+        switch report {
+        case .gone:
+            tracker.reset()
+            return []
+        case .nothingNew:
+            return tracker.timerFired(uptime: uptime, now: now)
+        case .observed(let observation):
+            return tracker.playerDidUpdate(state: observation.state, song: observation.song, position: observation.position, uptime: uptime, now: now)
+        }
+    }
+
+    private func time(_ tracker: inout PlayTracker, to uptime: TimeInterval) -> [PlayTracker.Effect] {
+        return tracker.timerFired(uptime: uptime, now: Date(timeIntervalSince1970: 1_800_000_000 + uptime))
+    }
+
+    private func scrobbles(_ effects: [PlayTracker.Effect]) -> [Date] {
+        return effects.compactMap { if case .scrobble(_, let startedAt) = $0 { return startedAt } else { return nil } }
+    }
+
+    func testASongPlayedOnlyOnAnotherDeviceIsNeverScrobbled() {
+        var tracker = PlayTracker(checksPosition: false)
+
+        var effects = feed(LastfmSources.spotify(shown: nil, heard: notification(kateBush, position: 0), isHidden: true), to: &tracker, at: 0)
+        effects += time(&tracker, to: 600)
+
+        XCTAssertEqual(effects, [], "not even as playing now")
+    }
+
+    /// Time on the other device doesn't count, and the play from this Mac isn't forgotten
+    func testASongMovedToAnotherDeviceAndBackIsScrobbledOnceForItsTimeHere() {
+        var tracker = PlayTracker(checksPosition: false)
+        let here = notification(kateBush, position: 0)
+
+        var effects = feed(LastfmSources.spotify(shown: here, heard: here, isHidden: false), to: &tracker, at: 0)
+        // 60 s here, then 30 s on the speaker
+        effects += feed(LastfmSources.spotify(shown: nil, heard: notification(kateBush, position: 60), isHidden: true), to: &tracker, at: 60)
+        effects += time(&tracker, to: 90)
+        XCTAssertEqual(scrobbles(effects), [], "60 s here is under half the song")
+
+        // Back here 30 s further in: 47 s more here makes 107 s
+        let back = notification(kateBush, position: 91)
+        effects += feed(LastfmSources.spotify(shown: back, heard: back, isHidden: false), to: &tracker, at: 90)
+        effects += time(&tracker, to: 130)
+        XCTAssertEqual(scrobbles(effects), [], "100 s here")
+        effects += time(&tracker, to: 140)
+        XCTAssertEqual(scrobbles(effects), [Date(timeIntervalSince1970: 1_800_000_000)], "one play, from when it started here")
+
+        // Away and back again: still the same play
+        effects += feed(LastfmSources.spotify(shown: nil, heard: notification(kateBush, position: 145), isHidden: true), to: &tracker, at: 145)
+        let again = notification(kateBush, position: 160)
+        effects += feed(LastfmSources.spotify(shown: again, heard: again, isHidden: false), to: &tracker, at: 160)
+        effects += time(&tracker, to: 400)
+        XCTAssertEqual(scrobbles(effects).count, 1)
+    }
+
+    func testANewSongOnAnotherDeviceEndsThePlayHere() {
+        var tracker = PlayTracker(checksPosition: false)
+        let here = notification(kateBush, position: 0)
+
+        var effects = feed(LastfmSources.spotify(shown: here, heard: here, isHidden: false), to: &tracker, at: 0)
+        effects += feed(LastfmSources.spotify(shown: nil, heard: notification(otherSong, position: 0), isHidden: true), to: &tracker, at: 60)
+        effects += time(&tracker, to: 600)
+
+        XCTAssertEqual(scrobbles(effects), [], "60 s of the first song, and none of the second here")
+    }
+
 }

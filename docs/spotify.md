@@ -22,6 +22,8 @@ A song or episode's payload always has the same 13 keys:
 
 There is no artwork in the payload, and nothing that marks Spotify Connect playback or an ad. Ads were not captured (no free account to hand), which is why StarBar announces by an allow-list of Track ID prefixes.
 
+Measured again 2026-11-20 with Spotify 1.3.10.2586 on macOS 27.2.1, from the twelve payloads StarBar logged that day: **12 keys, `Popularity` gone**, the rest as above. `Album Artist` was filled once, in the payload Spotify sent as StarBar relaunched, and empty otherwise.
+
 ### When it posts
 
 - **Posts**, about 0.6 to 1.1 s after the command: play, pause, resume, next track, `play track` with a URI, previous track in the first ~3 s of a song.
@@ -52,6 +54,27 @@ Spotify's sdef declares access groups, so a sandboxed app can use `com.apple.sec
 - `*` on the Standard Suite.
 
 StarBar asks for `com.spotify.playback` (to read `current track` and `player state`) and `com.spotify.library` (to read the track's properties).
+
+## Playing on another device (Spotify Connect)
+
+When Spotify plays on another device, such as a speaker in another room, the Mac's Spotify app is only its remote control, but it still posts `PlaybackStateChanged` for every song, and StarBar showed the strip for each one (Ross, 2026-11-20, with an Alexa downstairs). Measured that day on macOS 27.2.1 and Spotify 1.3.10:
+
+- **The notification can't tell them apart**: the same 12 keys, nothing about a device.
+- **Nor can AppleScript**: the dictionary's application class has `current track`, `sound volume`, `player state`, `player position`, `repeating`, `shuffling` and the Standard Suite's `name`, `frontmost` and `version`; the track class has nothing about devices either. (`shuffling enabled` has the same code as `repeating enabled`, `pReE`, a slip in Spotify's sdef.)
+- **Core Audio can**, from macOS 14.2: it lists the processes using it (`kAudioHardwarePropertyProcessObjectList`), and for each says whether it is sending sound to an output (`kAudioProcessPropertyIsRunningOutput`). Only Spotify's main process (`Contents/MacOS/Spotify`) is a Core Audio client; its five helper processes are not. Reading the list asked for no permission from a Terminal script. While Spotify was paused it read `IsRunningOutput = 0`, like every other process. **Not yet measured**: the value while Spotify plays on this Mac and while it plays on another device, how long after the notification the sound starts, whether the listener on `IsRunningOutput` is called (a developer forum report for macOS 15.0.1 says it wasn't, where `IsRunning` and `Devices` were), and whether the sandboxed app may read it.
+- **The Web API can as well**: `GET /v1/me/player` names the active device and its type. It needs the `user-read-playback-state` scope, which StarBar doesn't ask for, so everyone signed in would have to sign in again, and it would work only for the five accounts Development Mode allows, with a request for every song. The Player endpoints survived the February 2026 Development Mode changes.
+
+So StarBar watches Spotify's process through Core Audio (`ProcessAudioOutput`, `SpotifyPlaybackPlace`): Playing with no sound from Spotify within `outputWait` is another device's, and is hidden from the strip and the menu bar unless Preferences shows other devices (Ross chose this on 2026-11-21, off by default). A hidden song isn't scrobbled either: Ross asked the same day for scrobbling to follow what is shown, one for one. To the scrobbler a song on the other device is a pause, so a play begun on this Mac counts only its time here, and isn't scrobbled twice when it comes back. Each notification and each decision is logged, as "Spotify says … its sound is …" and "Spotify is playing …", so the first live run settles the open points above.
+
+### Measured live, 2026-11-21
+
+StarBar Dev on Exocortex (macOS 27), with the setting off, read from its log:
+
+- **The sandboxed app reads Core Audio**, and the listener on `IsRunningOutput` is called: no failed read in seven hours, and a "started sending sound" or "stopped sending sound" line for every change. Spotify's main process is the one that sends.
+- **Six songs played on the Alexa between 12:36 and 12:55 were all hidden**: each Playing came with no sound from Spotify and went out hidden.
+- **A song started on this Mac sends sound first**: "In Dulce Jubilo" began sending at 15:22:18.150 and Spotify's notification came 26 ms later, so it showed at once.
+- **A song started on the Alexa while this Mac was playing another reached the strip.** Spotify announced “Fairytale of New York” at 15:22:41.880, 0.252 s into the song, while this Mac's sound for “In Dulce Jubilo” was still going out, so StarBar took it as playing here and the strip came up 5 ms later. The sound stopped at 15:22:42.738, 0.86 s after the notification, and the song was hidden 2.2 s after that, with the strip already up. Hence `confirmWait`: a new song announced while the sound from the song before goes on is held 1.5 s, and shows only if the sound is still going then. A song that follows the one before as it ends (`dueToEnd`, 15 s, room for Spotify's crossfade of up to 12 s) or whose sound started at most `freshSound` (0.5 s) before its notification isn't held. A song skipped to on this Mac is held, and shows 1.5 s late; how Core Audio sees a skip here hasn't been measured, so whether it can be told apart sooner is open.
+- **One sample of the tail**: whether 0.86 s varies, with the network or the device, is not known.
 
 ## Opening a song
 
