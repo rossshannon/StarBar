@@ -42,6 +42,8 @@ final class RatingClickControllerTests: XCTestCase {
     private final class SaveRecorder: RatingControlDelegate {
         var savedRatings: [Int] = []
         var shouldSave: (RatingControl) -> Bool = { _ in true }
+        /// Runs as the save is reported, while the gesture that made it is still under way
+        var whenSaved: (() -> Void)?
 
         func ratingControl(_ ratingControl: RatingControl, shouldUpdateRating rating: Int) -> Bool {
             return shouldSave(ratingControl)
@@ -49,6 +51,7 @@ final class RatingClickControllerTests: XCTestCase {
 
         func ratingControl(_ ratingControl: RatingControl, userDidUpdateRating rating: Int) {
             savedRatings.append(rating)
+            whenSaved?()
         }
     }
 
@@ -375,6 +378,68 @@ final class RatingClickControllerTests: XCTestCase {
         click(at: 52)
         XCTAssertFalse(controller.isDragging)
         XCTAssertEqual(recorder.savedRatings, [60])
+    }
+
+    // MARK: - What the stars showed as a rating is saved
+
+    /// What the controller says of the save under way, at each save the delegate hears of
+    private func recordSaves() -> () -> [[Int]] {
+        var seen: [[Int]] = []
+        recorder.whenSaved = { [unowned self] in
+            seen.append(self.controller.saving.map { [$0.before, $0.shown] } ?? [])
+        }
+        return { seen }
+    }
+
+    func testAQuickClickIsSavedFromTheRatingOnShow() {
+        let saves = recordSaves()
+        click(at: 72)
+        XCTAssertEqual(recorder.savedRatings, [80])
+        XCTAssertEqual(saves(), [[40, 40]], "the song had two stars, and two were on show")
+        XCTAssertNil(controller.saving, "only while the save is under way")
+    }
+
+    /// A drag's stars go back to where it began before the save is checked, so the delegate
+    /// can't read what they showed from the control: the flourish would start from the wrong
+    /// stars
+    func testADragsReleaseIsSavedFromWhereTheStarsHadFollowedTheMouseTo() {
+        let saves = recordSaves()
+        XCTAssertTrue(press(at: 97))
+        XCTAssertEqual(ratingControl.rating, 100)
+        XCTAssertNil(controller.saving, "nothing is being saved while the button is held")
+        XCTAssertFalse(release(at: 52))
+        XCTAssertEqual(recorder.savedRatings, [60])
+        XCTAssertEqual(saves(), [[40, 100]], "two stars before the press, and five on show at the release")
+        XCTAssertNil(controller.saving)
+    }
+
+    func testARefusedSaveLeavesNothingBeingSaved() {
+        recorder.shouldSave = { _ in false }
+        XCTAssertTrue(press(at: 97))
+        XCTAssertFalse(release(at: 97))
+        XCTAssertEqual(recorder.savedRatings, [])
+        XCTAssertNil(controller.saving)
+    }
+
+    func testEachChangeOfTheStarsDuringADragIsReportedWithWhatTheyShowed() {
+        var changes: [[Int]] = []
+        var savingAtEachChange: [Bool] = []
+        controller.didPreview = { [unowned self] shown, rating in
+            changes.append([shown, rating])
+            savingAtEachChange.append(self.controller.saving != nil)
+        }
+        XCTAssertTrue(press(at: 12))
+        XCTAssertTrue(move(to: 52))
+        XCTAssertTrue(move(to: 55))
+        XCTAssertEqual(changes, [[40, 20], [20, 60]], "once a change, not once a tick")
+        XCTAssertEqual(savingAtEachChange, [false, false])
+
+        // The release puts back the rating from before the drag, then saves: that step back
+        // is reported as part of the save, so the owner doesn't draw it as a change
+        XCTAssertFalse(release(at: 97))
+        XCTAssertEqual(changes.last, [60, 40])
+        XCTAssertEqual(savingAtEachChange.last, true)
+        XCTAssertEqual(recorder.savedRatings, [100])
     }
 
     // MARK: - In the menu bar
