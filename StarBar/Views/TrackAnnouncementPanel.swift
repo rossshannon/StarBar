@@ -89,6 +89,9 @@ final class TrackAnnouncementPanel: NSPanel {
     /// above its top edge; it follows the strip as it slides.
     let heartView = HeartBurstView(frame: .zero)
     private var heartTimer: RatingReminderTimer?
+    /// Steps the stars' flourish after a rating was saved (`StarFlourish`), which the strip
+    /// draws in its own rating row
+    private var starsTimer: RatingReminderTimer?
 
     /// Whether the panel is making its unseen first appearance (`warmUp`)
     private(set) var isWarmingUp = false
@@ -180,6 +183,7 @@ final class TrackAnnouncementPanel: NSPanel {
     deinit {
         slideTimer?.invalidate()
         heartTimer?.invalidate()
+        starsTimer?.invalidate()
         seeThroughTimer?.invalidate()
         warmUpTimer?.invalidate()
         sleeveTimer?.invalidate()
@@ -250,8 +254,9 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             startSeeThrough()
         }
         let isNewAnnouncement = stripView.announcement != announcement
-        // A heart still changing belongs to the song before
+        // A heart still changing belongs to the song before, and so do stars still popping
         stopHeart()
+        stopStars()
         // A new song's artwork, or the placeholder, shows at once; only a cover that comes
         // later and finds the slot visible fades in
         stopArtworkFade()
@@ -339,6 +344,12 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         if heartTimer != nil, before.identity != announcement.identity || before.isFavorited != announcement.isFavorited
             || before.namesSpotify != announcement.namesSpotify || before.canRate != announcement.canRate {
             stopHeart()
+        }
+        // The same for stars popping towards a rating the strip no longer shows: the user
+        // chose another, or Music refused it and the old one is back
+        if starsTimer != nil, before.identity != announcement.identity || before.rating != announcement.rating
+            || before.namesSpotify != announcement.namesSpotify || before.canRate != announcement.canRate {
+            stopStars()
         }
         stripView.announcement = announcement
         if coverArrived {
@@ -459,6 +470,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
                 self.stopSeeThrough()
                 self.stopSleeve()
                 self.stopHeart()
+                self.stopStars()
                 self.finishTintFade()
             }
         }
@@ -553,6 +565,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         stopSeeThrough()
         stopSleeve()
         stopHeart()
+        stopStars()
         finishTintFade()
     }
 
@@ -808,6 +821,59 @@ extension TrackAnnouncementPanel {
         heartView.change = nil
         heartView.hearts = nil
         stripView.hidesHeart = false
+    }
+
+}
+
+// MARK: - The stars
+
+extension TrackAnnouncementPanel {
+
+    /// Whether the strip's stars are in the middle of their flourish
+    var isAnimatingStars: Bool {
+        return starsTimer != nil
+    }
+
+    /// Play `flourish` over the strip's stars, which already show the rating it ends at. The
+    /// strip draws each frame in its own rating row, in place of the stars at rest: a star
+    /// pops by a few points and never leaves the strip, so unlike the heart's burst it needs
+    /// no view of its own, and rides the slide with the rest of the strip.
+    ///
+    /// Stepped on the slide's clock, with a `SteppedTimeline` so a stall pauses it, never with
+    /// Core Animation, which on macOS 27 ran animations on this panel without drawing them.
+    func animateStars(_ flourish: StarFlourish) {
+        stopStars()
+        let announcement = stripView.announcement
+        // Only over stars, and only the ones it was made for
+        guard !isWarmingUp, phase == .shown || phase == .slidingIn, flourish.duration > 0,
+              announcement.canRate, !announcement.namesSpotify,
+              flourish.to == Stars.styles(forRating: announcement.rating) else { return }
+        stripView.starFlourish = (flourish, 0)
+
+        var timeline = SteppedTimeline(start: clock.now())
+        var cadence = FrameCadence()
+        // A real frame interval, never 0: before macOS 14 this is a Timer
+        starsTimer = clock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            guard let self = self, self.starsTimer != nil else { return }
+            let now = self.clock.now()
+            let elapsed = timeline.step(at: now)
+            cadence.frame(at: now, animationTime: elapsed)
+            if elapsed >= flourish.duration {
+                self.stopStars()
+                os_log("Strip star flourish completed: %{public}s", cadence.summary)
+            } else {
+                self.stripView.starFlourish = (flourish, elapsed)
+            }
+        }
+    }
+
+    /// Put the strip's stars back at rest, wherever their flourish has got to
+    fileprivate func stopStars() {
+        starsTimer?.invalidate()
+        starsTimer = nil
+        if stripView.starFlourish != nil {
+            stripView.starFlourish = nil
+        }
     }
 
 }

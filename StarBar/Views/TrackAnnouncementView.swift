@@ -175,6 +175,13 @@ final class TrackAnnouncementView: NSView {
         set { content.hidesHeart = newValue }
     }
 
+    /// The stars' flourish after a rating was saved in StarBar, and how far it has got, drawn
+    /// in place of the stars at rest; nil at rest. The panel steps it.
+    var starFlourish: (flourish: StarFlourish, elapsed: TimeInterval)? {
+        get { return content.starFlourish }
+        set { content.starFlourish = newValue }
+    }
+
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
@@ -740,6 +747,15 @@ final class TrackAnnouncementContentView: NSView {
         }
     }
 
+    /// The stars' flourish after a rating was saved in StarBar (`StarFlourish`), and how far
+    /// it has got: drawn where the stars at rest are, in their place, until the panel, which
+    /// steps it, sets this back to nil. Only the rating row is drawn again at each step.
+    var starFlourish: (flourish: StarFlourish, elapsed: TimeInterval)? {
+        didSet {
+            setNeedsDisplay(starFlourishRect)
+        }
+    }
+
     init(announcement: TrackAnnouncement, frame: NSRect = .zero) {
         self.announcement = announcement
         super.init(frame: frame)
@@ -783,7 +799,9 @@ final class TrackAnnouncementContentView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let frames = self.frames
-        if !breakout {
+        // Not when only the stars' row is drawn again, at every step of their flourish:
+        // scaling the cover is the costly part of drawing the strip
+        if !breakout, frames.artwork.intersects(dirtyRect) {
             drawArtwork(in: frames.artwork)
         }
         draw(announcement.title, in: frames.title, font: titleFont)
@@ -907,19 +925,59 @@ final class TrackAnnouncementContentView: NSView {
         // heart out altogether
         let stars = Stars.rating(announcement.rating, starSize: starSize, spacing: spacing,
                                  isFavorited: announcement.isFavorited || hidesHeart)
-        let template = stars.image
-        template.isTemplate = true
-        let image = template.withTintColor(.white)
-        let origin = NSPoint(x: rect.minX, y: rect.midY - image.size.height / 2)
+        let origin = NSPoint(x: rect.minX, y: rect.midY - starSize.height / 2)
+        let heartOrigin = NSPoint(x: rect.minX + stars.starsWidth + spacing, y: origin.y)
 
         NSGraphicsContext.saveGraphicsState()
         textShadow.set()
-        image.draw(at: origin, from: .zero, operation: .sourceOver, fraction: 1)
+        if let running = starFlourish {
+            // A frame of the flourish in place of the stars at rest: taller than they are by
+            // the same room above and below, for a star that pops past its slot, so it is
+            // drawn that much lower and the stars stay where they were. It has no heart, so
+            // an unset heart's outline is drawn beside it.
+            let frame = running.flourish.image(at: running.elapsed, starSize: starSize, spacing: spacing)
+            frame.withTintColor(.white).draw(at: starFlourishOrigin(starsAt: origin, starSize: starSize),
+                                             from: .zero, operation: .sourceOver, fraction: 1)
+            if !announcement.isFavorited && !hidesHeart {
+                heartImage(favorited: false).draw(at: heartOrigin, from: .zero, operation: .sourceOver, fraction: 1)
+            }
+        } else {
+            let template = stars.image
+            template.isTemplate = true
+            template.withTintColor(.white).draw(at: origin, from: .zero, operation: .sourceOver, fraction: 1)
+        }
         if announcement.isFavorited && !hidesHeart {
             let heart = Stars.filledFavoriteHeartImage(size: starSize)
-            heart.draw(at: NSPoint(x: rect.minX + stars.starsWidth + spacing, y: origin.y), from: .zero, operation: .sourceOver, fraction: 1)
+            heart.draw(at: heartOrigin, from: .zero, operation: .sourceOver, fraction: 1)
         }
         NSGraphicsContext.restoreGraphicsState()
+
+        // The flourish's colour over the white stars, with no shadow of its own: the stars
+        // under it have cast theirs
+        if let running = starFlourish,
+           let tint = running.flourish.tintImage(at: running.elapsed, starSize: starSize, spacing: spacing) {
+            tint.draw(at: starFlourishOrigin(starsAt: origin, starSize: starSize),
+                      from: .zero, operation: .sourceOver, fraction: 1)
+        }
+    }
+
+    /// Where a frame of the stars' flourish is drawn, for stars at rest drawn at `origin`
+    private func starFlourishOrigin(starsAt origin: NSPoint, starSize: NSSize) -> NSPoint {
+        return NSPoint(x: origin.x, y: origin.y - StarFlourish.headroom(starSize: starSize))
+    }
+
+    /// The part of the strip a frame of the stars' flourish can draw in: the stars' row with
+    /// the room a popped star takes, and its shadow's reach on every side
+    var starFlourishRect: NSRect {
+        let rect = frames.rating
+        let starSize = ratingStarSize
+        let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+        let size = StarFlourish.imageSize(starSize: starSize, spacing: spacing)
+        let origin = starFlourishOrigin(starsAt: NSPoint(x: rect.minX, y: rect.midY - starSize.height / 2),
+                                        starSize: starSize)
+        let reach = (abs(textShadow.shadowOffset.width) + abs(textShadow.shadowOffset.height)
+            + textShadow.shadowBlurRadius + 2).rounded(.up)
+        return NSRect(origin: origin, size: size).insetBy(dx: -reach, dy: -reach)
     }
 
     private var ratingStarSize: NSSize {

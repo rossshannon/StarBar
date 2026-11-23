@@ -23,6 +23,8 @@ final class TrackAnnouncementControllerTests: XCTestCase {
     private var artworkReads: [TrackAnnouncementController.ArtworkRead] = []
     private var reduceMotion = false
     private var reduceTransparency = false
+    /// Which flourish the hidden default asks for, read at each rating
+    private var flourishLook = StarFlourish.Look.afterglow
     /// What Music answers when asked which track it is playing; nil when it can't say
     private var musicsCurrentIdentity: String?
     /// The identities the controller asked Music to match against
@@ -48,6 +50,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
         artworkReads = []
         reduceMotion = false
         reduceTransparency = false
+        flourishLook = .afterglow
         musicsCurrentIdentity = nil
         identityReadsFor = []
         identityReads = 0
@@ -89,6 +92,7 @@ final class TrackAnnouncementControllerTests: XCTestCase {
             presenter: presenter,
             clock: clock,
             accessibility: { [unowned self] in (self.reduceMotion, self.reduceTransparency) },
+            starFlourishLook: { [unowned self] in self.flourishLook },
             isRunning: { [unowned self] kind in self.running.contains(kind) },
             refusedWrites: { [unowned self] kind, trackID in self.refusals["\(kind.rawValue)|\(trackID ?? "")", default: 0] },
             isEnabled: enabled
@@ -1627,6 +1631,194 @@ extension TrackAnnouncementControllerTests {
         XCTAssertTrue(presenter.animated.isEmpty)
     }
 
+    // MARK: - The stars' flourish
+
+    func testARatingSavedOverALowerOnePopsTheStripsStars() {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidRate(80)
+
+        XCTAssertEqual(presenter.flourished, [StarFlourish(saving: 80, from: 40, showing: 40, reduceMotion: false, look: .afterglow)])
+        XCTAssertEqual(presenter.flourished.last?.kind, .raise)
+        XCTAssertEqual(presenter.refreshed.last?.rating, 80, "drawn with the new rating, which the flourish ends at")
+    }
+
+    /// The strip never follows a drag, so its flourish starts from the rating it showed,
+    /// whatever the menu bar's stars had followed the mouse to
+    func testTheFlourishStartsFromWhatTheStripShowed() throws {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidRate(60)
+        controller.userDidRate(100)
+
+        let second = try XCTUnwrap(presenter.flourished.last)
+        XCTAssertEqual(presenter.flourished.count, 2)
+        XCTAssertEqual(second.from, Stars.styles(forRating: 60))
+        XCTAssertEqual(second.to, Stars.styles(forRating: 100))
+    }
+
+    func testTheSameStarsSavedAgainStillPop() throws {
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidRate(60)
+
+        let flourish = try XCTUnwrap(presenter.flourished.last)
+        XCTAssertEqual(flourish.kind, .raise)
+        XCTAssertEqual(flourish.from, flourish.to)
+        XCTAssertTrue(presenter.refreshed.isEmpty, "nothing on the strip changed")
+    }
+
+    func testALoweredOrRemovedRatingFoldsQuietly() {
+        live = .loaded(.init(rating: 80, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidRate(40)
+        XCTAssertEqual(presenter.flourished.last?.kind, .lower)
+
+        controller.userDidRate(0)
+        XCTAssertEqual(presenter.flourished.last?.kind, .lower)
+        XCTAssertEqual(presenter.flourished.count, 2)
+
+        // Nothing left to fold
+        controller.userDidRate(0)
+        XCTAssertEqual(presenter.flourished.count, 2)
+    }
+
+    func testUnderReduceMotionTheStripsStarsCrossFade() {
+        reduceMotion = true
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        controller.userDidRate(80)
+        XCTAssertEqual(presenter.flourished.map { $0.kind }, [.fade])
+
+        // The same stars again change nothing, so there is nothing to fade
+        controller.userDidRate(80)
+        XCTAssertEqual(presenter.flourished.count, 1)
+    }
+
+    func testTheLookIsReadAtEachRating() {
+        live = .loaded(.init(rating: 20, isFavorited: false))
+        update(snapshot(track: "A"))
+
+        flourishLook = .pop
+        controller.userDidRate(40)
+        flourishLook = .run
+        controller.userDidRate(60)
+
+        XCTAssertEqual(presenter.flourished.map { $0.look }, [.pop, .run])
+    }
+
+    func testWithTheStripDownNoStarsFlourish() {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 1)
+
+        controller.userDidRate(80)
+
+        XCTAssertTrue(presenter.flourished.isEmpty)
+    }
+
+    func testARatingForASongTheStripIsNotShowingFlourishesNothing() {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+        // Music has moved on, and its notification is still on its way
+        musicsCurrentIdentity = "B"
+
+        controller.userDidRate(80)
+
+        XCTAssertTrue(presenter.flourished.isEmpty)
+    }
+
+    func testAStripThatShowsNoStarsHasNoneToFlourish() {
+        // A catalog song that can't be rated shows why, in place of the stars
+        live = .loaded(.init(rating: 0, isFavorited: false, canRate: false))
+        update(snapshot(track: "A"))
+        controller.userDidRate(80)
+        XCTAssertTrue(presenter.flourished.isEmpty)
+
+        // A Spotify song the user doesn't have shows Spotify's name
+        live = .loaded(.init(isFavorited: false, canRate: false, showsSpotifyHeart: true))
+        update(spotify())
+        controller.userDidRate(80)
+        XCTAssertTrue(presenter.flourished.isEmpty)
+    }
+
+    func testASpotifySongsCopyInMusicFlourishesItsStars() throws {
+        live = musicCopy
+        update(spotify())
+
+        controller.userDidRate(100)
+
+        let flourish = try XCTUnwrap(presenter.flourished.last)
+        XCTAssertEqual(flourish.from, Stars.styles(forRating: 80))
+        XCTAssertEqual(flourish.to, Stars.styles(forRating: 100))
+    }
+
+    /// A rating saved just before the strip goes keeps it up until the stars have finished,
+    /// rather than pop over a strip sliding away
+    func testARatingSavedNearTheEndKeepsTheStripUpUntilTheStarsHaveFinished() throws {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+        let hold = try XCTUnwrap(clock.pendingOneShot)
+        clock.advance(by: expectedHold - 0.2)
+
+        controller.userDidRate(100)
+
+        let flourish = try XCTUnwrap(presenter.flourished.last)
+        XCTAssertGreaterThan(flourish.duration, 0.2)
+        XCTAssertFalse(hold.isValid)
+        let extended = try XCTUnwrap(clock.pendingOneShot)
+        XCTAssertEqual(extended.seconds, flourish.duration + TrackAnnouncementController.heartChangeMargin, accuracy: 0.001)
+        XCTAssertEqual(presenter.hideCount, 0)
+        clock.advance(by: extended.seconds)
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 1)
+    }
+
+    func testARatingSavedEarlyLeavesTheHoldAlone() throws {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+        let hold = try XCTUnwrap(clock.pendingOneShot)
+
+        controller.userDidRate(100)
+
+        XCTAssertTrue(clock.pendingOneShot === hold)
+    }
+
+    /// The flourish is stepped, as the heart's change is, so a stall pauses it while the
+    /// strip's deadline runs on: a strip due to go while its stars are still popping waits
+    /// for them, then stays up the margin
+    func testAStallThatUsesUpTheExtensionDoesNotCutTheStarsShort() throws {
+        live = .loaded(.init(rating: 40, isFavorited: false))
+        update(snapshot(track: "A"))
+        clock.advance(by: expectedHold - 0.2)
+        controller.userDidRate(100)
+        presenter.isAnimatingStars = true
+        let extended = try XCTUnwrap(clock.pendingOneShot)
+
+        clock.advance(by: extended.seconds + 1)
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 0, "not while the stars are still in their flourish")
+        let check = try XCTUnwrap(clock.pendingOneShot)
+        XCTAssertEqual(check.seconds, TrackAnnouncementController.heartCheckInterval, accuracy: 0.001)
+
+        presenter.isAnimatingStars = false
+        clock.advance(by: check.seconds)
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 0, "the margin after the flourish, not the moment it ends")
+        let margin = try XCTUnwrap(clock.pendingOneShot)
+        XCTAssertEqual(margin.seconds, TrackAnnouncementController.heartChangeMargin, accuracy: 0.001)
+        clock.advance(by: margin.seconds)
+        clock.fireOneShot()
+        XCTAssertEqual(presenter.hideCount, 1)
+        XCTAssertNil(clock.pendingOneShot, "nothing left waiting")
+    }
+
 }
 
 // MARK: - Fakes
@@ -1640,6 +1832,9 @@ final class FakePresenter: TrackAnnouncementPresenter {
     private(set) var animated: [HeartChange] = []
     /// Whether the strip's heart is still changing; each test says when it has finished
     var isAnimatingHeart = false
+    private(set) var flourished: [StarFlourish] = []
+    /// Whether the strip's stars are still in their flourish; each test says when they are
+    var isAnimatingStars = false
 
     func show(_ announcement: TrackAnnouncement, reduceMotion: Bool, reduceTransparency: Bool) {
         shown.append(announcement)
@@ -1657,5 +1852,9 @@ final class FakePresenter: TrackAnnouncementPresenter {
 
     func animateHeart(_ change: HeartChange) {
         animated.append(change)
+    }
+
+    func animateStars(_ flourish: StarFlourish) {
+        flourished.append(flourish)
     }
 }

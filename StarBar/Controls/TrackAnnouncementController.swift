@@ -150,6 +150,9 @@ final class TrackAnnouncementController: NSObject {
     private let presenter: TrackAnnouncementPresenter
     private let clock: RatingReminderClock
     private let accessibility: () -> (reduceMotion: Bool, reduceTransparency: Bool)
+    /// Which flourish the strip's stars get for a raised rating, read at each rating
+    /// (`StarFlourish.Look.current`, the hidden default the menu bar's stars read too)
+    private let starFlourishLook: () -> StarFlourish.Look
 
     private(set) var isEnabled: Bool
     /// Whether a player is still running, so the songs seen in one that quit are forgotten
@@ -217,6 +220,7 @@ final class TrackAnnouncementController: NSObject {
             (NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
              NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency)
         },
+        starFlourishLook: @escaping () -> StarFlourish.Look = { StarFlourish.Look.current() },
         isRunning: @escaping (PlayerKind) -> Bool = { _ in true },
         refusedWrites: @escaping (iTunesRadioStation.WriteKind, String?) -> Int = { _, _ in 0 },
         isEnabled: Bool
@@ -229,6 +233,7 @@ final class TrackAnnouncementController: NSObject {
         self.presenter = presenter
         self.clock = clock
         self.accessibility = accessibility
+        self.starFlourishLook = starFlourishLook
         self.isRunning = isRunning
         self.refusedWrites = refusedWrites
         self.isEnabled = isEnabled
@@ -465,7 +470,26 @@ extension TrackAnnouncementController {
             ?? showing(identity)?.rating
         pendingRating = (identity, rating, clock.now().addingTimeInterval(TrackAnnouncementController.pendingRatingLifetime),
                          trackID, refusedWrites(.rating, trackID), before)
+        // The strip never follows a drag, so its stars still show what the song had
+        let shownBefore = showing(identity).flatMap { $0.canRate && !$0.namesSpotify ? $0.rating : nil }
         updateStrip(identity: identity) { TrackAnnouncement(copying: $0, rating: rating) }
+        if let shownBefore = shownBefore {
+            animateStars(saving: rating, from: shownBefore)
+        }
+    }
+
+    /// Play the stars' flourish on the strip, as the menu bar does, for a rating just saved
+    /// over the one the strip showed, and keep the strip up until it has finished. The same
+    /// stars saved again still pop, as a click on them in the menu bar does.
+    private func animateStars(saving rating: Int, from shown: Int) {
+        let flourish = StarFlourish(saving: rating, from: shown, showing: shown,
+                                    reduceMotion: accessibility().reduceMotion, look: starFlourishLook())
+        guard flourish.duration > 0 else { return }
+        let until = clock.now().addingTimeInterval(flourish.duration + TrackAnnouncementController.heartChangeMargin)
+        if let hideAt = hideAt, hideAt < until {
+            scheduleHide(at: until)
+        }
+        presenter.animateStars(flourish)
     }
 
     /// The user toggled the current track's heart in StarBar. Shows it on the strip now.
@@ -709,13 +733,14 @@ extension TrackAnnouncementController {
         }
     }
 
-    /// Take the strip down, unless its heart is still changing: then wait for the change to
-    /// end and keep the strip up `heartChangeMargin` after that. A heart set near the end has
-    /// already moved the deadline past the change, but that deadline is on the wall clock,
-    /// and the change is stepped (`SteppedTimeline`), so a stalled main thread pauses the
-    /// change while the deadline runs on; hiding then would cut the burst short.
+    /// Take the strip down, unless its heart is still changing or its stars are still in
+    /// their flourish: then wait for that to end and keep the strip up `heartChangeMargin`
+    /// after it. A heart set near the end has already moved the deadline past the change, but
+    /// that deadline is on the wall clock, and the change is stepped (`SteppedTimeline`), so a
+    /// stalled main thread pauses the change while the deadline runs on; hiding then would
+    /// cut the burst short.
     private func hideUnlessTheHeartIsChanging() {
-        guard presenter.isAnimatingHeart else {
+        guard stripIsChanging else {
             hideTimer = nil
             hideAt = nil
             currentAnnouncement = nil
@@ -725,7 +750,7 @@ extension TrackAnnouncementController {
         // Still the hide timer, so the strip still counts as up
         hideTimer = clock.schedule(after: TrackAnnouncementController.heartCheckInterval, repeats: false) { [weak self] in
             guard let self = self else { return }
-            if self.presenter.isAnimatingHeart {
+            if self.stripIsChanging {
                 self.hideUnlessTheHeartIsChanging()
             } else {
                 self.scheduleHide(at: self.clock.now().addingTimeInterval(TrackAnnouncementController.heartChangeMargin))
@@ -733,7 +758,13 @@ extension TrackAnnouncementController {
         }
     }
 
-    /// How long the strip stays up after a heart has finished changing, at the least
+    /// Whether the strip is drawing a change the user made on it, which it stays up for
+    private var stripIsChanging: Bool {
+        return presenter.isAnimatingHeart || presenter.isAnimatingStars
+    }
+
+    /// How long the strip stays up after a heart or the stars have finished changing, at the
+    /// least
     static let heartChangeMargin: TimeInterval = 0.4
     /// How often a strip due to go looks again at a heart still changing on it
     static let heartCheckInterval: TimeInterval = 0.1
@@ -879,4 +910,9 @@ protocol TrackAnnouncementPresenter: AnyObject {
     func animateHeart(_ change: HeartChange)
     /// Whether the strip's heart is still changing, which keeps the strip up
     var isAnimatingHeart: Bool { get }
+    /// A rating was saved for the song on the strip, which already shows it: play the stars'
+    /// flourish over them. Nothing if the strip is down, or shows no stars.
+    func animateStars(_ flourish: StarFlourish)
+    /// Whether the strip's stars are still in their flourish, which keeps the strip up
+    var isAnimatingStars: Bool { get }
 }
