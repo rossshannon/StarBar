@@ -4,8 +4,9 @@
 //
 //  The stars' flourish when a rating is saved, as pure timing and as drawn: which kind a save
 //  gets, when the run reaches each star, how each pops and takes its colour, the quiet fold
-//  back for a rating lowered, the cross-fade under Reduce Motion, and that the frames sit
-//  exactly over the stars at rest.
+//  back for a rating lowered, the cross-fade under Reduce Motion, which saves get the
+//  five-star finale (`StarFinaleTests` has the finale itself), and that the frames sit exactly
+//  over the stars at rest.
 //
 
 import XCTest
@@ -68,13 +69,13 @@ final class StarFlourishTests: XCTestCase {
         let suite = "StarFlourishTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(StarFlourish.Look.current(defaults), .afterglow, "unless it says otherwise")
+        XCTAssertEqual(StarFlourish.Look.current(defaults), .run, "the one-colour run, unless it says otherwise")
         for look in StarFlourish.Look.allCases {
             defaults.set(look.rawValue, forKey: "starFlourish")
             XCTAssertEqual(StarFlourish.Look.current(defaults), look)
         }
         defaults.set("fireworks", forKey: "starFlourish")
-        XCTAssertEqual(StarFlourish.Look.current(defaults), .afterglow, "a name it doesn't know changes nothing")
+        XCTAssertEqual(StarFlourish.Look.current(defaults), .run, "a name it doesn't know changes nothing")
     }
 
     // MARK: - The run
@@ -269,6 +270,59 @@ final class StarFlourishTests: XCTestCase {
         XCTAssertNil(StarFlourish.preview(from: 40, to: 80, reduceMotion: true), "they switch as they always did")
     }
 
+    // MARK: - The five-star finale
+
+    func testOnlyASongThatBecomesFiveStarsHasTheFinale() throws {
+        XCTAssertTrue(saved(100, from: 60).hasFinale)
+        XCTAssertTrue(saved(100, from: 0).hasFinale)
+        XCTAssertTrue(saved(100, from: 90).hasFinale, "four and a half, filled out")
+        XCTAssertTrue(saved(100, from: 60, showing: 100).hasFinale, "the press had lit all five before the release saved them")
+        XCTAssertFalse(saved(100, from: 100).hasFinale, "five stars chosen again only pop")
+        XCTAssertFalse(saved(90, from: 60).hasFinale, "four and a half isn't five")
+        XCTAssertFalse(saved(80, from: 60).hasFinale)
+        XCTAssertFalse(saved(80, from: 100).hasFinale, "never for stars taken away")
+        XCTAssertFalse(saved(100, from: 60, reduceMotion: true).hasFinale, "nothing may move")
+        let held = try XCTUnwrap(StarFlourish.preview(from: 60, to: 100, reduceMotion: false))
+        XCTAssertFalse(held.hasFinale, "nothing is saved while the button is held")
+        for look in StarFlourish.Look.allCases {
+            XCTAssertTrue(saved(100, from: 60, look: look).hasFinale, "\(look)")
+        }
+    }
+
+    func testAFlourishLastsAsLongAsItsFinale() {
+        let run = saved(100, from: 60, look: .run)
+        XCTAssertEqual(run.starsDuration, 0.5, accuracy: 0.0001, "the run itself")
+        XCTAssertEqual(run.duration, StarFinale.duration(stagger: 0.05), accuracy: 0.0001, "and the small stars still in the air")
+        XCTAssertEqual(run.duration, 0.88, accuracy: 0.0001)
+
+        let pop = saved(100, from: 60, look: .pop)
+        XCTAssertEqual(pop.starsDuration, 0.25, accuracy: 0.0001)
+        XCTAssertEqual(pop.duration, 0.68, accuracy: 0.0001, "all five leave together")
+
+        let afterglow = saved(100, from: 60, look: .afterglow)
+        XCTAssertGreaterThanOrEqual(afterglow.duration, afterglow.starsDuration, "never cut short of the colour cooling")
+        XCTAssertGreaterThanOrEqual(afterglow.duration, StarFinale.duration(stagger: 0.05))
+
+        // With no finale, a flourish takes the stars' own time and no more
+        let four = saved(80, from: 60, look: .run)
+        XCTAssertEqual(four.duration, four.starsDuration)
+        XCTAssertEqual(saved(100, from: 100, look: .run).duration, 0.5, accuracy: 0.0001, "five stars chosen again")
+    }
+
+    /// While the small stars finish their flight, the stars themselves are drawn at rest
+    func testTheStarsAreAtRestWhileTheFinaleFinishes() {
+        let flourish = saved(100, from: 60, look: .run)
+        XCTAssertLessThan(flourish.starsDuration, flourish.duration)
+        for elapsed in stride(from: flourish.starsDuration, through: flourish.duration, by: 1.0 / 60.0) {
+            for index in 0..<5 {
+                let pose = flourish.pose(of: index, at: elapsed)
+                XCTAssertEqual(pose.scale, 1, accuracy: 0.0001, "star \(index) at \(elapsed)")
+                XCTAssertEqual(pose.morph, 1, accuracy: 0.0001, "star \(index) at \(elapsed)")
+                XCTAssertEqual(pose.tint, 0, accuracy: 0.0001, "star \(index) at \(elapsed)")
+            }
+        }
+    }
+
     // MARK: - The end
 
     func testEveryFlourishEndsWithTheSavedStarsAtRest() {
@@ -337,6 +391,8 @@ final class StarFlourishTests: XCTestCase {
         XCTAssertEqual(grown.width, 19.2, accuracy: 0.0001)
         // The star's centre, 0.764 pt under the slot's for a 16 pt star, is the point that stays
         let centreY = slot.midY - 0.764
+        XCTAssertEqual(StarFlourish.centre(ofStarIn: slot).x, slot.midX, accuracy: 0.0001)
+        XCTAssertEqual(StarFlourish.centre(ofStarIn: slot).y, centreY, accuracy: 0.0001, "where the finale's small stars leave from")
         XCTAssertEqual(grown.minY + (centreY - slot.minY) * 1.2, centreY, accuracy: 0.0001)
     }
 

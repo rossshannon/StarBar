@@ -182,6 +182,17 @@ final class TrackAnnouncementView: NSView {
         set { content.starFlourish = newValue }
     }
 
+    /// Where the first of the five stars is drawn, in this view's coordinates; nil when the
+    /// strip shows no stars
+    var firstStarFrame: NSRect? {
+        return content.firstStarFrame
+    }
+
+    /// The gap between one star and the next
+    var starSpacing: CGFloat {
+        return TrackAnnouncementLayout.ratingSpacing * scale
+    }
+
     /// 0.6 normally; 1 when Reduce Transparency is on, which also makes the other styles
     /// draw an opaque tint over their backdrop
     var backgroundAlpha: CGFloat = TrackAnnouncementLayout.backgroundAlpha {
@@ -982,6 +993,17 @@ final class TrackAnnouncementContentView: NSView {
 
     private var ratingStarSize: NSSize {
         return NSSize(width: TrackAnnouncementLayout.ratingStarSize * scale, height: TrackAnnouncementLayout.ratingStarSize * scale)
+    }
+
+    /// Where the first star is drawn, laid out as `Stars.image` lays the stars out. Nil for a
+    /// strip that shows no stars: Spotify's name, or why the song can't be rated.
+    var firstStarFrame: NSRect? {
+        guard !announcement.namesSpotify, announcement.canRate else { return nil }
+        let rect = frames.rating
+        let starSize = ratingStarSize
+        let spacing = TrackAnnouncementLayout.ratingSpacing * scale
+        return NSRect(x: rect.minX + spacing, y: rect.midY - starSize.height / 2,
+                      width: starSize.width, height: starSize.height)
     }
 
     /// Where the heart is drawn: after the stars, or first on the row when there are none.

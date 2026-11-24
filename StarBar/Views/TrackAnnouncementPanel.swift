@@ -92,6 +92,11 @@ final class TrackAnnouncementPanel: NSPanel {
     /// Steps the stars' flourish after a rating was saved (`StarFlourish`), which the strip
     /// draws in its own rating row
     private var starsTimer: RatingReminderTimer?
+    /// The five-star finale's small stars (`StarFinale`), stepped with the stars' flourish.
+    /// Beside the strip rather than inside it, as the heart's burst is: they fly up over the
+    /// lines above the stars, which then needn't be drawn again at every step. It follows the
+    /// strip as it slides.
+    let finaleView = StarFinaleView(frame: .zero)
 
     /// Whether the panel is making its unseen first appearance (`warmUp`)
     private(set) var isWarmingUp = false
@@ -166,6 +171,8 @@ final class TrackAnnouncementPanel: NSPanel {
         // Over the sleeve too, since a dot can fly across it
         heartView.isHidden = true
         container.addSubview(heartView)
+        finaleView.isHidden = true
+        container.addSubview(finaleView)
 
         if clock == nil {
             self.clock = DisplayLinkClock(screen: { [weak self] in self?.screen })
@@ -210,6 +217,7 @@ final class TrackAnnouncementPanel: NSPanel {
             // The glass's side insets move the sleeve and the heart with the rest of the content
             layoutSleeve()
             layoutHeart()
+            layoutFinale()
         }
     }
 
@@ -363,6 +371,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
         }
         retint(fading: !coverArrived || artworkSlotWasVisible, why: coverArrived ? "cover arrived" : "same song")
         layoutHeart()
+        layoutFinale()
     }
 
     private func logArtwork(_ state: String) {
@@ -493,6 +502,7 @@ extension TrackAnnouncementPanel: TrackAnnouncementPresenter {
             self.layoutSleeve()
             self.recordArtworkVisibility()
             self.layoutHeart()
+            self.layoutFinale()
         }
 
         guard slideDuration > 0 else {
@@ -839,6 +849,9 @@ extension TrackAnnouncementPanel {
     /// pops by a few points and never leaves the strip, so unlike the heart's burst it needs
     /// no view of its own, and rides the slide with the rest of the strip.
     ///
+    /// The five-star finale, when the flourish has one, does leave the row: its small stars
+    /// fan up over the lines above, in `finaleView`, on the same steps.
+    ///
     /// Stepped on the slide's clock, with a `SteppedTimeline` so a stall pauses it, never with
     /// Core Animation, which on macOS 27 ran animations on this panel without drawing them.
     func animateStars(_ flourish: StarFlourish) {
@@ -849,6 +862,13 @@ extension TrackAnnouncementPanel {
               announcement.canRate, !announcement.namesSpotify,
               flourish.to == Stars.styles(forRating: announcement.rating) else { return }
         stripView.starFlourish = (flourish, 0)
+        if flourish.hasFinale, let star = stripView.firstStarFrame {
+            finaleView.finale = .strip(starSize: star.width, spacing: stripView.starSpacing,
+                                       stagger: flourish.look.stagger)
+            finaleView.elapsed = 0
+            finaleView.isHidden = false
+            layoutFinale()
+        }
 
         var timeline = SteppedTimeline(start: clock.now())
         var cadence = FrameCadence()
@@ -863,16 +883,35 @@ extension TrackAnnouncementPanel {
                 os_log("Strip star flourish completed: %{public}s", cadence.summary)
             } else {
                 self.stripView.starFlourish = (flourish, elapsed)
+                if self.finaleView.finale != nil {
+                    self.finaleView.elapsed = elapsed
+                }
             }
         }
     }
 
-    /// Put the strip's stars back at rest, wherever their flourish has got to
+    /// Put the finale's view over the strip's stars, wherever the strip has slid to, and fade
+    /// it with the strip
+    fileprivate func layoutFinale() {
+        guard let finale = finaleView.finale, let star = stripView.firstStarFrame else { return }
+        let onPanel = star.offsetBy(dx: stripView.frame.minX, dy: stripView.frame.minY)
+        let placed = StarFinaleView.frame(for: finale, firstStarAt: StarFlourish.centre(ofStarIn: onPanel))
+        finaleView.frame = placed.frame
+        finaleView.origin = placed.origin
+        finaleView.alphaValue = stripView.alphaValue
+    }
+
+    /// Put the strip's stars back at rest, wherever their flourish has got to, and take the
+    /// finale's small stars away
     fileprivate func stopStars() {
         starsTimer?.invalidate()
         starsTimer = nil
         if stripView.starFlourish != nil {
             stripView.starFlourish = nil
+        }
+        if finaleView.finale != nil {
+            finaleView.finale = nil
+            finaleView.isHidden = true
         }
     }
 

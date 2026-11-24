@@ -3,9 +3,10 @@
 //  StarBarTests
 //
 //  The menu bar's stars after a rating is saved: the flourish drawn over them and its colour
-//  over that, the stars put back at rest when it ends, and what ends it early. Driven by a
-//  fake clock and a fake mouse, onto fake tracks, with Reduce Motion and the flourish's look
-//  set by each test rather than read from the Mac.
+//  over that, the stars put back at rest when it ends, what ends it early, and the five-star
+//  finale thrown over the menu bar with it. Driven by a fake clock and a fake mouse, onto
+//  fake tracks, with Reduce Motion and the flourish's look set by each test rather than read
+//  from the Mac.
 //
 
 import XCTest
@@ -37,9 +38,14 @@ final class MenuBarStarFlourishTests: XCTestCase {
         clock = FakeClock()
         pointer = FakePointer()
         menu = MenuBarRatingControl(widthClock: clock, pointer: pointer)
+        // A status item made in a test is never on screen. Say so, whatever the Mac running
+        // the tests makes of it, so the finale's window goes up only where a test puts the
+        // item on screen (`putItemOnScreen`).
+        menu.heartOnScreenInTests = { nil }
     }
 
     override func tearDown() {
+        menu.finaleWindow?.stop()
         NSStatusBar.system.removeStatusItem(menu.statusItem)
         menu = nil
         pointer = nil
@@ -251,6 +257,208 @@ final class MenuBarStarFlourishTests: XCTestCase {
         XCTAssertNil(menu.starFlourishInPlay)
         XCTAssertTrue(menu.starTintView.isHidden)
         XCTAssertTrue(image === menu.menuBarIcon.image, "the stopped icon, not a frame of the stars")
+    }
+
+    // MARK: - The five-star finale
+
+    /// Say where the item's heart is on screen, as `MenuBarHeartChangeTests` does: 12 points
+    /// below the top of the main screen, as on a 24 point menu bar
+    @discardableResult
+    private func putItemOnScreen() -> NSRect {
+        let screen = NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+        let heart = NSRect(x: screen.midX.rounded(), y: screen.maxY - 12 - 8, width: 16, height: 16)
+        menu.heartOnScreenInTests = { heart }
+        return heart
+    }
+
+    private var finaleIsPlaying: Bool {
+        return menu.finaleWindow?.isPlaying ?? false
+    }
+
+    func testASongGivenFiveStarsThrowsTheFinaleOverTheMenuBar() throws {
+        MenuBarRatingControl.starFlourishLook = { .run }
+        let heart = putItemOnScreen()
+        showSong(rating: 60)
+
+        save(100)
+
+        let flourish = try XCTUnwrap(menu.starFlourishInPlay)
+        XCTAssertEqual(flourish.look, .run)
+        XCTAssertTrue(flourish.hasFinale)
+        let window = try XCTUnwrap(menu.finaleWindow)
+        XCTAssertTrue(window.isPlaying)
+        XCTAssertTrue(window.isVisible)
+        XCTAssertEqual(window.finaleView.finale, StarFinale.menuBar(starSize: 16, spacing: 4, stagger: 0.05))
+        XCTAssertEqual(window.finaleView.elapsed, 0, "its first frame, which is empty")
+        // The first star is five stars, their gaps and the gap before the heart to the left
+        // of the heart, and its centre a little under its slot's
+        let centre = NSPoint(x: window.frame.minX + window.finaleView.origin.x, y: window.frame.minY + window.finaleView.origin.y)
+        XCTAssertEqual(centre.x, heart.midX - (5 * 20 + 4), accuracy: 0.001)
+        XCTAssertEqual(centre.y, heart.midY - 0.764, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(menu.firstStarOnScreen).x, centre.x, accuracy: 0.001)
+
+        clock.runFrames(for: 0.3)
+        XCTAssertEqual(window.finaleView.elapsed, 0.3, accuracy: 0.001, "stepped with the stars")
+
+        // The run is over by now, and the small stars are still in the air
+        clock.runFrames(for: 0.3)
+        XCTAssertLessThan(flourish.starsDuration, 0.6)
+        XCTAssertNotNil(menu.starFlourishInPlay, "the flourish lasts as long as its finale")
+        XCTAssertTrue(menu.isAnimating, "so Music's re-reads wait for the finale too")
+        XCTAssertTrue(window.isPlaying)
+        XCTAssertEqual(window.finaleView.elapsed, 0.6, accuracy: 0.001)
+
+        clock.runFrames(for: flourish.duration - 0.6 + 0.05)
+        XCTAssertNil(menu.starFlourishInPlay)
+        XCTAssertFalse(menu.isAnimating)
+        XCTAssertFalse(window.isVisible, "the window goes with the last small star")
+        XCTAssertFalse(window.isPlaying)
+        XCTAssertTrue(showsStarsAtRest)
+        XCTAssertTrue(clock.pendingRepeating.isEmpty)
+    }
+
+    /// The small stars leave as the look in use reaches each star: one after another for the
+    /// runs, all together for the plain pop
+    func testTheFinaleKeepsTimeWithTheLookInUse() throws {
+        putItemOnScreen()
+        showSong(rating: 60)
+        for look in StarFlourish.Look.allCases {
+            MenuBarRatingControl.starFlourishLook = { look }
+
+            save(100)
+
+            let window = try XCTUnwrap(menu.finaleWindow)
+            XCTAssertTrue(window.isPlaying, "\(look)")
+            XCTAssertEqual(window.finaleView.finale?.stagger, look.stagger, "\(look)")
+            let flourish = try XCTUnwrap(menu.starFlourishInPlay)
+            XCTAssertGreaterThanOrEqual(flourish.duration, StarFinale.duration(stagger: look.stagger), "\(look)")
+            clock.runFrames(for: flourish.duration + 0.05)
+            XCTAssertFalse(window.isPlaying, "\(look)")
+            XCTAssertTrue(showsStarsAtRest, "\(look)")
+
+            // Back to three stars, quietly, for the next look
+            save(60)
+            clock.runFrames(for: 0.5)
+            XCTAssertNil(menu.starFlourishInPlay, "\(look)")
+        }
+    }
+
+    func testFiveStarsChosenAgainAndEveryOtherRatingHaveNoFinale() throws {
+        putItemOnScreen()
+        showSong(rating: 100)
+
+        save(100)
+        let again = try XCTUnwrap(menu.starFlourishInPlay)
+        XCTAssertEqual(again.kind, .raise, "the stars still pop")
+        XCTAssertFalse(again.hasFinale, "the song already had five")
+        XCTAssertFalse(finaleIsPlaying)
+        clock.runFrames(for: again.duration + 0.05)
+
+        save(80)
+        XCTAssertEqual(try XCTUnwrap(menu.starFlourishInPlay).kind, .lower)
+        XCTAssertFalse(finaleIsPlaying)
+        clock.runFrames(for: 0.5)
+
+        save(90)
+        let nearly = try XCTUnwrap(menu.starFlourishInPlay)
+        XCTAssertEqual(nearly.kind, .raise)
+        XCTAssertFalse(nearly.hasFinale, "four and a half isn't five")
+        XCTAssertFalse(finaleIsPlaying)
+    }
+
+    /// Where the item isn't on screen, small stars would fly out of nothing, so only the
+    /// stars pop
+    func testNoFinaleWindowWhenTheItemIsntOnScreen() throws {
+        showSong(rating: 60)
+
+        save(100)
+
+        let flourish = try XCTUnwrap(menu.starFlourishInPlay)
+        XCTAssertTrue(flourish.hasFinale)
+        XCTAssertNil(menu.firstStarOnScreen)
+        XCTAssertFalse(finaleIsPlaying)
+        XCTAssertEqual(image?.size, flourishSize, "the stars still pop in the menu bar")
+        clock.runFrames(for: flourish.duration + 0.05)
+        XCTAssertTrue(showsStarsAtRest)
+    }
+
+    func testReduceMotionHasNoFinale() throws {
+        putItemOnScreen()
+        showSong(rating: 60)
+        MenuBarRatingControl.reduceMotion = { true }
+
+        save(100)
+
+        let flourish = try XCTUnwrap(menu.starFlourishInPlay)
+        XCTAssertEqual(flourish.kind, .fade)
+        XCTAssertFalse(flourish.hasFinale)
+        XCTAssertFalse(finaleIsPlaying, "nothing may move")
+    }
+
+    func testAnotherRatingOrANewSongTakesTheFinaleDown() throws {
+        putItemOnScreen()
+        showSong(rating: 60)
+        save(100)
+        clock.runFrames(for: 0.2)
+        let window = try XCTUnwrap(menu.finaleWindow)
+        XCTAssertTrue(window.isPlaying)
+
+        // The user thinks again: four stars
+        menu.ratingControl.update(rating: 80)
+        XCTAssertFalse(window.isPlaying, "it was for five stars, which the song no longer shows")
+        XCTAssertFalse(window.isVisible)
+        menu.flourishStars(saving: 80, from: 100, showing: 100)
+        XCTAssertFalse(window.isPlaying, "and a rating lowered is quiet")
+        clock.runFrames(for: 0.5)
+
+        // Five again, and the next song starts while the small stars are in the air
+        save(100)
+        XCTAssertTrue(window.isPlaying, "the same window, put up again")
+        XCTAssertEqual(window.finaleView.elapsed, 0)
+        clock.runFrames(for: 0.2)
+        let next = FakeTrack(name: "Next", persistentID: "00000000000000F2", rating: 20)
+        iTunesPlayer.shared.update(next, broadcast: false)
+        menu.applyTrackDisplay(PlayingTrack(track: next), isStopped: false, musicIsRunning: true)
+        XCTAssertNil(menu.starFlourishInPlay)
+        XCTAssertFalse(window.isPlaying, "they were for the last song")
+        XCTAssertFalse(window.isVisible)
+    }
+
+    /// The stars and their finale share one timeline, so a held main thread pauses both alike
+    func testAStallPausesTheFinaleWithTheStars() throws {
+        putItemOnScreen()
+        showSong(rating: 60)
+        save(100)
+        clock.runFrames(for: 0.1)
+
+        // Longer than the whole finale with no frame, then one late frame
+        clock.advance(by: 1.5)
+        clock.fireRepeating()
+
+        let window = try XCTUnwrap(menu.finaleWindow)
+        XCTAssertTrue(window.isPlaying, "not finished unseen")
+        XCTAssertNotNil(menu.starFlourishInPlay)
+        XCTAssertEqual(window.finaleView.elapsed, 0.1 + SteppedTimeline.maxStep, accuracy: 0.001, "where the stars are")
+    }
+
+    /// The shortcut redraws the menu bar after its own rating, and Music's next update agrees
+    /// with the stars: neither takes the finale down
+    func testAShortcutToFiveStarsThrowsTheFinaleAndItOutlivesTheRedraw() throws {
+        putItemOnScreen()
+        let song = showSong(rating: 60)
+
+        menu.setRating(stars: 5)
+
+        sendHeldRating()
+        XCTAssertEqual(song.ratingsWritten, [100])
+        XCTAssertTrue(try XCTUnwrap(menu.starFlourishInPlay).hasFinale)
+        XCTAssertTrue(finaleIsPlaying)
+
+        clock.runFrames(for: 0.1)
+        menu.applyTrackDisplay(PlayingTrack(track: song), isStopped: false, musicIsRunning: true)
+        XCTAssertNotNil(menu.starFlourishInPlay)
+        XCTAssertTrue(finaleIsPlaying)
+        XCTAssertEqual(try XCTUnwrap(menu.finaleWindow).finaleView.elapsed, 0.1, accuracy: 0.001)
     }
 
     // MARK: - Through the shortcuts and the mouse

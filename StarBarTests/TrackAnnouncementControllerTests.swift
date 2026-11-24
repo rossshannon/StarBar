@@ -1790,6 +1790,30 @@ extension TrackAnnouncementControllerTests {
         XCTAssertTrue(clock.pendingOneShot === hold)
     }
 
+    /// A song given five stars throws its small stars after the run is over, and the strip
+    /// stays up for those too
+    func testFiveStarsSavedNearTheEndKeepsTheStripUpForTheFinale() throws {
+        flourishLook = .run
+        live = .loaded(.init(rating: 60, isFavorited: false))
+        update(snapshot(track: "A"))
+        clock.advance(by: expectedHold - 0.2)
+
+        controller.userDidRate(100)
+
+        let flourish = try XCTUnwrap(presenter.flourished.last)
+        XCTAssertTrue(flourish.hasFinale)
+        XCTAssertGreaterThan(flourish.duration, flourish.starsDuration, "the small stars outlast the run")
+        let extended = try XCTUnwrap(clock.pendingOneShot)
+        XCTAssertEqual(extended.seconds, StarFinale.duration(stagger: 0.05) + TrackAnnouncementController.heartChangeMargin, accuracy: 0.001)
+        XCTAssertEqual(presenter.hideCount, 0)
+
+        // Five stars chosen again only pop, so the strip waits for the stars alone
+        controller.userDidRate(100)
+        let again = try XCTUnwrap(presenter.flourished.last)
+        XCTAssertFalse(again.hasFinale)
+        XCTAssertEqual(again.duration, again.starsDuration)
+    }
+
     /// The flourish is stepped, as the heart's change is, so a stall pauses it while the
     /// strip's deadline runs on: a strip due to go while its stars are still popping waits
     /// for them, then stays up the margin

@@ -25,11 +25,15 @@ import Cocoa
 /// - Reduce Motion cross-fades the glyphs that change, and nothing moves.
 /// - While the mouse button is held and the stars follow it, a glyph that changes grows or
 ///   shrinks quickly rather than switching, and nothing pops: nothing is saved yet.
+///
+/// He chose the one-colour run on 2026-11-24 (`Look.run`), with the five-star finale on top
+/// (`StarFinale`): a song given five stars has each star throw a small coloured star of its
+/// own as the run reaches it.
 struct StarFlourish: Equatable {
 
     /// Which flourish a raised rating gets.
     ///
-    /// The hidden default `starFlourish` picks one by name (`afterglow`, `run` or `pop`), read
+    /// The hidden default `starFlourish` picks one by name (`run`, `afterglow` or `pop`), read
     /// at each rating, so the three can be compared on the real menu bar without a rebuild.
     enum Look: String, CaseIterable, Equatable {
         /// The run, and the app icon's five colours flash on each star as it pops, then cool
@@ -42,9 +46,9 @@ struct StarFlourish: Equatable {
         /// the fallback
         case pop
 
-        /// The look in use: `afterglow` unless the hidden default names another
+        /// The look in use: `run`, which Ross chose, unless the hidden default names another
         static func current(_ defaults: UserDefaults = .standard) -> Look {
-            return defaults.string(forKey: "starFlourish").flatMap { Look(rawValue: $0) } ?? .afterglow
+            return defaults.string(forKey: "starFlourish").flatMap { Look(rawValue: $0) } ?? .run
         }
 
         /// How long after one star the next one starts
@@ -100,6 +104,10 @@ struct StarFlourish: Equatable {
     let from: [Star.Style]
     /// What each shows when it ends
     let to: [Star.Style]
+    /// Whether the five-star finale plays with it (`StarFinale`): the song was given five
+    /// stars and didn't have them before. Whoever draws the flourish draws the finale, stepped
+    /// on the same clock, and `duration` allows for it.
+    let hasFinale: Bool
 
     /// The largest any look draws a star, against its own size
     static let largestScale: CGFloat = 1.3
@@ -117,11 +125,12 @@ struct StarFlourish: Equatable {
     static let fadeDuration: TimeInterval = 0.15
     static let previewDuration: TimeInterval = 0.1
 
-    private init(kind: Kind, look: Look, from: [Star.Style], to: [Star.Style]) {
+    private init(kind: Kind, look: Look, from: [Star.Style], to: [Star.Style], hasFinale: Bool = false) {
         self.kind = kind
         self.look = look
         self.from = from
         self.to = to
+        self.hasFinale = hasFinale
     }
 
     /// The flourish for a rating the user has just saved.
@@ -134,7 +143,7 @@ struct StarFlourish: Equatable {
     ///   - shown: the rating the stars showed as the gesture ended: `before` for a shortcut or
     ///     a quick click, and whatever the stars had followed the mouse to for a press that
     ///     was held
-    init(saving rating: Int, from before: Int, showing shown: Int, reduceMotion: Bool, look: Look = .afterglow) {
+    init(saving rating: Int, from before: Int, showing shown: Int, reduceMotion: Bool, look: Look = .run) {
         let to = Stars.styles(forRating: rating)
         let kind: Kind
         if reduceMotion {
@@ -144,7 +153,15 @@ struct StarFlourish: Equatable {
         } else {
             kind = .raise
         }
-        self.init(kind: kind, look: look, from: Stars.styles(forRating: shown), to: to)
+        // The finale is for a song that becomes five stars, not for five stars chosen again,
+        // and never under Reduce Motion, where nothing moves
+        let hadFiveStars = StarFlourish.isFiveStars(Stars.styles(forRating: before))
+        self.init(kind: kind, look: look, from: Stars.styles(forRating: shown), to: to,
+                  hasFinale: kind == .raise && StarFlourish.isFiveStars(to) && !hadFiveStars)
+    }
+
+    private static func isFiveStars(_ styles: [Star.Style]) -> Bool {
+        return styles.allSatisfy { $0 == .full }
     }
 
     /// The stars following the mouse from `shown` to `rating` while its button is held, or nil
@@ -185,9 +202,15 @@ struct StarFlourish: Equatable {
         }
     }
 
-    /// How long the whole flourish takes: 0 when there is nothing to draw, such as no stars
-    /// chosen for a song that had none
+    /// How long the whole flourish takes, the finale included: 0 when there is nothing to
+    /// draw, such as no stars chosen for a song that had none
     var duration: TimeInterval {
+        return hasFinale ? max(starsDuration, StarFinale.duration(stagger: look.stagger)) : starsDuration
+    }
+
+    /// How long the stars themselves take. From then on they are drawn at rest, while the
+    /// finale's small stars, if it has one, are still in the air.
+    var starsDuration: TimeInterval {
         switch kind {
         case .raise:
             return lit == 0 ? 0 : TimeInterval(lit - 1) * look.stagger + look.starDuration
@@ -283,12 +306,18 @@ extension StarFlourish {
                       width: starSize.width, height: starSize.height)
     }
 
-    /// `slot` resized about the star's own centre, which `Star` draws a little below the
-    /// slot's, so a star that pops grows evenly from its middle
+    /// The middle of the star drawn in `slot`, which `Star` draws a little below the slot's
+    /// own, so that the star's top point and its feet are the same distance from the edges
+    static func centre(ofStarIn slot: NSRect) -> CGPoint {
+        return CGPoint(x: slot.midX, y: slot.midY - 0.0955 * slot.height * 0.5)
+    }
+
+    /// `slot` resized about the star's own centre, so a star that pops grows evenly from its
+    /// middle
     static func frame(ofStarIn slot: NSRect, scale: CGFloat) -> NSRect {
         // Exactly the slot at rest, so a flourish's first and last frames are the stars at rest
         guard scale != 1 else { return slot }
-        let centre = CGPoint(x: slot.midX, y: slot.midY - 0.0955 * slot.height * 0.5)
+        let centre = StarFlourish.centre(ofStarIn: slot)
         return NSRect(x: centre.x + (slot.minX - centre.x) * scale,
                       y: centre.y + (slot.minY - centre.y) * scale,
                       width: slot.width * scale, height: slot.height * scale)

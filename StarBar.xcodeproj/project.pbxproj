@@ -165,6 +165,10 @@
 		5A7E1A000000000000000415 /* TrackAnnouncementSleeveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000000416 /* TrackAnnouncementSleeveTests.swift */; };
 		5A7E1A000000000000001301 /* HeartBurst.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001302 /* HeartBurst.swift */; };
 		5A7E1ADD0E1E9B8426000001 /* StarFlourish.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B8426000002 /* StarFlourish.swift */; };
+		5A7E1ADD0E1E9B8426000007 /* StarFinale.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B8426000008 /* StarFinale.swift */; };
+		5A7E1ADD0E1E9B8426000009 /* MenuBarOverlayWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B842600000A /* MenuBarOverlayWindow.swift */; };
+		5A7E1ADD0E1E9B842600000B /* StarFinaleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B842600000C /* StarFinaleView.swift */; };
+		5A7E1ADD0E1E9B842600000D /* StarFinaleWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B842600000E /* StarFinaleWindow.swift */; };
 		5A7E1A000000000000001303 /* HeartBurstView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001304 /* HeartBurstView.swift */; };
 		5A7E1A000000000000001305 /* HeartBurstWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001306 /* HeartBurstWindow.swift */; };
 		5A7E1A000000000000001307 /* HeartBurstTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A000000000000001308 /* HeartBurstTests.swift */; };
@@ -172,6 +176,8 @@
 		5A7E1A00000000000000130B /* MenuBarHeartChangeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A00000000000000130C /* MenuBarHeartChangeTests.swift */; };
 		5A7E1ADD0E1E9B8426000003 /* StarFlourishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B8426000004 /* StarFlourishTests.swift */; };
 		5A7E1ADD0E1E9B8426000005 /* MenuBarStarFlourishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B8426000006 /* MenuBarStarFlourishTests.swift */; };
+		5A7E1ADD0E1E9B842600000F /* StarFinaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B8426000010 /* StarFinaleTests.swift */; };
+		5A7E1ADD0E1E9B8426000011 /* StarFinaleWindowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1ADD0E1E9B8426000012 /* StarFinaleWindowTests.swift */; };
 		5A7E1A0000000000000000E6 /* TrackAnnouncementController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E5 /* TrackAnnouncementController.swift */; };
 		5A7E1A0000000000000000E8 /* TrackAnnouncementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */; };
 		5A7E1A0000000000000000EA /* TrackAnnouncementPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */; };
@@ -367,6 +373,10 @@
 		5A7E1A000000000000000416 /* TrackAnnouncementSleeveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementSleeveTests.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001302 /* HeartBurst.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurst.swift; sourceTree = "<group>"; };
 		5A7E1ADD0E1E9B8426000002 /* StarFlourish.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFlourish.swift; sourceTree = "<group>"; };
+		5A7E1ADD0E1E9B8426000008 /* StarFinale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFinale.swift; sourceTree = "<group>"; };
+		5A7E1ADD0E1E9B842600000A /* MenuBarOverlayWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarOverlayWindow.swift; sourceTree = "<group>"; };
+		5A7E1ADD0E1E9B842600000C /* StarFinaleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFinaleView.swift; sourceTree = "<group>"; };
+		5A7E1ADD0E1E9B842600000E /* StarFinaleWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFinaleWindow.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001304 /* HeartBurstView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstView.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001306 /* HeartBurstWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstWindow.swift; sourceTree = "<group>"; };
 		5A7E1A000000000000001308 /* HeartBurstTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeartBurstTests.swift; sourceTree = "<group>"; };
@@ -374,6 +384,8 @@
 		5A7E1A00000000000000130C /* MenuBarHeartChangeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarHeartChangeTests.swift; sourceTree = "<group>"; };
 		5A7E1ADD0E1E9B8426000004 /* StarFlourishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFlourishTests.swift; sourceTree = "<group>"; };
 		5A7E1ADD0E1E9B8426000006 /* MenuBarStarFlourishTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarStarFlourishTests.swift; sourceTree = "<group>"; };
+		5A7E1ADD0E1E9B8426000010 /* StarFinaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFinaleTests.swift; sourceTree = "<group>"; };
+		5A7E1ADD0E1E9B8426000012 /* StarFinaleWindowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StarFinaleWindowTests.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E5 /* TrackAnnouncementController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementController.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E7 /* TrackAnnouncementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementView.swift; sourceTree = "<group>"; };
 		5A7E1A0000000000000000E9 /* TrackAnnouncementPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackAnnouncementPanel.swift; sourceTree = "<group>"; };
@@ -552,6 +564,8 @@
 				5A7E1A00000000000000130C /* MenuBarHeartChangeTests.swift */,
 				5A7E1ADD0E1E9B8426000004 /* StarFlourishTests.swift */,
 				5A7E1ADD0E1E9B8426000006 /* MenuBarStarFlourishTests.swift */,
+				5A7E1ADD0E1E9B8426000010 /* StarFinaleTests.swift */,
+				5A7E1ADD0E1E9B8426000012 /* StarFinaleWindowTests.swift */,
 				5A7E1A0000000000000000F1 /* FakeClock.swift */,
 			);
 			path = "StarBarTests";
@@ -655,6 +669,7 @@
 				5A7E1A000000000000000412 /* TrackAnnouncementSleeve.swift */,
 				5A7E1A000000000000001302 /* HeartBurst.swift */,
 				5A7E1ADD0E1E9B8426000002 /* StarFlourish.swift */,
+				5A7E1ADD0E1E9B8426000008 /* StarFinale.swift */,
 			);
 			path = Helper;
 			sourceTree = "<group>";
@@ -698,6 +713,9 @@
 				5A7E1A000000000000000414 /* TrackAnnouncementSleeveView.swift */,
 				5A7E1A000000000000001304 /* HeartBurstView.swift */,
 				5A7E1A000000000000001306 /* HeartBurstWindow.swift */,
+				5A7E1ADD0E1E9B842600000A /* MenuBarOverlayWindow.swift */,
+				5A7E1ADD0E1E9B842600000C /* StarFinaleView.swift */,
+				5A7E1ADD0E1E9B842600000E /* StarFinaleWindow.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -969,6 +987,10 @@
 				5A7E1A000000000000000411 /* TrackAnnouncementSleeve.swift in Sources */,
 				5A7E1A000000000000001301 /* HeartBurst.swift in Sources */,
 				5A7E1ADD0E1E9B8426000001 /* StarFlourish.swift in Sources */,
+				5A7E1ADD0E1E9B8426000007 /* StarFinale.swift in Sources */,
+				5A7E1ADD0E1E9B8426000009 /* MenuBarOverlayWindow.swift in Sources */,
+				5A7E1ADD0E1E9B842600000B /* StarFinaleView.swift in Sources */,
+				5A7E1ADD0E1E9B842600000D /* StarFinaleWindow.swift in Sources */,
 				5A7E1A000000000000001303 /* HeartBurstView.swift in Sources */,
 				5A7E1A000000000000001305 /* HeartBurstWindow.swift in Sources */,
 				5A7E1A0000000000000000E2 /* TrackAnnouncement.swift in Sources */,
@@ -1040,6 +1062,8 @@
 				5A7E1A00000000000000130B /* MenuBarHeartChangeTests.swift in Sources */,
 				5A7E1ADD0E1E9B8426000003 /* StarFlourishTests.swift in Sources */,
 				5A7E1ADD0E1E9B8426000005 /* MenuBarStarFlourishTests.swift in Sources */,
+				5A7E1ADD0E1E9B842600000F /* StarFinaleTests.swift in Sources */,
+				5A7E1ADD0E1E9B8426000011 /* StarFinaleWindowTests.swift in Sources */,
 				5A7E1A0000000000000000EE /* TrackAnnouncementControllerTests.swift in Sources */,
 				5A7E1A0000000000000000EC /* TrackAnnouncementLayoutTests.swift in Sources */,
 				5A7E1A0000000000000000DC /* RatingReminderControllerTests.swift in Sources */,

@@ -97,6 +97,10 @@ final class MenuBarRatingControl {
     var starFlourishInPlay: StarFlourish? {
         return starFlourish?.flourish
     }
+    /// The window the five-star finale is drawn in, over the menu bar (`StarFinale`), made the
+    /// first time a song is given five stars, and stepped with the stars' flourish. Not
+    /// private only so the tests can see whether it played.
+    private(set) var finaleWindow: StarFinaleWindow?
     
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
     private lazy var outlinedHeartImage = Stars.outlinedFavoriteHeartImage(size: ratingControl.starSize)
@@ -967,7 +971,37 @@ extension MenuBarRatingControl {
         starFlourishTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             self?.stepStarFlourish()
         }
+        if flourish.hasFinale {
+            playFinale(with: flourish)
+        }
         drawStarFlourish()
+    }
+
+    /// The centre of the first star on screen, or nil when the item isn't where the user can
+    /// see it (`heartOnScreen`). The stars and the heart's slot are laid out from the button's
+    /// right edge and share its middle, so the first star's slot is the heart's, moved left by
+    /// what lies between them. Not private only for the tests.
+    var firstStarOnScreen: NSPoint? {
+        guard let heart = heartOnScreen else { return nil }
+        let starSize = ratingControl.starSize
+        let spacing = ratingControl.spacing
+        let heartMinX = RatingControl.favoriteMinX(mode: .rating, starSize: starSize, spacing: spacing)
+        let slot = StarFlourish.slot(0, starSize: starSize, spacing: spacing)
+        return StarFlourish.centre(ofStarIn: NSRect(x: heart.minX - heartMinX + slot.minX, y: heart.minY,
+                                                    width: starSize.width, height: starSize.height))
+    }
+
+    /// Put the five-star finale up over the stars, in a window of its own, since its small
+    /// stars leave the item. The flourish's own steps move it on, and its end takes it down.
+    private func playFinale(with flourish: StarFlourish) {
+        guard let centre = firstStarOnScreen else {
+            os_log("%{public}s[%{public}ld], %{public}s: no five-star finale: the menu bar item isn't on screen", ((#file as NSString).lastPathComponent), #line, #function)
+            return
+        }
+        let window = finaleWindow ?? StarFinaleWindow()
+        finaleWindow = window
+        window.play(.menuBar(starSize: ratingControl.starSize.width, spacing: ratingControl.spacing,
+                             stagger: flourish.look.stagger), firstStarAt: centre)
     }
 
     /// One frame of the stars' flourish
@@ -989,10 +1023,12 @@ extension MenuBarRatingControl {
     /// Draw the flourish where it has got to. Its image is taller than the stars at rest by
     /// the same amount above and below, for a star that pops past its slot, so the button,
     /// which centres its image, draws the stars where they were; the colour goes over them in
-    /// a view of its own, the same size and in the same place.
+    /// a view of its own, the same size and in the same place. The five-star finale, when the
+    /// flourish has one, is stepped here too, in its window over the menu bar.
     private func drawStarFlourish() {
         guard let running = starFlourish, let button = statusItem.button else { return }
         let elapsed = running.time.elapsed
+        finaleWindow?.step(to: elapsed)
         let starSize = ratingControl.starSize
         let spacing = ratingControl.spacing
         button.image = padded(running.flourish.image(at: elapsed, starSize: starSize, spacing: spacing))
@@ -1014,6 +1050,7 @@ extension MenuBarRatingControl {
         starFlourish = nil
         starTintView.isHidden = true
         starTintView.image = nil
+        finaleWindow?.stop()
         // One line a flourish, as for the transitions; not for a press's quick changes, which
         // come many to a drag
         if running.flourish.kind != .preview, running.cadence.frames > 0 {
