@@ -1775,6 +1775,410 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertFalse(animated.stripView.hidesHeart)
     }
 
+    // MARK: - The stars' flourish
+
+    /// Four stars saved over two, as the strip's controller makes it
+    private let raise = StarFlourish(saving: 80, from: 40, showing: 40, reduceMotion: false, look: .afterglow)
+
+    private func rated(_ rating: Int) -> TrackAnnouncement {
+        return TrackAnnouncement(copying: sample, rating: rating)
+    }
+
+    func testASavedRatingFlourishesInTheStripsOwnRowAndEndsAtRest() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(40), reduceMotion: false, reduceTransparency: false)
+        animated.refresh(rated(80))
+        XCTAssertFalse(animated.isAnimatingStars)
+
+        animated.animateStars(raise)
+
+        XCTAssertTrue(animated.isAnimatingStars)
+        let first = try XCTUnwrap(animated.stripView.starFlourish)
+        XCTAssertEqual(first.flourish, raise)
+        XCTAssertEqual(first.elapsed, 0)
+
+        clock.runFrames(for: 0.1)
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.starFlourish).elapsed, 0.1, accuracy: 0.001)
+
+        clock.runFrames(for: raise.duration - 0.1 + 0.02)
+        XCTAssertFalse(animated.isAnimatingStars)
+        XCTAssertNil(animated.stripView.starFlourish, "the strip draws its stars at rest again")
+    }
+
+    /// Stepped, as the slide is: a held main thread pauses the stars where they were drawn
+    func testAStallPausesTheStarsRatherThanSkippingThem() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(80), reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(raise)
+        clock.runFrames(for: 0.1)
+
+        // Half a second with no frame, then one late frame
+        clock.advance(by: 0.5)
+        clock.fireRepeating()
+
+        XCTAssertTrue(animated.isAnimatingStars, "not finished unseen")
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.starFlourish).elapsed, 0.1 + SteppedTimeline.maxStep, accuracy: 0.001)
+    }
+
+    func testOnlyStarsTheStripShowsFlourish() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock, slideDuration: 0.3)
+        defer { animated.orderOut(nil) }
+
+        animated.animateStars(raise)
+        XCTAssertFalse(animated.isAnimatingStars, "the strip is down")
+
+        animated.warmUp(reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(raise)
+        XCTAssertFalse(animated.isAnimatingStars, "the warm-up is never seen")
+
+        animated.show(TrackAnnouncement(copying: rated(80), canRate: false), reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(raise)
+        XCTAssertFalse(animated.isAnimatingStars, "a song that can't be rated shows no stars")
+
+        let spotify = TrackAnnouncement(identity: "spotify:track:S", title: "T", artist: "A", album: "B", rating: 80, canRate: false, source: .spotify, showsSpotifyHeart: true)
+        animated.show(spotify, reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(raise)
+        XCTAssertFalse(animated.isAnimatingStars, "nor does a Spotify song the user doesn't have")
+
+        animated.show(rated(60), reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(raise)
+        XCTAssertFalse(animated.isAnimatingStars, "a flourish that ends at other stars than the strip shows")
+        XCTAssertNil(animated.stripView.starFlourish)
+    }
+
+    func testTheStarsFlourishWhileTheStripSlidesInButNotOnItsWayOut() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock, slideDuration: 0.3)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(80), reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.05)
+        XCTAssertEqual(animated.phase, .slidingIn)
+
+        animated.animateStars(raise)
+        XCTAssertTrue(animated.isAnimatingStars, "a rating saved as the strip comes up")
+
+        clock.runFrames(for: 0.3 + raise.duration)
+        XCTAssertEqual(animated.phase, .shown)
+        XCTAssertFalse(animated.isAnimatingStars)
+
+        animated.hide()
+        XCTAssertEqual(animated.phase, .slidingOut)
+        animated.animateStars(raise)
+        XCTAssertFalse(animated.isAnimatingStars)
+    }
+
+    func testAnotherRatingANewSongOrHidingEndsTheFlourish() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(80), reduceMotion: false, reduceTransparency: false)
+
+        animated.animateStars(raise)
+        animated.refresh(TrackAnnouncement(copying: rated(80), isFavorited: true))
+        XCTAssertTrue(animated.isAnimatingStars, "a heart set meanwhile leaves the stars in their flourish")
+
+        animated.refresh(rated(40))
+        XCTAssertFalse(animated.isAnimatingStars, "Music refused the rating: the old stars are back, at rest")
+        XCTAssertNil(animated.stripView.starFlourish)
+
+        animated.refresh(rated(80))
+        animated.animateStars(raise)
+        animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album", rating: 80), reduceMotion: false, reduceTransparency: false)
+        XCTAssertFalse(animated.isAnimatingStars, "the stars belonged to the song before")
+
+        animated.animateStars(raise)
+        XCTAssertTrue(animated.isAnimatingStars)
+        animated.hide()
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertFalse(animated.isAnimatingStars)
+        XCTAssertNil(animated.stripView.starFlourish)
+    }
+
+    /// A second rating ends the first one's flourish and starts its own, on one timer
+    func testARatingSavedDuringAFlourishStartsItsOwn() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(80), reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(raise)
+        clock.runFrames(for: 0.1)
+        let timers = clock.pendingRepeating.count
+
+        let second = StarFlourish(saving: 100, from: 80, showing: 80, reduceMotion: false, look: .afterglow)
+        animated.refresh(rated(100))
+        animated.animateStars(second)
+
+        let running = try XCTUnwrap(animated.stripView.starFlourish)
+        XCTAssertEqual(running.flourish, second)
+        XCTAssertEqual(running.elapsed, 0)
+        XCTAssertEqual(clock.pendingRepeating.count, timers, "the first one's timer has gone")
+    }
+
+    // MARK: The five-star finale
+
+    /// Five stars saved over three, in the one-colour run
+    private let fiveStars = StarFlourish(saving: 100, from: 60, showing: 60, reduceMotion: false, look: .run)
+
+    /// The first star's centre on the panel, wherever the strip has slid to
+    private func firstStarCentre(_ panel: TrackAnnouncementPanel) throws -> NSPoint {
+        let star = try XCTUnwrap(panel.stripView.firstStarFrame)
+        return StarFlourish.centre(ofStarIn: star.offsetBy(dx: panel.stripView.frame.minX, dy: panel.stripView.frame.minY))
+    }
+
+    /// Where the finale's view has the first star's centre, on the panel
+    private func finaleCentre(_ panel: TrackAnnouncementPanel) -> NSPoint {
+        return NSPoint(x: panel.finaleView.frame.minX + panel.finaleView.origin.x, y: panel.finaleView.frame.minY + panel.finaleView.origin.y)
+    }
+
+    func testASongGivenFiveStarsThrowsTheFinaleUpFromTheStripsStars() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(60), reduceMotion: false, reduceTransparency: false)
+        animated.refresh(rated(100))
+        XCTAssertTrue(animated.finaleView.isHidden)
+        XCTAssertTrue(fiveStars.hasFinale)
+
+        animated.animateStars(fiveStars)
+
+        XCTAssertTrue(animated.isAnimatingStars)
+        XCTAssertFalse(animated.finaleView.isHidden)
+        let star = try XCTUnwrap(animated.stripView.firstStarFrame)
+        let finale = try XCTUnwrap(animated.finaleView.finale)
+        XCTAssertEqual(finale, StarFinale.strip(starSize: star.width, spacing: animated.stripView.starSpacing, stagger: 0.05))
+        XCTAssertEqual(finale.fan, .up, "the panel ends at the strip's bottom edge")
+        XCTAssertEqual(animated.finaleView.elapsed, 0, "its first frame, which is empty")
+        XCTAssertTrue(animated.finaleView.superview === animated.heartView.superview, "beside the strip, as the heart's burst is")
+
+        let centre = try firstStarCentre(animated)
+        XCTAssertEqual(finaleCentre(animated).x, centre.x, accuracy: 0.001)
+        XCTAssertEqual(finaleCentre(animated).y, centre.y, accuracy: 0.001)
+        XCTAssertTrue(animated.finaleView.frame.contains(finale.bounds.offsetBy(dx: centre.x, dy: centre.y)), "room for every small star")
+        XCTAssertTrue(animated.stripView.frame.contains(animated.finaleView.frame), "and all of it over the strip")
+
+        clock.runFrames(for: 0.3)
+        XCTAssertEqual(animated.finaleView.elapsed, 0.3, accuracy: 0.001, "stepped with the stars")
+        XCTAssertEqual(try XCTUnwrap(animated.stripView.starFlourish).elapsed, 0.3, accuracy: 0.001)
+
+        // The run is over by now, and the small stars are still in the air
+        clock.runFrames(for: 0.3)
+        XCTAssertLessThan(fiveStars.starsDuration, 0.6)
+        XCTAssertTrue(animated.isAnimatingStars, "the flourish lasts as long as its finale")
+        XCTAssertFalse(animated.finaleView.isHidden)
+        XCTAssertNil(animated.stripView.starFlourish, "the stars have landed: the strip draws them at rest, once")
+        XCTAssertEqual(animated.finaleView.elapsed, 0.6, accuracy: 0.001, "and only the small stars are stepped")
+
+        clock.runFrames(for: fiveStars.duration - 0.6 + 0.02)
+        XCTAssertFalse(animated.isAnimatingStars)
+        XCTAssertTrue(animated.finaleView.isHidden)
+        XCTAssertNil(animated.finaleView.finale)
+        XCTAssertNil(animated.stripView.starFlourish, "the strip draws its stars at rest again")
+    }
+
+    func testOtherRatingsAndReduceMotionHaveNoFinale() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(80), reduceMotion: false, reduceTransparency: false)
+
+        animated.animateStars(raise)
+        XCTAssertTrue(animated.isAnimatingStars)
+        XCTAssertTrue(animated.finaleView.isHidden, "four stars pop, and that is all")
+        XCTAssertNil(animated.finaleView.finale)
+
+        // Five stars for a song that had five
+        animated.refresh(rated(100))
+        animated.animateStars(StarFlourish(saving: 100, from: 100, showing: 100, reduceMotion: false, look: .run))
+        XCTAssertTrue(animated.isAnimatingStars)
+        XCTAssertTrue(animated.finaleView.isHidden)
+
+        animated.animateStars(StarFlourish(saving: 100, from: 60, showing: 60, reduceMotion: true, look: .run))
+        XCTAssertTrue(animated.isAnimatingStars, "the stars cross-fade")
+        XCTAssertTrue(animated.finaleView.isHidden, "and nothing flies")
+    }
+
+    func testTheFinaleRidesWithTheStripWhileItSlidesIn() throws {
+        let clock = FakeClock()
+        let animated = heartPanel(clock, slideDuration: 0.3)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(100), reduceMotion: false, reduceTransparency: false)
+        clock.runFrames(for: 0.05)
+
+        animated.animateStars(fiveStars)
+        XCTAssertFalse(animated.finaleView.isHidden, "five stars saved as the strip comes up")
+        let low = try firstStarCentre(animated)
+        XCTAssertEqual(finaleCentre(animated).y, low.y, accuracy: 0.001)
+        clock.runFrames(for: 0.1)
+
+        XCTAssertEqual(animated.phase, .slidingIn)
+        let centre = try firstStarCentre(animated)
+        XCTAssertGreaterThan(centre.y, low.y, "the strip has moved up")
+        XCTAssertEqual(finaleCentre(animated).x, centre.x, accuracy: 0.001)
+        XCTAssertEqual(finaleCentre(animated).y, centre.y, accuracy: 0.001)
+        XCTAssertEqual(animated.finaleView.alphaValue, animated.stripView.alphaValue)
+    }
+
+    func testAnotherRatingANewSongOrHidingTakesTheFinaleDown() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(100), reduceMotion: false, reduceTransparency: false)
+
+        animated.animateStars(fiveStars)
+        animated.refresh(TrackAnnouncement(copying: rated(100), isFavorited: true))
+        XCTAssertFalse(animated.finaleView.isHidden, "a heart set meanwhile leaves the small stars flying")
+
+        animated.refresh(rated(60))
+        XCTAssertTrue(animated.finaleView.isHidden, "Music refused the rating: the old stars are back")
+        XCTAssertNil(animated.finaleView.finale)
+
+        animated.refresh(rated(100))
+        animated.animateStars(fiveStars)
+        XCTAssertFalse(animated.finaleView.isHidden)
+        animated.show(TrackAnnouncement(identity: "2", title: "Next", artist: "Artist", album: "Album", rating: 100), reduceMotion: false, reduceTransparency: false)
+        XCTAssertTrue(animated.finaleView.isHidden, "the small stars belonged to the song before")
+
+        animated.animateStars(fiveStars)
+        XCTAssertFalse(animated.finaleView.isHidden)
+        animated.hide()
+        XCTAssertEqual(animated.phase, .hidden)
+        XCTAssertTrue(animated.finaleView.isHidden)
+        XCTAssertNil(animated.finaleView.finale)
+    }
+
+    /// A second rating takes the first one's small stars down with its flourish
+    func testALowerRatingSavedDuringTheFinaleEndsIt() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(100), reduceMotion: false, reduceTransparency: false)
+        animated.animateStars(fiveStars)
+        clock.runFrames(for: 0.2)
+        XCTAssertFalse(animated.finaleView.isHidden)
+
+        animated.refresh(rated(80))
+        animated.animateStars(StarFlourish(saving: 80, from: 100, showing: 100, reduceMotion: false, look: .run))
+
+        XCTAssertTrue(animated.isAnimatingStars, "the stars fold back")
+        XCTAssertTrue(animated.finaleView.isHidden, "with nothing in the air")
+        XCTAssertNil(animated.finaleView.finale)
+    }
+
+    /// A strip that shows no stars has no first star for the finale to start from
+    func testAStripWithNoStarsHasNoFirstStar() {
+        let clock = FakeClock()
+        let animated = heartPanel(clock)
+        defer { animated.orderOut(nil) }
+        animated.show(rated(100), reduceMotion: false, reduceTransparency: false)
+        XCTAssertNotNil(animated.stripView.firstStarFrame)
+        XCTAssertGreaterThan(animated.stripView.starSpacing, 0)
+
+        animated.show(TrackAnnouncement(copying: rated(100), canRate: false), reduceMotion: false, reduceTransparency: false)
+        XCTAssertNil(animated.stripView.firstStarFrame, "the cannot-rate line")
+
+        let spotify = TrackAnnouncement(identity: "spotify:track:S", title: "T", artist: "A", album: "B", rating: 100, canRate: false, source: .spotify, showsSpotifyHeart: true)
+        animated.show(spotify, reduceMotion: false, reduceTransparency: false)
+        XCTAssertNil(animated.stripView.firstStarFrame, "Spotify's name")
+        animated.animateStars(fiveStars)
+        XCTAssertTrue(animated.finaleView.isHidden)
+    }
+
+    /// The first star is where the strip draws it: on the heart's row, five stars before it
+    func testTheFirstStarIsWhereTheStripDrawsIt() throws {
+        let size = NSSize(width: 260, height: TrackAnnouncementLayout.stripHeight(scale: 1))
+        let view = TrackAnnouncementContentView(announcement: rated(100), frame: NSRect(origin: .zero, size: size))
+        let star = try XCTUnwrap(view.firstStarFrame)
+        XCTAssertEqual(star.size, NSSize(width: 12, height: 12))
+        XCTAssertTrue(view.starFlourishRect.contains(star), "in the row a flourish is drawn in")
+        let heart = try XCTUnwrap(view.heartFrame)
+        XCTAssertEqual(star.midY, heart.midY, accuracy: 0.001, "on the heart's row")
+        XCTAssertEqual(heart.minX - star.minX, 5 * 15 + 3, accuracy: 0.001, "five stars, their gaps and the gap before the heart")
+    }
+
+    // MARK: The stars' flourish as drawn
+
+    /// The strip's content drawn into a bitmap, at rest or at a moment of a flourish
+    private func drawn(_ announcement: TrackAnnouncement, _ flourish: StarFlourish? = nil, at elapsed: TimeInterval = 0) throws -> (rep: NSBitmapImageRep, view: TrackAnnouncementContentView) {
+        let size = NSSize(width: 260, height: TrackAnnouncementLayout.stripHeight(scale: 1))
+        let view = TrackAnnouncementContentView(announcement: announcement, frame: NSRect(origin: .zero, size: size))
+        if let flourish = flourish {
+            view.starFlourish = (flourish, elapsed)
+        }
+        let rep = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: rep)
+        return (rep, view)
+    }
+
+    /// A pixel's alpha and its colour premultiplied, since a clear pixel's colour means nothing
+    private func premultiplied(_ colour: NSColor) -> [CGFloat] {
+        let alpha = colour.alphaComponent
+        return [alpha, colour.redComponent * alpha, colour.greenComponent * alpha, colour.blueComponent * alpha]
+    }
+
+    /// Where two pictures of one view differ, as points in the view (its origin bottom left),
+    /// with whether the second picture is coloured there
+    private func differences(_ first: NSBitmapImageRep, _ second: NSBitmapImageRep, in bounds: NSRect) -> [(point: NSPoint, isColoured: Bool)] {
+        var found: [(point: NSPoint, isColoured: Bool)] = []
+        let scale = CGFloat(first.pixelsWide) / bounds.width
+        let tolerance: CGFloat = 0.02
+        for y in 0..<min(first.pixelsHigh, second.pixelsHigh) {
+            for x in 0..<min(first.pixelsWide, second.pixelsWide) {
+                guard let one = first.colorAt(x: x, y: y), let other = second.colorAt(x: x, y: y) else { continue }
+                let differs = zip(premultiplied(one), premultiplied(other)).contains { abs($0 - $1) > tolerance }
+                guard differs else { continue }
+                let point = NSPoint(x: (CGFloat(x) + 0.5) / scale, y: (CGFloat(first.pixelsHigh - y) - 0.5) / scale)
+                let isColoured = other.alphaComponent > 0.5 && other.saturationComponent > 0.4
+                found.append((point: point, isColoured: isColoured))
+            }
+        }
+        return found
+    }
+
+    /// The frame of a flourish is taller than the stars at rest and has no heart, so it is
+    /// drawn lower and the heart beside it. Its last frame has to be the picture at rest, or
+    /// the stars would jump as the flourish ends.
+    func testAFlourishEndsOnThePictureOfTheStarsAtRest() throws {
+        for isFavorited in [false, true] {
+            let announcement = TrackAnnouncement(copying: rated(80), isFavorited: isFavorited)
+            let rest = try drawn(announcement)
+            let ended = try drawn(announcement, raise, at: raise.duration)
+
+            let moved = differences(rest.rep, ended.rep, in: rest.view.bounds)
+            XCTAssertTrue(moved.isEmpty, "\(moved.count) pixels differ at rest, favourite \(isFavorited), the first at \(String(describing: moved.first?.point))")
+        }
+    }
+
+    /// Only the stars' row is drawn again at each step, so everything a frame draws, colour
+    /// and shadow included, has to fall inside it
+    func testAFrameOfTheFlourishDrawsOnlyInTheRowDrawnAgain() throws {
+        let rest = try drawn(rated(80))
+        // The first star near its biggest and the second on its way up, both in colour
+        let popping = try drawn(rated(80), raise, at: 0.1)
+
+        let changed = differences(rest.rep, popping.rep, in: rest.view.bounds)
+        XCTAssertFalse(changed.isEmpty, "the flourish draws something")
+        let row = popping.view.starFlourishRect
+        let outside = changed.filter { !row.contains($0.point) }
+        XCTAssertTrue(outside.isEmpty, "\(outside.count) pixels changed outside \(row), the first at \(String(describing: outside.first?.point))")
+        XCTAssertTrue(popping.view.bounds.contains(row), "and the row is on the strip")
+        XCTAssertTrue(changed.contains { $0.isColoured }, "the icon's colours over the white stars")
+    }
+
+    func testARunInOneColourDrawsNoColour() throws {
+        let run = StarFlourish(saving: 80, from: 40, showing: 40, reduceMotion: false, look: .run)
+        let rest = try drawn(rated(80))
+        let popping = try drawn(rated(80), run, at: 0.1)
+
+        let changed = differences(rest.rep, popping.rep, in: rest.view.bounds)
+        XCTAssertFalse(changed.isEmpty)
+        XCTAssertFalse(changed.contains { $0.isColoured })
+    }
+
     // MARK: The album tint
 
     private func tintPanel(_ clock: FakeClock) -> TrackAnnouncementPanel {

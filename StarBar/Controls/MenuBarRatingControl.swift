@@ -72,6 +72,37 @@ final class MenuBarRatingControl {
     var heartOnScreenInTests: (() -> NSRect?)?
     /// Reduce Motion, read at each click and for each transition; the tests replace it
     static var reduceMotion: () -> Bool = { NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
+
+    /// The colour of the stars' flourish (`StarFlourish.Look.afterglow`), drawn over the stars
+    /// as the red heart is over its slot, because the stars are a template image, which is one
+    /// colour. The same size as the flourish's own image and in the same place, and hidden
+    /// whenever no star is coloured. Not private only so the tests can see it.
+    let starTintView: NSImageView = {
+        let imageView = PassthroughImageView()
+        imageView.imageScaling = .scaleNone
+        imageView.isHidden = true
+        // Follows the button's right edge, as the stars and the heart do
+        imageView.autoresizingMask = MenuBarRatingControl.favoriteHeartAutoresizingMask
+        return imageView
+    }()
+    /// The stars' flourish after a rating was saved, or their quick change while a press is
+    /// held (`StarFlourish`), stepped on `widthClock`: which, how long it has run (a stall
+    /// pauses it rather than skipping it), the song it was for, since a new song ends it,
+    /// how evenly its frames came, for the log, and whether the stars have landed, which they
+    /// do before a five-star finale's small stars have: from then on the stars are at rest
+    /// and only the finale's window is stepped. Nil at rest.
+    private var starFlourish: (flourish: StarFlourish, time: SteppedTimeline, song: String?, cadence: FrameCadence, starsLanded: Bool)?
+    private var starFlourishTimer: RatingReminderTimer?
+    /// Which flourish a raised rating gets, read at each rating; the tests replace it
+    static var starFlourishLook: () -> StarFlourish.Look = { StarFlourish.Look.current() }
+    /// The flourish the stars are in the middle of, for the tests
+    var starFlourishInPlay: StarFlourish? {
+        return starFlourish?.flourish
+    }
+    /// The window the five-star finale is drawn in, over the menu bar (`StarFinale`), made the
+    /// first time a song is given five stars, and stepped with the stars' flourish. Not
+    /// private only so the tests can see whether it played.
+    private(set) var finaleWindow: StarFinaleWindow?
     
     private lazy var filledHeartImage = Stars.filledFavoriteHeartImage(size: ratingControl.starSize)
     private lazy var outlinedHeartImage = Stars.outlinedFavoriteHeartImage(size: ratingControl.starSize)
@@ -111,7 +142,15 @@ final class MenuBarRatingControl {
             toggleFavorite: { [unowned self] in self.toggleFavorite() }
         )
         controller.addToLibrary = { [unowned self] in self.addCurrentTrackToLibrary() }
-        controller.didPreview = { [unowned self] in self.statusItem.button?.needsDisplay = true }
+        controller.didPreview = { [unowned self] shown, rating in
+            self.statusItem.button?.needsDisplay = true
+            // The stars going back to where a drag began, as its release is saved, are not a
+            // change to show: the save's own flourish starts from what they showed
+            guard self.clickController.saving == nil,
+                  let flourish = StarFlourish.preview(from: shown, to: rating,
+                                                      reduceMotion: MenuBarRatingControl.reduceMotion()) else { return }
+            self.beginStarFlourish(flourish)
+        }
         controller.didEndDrag = { saved in
             // Player updates are ignored during a drag, and a drag that saves nothing restores
             // the rating from when it began. The track may have changed meanwhile, so ask Music.
@@ -211,6 +250,8 @@ final class MenuBarRatingControl {
         didSet {
             if displayedSongIdentity != oldValue {
                 clickController.cancelDrag()
+                // A flourish still playing was for the last song's rating
+                endStarFlourish()
             }
         }
     }
@@ -293,10 +334,11 @@ final class MenuBarRatingControl {
     }
 
     /// True while a transition is being drawn in the menu bar: the stars rolling in or
-    /// shrinking away, a rating changing. Its frames are drawn on the main thread, so the
-    /// Apple Events a player update sets off would hold them
+    /// shrinking away, a rating changing, the stars' flourish after a rating was saved. Its
+    /// frames are drawn on the main thread, so the Apple Events a player update sets off would
+    /// hold them
     var isAnimating: Bool {
-        return widthTimer != nil
+        return widthTimer != nil || starFlourish != nil
     }
 
     /// Say why a rating shortcut did nothing. Silence here reads as a broken shortcut.
@@ -398,6 +440,7 @@ final class MenuBarRatingControl {
 
         button.image = ratingControl.starsImage
         favoriteHeartView.image = outlinedHeartImage
+        button.addSubview(starTintView)
         button.addSubview(outgoingHeartView)
         button.addSubview(favoriteHeartView)
         button.addSubview(addToLibrarySpinner)
@@ -419,7 +462,10 @@ final class MenuBarRatingControl {
         button.addGestureRecognizer(panGestureRecognizer)
 
         ratingControl.delegate = self
-        ratingControl.didChange = { [unowned self] in self.updateAccessibility() }
+        ratingControl.didChange = { [unowned self] in
+            self.updateAccessibility()
+            self.endStaleStarFlourish()
+        }
         button.setAccessibilityLabel("StarBar")
 
         if MenuBarRatingControl.isUITesting {
@@ -518,6 +564,11 @@ extension MenuBarRatingControl {
             mode: ratingControl.mode, from: outgoingStars, to: ratingControl.stars)
         let shouldAnimate = animate || rolls || collapses || changesRating
         let rollsFromSpotify = rolls && !wasStopped && displayedMode == .spotify
+        // Whatever replaces the stars, or changes them for a new song, takes them over from a
+        // flourish still playing for a rating just saved
+        if changed || changesRating || isStop || ratingControl.mode != .rating {
+            endStarFlourish()
+        }
         displayedStopped = isStop
         displayedMode = ratingControl.mode
         statusItem.button?.setButtonType(!isStop ? .momentaryChange : .onOff)
@@ -712,7 +763,15 @@ extension MenuBarRatingControl {
         ratingTransitionTarget = nil
         displayedContentWidth = menuBarWidth
         statusItem.length = settledAllocation
-        statusItem.button?.image = !isStop ? padded(ratingControl.starsImage) : menuBarIcon.image
+        if let running = starFlourish, !running.starsLanded {
+            // Nothing on show has changed, or the flourish would have ended: this is a
+            // shortcut's own redraw after its rating, or a player update that agrees with the
+            // stars. Putting the stars at rest here would cut the flourish off at its first frame.
+            // Once the stars have landed they are at rest anyway, under the finale's small stars.
+            drawStarFlourish()
+        } else {
+            statusItem.button?.image = !isStop ? padded(ratingControl.starsImage) : menuBarIcon.image
+        }
         updateFavoriteHeartView()
         updateAddToLibrarySpinner()
     }
@@ -891,6 +950,143 @@ extension MenuBarRatingControl {
         let window = burstWindow ?? HeartBurstWindow()
         burstWindow = window
         window.play(around: heart, burst: .menuBar(heartSize: ratingControl.starSize.width), palette: palette)
+    }
+
+    /// The user saved `rating` for the song on show, and the stars already show it: play
+    /// their flourish. `before` is the song's rating before the gesture, and `shown` what the
+    /// stars showed as it ended, which for a press that was held is wherever they had followed
+    /// the mouse to (`StarFlourish.init(saving:from:showing:reduceMotion:look:)`). Not private
+    /// only so the tests can play one without Music.
+    func flourishStars(saving rating: Int, from before: Int, showing shown: Int) {
+        beginStarFlourish(StarFlourish(saving: rating, from: before, showing: shown,
+                                       reduceMotion: Self.reduceMotion(), look: Self.starFlourishLook()))
+    }
+
+    /// Start `flourish` over the stars, which already show the rating it ends at, and draw its
+    /// first frame. Only over the stars at rest: a rollout, a collapse or a new song's stars
+    /// changing in place draws them itself, and a rating saved meanwhile shows in that.
+    private func beginStarFlourish(_ flourish: StarFlourish) {
+        endStarFlourish()
+        guard flourish.duration > 0, !isStop, ratingControl.mode == .rating, widthTimer == nil,
+              statusItem.button != nil else { return }
+        starFlourish = (flourish, SteppedTimeline(start: widthClock.now()), displayedSongIdentity, FrameCadence(), false)
+        // A real frame interval, never 0: before macOS 14 this is a Timer
+        starFlourishTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
+            self?.stepStarFlourish()
+        }
+        if flourish.hasFinale {
+            playFinale(with: flourish)
+        }
+        drawStarFlourish()
+    }
+
+    /// The centre of the first star on screen, or nil when the item isn't where the user can
+    /// see it (`heartOnScreen`). The stars and the heart's slot are laid out from the button's
+    /// right edge and share its middle, so the first star's slot is the heart's, moved left by
+    /// what lies between them. Not private only for the tests.
+    var firstStarOnScreen: NSPoint? {
+        guard let heart = heartOnScreen else { return nil }
+        let starSize = ratingControl.starSize
+        let spacing = ratingControl.spacing
+        let heartMinX = RatingControl.favoriteMinX(mode: .rating, starSize: starSize, spacing: spacing)
+        let slot = StarFlourish.slot(0, starSize: starSize, spacing: spacing)
+        return StarFlourish.centre(ofStarIn: NSRect(x: heart.minX - heartMinX + slot.minX, y: heart.minY,
+                                                    width: starSize.width, height: starSize.height))
+    }
+
+    /// Put the five-star finale up over the stars, in a window of its own, since its small
+    /// stars leave the item. The flourish's own steps move it on, and its end takes it down.
+    private func playFinale(with flourish: StarFlourish) {
+        guard let centre = firstStarOnScreen else {
+            os_log("%{public}s[%{public}ld], %{public}s: no five-star finale: the menu bar item isn't on screen", ((#file as NSString).lastPathComponent), #line, #function)
+            return
+        }
+        let window = finaleWindow ?? StarFinaleWindow()
+        finaleWindow = window
+        window.play(.menuBar(starSize: ratingControl.starSize.width, spacing: ratingControl.spacing,
+                             stagger: flourish.look.stagger), firstStarAt: centre)
+    }
+
+    /// One frame of the stars' flourish
+    private func stepStarFlourish() {
+        guard var running = starFlourish else { return endStarFlourish() }
+        let now = widthClock.now()
+        let elapsed = running.time.step(at: now)
+        running.cadence.frame(at: now, animationTime: elapsed)
+        starFlourish = running
+        guard elapsed < running.flourish.duration else {
+            return endStarFlourish(completed: true)
+        }
+        guard running.song == displayedSongIdentity, !isStop, ratingControl.mode == .rating else {
+            return endStarFlourish()
+        }
+        drawStarFlourish()
+    }
+
+    /// Draw the flourish where it has got to. Its image is taller than the stars at rest by
+    /// the same amount above and below, for a star that pops past its slot, so the button,
+    /// which centres its image, draws the stars where they were; the colour goes over them in
+    /// a view of its own, the same size and in the same place. The five-star finale, when the
+    /// flourish has one, is stepped here too, in its window over the menu bar.
+    ///
+    /// The stars land before the finale's small stars do (0.5 s against 0.88 s). From then on
+    /// they are the stars at rest, put back once, and only the finale's window is stepped:
+    /// drawing the same stars again at every step made an image and redrew the button for
+    /// nothing, 23 times at 60 Hz.
+    private func drawStarFlourish() {
+        guard let running = starFlourish, let button = statusItem.button else { return }
+        let elapsed = running.time.elapsed
+        finaleWindow?.step(to: elapsed)
+        guard elapsed < running.flourish.starsDuration else {
+            if !running.starsLanded {
+                starFlourish?.starsLanded = true
+                starTintView.isHidden = true
+                starTintView.image = nil
+                button.image = padded(ratingControl.starsImage)
+            }
+            return
+        }
+        let starSize = ratingControl.starSize
+        let spacing = ratingControl.spacing
+        button.image = padded(running.flourish.image(at: elapsed, starSize: starSize, spacing: spacing))
+        guard let tint = running.flourish.tintImage(at: elapsed, starSize: starSize, spacing: spacing) else {
+            starTintView.isHidden = true
+            return
+        }
+        starTintView.image = tint
+        // Right-aligned with the edge inset and centred, as the button draws the stars
+        starTintView.frame = Self.favoriteHeartFrame(in: button.bounds, size: tint.size)
+        starTintView.isHidden = false
+    }
+
+    /// Put the stars back at rest, wherever their flourish has got to
+    private func endStarFlourish(completed: Bool = false) {
+        starFlourishTimer?.invalidate()
+        starFlourishTimer = nil
+        guard let running = starFlourish else { return }
+        starFlourish = nil
+        starTintView.isHidden = true
+        starTintView.image = nil
+        finaleWindow?.stop()
+        // One line a flourish, as for the transitions; not for a press's quick changes, which
+        // come many to a drag
+        if running.flourish.kind != .preview, running.cadence.frames > 0 {
+            os_log("Menu bar star flourish %{public}s: %{public}s", completed ? "completed" : "cut short", running.cadence.summary)
+        }
+        // A transition under way draws the stars itself
+        if widthTimer == nil {
+            statusItem.button?.image = !isStop ? padded(ratingControl.starsImage) : menuBarIcon.image
+        }
+    }
+
+    /// End a flourish the stars have moved on from: it was drawn towards a rating that is no
+    /// longer the one on show, because the user chose another, a drag carried on, or Music
+    /// answered with something else
+    private func endStaleStarFlourish() {
+        guard let running = starFlourish else { return }
+        if ratingControl.mode != .rating || running.flourish.to != Stars.styles(forRating: ratingControl.rating) {
+            endStarFlourish()
+        }
     }
 
     /// Show the heart the user just chose, and animate it there. Not private only so the tests
@@ -1197,6 +1393,10 @@ extension MenuBarRatingControl: RatingControlDelegate {
         } else {
             choose(rating: rating)
         }
+        // What the stars showed as the click or drag ended, which the control no longer has:
+        // a drag's stars went back to where it began before the save was checked
+        let gesture = clickController.saving
+        flourishStars(saving: rating, from: gesture?.before ?? rating, showing: gesture?.shown ?? rating)
         statusItem.button?.needsDisplay = true
     }
 
@@ -1531,8 +1731,10 @@ extension MenuBarRatingControl {
         // a rating that never saved
         guard shortcutCanRate() else { return }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
-        ratingControl.update(rating: ratingControl.rating + ratingChange)
+        let before = ratingControl.rating
+        ratingControl.update(rating: before + ratingChange)
         choose(rating: ratingControl.rating)
+        flourishStars(saving: ratingControl.rating, from: before, showing: before)
     }
 
     @objc func iTunesRadioRequestTrackRatingDown(_ notification: Notification) {
@@ -1544,8 +1746,10 @@ extension MenuBarRatingControl {
 
         guard shortcutCanRate() else { return }
         let ratingChange: Int = UserDefaults.standard.allowHalfStar ? 10 : 20
-        ratingControl.update(rating: ratingControl.rating - ratingChange)
+        let before = ratingControl.rating
+        ratingControl.update(rating: before - ratingChange)
         choose(rating: ratingControl.rating)
+        flourishStars(saving: ratingControl.rating, from: before, showing: before)
     }
 
     @objc func iTunesRadioRequestTrackRating5(_ notification: Notification) {
@@ -1580,8 +1784,10 @@ extension MenuBarRatingControl {
       }
 
       guard shortcutCanRate() else { return }
+      let before = ratingControl.rating
       ratingControl.update(rating: stars * 20)
       choose(rating: ratingControl.rating)
+      flourishStars(saving: ratingControl.rating, from: before, showing: before)
     }
 
     @objc func windowDidResize(_ notification: Notification) {

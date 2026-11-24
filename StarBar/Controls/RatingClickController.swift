@@ -35,12 +35,19 @@ final class RatingClickController {
     /// Add the playing song to the library, so Music has somewhere to keep a rating.
     /// Only called in `RatingControl.Mode.addToLibrary`.
     var addToLibrary: () -> Void = {}
-    /// Called after the stars change during a drag, so the owner can redraw
-    var didPreview: () -> Void = {}
+    /// Called after the stars change during a drag, from one rating to another, so the owner
+    /// can redraw. Also when they go back to the rating from before the drag, as it ends.
+    var didPreview: (_ from: Int, _ to: Int) -> Void = { _, _ in }
     /// Called when a drag ends: true if a rating was saved, false if it was cancelled
     var didEndDrag: (_ saved: Bool) -> Void = { _ in }
 
     private(set) var drag: RatingControl.Drag?
+    /// Set while a click or a drag's release is being saved: the rating from before the
+    /// gesture, and the one the stars showed as it ended, which for a drag is wherever they
+    /// had followed the mouse to. The stars go back to the first before the save is checked,
+    /// so by the time the delegate hears of the save, this is the only record of what was on
+    /// screen (`StarFlourish` starts from it). Nil at any other time.
+    private(set) var saving: (before: Int, shown: Int)?
 
     var isDragging: Bool {
         return drag != nil
@@ -89,7 +96,9 @@ final class RatingClickController {
         let rating = ratingControl.rating(atPositionX: positionX, behavior: behavior())
         guard isHeld else {
             if let rating = rating {
+                saving = (before: ratingControl.rating, shown: ratingControl.rating)
                 ratingControl.commit(rating: rating)
+                saving = nil
             }
             return false
         }
@@ -115,8 +124,10 @@ final class RatingClickController {
                 os_log("%{public}s[%{public}ld], %{public}s: drag released at rating %{public}ld", ((#file as NSString).lastPathComponent), #line, #function, releaseRating)
                 // Discard the preview before validation: the delegate may reject the save
                 // and synchronously refresh the track. Keep whatever that refresh returns.
+                saving = (before: drag.originalRating, shown: ratingControl.rating)
                 preview(drag.originalRating)
                 let saved = ratingControl.commit(rating: releaseRating)
+                saving = nil
                 didEndDrag(saved)
             } else {
                 // Nothing saved: put back the rating the stars showed before the drag,
@@ -145,9 +156,10 @@ final class RatingClickController {
     }
 
     private func preview(_ rating: Int) {
-        guard rating != ratingControl.rating else { return }
+        let shown = ratingControl.rating
+        guard rating != shown else { return }
         ratingControl.update(rating: rating)
-        didPreview()
+        didPreview(shown, rating)
     }
 
 }
