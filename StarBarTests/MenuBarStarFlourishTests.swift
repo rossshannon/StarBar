@@ -299,10 +299,12 @@ final class MenuBarStarFlourishTests: XCTestCase {
 
         clock.runFrames(for: 0.3)
         XCTAssertEqual(window.finaleView.elapsed, 0.3, accuracy: 0.001, "stepped with the stars")
+        XCTAssertEqual(image?.size, flourishSize, "which are still popping")
 
         // The run is over by now, and the small stars are still in the air
         clock.runFrames(for: 0.3)
         XCTAssertLessThan(flourish.starsDuration, 0.6)
+        XCTAssertTrue(showsStarsAtRest, "the stars have landed, and are at rest under the small stars")
         XCTAssertNotNil(menu.starFlourishInPlay, "the flourish lasts as long as its finale")
         XCTAssertTrue(menu.isAnimating, "so Music's re-reads wait for the finale too")
         XCTAssertTrue(window.isPlaying)
@@ -459,6 +461,44 @@ final class MenuBarStarFlourishTests: XCTestCase {
         XCTAssertNotNil(menu.starFlourishInPlay)
         XCTAssertTrue(finaleIsPlaying)
         XCTAssertEqual(try XCTUnwrap(menu.finaleWindow).finaleView.elapsed, 0.1, accuracy: 0.001)
+    }
+
+    /// The stars land before their small stars do. From then on the button shows the stars at
+    /// rest, and a redraw that changes nothing, as after a shortcut or an update from Music
+    /// that agrees with the stars, leaves them so and the small stars flying.
+    func testARedrawAfterTheStarsHaveLandedLeavesThemAtRestUnderTheFinale() throws {
+        MenuBarRatingControl.starFlourishLook = { .run }
+        putItemOnScreen()
+        let song = showSong(rating: 60)
+
+        menu.setRating(stars: 5)
+
+        sendHeldRating()
+        XCTAssertEqual(song.ratingsWritten, [100])
+        let flourish = try XCTUnwrap(menu.starFlourishInPlay)
+        let window = try XCTUnwrap(menu.finaleWindow)
+        clock.runFrames(for: flourish.starsDuration - 0.1)
+        XCTAssertEqual(image?.size, flourishSize, "the stars are still popping")
+
+        clock.runFrames(for: 0.2)
+        XCTAssertTrue(showsStarsAtRest, "landed")
+        XCTAssertNotNil(menu.starFlourishInPlay)
+        XCTAssertTrue(window.isPlaying)
+
+        menu.applyTrackDisplay(PlayingTrack(track: song), isStopped: false, musicIsRunning: true)
+        XCTAssertTrue(showsStarsAtRest)
+        XCTAssertNotNil(menu.starFlourishInPlay, "the flourish isn't over")
+        XCTAssertTrue(menu.isAnimating)
+        XCTAssertTrue(window.isPlaying)
+
+        clock.runFrames(for: 0.1)
+        XCTAssertTrue(showsStarsAtRest, "not drawn again as the small stars are stepped")
+        XCTAssertEqual(window.finaleView.elapsed, flourish.starsDuration + 0.2, accuracy: 0.001)
+
+        clock.runFrames(for: flourish.duration)
+        XCTAssertNil(menu.starFlourishInPlay)
+        XCTAssertFalse(window.isPlaying)
+        XCTAssertTrue(showsStarsAtRest)
     }
 
     // MARK: - Through the shortcuts and the mouse

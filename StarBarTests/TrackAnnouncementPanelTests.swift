@@ -1970,6 +1970,8 @@ final class TrackAnnouncementPanelTests: XCTestCase {
         XCTAssertLessThan(fiveStars.starsDuration, 0.6)
         XCTAssertTrue(animated.isAnimatingStars, "the flourish lasts as long as its finale")
         XCTAssertFalse(animated.finaleView.isHidden)
+        XCTAssertNil(animated.stripView.starFlourish, "the stars have landed: the strip draws them at rest, once")
+        XCTAssertEqual(animated.finaleView.elapsed, 0.6, accuracy: 0.001, "and only the small stars are stepped")
 
         clock.runFrames(for: fiveStars.duration - 0.6 + 0.02)
         XCTAssertFalse(animated.isAnimatingStars)

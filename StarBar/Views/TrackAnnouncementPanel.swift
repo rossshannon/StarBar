@@ -850,7 +850,9 @@ extension TrackAnnouncementPanel {
     /// no view of its own, and rides the slide with the rest of the strip.
     ///
     /// The five-star finale, when the flourish has one, does leave the row: its small stars
-    /// fan up over the lines above, in `finaleView`, on the same steps.
+    /// fan up over the lines above, in `finaleView`, on the same steps. They are in the air
+    /// longer than the stars pop (0.88 s against 0.5 s), and for that last part the strip
+    /// draws its stars at rest and only `finaleView` is stepped.
     ///
     /// Stepped on the slide's clock, with a `SteppedTimeline` so a stall pauses it, never with
     /// Core Animation, which on macOS 27 ran animations on this panel without drawing them.
@@ -882,7 +884,14 @@ extension TrackAnnouncementPanel {
                 self.stopStars()
                 os_log("Strip star flourish completed: %{public}s", cadence.summary)
             } else {
-                self.stripView.starFlourish = (flourish, elapsed)
+                if elapsed < flourish.starsDuration {
+                    self.stripView.starFlourish = (flourish, elapsed)
+                } else if self.stripView.starFlourish != nil {
+                    // The stars have landed and only the finale's small stars are in the air,
+                    // in a view of their own: the strip draws its stars at rest once, not the
+                    // same stars again at every step
+                    self.stripView.starFlourish = nil
+                }
                 if self.finaleView.finale != nil {
                     self.finaleView.elapsed = elapsed
                 }

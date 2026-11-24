@@ -87,9 +87,11 @@ final class MenuBarRatingControl {
     }()
     /// The stars' flourish after a rating was saved, or their quick change while a press is
     /// held (`StarFlourish`), stepped on `widthClock`: which, how long it has run (a stall
-    /// pauses it rather than skipping it), the song it was for, since a new song ends it, and
-    /// how evenly its frames came, for the log. Nil at rest.
-    private var starFlourish: (flourish: StarFlourish, time: SteppedTimeline, song: String?, cadence: FrameCadence)?
+    /// pauses it rather than skipping it), the song it was for, since a new song ends it,
+    /// how evenly its frames came, for the log, and whether the stars have landed, which they
+    /// do before a five-star finale's small stars have: from then on the stars are at rest
+    /// and only the finale's window is stepped. Nil at rest.
+    private var starFlourish: (flourish: StarFlourish, time: SteppedTimeline, song: String?, cadence: FrameCadence, starsLanded: Bool)?
     private var starFlourishTimer: RatingReminderTimer?
     /// Which flourish a raised rating gets, read at each rating; the tests replace it
     static var starFlourishLook: () -> StarFlourish.Look = { StarFlourish.Look.current() }
@@ -761,10 +763,11 @@ extension MenuBarRatingControl {
         ratingTransitionTarget = nil
         displayedContentWidth = menuBarWidth
         statusItem.length = settledAllocation
-        if starFlourish != nil {
+        if let running = starFlourish, !running.starsLanded {
             // Nothing on show has changed, or the flourish would have ended: this is a
             // shortcut's own redraw after its rating, or a player update that agrees with the
             // stars. Putting the stars at rest here would cut the flourish off at its first frame.
+            // Once the stars have landed they are at rest anyway, under the finale's small stars.
             drawStarFlourish()
         } else {
             statusItem.button?.image = !isStop ? padded(ratingControl.starsImage) : menuBarIcon.image
@@ -966,7 +969,7 @@ extension MenuBarRatingControl {
         endStarFlourish()
         guard flourish.duration > 0, !isStop, ratingControl.mode == .rating, widthTimer == nil,
               statusItem.button != nil else { return }
-        starFlourish = (flourish, SteppedTimeline(start: widthClock.now()), displayedSongIdentity, FrameCadence())
+        starFlourish = (flourish, SteppedTimeline(start: widthClock.now()), displayedSongIdentity, FrameCadence(), false)
         // A real frame interval, never 0: before macOS 14 this is a Timer
         starFlourishTimer = widthClock.schedule(after: 1.0 / 60.0, repeats: true) { [weak self] in
             self?.stepStarFlourish()
@@ -1025,10 +1028,24 @@ extension MenuBarRatingControl {
     /// which centres its image, draws the stars where they were; the colour goes over them in
     /// a view of its own, the same size and in the same place. The five-star finale, when the
     /// flourish has one, is stepped here too, in its window over the menu bar.
+    ///
+    /// The stars land before the finale's small stars do (0.5 s against 0.88 s). From then on
+    /// they are the stars at rest, put back once, and only the finale's window is stepped:
+    /// drawing the same stars again at every step made an image and redrew the button for
+    /// nothing, 23 times at 60 Hz.
     private func drawStarFlourish() {
         guard let running = starFlourish, let button = statusItem.button else { return }
         let elapsed = running.time.elapsed
         finaleWindow?.step(to: elapsed)
+        guard elapsed < running.flourish.starsDuration else {
+            if !running.starsLanded {
+                starFlourish?.starsLanded = true
+                starTintView.isHidden = true
+                starTintView.image = nil
+                button.image = padded(ratingControl.starsImage)
+            }
+            return
+        }
         let starSize = ratingControl.starSize
         let spacing = ratingControl.spacing
         button.image = padded(running.flourish.image(at: elapsed, starSize: starSize, spacing: spacing))
