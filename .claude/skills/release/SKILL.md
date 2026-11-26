@@ -26,6 +26,7 @@ git log --first-parent --oneline "$PREV"..origin/main
 git diff --stat "$PREV" origin/main -- .github/workflows build.sh StarBar/StarBar.entitlements "Privacy Policy.md" README.md
 ```
 
+- A cloud session's clone is shallow, so `git rev-list --count` there is not the build number: run `git fetch --unshallow origin` first. The release's build number is the release commit's count.
 - Read every merged pull request in that range. Settle the version and a title of a few words with the maintainer if they haven't given them.
 - A change to `release.yml` or `build.sh` has never run for a tag: say so in the hand-over, since the Release run is its first test.
 - Check nothing meant for this release is still open, and that nothing unfinished has merged.
@@ -102,3 +103,4 @@ On each real run, append a dated one-liner: what you sharpened, what bit you, wh
 
 - 2026-11-13 — Skill written from the 1.5.0 to 1.10.0 releases, each of which was published by a script written for it. Not yet run for a release.
 - 2026-11-17 — 1.10.0 was published by a script written for it (`publish-v1.10.0.sh`), not yet by `publish.sh`; its lessons are folded in here. `publish.sh` now checks the project's object IDs and the Release workflow's required secrets before tagging, and shows the run with `watch-run.sh`, because Ross found `gh run watch`'s running and waiting steps looked alike and asked what "–" meant (skipped). Added the zip's `Info.plist` check, dating the site from `published_at`, writing merge messages fresh, and `docs/releases/v1.10.0.md`. A policy change can now be answered by a sentence naming the privacy policy, as 1.10.0's notes did.
+- 2026-11-26 — 1.11.0 prepared from a cloud session: scope was four merges (#50, #58, #59, #60), and #58's earlier Apple search made the privacy policy's "songs in your library never cause this request" untrue for catalogue plays of owned songs, so the policy changed in the release pull request and the notes have both a Network access and a Privacy section. Added the shallow-clone note to Scope (the cloud clone counted 271 commits, not 530).

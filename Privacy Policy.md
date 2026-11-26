@@ -2,13 +2,14 @@
 
 StarBar has no accounts, no analytics, no crash reporting and no update check, and it keeps nothing about you anywhere but your Mac. It goes online for three things only: cover art, from Apple or Spotify; liking Spotify songs, if you connect your Spotify account; and scrobbling to Last.fm, if you connect your Last.fm account.
 
-This page lists everything StarBar reads, changes, keeps and sends. It was last updated in November 2026, for StarBar 1.10.0.
+This page lists everything StarBar reads, changes, keeps and sends. It was last updated in November 2026, for StarBar 1.11.0.
 
 ## What StarBar reads
 
 - **From Music**: the playing song's name, artist, album, cover, rating and favourite. StarBar asks Music through Scripting Bridge, which is why macOS asks you to allow it under System Settings → Privacy & Security → Automation.
 - **From Spotify**, if you use it: the playing song's name, artist, album and the address of its cover. macOS asks you to allow that under Automation too, the first time it's needed.
 - **From your Music library**, when a Spotify song is playing and Music is open: the titles and artists of your songs, so StarBar can find your copy of the same song. It keeps that list in memory only, and reads it again only after Music says the library has changed.
+- **From macOS**, on macOS 14.2 and later: whether the Spotify app is sending sound to your Mac's speakers or headphones, so StarBar can tell a song playing on your Mac from one playing on another device through Spotify Connect. macOS reports this without asking you. StarBar reads only whether sound is going out, never the sound itself, and keeps none of it.
 
 These are conversations between apps on your Mac.
 
@@ -35,7 +36,7 @@ Nothing else is kept: no record of what you've listened to beyond the plays wait
 
 ## What StarBar sends over the network
 
-- **Covers for Apple Music songs you haven't added to your library.** When Music plays a song straight from the Apple Music catalogue and it isn't in your library, Music often gives StarBar the wrong cover or none at all. So StarBar asks Apple's iTunes Search service (`itunes.apple.com`) for the song, sending its artist and title and your Mac's region, which picks the store to search. It then downloads the cover from Apple's image server (`mzstatic.com`). Other songs from the same album then use the cover already fetched rather than asking again. The request goes to the company that is already streaming you the song. Songs in your library, including Apple Music songs you've added, never cause this request: their covers come from your library.
+- **Covers for songs Music plays from the Apple Music catalogue.** When Music plays a song straight from the Apple Music catalogue and it isn't in your library, Music often gives StarBar the wrong cover or none at all. So StarBar asks Apple's iTunes Search service (`itunes.apple.com`) for the song, sending its artist and title and your Mac's region, which picks the store to search. It then downloads the cover from Apple's image server (`mzstatic.com`). Other songs from the same album then use the cover already fetched rather than asking again. The request goes to the company that is already streaming you the song. With the Music Video strip on, StarBar asks as soon as Music says a catalogue song has started, so that the cover is ready when the strip slides up, and before it has asked Music whether you own the song. So a song you own is searched for too when Music plays it from the Apple Music catalogue rather than from your library, as it can when you play an album from its page in Apple Music. Songs played from your library, including Apple Music songs you've added, never cause this request: their covers come from your library.
 - **Covers for Spotify songs.** While a Spotify song is playing, StarBar downloads its cover from Spotify's image server (`i.scdn.co`). The request says only which cover is wanted.
 - **Spotify likes, if you connect.** Press **Connect** in Preferences and StarBar signs in through Spotify's own page at `accounts.spotify.com`, so your password never passes through StarBar. After that it asks `api.spotify.com` once per new song whether that song is in your Liked Songs, and sends a like or unlike when you click the heart. None of this happens until you press Connect. To revoke the sign-in on Spotify's side as well, remove the app under **Manage apps** on your Spotify account page.
 
@@ -56,6 +57,6 @@ StarBar's web pages at [rossshannon.com/starbar](https://rossshannon.com/starbar
 
 ## Changes
 
-If any of this changes, this page changes with it and the release notes say so. StarBar 1.9.0 added the request to Apple for covers, and remembering the last library song Music played. StarBar 1.10.0 added scrobbling to Last.fm, described above.
+If any of this changes, this page changes with it and the release notes say so. StarBar 1.9.0 added the request to Apple for covers, and remembering the last library song Music played. StarBar 1.10.0 added scrobbling to Last.fm, described above. StarBar 1.11.0 asks Apple for a catalogue song's cover as soon as the song starts, which takes in catalogue plays of songs you own, and reads whether Spotify is sending sound to your Mac, to leave out Spotify songs playing on other devices.
 
 Questions: [open an issue](https://github.com/rossshannon/StarBar/issues).
