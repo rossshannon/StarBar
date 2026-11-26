@@ -310,5 +310,220 @@ How to tell a wrong sleeve from a right one for an album Apple's search doesn't 
 *Coda*. Nothing on an artwork says which song it belongs to, and the catalog object and the
 library copy hold different resolutions (800×800 against 600×600 for the same album), so the
 bytes cannot be compared either. The Apple Music API would answer by song identifier, but
-needs a developer token. Whether Music's `playerInfo` notification carries the catalog ID for a
-catalog track (`PlayInfo` has a `storeURL` field for its `Store URL` key) has not been checked.
+needs a developer token. Music's `playerInfo` notification does not carry the catalog ID:
+measured 2026-09-23 over 24 notifications, it had no `Store URL` key for a catalog track or a
+library song, so `PlayInfo.storeURL` stays empty (see "What identifies the playing catalog
+track" below). MediaRemote does carry it, with an `mzstatic.com` artwork URL for the song's own
+release, but only through a private framework, so it answers the question without being
+something to ship.
+
+## Finding the user's copy when the catalog plays a different release
+
+Measured 2026-09-23, read-only, against a library of 8,090 songs.
+
+**Since built:** on 2026-11-16 the library matcher (`SongMatcher`) began finding the user's copy
+of a catalog song when the exact search misses, by metadata, as the first proposal at the end
+of this section suggests. Its rules are in
+[cross-app-matching.md](cross-app-matching.md#apple-music-catalog-songs-and-titles-without-their-last-bracket).
+The prototype key below came first and is not the one StarBar uses.
+
+### The case that prompted it
+
+| | The playing catalog track | The user's library copy |
+|---|---|---|
+| Name | Where the Streets Have No Name | Where the Streets Have No Name **(New Edit)** |
+| Album | The Joshua Tree (20th Anniversary Deluxe Edition) [2007 Remaster] | **U218 Singles** |
+| Duration | 336.6 s | **286.5 s** |
+| Class | `URL track` | `file track`, `cloud status` purchased |
+| Rating, favourite | 0 computed, false | 80 user, true |
+
+`libraryCopy(of:)` matches name, artist and album together, and two of the three differ, so it
+finds nothing and the menu bar offers to add a song the user already owns. The durations differ
+by 50 s, so these are different edits: no identifier comparison will ever join them.
+
+### Three kinds of "the same song"
+
+| Kind | Example | What can join them |
+|---|---|---|
+| The same catalog item | An album added from Apple Music, then played from its catalog page | Exact name, artist and album (what StarBar did then), or the catalog ID |
+| The same recording, another release | A remaster, a compilation, a soundtrack reissue | Artist and a cleaned title, with durations within a few seconds |
+| The same song, another edit | The U2 case; radio and single edits | Artist and a cleaned title only. Duration can differ by a minute or more |
+
+The public catalog shows why IDs cannot do the second and third kinds. A search of the iTunes
+Search API for the title returns 15 U2 songs, each with its own ID, and the 2007 remaster that
+was playing is a 16th. The 15 are the album version (338 s, twice), two "Edited Version"s
+(275 s), "New Edit U218" (286 s), the U218 Singles version (288 s), six live recordings, a
+remix, a medley and the 2023 re-recording.
+
+### What identifies the playing catalog track
+
+- **Scripting Bridge: nothing.** Its roughly 80 properties include no store or catalog ID,
+  `address` raises -1728, and album artist, year and track number are blank. Music's scripting
+  dictionary declares no such property.
+- **MediaRemote (private framework): the full set.** A direct call from an ordinary process
+  returns nothing, which matches the restriction Apple added in macOS 15.4. Loaded into
+  `/usr/bin/perl` through `DynaLoader`, the workaround `mediaremote-adapter` uses, it returned:
+  `iTunesStoreIdentifier` 1440783563 (the song; the iTunes lookup API confirms it is this
+  release, 336,613 ms), `AlbumiTunesStoreAdamIdentifier` 1440783429,
+  `ArtistiTunesStoreAdamIdentifier` 78500, an artwork URL, and the radio station playing it.
+  The song was playing from a station ("Champagne Supernova (Remastered) Station"), and a play
+  straight from an album page has not been sampled. It gave the same keys for 12 more station
+  songs. For a library song, its `iTunesStoreIdentifier` equals the library's `storeItemID`
+  (see below) in all three cases tried: a subscription, a matched and a purchased song. Its
+  `UniqueIdentifier` is the catalog song ID for a catalog stream, but the signed persistent ID
+  for a library song. That route depends on an Apple binary's allow-listing, and Apple can
+  close it in any update.
+- **The `playerInfo` notification: no store identifier at all.** For a catalog track it
+  carries only `Name`, `Artist`, `Album`, `Genre`, `Player State` and `Total Time`. For a
+  library song it adds `PersistentID`, `Library PersistentID` and sometimes `Composer`. There
+  is no `Store URL` key in either case (24 notifications captured).
+- **MusicKit: not usable as StarBar is signed.** Catalog requests, ISRC filtering and
+  `Song.playParameters` exist on macOS 12+, and `MusicLibraryRequest` on macOS 14+. All of
+  them need the MusicKit App Service on an App ID owned by a paid developer team. An ad hoc
+  build has no team. `SystemMusicPlayer`, which would name the playing song, does not exist
+  on native macOS. So MusicKit could say whether two catalog IDs share a recording (ISRC), but
+  it cannot say what Music is playing.
+
+### What identifies library songs
+
+- **`ITLibMediaItem` has undocumented catalog properties:** `storeItemID`,
+  `subscriptionAdamID` and `cloudUniversalLibraryID`. `ITLibAlbum` has `adamID`,
+  `subscriptionAdamID` and `cloudAlbumID`. `ITLibArtist` has `subscriptionAdamID`. They were
+  found by listing the class's Objective-C properties. None of them is in the public headers.
+- **Reading them needs Media & Apple Music permission.** `AMPLibraryAgent` refuses a bare
+  command-line binary without prompting ("Refusing connection … TCC not granted"). An app
+  bundle with `NSAppleMusicUsageDescription` gets a prompt, and once allowed it loads the whole
+  library in 5.6 s.
+- **Only `storeItemID` is filled in.** `subscriptionAdamID`, `cloudUniversalLibraryID` and all
+  three album IDs read as empty on every song.
+- **`storeItemID` follows `cloud status` exactly.** It is set on every subscription (787),
+  purchased (464) and no-longer-available (50) song, and on 3,367 of 3,371 matched songs. It is
+  never set on an uploaded (3,307) or unknown (106) song. That is 4,888 of 8,310 songs (59 %).
+  ITLibrary lists 220 more songs than Music's library playlist does, all Apple Music or HLS
+  kinds. Why they are missing from the playlist was not investigated.
+- **A purchase's ID is usually out of date.** Apple re-issues albums under new IDs, and the
+  purchase keeps the old one. The user's U2 New Edit, bought on *U218 Singles*, has
+  `storeItemID` 205162007, which the lookup API no longer knows. The same edit is now
+  1440729868. In random samples of 150 songs, the IDs that resolved in the Irish store were
+  145 subscription, 140 matched, and only 32-44 purchased. The purchased figure is a range, not
+  a measurement: two identical queries to the lookup service returned 32 and then 42. Adding
+  the UK and US stores raised it only to 44.
+
+### Twelve songs from a station
+
+With playback allowed, 12 consecutive songs from the station were skipped through, and each
+was checked against the library three ways. All 12 were `URL track`s. The station played
+deluxe and remastered editions, such as *Urban Hymns (Deluxe / Remastered 2016)* and *(What's
+The Story) Morning Glory? (30th Anniversary Deluxe Edition)*.
+
+| Check | Songs with a library copy |
+|---|---|
+| Catalog ID (MediaRemote) equals a library `storeItemID` | 0 |
+| Exact name, artist and album (StarBar then) | 1 ("Burn the Witch") |
+| The loose key below | 7 |
+
+The user owned the original release of most of these songs, not the deluxe edition, so the IDs
+differed. Five of the seven loose matches were within 2 s: "Live Forever", "Beetlebum",
+"Bigmouth Strikes Again", "Castle on the Hill" and "Wonderwall". The other two were within
+7 s: an uploaded copy of "Burn the Witch", and "With or Without You" from *U218 Singles*.
+"Castle on the Hill" is one of the 220 songs ITLibrary lists and Music's library playlist does
+not, so a lookup through Music would find six.
+
+**Driving playback for a measurement changes play statistics.** Skipping through a station
+touched no library song. But playing a library song for 4 s, pausing it and then playing
+another library song counted a skip on the first: its `skipped count` rose by one and its
+`skipped date` became the time of the switch. `played count` did not change. The last song,
+which was only paused, gained no skip. So it is starting the next track that counts the skip,
+not the short play. Sample with catalog tracks, or stop after one library song.
+
+### Loose matching against the library
+
+A prototype key: the artist, folded to lowercase ASCII, without a leading "The" or a "feat."
+clause, plus the title with its release annotations removed. The album is ignored. Only two
+kinds of annotation are removed:
+
+- **Release packaging:** remaster and remastered, with or without a year, bonus track, LP
+  version, original version, mono, stereo, deluxe.
+- **Edits:** radio edit, single version, single edit, edit, new edit, radio version, 7" version.
+
+Live, remix, demo, cover, acoustic, instrumental, "Part 2", "Reprise" and anything unrecognised
+stay in the key, because they are a different performance or a different piece.
+
+Across the library:
+
+- The 8,090 songs give 7,603 keys. **424 keys match more than one song** (911 songs in all).
+- The spread of durations within a key: 180 within 3 s, 81 within 15 s, 86 within 60 s, 77
+  more than 60 s.
+- **Within 3 s, the matches are nearly always one recording.** In a random sample of 25 keys
+  whose songs came from different albums, 23 were one recording on different releases. The
+  two that were not were a live session with exactly the album take's length and a radio
+  session released on a compilation.
+- **Beyond 60 s, matches are mostly other performances whose titles do not say so.** Examples
+  are live albums (*Pulse*, *Live at CBGB's*, *I Might Be Wrong*) and full-length against
+  single edits. A few are different pieces with the same name: "Terran Theme 4" from two
+  StarCraft games and "Finale" from two Halo soundtracks.
+- **The artist is essential.** 370 cleaned titles are shared by different artists, for
+  example "Intro", "One" and "Time".
+- **The user's own copies often disagree.** Where a key has two or more user ratings, they
+  differ in 28 of 62 keys within 3 s, 14 of 19 within 15 s, 33 of 37 within 60 s and 23 of 31
+  beyond. So "your rating for this song" is often not one number.
+
+The key joins the U2 case: both titles clean to "where the streets have no name". It lands in
+the widest band, with a 50 s gap.
+
+The figures above compare library songs with each other. The direction StarBar needs is from
+catalog to library, so the same key was run over the public catalog's versions of 8 songs the
+library holds in several versions. Those songs were by U2, Pink Floyd (2), The Smiths (2),
+Radiohead, Curtis Mayfield and Daft Punk, giving 106 catalog rows:
+
+- **50 rows had a library copy within 3 s, and the nearest copy was always the same
+  recording.** In 6 of them the 3 s window also held a different recording: the Smiths' John
+  Peel session "This Charming Man", 3 s longer than the single. So rank candidates by the gap.
+  Do not treat the window as a set of equal matches.
+- **2 rows matched within 15 s**, both remasters of the same recording.
+- **8 rows matched only more loosely.** Two were the U2 album version against the user's New
+  Edit, which is the case the user wants. Three were *The Wall*'s "Comfortably Numb" against
+  the *Echoes* edit of the same recording. Three were wrong: Curtis Mayfield live recordings
+  whose titles do not say so, from *The Berlin Sessions* and *Live In Europe*.
+- **46 rows matched nothing.** Every row labelled live, remix, demo, session or re-recording
+  was correctly excluded, including the 2023 U2 re-recording. So were four edit spellings the
+  prototype does not know: "New Edit U218", "Edited Version", "Full-Length Version" and
+  "Extended Version". Those misses are safe ones, because they only lose a suggestion.
+
+### Cost
+
+A bulk read of 14 properties for all 8,093 tracks takes 0.98 s. That is one Apple Event per
+property, not per track. A `whose artist is "U2"` query that reads three properties of the 19
+matching tracks takes 17-131 ms. A per-song candidate lookup scoped by artist is cheap enough to
+run once per song, so it needs no index and cannot go stale.
+
+### What this suggested
+
+These were the proposals on 2026-09-23. The first was built on 2026-11-16, in the form
+cross-app-matching.md describes, and the second still holds. StarBar links the copy the
+matcher finds without naming it or asking, so the third and fourth have not been built, nor
+has the fifth.
+
+1. **Metadata is the only supported route, and it covers the U2 case.** Identifiers help only
+   when the user's copy *is* the catalog item under another name. Both routes to them are
+   private interfaces, and they matched none of the 12 station songs. Name, artist and
+   duration found 7 of the 12, against 1 for the exact match StarBar used then. A lookup through
+   Scripting Bridge cannot see the 220 Apple Music songs that are missing from the library
+   playlist. Those are the songs most likely to be playing from the catalog.
+2. **Keep the exact match automatic.**
+3. **Treat a same-recording match as a strong candidate, not a certainty.** From catalog to
+   library, the nearest copy within 3 s was the same recording in all 50 rows. But 50 rows of 8
+   songs is a small sample, and a wrong link overwrites a rating that cannot be restored. Name
+   the copy wherever its stars appear, for example "Your copy · U218 Singles", so a wrong link
+   is visible before anything is written.
+4. **Offer looser matches for the user to confirm, and remember the answer.** For example, a
+   menu item: "Rate your copy: Where the Streets Have No Name (New Edit), U218 Singles, 4:46,
+   ★★★★". Key the answer by the catalog song's name, artist, album and duration. A catalog
+   track's database ID changes between reads, and nobody has measured whether its persistent
+   ID survives a replay.
+5. **Where copies disagree, list them.** Do not pick one silently. Of the 149 keys whose
+   copies carry two or more user ratings, 98 disagree.
+
+The reverse direction needs nothing for ratings, because a library song can always be rated.
+The same key could still show that other copies exist, such as the 424 keys above. It could
+also offer to give them all one rating.
