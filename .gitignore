@@ -9,6 +9,9 @@
 
 ## Build generated
 build/
+# Scripts/redirect-build-dirs.sh makes build a symlink, which the pattern above
+# does not match: a pattern ending in a slash matches directories only.
+/build
 DerivedData/
 
 ## Various settings
